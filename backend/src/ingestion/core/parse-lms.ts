@@ -52,6 +52,29 @@ export interface MoodleCalendarEvent {
   url: string;
   description?: string | null;
   course?: MoodleCourseRef | null;
+  /** The call to action Moodle shows on the event; absent once nothing is due. */
+  action?: MoodleEventAction | null;
+}
+
+/** `event.action` on a calendar event. */
+export interface MoodleEventAction {
+  name?: string | null;
+  url?: string | null;
+  actionable?: boolean | null;
+}
+
+/**
+ * The action Moodle offers on an assignment that still wants a submission.
+ * Its absence (or `actionable: false`) means the student has submitted.
+ */
+export const EDIT_SUBMISSION_ACTION_NAME = "Thêm bài nộp";
+
+/** True while the event still offers "Thêm bài nộp" (the `editsubmission` link). */
+export function offersSubmission(event: MoodleCalendarEvent): boolean {
+  return (
+    event.action?.name === EDIT_SUBMISSION_ACTION_NAME &&
+    event.action.actionable === true
+  );
 }
 
 /** The `data` object of a `core_calendar_get_calendar_monthly_view` response. */
@@ -210,6 +233,7 @@ export function parseMonthlyView(
       location: event.url.trim(),
       note: (event.description || "") + submissionLinkHtml,
       lmsCourse: courseOf(event, courses),
+      submitted: !offersSubmission(event),
     });
   }
 

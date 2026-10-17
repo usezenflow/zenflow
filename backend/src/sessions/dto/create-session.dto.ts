@@ -90,35 +90,13 @@ export class CreateSessionDto {
   /**
    * ISO-8601 deadline — required for a `TASK`, absent for fixed types.
    * `@IsFeasibleTaskWindow` additionally rejects a deadline that leaves no
-   * time to fit `durationMinutes × sessionCount` back-to-back before it (a
+   * time to fit `durationMinutes` before it (a
    * coarse, necessary-not-sufficient check — see that decorator's doc).
    */
   @ValidateIf((o: CreateSessionDto) => o.type === "TASK")
   @IsISO8601()
   @IsFeasibleTaskWindow()
   deadline?: string;
-
-  /**
-   * Number of study sessions (`TASK` only). Omitted or `1` → one ordinary
-   * task; `> 1` → a `TASK` series of N linked sessions spread across
-   * `now … deadline` (see `services/bandit/README.md`).
-   */
-  @IsOptional()
-  @ValidateIf((o: CreateSessionDto) => o.type === "TASK")
-  @IsInt()
-  @Min(1)
-  @Max(MAX_SESSION_COUNT)
-  sessionCount?: number;
-
-  /** Minutes of each session of a series (see `CreateSessionInput.sessionDurations`). */
-  @IsOptional()
-  @ValidateIf((o: CreateSessionDto) => o.type === "TASK")
-  @IsArray()
-  @ArrayMaxSize(MAX_SESSION_COUNT)
-  @IsInt({ each: true })
-  @Min(TIME_GRANULARITY, { each: true })
-  @IsDivisibleBy(TIME_GRANULARITY, { each: true })
-  sessionDurations?: number[];
 
   /** ISO-8601 start — required for the fixed types (`ASSIGNMENT`/`EXAM`/`LECTURE`/`DND`). */
   @ValidateIf((o: CreateSessionDto) => o.type !== "TASK")

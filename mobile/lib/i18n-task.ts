@@ -16,7 +16,7 @@ const taskTranslations: Record<string, string> = {
     "Thời lượng phải là bội số của 15 phút",
   "Not enough time left before this deadline\nChoose a later deadline to leave room for this session.":
     "Không còn đủ thời gian trước deadline\nChọn deadline muộn hơn để có đủ thời gian cho buổi này.",
-  "New task": "Task mới",
+  "New plan": "Kế hoạch mới",
   Close: "Đóng",
   Cancel: "Hủy",
   Title: "Tiêu đề",
@@ -41,12 +41,12 @@ const taskTranslations: Record<string, string> = {
   "This sitting": "Buổi này",
   "This and all later sittings": "Buổi này và các buổi sau",
   "All sittings": "Tất cả các buổi",
-  "Delete the entire task and all its sittings.":
-    "Xóa task và tất cả các buổi.",
+  "Delete the entire plan and all its sittings.":
+    "Xóa kế hoạch và tất cả các buổi.",
   "Only {date} is removed.": "Chỉ xóa buổi ngày {date}.",
   "The series ends before {date}.": "Lịch lặp lại kết thúc trước {date}.",
   "Sittings from {date} onward are removed.": "Xóa các buổi từ {date} trở đi.",
-  Task: "Task",
+  Plan: "Kế hoạch",
   Fixed: "Cố định",
   Assignment: "Bài tập",
   Exam: "Thi",

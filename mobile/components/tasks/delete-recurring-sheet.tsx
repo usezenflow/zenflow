@@ -103,7 +103,7 @@ const COPY: Record<
         scope: "series",
         Icon: CalendarDays,
         label: "All sittings",
-        hint: () => t("Delete the entire task and all its sittings."),
+        hint: () => t("Delete the entire plan and all its sittings."),
         destructive: true,
       },
     ],

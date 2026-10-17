@@ -5,6 +5,7 @@ import {
   OutboundBreakers,
   UpstreamUnavailableError,
 } from "../common/outbound-breaker";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import { LMSService } from "./lms.service";
 
 const BASE = "https://lms.dlu.edu.vn";
@@ -26,11 +27,13 @@ const reply = (
     json?: unknown;
     setCookie?: string[];
     location?: string;
+    url?: string;
   } = {},
 ): Response =>
   ({
     status: init.status ?? 200,
     ok: (init.status ?? 200) < 400,
+    url: init.url ?? "",
     headers: {
       getSetCookie: () => init.setCookie ?? [],
       get: (name: string) =>
@@ -217,6 +220,33 @@ describe("LMSService.fetchMonthlyView", () => {
     global.fetch = fetchMock;
   });
 
+  it("reports a redirect to the login page as a rejected session", async () => {
+    fetchMock.mockResolvedValueOnce(
+      reply({ url: `${BASE}/login/index.php?testsession=1` }),
+    );
+
+    await expect(
+      service.fetchMonthlyView(session, 2026, 4),
+    ).rejects.toBeInstanceOf(UpstreamSessionRejectedError);
+  });
+
+  it("reports a missing login or sesskey envelope as a rejected session", async () => {
+    fetchMock.mockResolvedValueOnce(
+      reply({
+        json: [
+          {
+            error: true,
+            exception: { errorcode: "requireloginerror" },
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      service.fetchMonthlyView(session, 2026, 4),
+    ).rejects.toBeInstanceOf(UpstreamSessionRejectedError);
+  });
+
   it("posts the documented AJAX envelope and unwraps `data`", async () => {
     const data = { weeks: [{ days: [{ events: [] }] }] };
     fetchMock.mockResolvedValueOnce(reply({ json: [{ error: false, data }] }));
@@ -249,12 +279,12 @@ describe("LMSService.fetchMonthlyView", () => {
   it("throws on an envelope-level error, which Moodle reports inside a 200", async () => {
     fetchMock.mockResolvedValueOnce(
       reply({
-        json: [{ error: true, exception: { errorcode: "invalidsesskey" } }],
+        json: [{ error: true, exception: { errorcode: "dmlwriteexception" } }],
       }),
     );
 
     await expect(service.fetchMonthlyView(session, 2026, 4)).rejects.toThrow(
-      /invalidsesskey/,
+      /dmlwriteexception/,
     );
   });
 
@@ -396,12 +426,12 @@ describe("LMSService.fetchEnrolledCourses (issue #56 discovery)", () => {
   it("throws on an envelope-level error, which Moodle reports inside a 200", async () => {
     fetchMock.mockResolvedValueOnce(
       reply({
-        json: [{ error: true, exception: { errorcode: "invalidsesskey" } }],
+        json: [{ error: true, exception: { errorcode: "dmlwriteexception" } }],
       }),
     );
 
     await expect(service.fetchEnrolledCourses(session)).rejects.toThrow(
-      /invalidsesskey/,
+      /dmlwriteexception/,
     );
   });
 

@@ -70,11 +70,6 @@ function toCreateInput(
       type: "TASK",
       durationMinutes: values.duration ?? DEFAULT_DURATION,
       deadline: values.deadline as string,
-      // Omitted/1 → one ordinary task; >1 → a multi-sitting series.
-      sessionCount:
-        values.sessionCount && values.sessionCount > 1
-          ? values.sessionCount
-          : undefined,
     };
   }
 

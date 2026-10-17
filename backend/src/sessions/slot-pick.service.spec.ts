@@ -1,3 +1,4 @@
+import { NotFoundException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import { SchedulingModel, type User } from "../../generated/prisma";
 import { SlotPickService } from "./slot-pick.service";

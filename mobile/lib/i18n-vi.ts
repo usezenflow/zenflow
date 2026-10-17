@@ -280,7 +280,7 @@ export default {
   Fri: "T6",
   Sat: "T7",
   Sun: "CN",
-  Task: "Task",
+  Plan: "Kế hoạch",
   Assignment: "Bài tập",
   Exam: "Kỳ thi",
   Lecture: "Buổi học",
@@ -311,7 +311,7 @@ export default {
   "cont. → {time}": "tiếp → {time}",
   "due {date}": "hạn {date}",
   "{category} conflict": "Trùng lịch {category}",
-  "Rescheduled {count} tasks": "Đã xếp lại {count} task",
+  "Rescheduled {count} plans": "Đã xếp lại {count} kế hoạch",
   "Deleted {count} notifications": "Đã xóa {count} thông báo",
   "Sent to {email}": "Đã gửi đến {email}",
   "Created {date}": "Tạo ngày {date}",
@@ -331,7 +331,7 @@ export default {
   "Sign in to your {provider}": "Đăng nhập {provider}",
   "Sign in to see your schedule": "Đăng nhập để xem lịch",
   "Update your {provider} login": "Cập nhật đăng nhập {provider}",
-  "Task created": "Đã tạo task",
+  "Plan created": "Đã tạo kế hoạch",
   "{count} sittings have an alternative": "{count} buổi có giờ thay thế",
   "All {total} are already scheduled. Swap any you like.":
     "Cả {total} buổi đã có lịch. Bạn có thể đổi buổi tùy ý.",
@@ -363,8 +363,8 @@ export default {
   "Connecting…": "Đang kết nối…",
   "{now}, nothing scheduled":
     "{now}, chưa có lịch",
-  "{now}, {count} tasks today":
-    "{now}, {count} task hôm nay",
+  "{now}, {count} plans today":
+    "{now}, {count} kế hoạch hôm nay",
   "{sign}{count} days": "{sign}{count} ngày",
   Forbidden: "Bạn không có quyền làm việc này.",
   "Provide both username and password to connect this provider for the first time.":
@@ -468,7 +468,7 @@ export default {
   "Rescheduled {ok}, {failed} left": "Đã xếp lại {ok}, còn {failed}",
   "The rest still overlap. Move them by hand.":
     "Mấy cái còn lại vẫn trùng lịch. Dời tay giúp mình nha.",
-  "Couldn't reschedule tasks": "Chưa xếp lại được task",
+  "Couldn't reschedule plans": "Chưa xếp lại được kế hoạch",
   "Couldn't delete notifications": "Chưa xóa được thông báo",
   "Couldn't find that item": "Không tìm thấy mục này",
   "It's no longer on your calendar.": "Mục này không còn trên lịch của bạn.",
@@ -491,7 +491,7 @@ export default {
   "This session now ends past its due time.":
     "Lịch này giờ kết thúc sau deadline.",
   "Scheduled after deadline": "Xếp sau deadline",
-  "Moved {count} flexible tasks": "Đã dời {count} việc linh hoạt",
+  "Moved {count} flexible plans": "Đã dời {count} việc linh hoạt",
   "Zenflow is open to DLU students for now. Use your @dlu.edu.vn email.":
     "Hiện Zenflow chỉ dành cho sinh viên DLU. Dùng mail @dlu.edu.vn của bạn nha.",
   "Some sessions weren't moved": "Một số buổi chưa được dời",
@@ -584,15 +584,7 @@ export default {
     "Chưa kết nối được DLU để kiểm tra tài khoản. Thử lại sau chút nha.",
   "Change it any time in Settings.":
     "Đổi lại lúc nào cũng được trong Cài đặt.",
-  "Daily plan": "Kế hoạch hằng ngày",
-  "Morning brief": "Tóm tắt buổi sáng",
-  "Classes and tasks today.": "Lớp học và việc hôm nay.",
-  "Evening check-in": "Check-in buổi tối",
-  "Mark today done or missed.": "Đánh dấu hôm nay xong hay bỏ lỡ.",
   Done: "Xong",
-  Missed: "Bỏ lỡ",
-  "Marked done": "Đã đánh dấu xong",
-  "Marked missed": "Đã đánh dấu bỏ lỡ",
   "Could not save. Try again.": "Chưa lưu được. Thử lại nha.",
   "Course colour": "Màu môn học",
   "Colour {n}": "Màu {n}",

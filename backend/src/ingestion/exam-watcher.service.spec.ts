@@ -7,6 +7,7 @@ import type { PortalExamRow } from "./core/parse-portal";
 import { ExamWatcherService } from "./exam-watcher.service";
 import { IngestionJobsService } from "./ingestion-jobs.service";
 import { MaterializerService } from "./materializer.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
 
 // ── in-memory Prisma double (PortalAPIJob side) ────────────────────────────
 
@@ -150,6 +151,7 @@ async function makeWatcher(
   // prisma double — everything else that touches the network/DLU is mocked.
   const module: TestingModule = await Test.createTestingModule({
     providers: [
+      { provide: UpstreamSessionCache, useValue: passThroughSessionCache },
       ExamWatcherService,
       IngestionJobsService,
       { provide: PrismaService, useValue: prisma },
@@ -177,6 +179,13 @@ async function makeWatcher(
     flushDigest,
   };
 }
+
+/** A session cache that always signs in, so these specs run without Redis. */
+const passThroughSessionCache = {
+  getOrLogin: (_userId: string, _kind: string, login: () => Promise<unknown>) =>
+    login(),
+  invalidate: jest.fn(),
+};
 
 describe("ExamWatcherService", () => {
   it("does nothing when INGESTION_ENABLED is off", async () => {

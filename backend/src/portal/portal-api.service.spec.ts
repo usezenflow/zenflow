@@ -5,6 +5,7 @@ import {
   OutboundBreakers,
   UpstreamUnavailableError,
 } from "../common/outbound-breaker";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import { PortalAPIService } from "./portal-api.service";
 
 const BASE = "https://portal-api.dlu.edu.vn";
@@ -28,6 +29,7 @@ const reply = (init: { status?: number; json?: unknown } = {}): Response =>
   ({
     status: init.status ?? 200,
     ok: (init.status ?? 200) < 400,
+    url: "",
     json: () => Promise.resolve(init.json),
   }) as unknown as Response;
 
@@ -144,10 +146,10 @@ describe("PortalAPIService", () => {
     });
 
     it("embeds the status in the error so statusCodeOf can recover it", async () => {
-      fetchMock.mockResolvedValueOnce(reply({ status: 403 }));
+      fetchMock.mockResolvedValueOnce(reply({ status: 500 }));
       await expect(
         service.fetchRegistHistory("TOKEN", "2026-2027", "HK01"),
-      ).rejects.toThrow(/getAllRegistHistory failed \(status 403\)/);
+      ).rejects.toThrow(/getAllRegistHistory failed \(status 500\)/);
     });
 
     it("collapses a transport failure into 'DLU is unreachable'", async () => {
@@ -188,14 +190,25 @@ describe("PortalAPIService", () => {
     });
 
     it("throws on a non-2xx status without leaking the query string", async () => {
-      fetchMock.mockResolvedValueOnce(reply({ status: 401 }));
+      fetchMock.mockResolvedValueOnce(reply({ status: 500 }));
 
       await expect(
         service.fetchTimetable("TOKEN", "2026-2027", "HK01", 34),
       ).rejects.toThrow(
-        "Portal request to /api/student/DrawingStudentSchedules failed (status 401)",
+        "Portal request to /api/student/DrawingStudentSchedules failed (status 500)",
       );
     });
+
+    it.each([401, 403])(
+      "reports a %i as a rejected session so the cache can sign in again",
+      async (status) => {
+        fetchMock.mockResolvedValueOnce(reply({ status }));
+
+        await expect(
+          service.fetchTimetable("TOKEN", "2026-2027", "HK01", 34),
+        ).rejects.toBeInstanceOf(UpstreamSessionRejectedError);
+      },
+    );
   });
 
   describe("fetchExams", () => {

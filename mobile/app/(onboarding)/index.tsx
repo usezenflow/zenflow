@@ -2,7 +2,6 @@ import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { listIntegrations } from "@/api/integrations";
 import { createTagsBulk, listTags } from "@/api/tags";
-import { createSession, searchSessions } from "@/api/tasks";
 import { updateBasicInfo } from "@/api/users";
 import {
   AlertCircle,
@@ -21,22 +20,19 @@ import {
 import { ImportedTimetable } from "@/components/onboarding/imported-timetable";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
 import { useIntegrationStore } from "@/hooks/use-integration-store";
 import { useNotificationToggle } from "@/hooks/use-notification-toggle";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useUserStore } from "@/hooks/use-user-store";
-import { DEFAULT_USER_NAME, type FocusBand } from "@zenflow/shared";
+import type { FocusBand } from "@zenflow/shared";
 import { DEFAULT_FOCUS_BAND, focusBandOptions } from "@/lib/focus-band";
 import {
   FIRST_STEP,
   type OnboardingStep,
   canGoBack,
-  dndRoutinePayloads,
   initialTagSelection,
-  missingRoutines,
   newTagsForBulk,
   nextStep,
   prevStep,
@@ -73,19 +69,6 @@ const COPY = {
   },
   get back() {
     return t("Back");
-  },
-  name: {
-    get title() {
-      return t("What should we call you?");
-    },
-    get body() {
-      return t(
-        "Shown in the app and in your reminders.",
-      );
-    },
-    get label() {
-      return t("Display name");
-    },
   },
   focus: {
     get title() {
@@ -175,7 +158,6 @@ const COPY = {
 } as const;
 
 const STEP_ICON: Partial<Record<OnboardingStep, typeof User>> = {
-  name: User,
   focus: Sun,
   dlu: GraduationCap,
   notifications: Bell,
@@ -243,10 +225,6 @@ export default function OnboardingScreen() {
   // skipping or going back returns straight to the summary.
   const [fromSummary, setFromSummary] = useState(false);
   const [busy, setBusy] = useState(false);
-  // The placeholder name means "not set": start empty instead of showing it.
-  const [name, setName] = useState(
-    user?.name && user.name !== DEFAULT_USER_NAME ? user.name : "",
-  );
   const [blocked, setBlocked] = useState(false);
   // Morning is preselected so the step is one tap.
   const [focusBand, setFocusBand] = useState<FocusBand>(
@@ -302,13 +280,6 @@ export default function OnboardingScreen() {
   }
 
   const advance = () => go();
-
-  const saveName = () =>
-    run(async () => {
-      const trimmed = name.trim();
-      if (!trimmed || trimmed === user?.name) return;
-      updateUser(await updateBasicInfo({ name: trimmed }));
-    });
 
   const saveFocus = () =>
     run(async () => {
@@ -385,39 +356,10 @@ export default function OnboardingScreen() {
     }
   }
 
-  /**
-   * Best effort: the daily Sleep, Lunch break and Dinner DND series in the
-   * user's timezone. Series already present by title are skipped. A failed
-   * lookup creates nothing, so a retry can't duplicate them.
-   */
-  async function seedDefaultRoutines() {
-    try {
-      const now = new Date();
-      const saved = useUserStore.getState().user;
-      const payloads = dndRoutinePayloads(
-        saved?.timezone || "UTC",
-        now,
-        saved?.focusBand ?? null,
-      );
-      const found = await Promise.all(
-        payloads.map((p) =>
-          searchSessions({ q: p.title, anchor: now.toISOString(), limit: 50 }),
-        ),
-      );
-      const existing = found.flatMap((r) => r.sessions);
-      for (const payload of missingRoutines(payloads, existing)) {
-        await createSession(payload).catch(() => {});
-      }
-    } catch {
-      // Not worth blocking the first run on.
-    }
-  }
-
   async function finish() {
     setBusy(true);
     try {
       await seedDefaultTags();
-      await seedDefaultRoutines();
       // Idempotent; the root AuthGate then routes to the app.
       updateUser(await updateBasicInfo({ onboarded: true }));
     } catch {
@@ -461,28 +403,6 @@ export default function OnboardingScreen() {
   let footer: React.ReactNode = null;
 
   switch (step) {
-    case "name":
-      ({ title, body } = COPY.name);
-      content = (
-        <View>
-          <Text className="mb-2 text-[13.5px] font-semibold">
-            {COPY.name.label}
-          </Text>
-          <Input
-            value={name}
-            onChangeText={setName}
-            autoComplete="name"
-            maxLength={100}
-          />
-        </View>
-      );
-      footer = (
-        <>
-          {primary(COPY.continue, saveName, !name.trim())}
-          {ghost(COPY.skipForNow, advance)}
-        </>
-      );
-      break;
     case "focus":
       ({ title, body } = COPY.focus);
       content = (

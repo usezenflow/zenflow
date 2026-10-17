@@ -51,7 +51,7 @@
       "expected": null
     },
     {
-      "name": "skip-settles-negative",
+      "name": "skip-settles-zero",
       "fn": "completionReward",
       "args": [
         0,
@@ -60,10 +60,10 @@
         true,
         4500000
       ],
-      "expected": -1.0
+      "expected": 0.0
     },
     {
-      "name": "no-check-off-missed-at-cutoff",
+      "name": "no-check-off-lapsed-at-cutoff",
       "fn": "completionReward",
       "args": [
         0,
@@ -72,7 +72,7 @@
         false,
         90000000
       ],
-      "expected": -1.0
+      "expected": -0.25
     }
   ]
 }

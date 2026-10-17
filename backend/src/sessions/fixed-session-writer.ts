@@ -40,6 +40,8 @@ export interface FixedSessionInput {
   durationMinutes: number;
   /** Where the block sits; fixed sessions are always scheduled. */
   scheduledStartTime: Date;
+  /** Set when an LMS submission was first observed; null/absent otherwise. */
+  submittedAt?: Date | null;
   /** Upstream identity for ingested rows; null/absent for user-created ones. */
   externalKey?: string | null;
   /** Parent `SessionSeries` for a recurring fixed session. */
@@ -76,6 +78,7 @@ export async function insertFixedSession(
       deadline: null,
       scheduledStartTime: input.scheduledStartTime,
       externalKey: input.externalKey ?? null,
+      submittedAt: input.submittedAt ?? null,
       seriesId: input.seriesId ?? null,
       scheduleStudyUnitId: input.scheduleStudyUnitId ?? null,
       lmsCourseId: input.lmsCourseId ?? null,

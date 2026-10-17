@@ -2,6 +2,8 @@ import { UpstreamUnavailableError } from "../common/outbound-breaker";
 import { forwardRef, Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { IntegrationsService } from "../integrations/integrations.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import { LMSService, type LmsSession } from "../lms/lms.service";
 import {
   ingestionUpstreamItems,
@@ -86,6 +88,7 @@ export class EnrollmentDiscoveryService {
     // `revealCredentials`, integrations needs ingestion for the manual trigger.
     @Inject(forwardRef(() => IntegrationsService))
     private readonly integrations: IntegrationsService,
+    private readonly sessions: UpstreamSessionCache,
   ) {
     this.dkhpEndpoint = this.config.get<string>("DKHP_API_URL") ?? "";
     this.lmsEndpoint = this.config.get<string>("LMS_URL") ?? "";
@@ -165,6 +168,9 @@ export class EnrollmentDiscoveryService {
       );
       return { ok: true, servedFromCache: false };
     } catch (error) {
+      if (error instanceof UpstreamSessionRejectedError) {
+        await this.sessions.invalidate(target.userId, "dkhp");
+      }
       if (error instanceof UpstreamUnavailableError) {
         // Nothing was requested and nothing succeeded: drop the run rather
         // than record a student failure; the ticker releases the claim.
@@ -337,6 +343,9 @@ export class EnrollmentDiscoveryService {
       await this.jobs.finishJob("LMS", jobId, "COMPLETED");
       return { ok: true, servedFromCache: false };
     } catch (error) {
+      if (error instanceof UpstreamSessionRejectedError) {
+        await this.sessions.invalidate(target.userId, "lms");
+      }
       if (error instanceof UpstreamUnavailableError) {
         // Nothing was requested and nothing succeeded: drop the run rather
         // than record a student failure; the ticker releases the claim.
@@ -493,9 +502,8 @@ export class EnrollmentDiscoveryService {
         target.userId,
         "PORTAL",
       );
-      const result = await this.portal.authenticateDkhp(
-        creds.username,
-        creds.password,
+      const result = await this.sessions.getOrLogin(target.userId, "dkhp", () =>
+        this.portal.authenticateDkhp(creds.username, creds.password),
       );
       if (!result.ok) {
         // A login failure fails the JOB, not an item: without a token there is
@@ -535,7 +543,9 @@ export class EnrollmentDiscoveryService {
         target.userId,
         "LMS",
       );
-      const result = await this.lms.login(creds.username, creds.password);
+      const result = await this.sessions.getOrLogin(target.userId, "lms", () =>
+        this.lms.login(creds.username, creds.password),
+      );
       if (!result.ok) {
         await this.jobs.finishJob("LMS", jobId, "FAILED");
         ingestionSignInFailures.add(1, { provider: "LMS", reason: "rejected" });

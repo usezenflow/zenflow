@@ -66,14 +66,18 @@ export const STABILITY_WEIGHT = 0.1;
 export const STABILITY_SATURATION_HOURS = 4;
 
 /**
- * Reward written on the `SessionEvent` for each outcome (ADR-0023). A user
- * drag/resize of a scheduled TASK is graded by displacement (`MOVE`). An
- * unmoved TASK is positive when checked off in its slot and negative when
- * skipped or missed. `CREATE` events carry a neutral 0.
+ * Reward written on the `SessionEvent` for each outcome (ADR-0023, amended by
+ * the level-up plan). A user drag/resize of a scheduled TASK is graded by
+ * displacement (`MOVE`). An unmoved TASK is positive when started or done in
+ * its slot, neutral when skipped or checked off at the wrong time, and a small
+ * negative when lapsed. `CREATE` events carry a neutral 0.
  */
 export const SESSION_MOVE_REWARD = -1.0;
 export const SESSION_COMPLETED_REWARD = 1.0;
-export const SESSION_MISSED_REWARD = -1.0;
+export const SESSION_STARTED_REWARD = 1.0;
+export const SESSION_SKIPPED_REWARD = 0.0;
+export const SESSION_WRONG_TIME_REWARD = 0.0;
+export const SESSION_LAPSED_REWARD = -0.25;
 
 /**
  * Disjoint LinUCB scheduling parameters

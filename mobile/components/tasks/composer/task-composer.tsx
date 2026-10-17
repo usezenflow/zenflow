@@ -127,7 +127,6 @@ export function TaskComposer({
   const type = form.watch("type");
   const kind: ComposerKind = type === "TASK" ? "TASK" : "EVENT";
   const isTask = kind === "TASK";
-  const spread = !(form.watch("splitTotal") ?? true);
   const saveDraft = useComposerStore((s) => s.saveDraft);
   const remember = useComposerStore((s) => s.rememberDuration);
   const [line, setLine] = useState(() => form.getValues("title") ?? "");
@@ -290,7 +289,7 @@ export function TaskComposer({
               <View className="flex-row gap-2" testID="task.kind">
                 <Chip
                   testID="task.kind.task"
-                  label={t("Task")}
+                  label={t("Plan")}
                   active={isTask}
                   disabled={busy}
                   onPress={() => setKind("TASK")}
@@ -332,7 +331,7 @@ export function TaskComposer({
               <>
                 <DeadlineField form={form} tz={tz} editing={!create} disabled={busy} />
                 {create && <DurationField form={form} disabled={busy} />}
-                {!(create && spread) && <SplitField form={form} disabled={busy} />}
+                {!create && <SplitField form={form} disabled={busy} />}
               </>
             ) : (
               <EventWhenField form={form} tz={tz} disabled={busy} />

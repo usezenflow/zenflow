@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { DEFAULT_USER_NAME } from "@zenflow/shared";
 import { NotificationsService } from "../notifications/notifications.service";
 import { NotificationEvent } from "../notifications/types";
 import { PortalAPIService } from "../portal/portal-api.service";
@@ -53,13 +54,16 @@ export class StudentSyncService {
     data: ProfileJobData,
     now = new Date(),
   ): Promise<StudentSyncResult> {
-    const token = await this.session.token(data.userId);
-    if (!token) return { ok: false };
-
-    const info = parseStudentInfo(await this.portal.fetchStudentInfo(token));
+    const fetched = await this.session.withToken(data.userId, async (token) => {
+      const rawInfo = await this.portal.fetchStudentInfo(token);
+      await sleep(this.requestDelayMs);
+      const rawPrograms = await this.portal.fetchStudyPrograms(token);
+      return { rawInfo, rawPrograms };
+    });
+    if (!fetched.ok) return { ok: false };
+    const info = parseStudentInfo(fetched.value.rawInfo);
     if (!info) throw new Error("The portal returned no student profile");
-    await sleep(this.requestDelayMs);
-    const programs = await this.portal.fetchStudyPrograms(token);
+    const programs = fetched.value.rawPrograms;
 
     // Type 1 is the student's main program.
     const main = programs.find((p) => p.Type === 1) ?? programs[0];
@@ -75,6 +79,11 @@ export class StudentSyncService {
       where: { userId: data.userId },
       create: { userId: data.userId, ...fields },
       update: fields,
+    });
+    // The DLU name fills the placeholder only; a name the student set wins.
+    await this.prisma.user.updateMany({
+      where: { id: data.userId, name: DEFAULT_USER_NAME },
+      data: { name: info.fullName },
     });
     for (const program of programs) {
       await this.prisma.studyProgram.upsert({
@@ -115,16 +124,18 @@ export class StudentSyncService {
     });
     if (programs.length === 0) return { ok: true };
 
-    const token = await this.session.token(data.userId);
-    if (!token) return { ok: false };
-
-    const years: PortalMarksYear[] = [];
-    let first = true;
-    for (const { studyProgramId } of programs) {
-      if (!first) await sleep(this.requestDelayMs);
-      first = false;
-      years.push(...(await this.portal.fetchMarks(token, studyProgramId)));
-    }
+    const fetched = await this.session.withToken(data.userId, async (token) => {
+      const years: PortalMarksYear[] = [];
+      let first = true;
+      for (const { studyProgramId } of programs) {
+        if (!first) await sleep(this.requestDelayMs);
+        first = false;
+        years.push(...(await this.portal.fetchMarks(token, studyProgramId)));
+      }
+      return years;
+    });
+    if (!fetched.ok) return { ok: false };
+    const years = fetched.value;
     const parsed = parseMarks(years);
 
     for (const mark of parsed.marks) {

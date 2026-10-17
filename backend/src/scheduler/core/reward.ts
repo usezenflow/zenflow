@@ -9,29 +9,40 @@ import {
  * ADR-0023). No I/O, no clock.
  */
 
-/** Settled outcome of an unmoved placement, see {@link completionReward}. */
-export type CompletionOutcome = "COMPLETED" | "SKIPPED" | "MISSED";
+/** Settled outcome of an unmoved placement, see {@link completionOutcome}. */
+export type CompletionOutcome =
+  | "DONE"
+  | "STARTED"
+  | "SKIPPED"
+  | "WRONG_TIME"
+  | "LAPSED";
 
 /**
- * Outcome of an unmoved TASK, or `null` while it is not settled yet. Settles
- * at `end + grace` for a check-off inside the slot (`COMPLETED`) or a skip
- * (`SKIPPED`). A check-off before `start` does not count, so the placement is
- * `MISSED` at `end + cutoff`, as is one with no check-off.
+ * Outcome of an unmoved TASK, or `null` while it is not settled yet.
+ *
+ * Skip, done and started settle at `end + grace`. A start counts when it falls
+ * in `[start, end)`; a check-off counts from `start` on. A check-off before
+ * `start` is `WRONG_TIME`, and no start or check-off is `LAPSED`; both settle at
+ * `end + cutoff`.
  */
-export function completionReward(
+export function completionOutcome(
   startMs: number,
   endMs: number,
   completedAtMs: number | null,
   skipped: boolean,
   nowMs: number,
+  startedAtMs: number | null,
   graceMs: number = OUTCOME_GRACE_MS,
   cutoffMs: number = OUTCOME_MISS_CUTOFF_MS,
 ): CompletionOutcome | null {
   if (nowMs < endMs + graceMs) return null;
   if (skipped) return "SKIPPED";
-  if (completedAtMs !== null && completedAtMs >= startMs) return "COMPLETED";
-  if (nowMs >= endMs + cutoffMs) return "MISSED";
-  return null;
+  if (completedAtMs !== null && completedAtMs >= startMs) return "DONE";
+  if (startedAtMs !== null && startedAtMs >= startMs && startedAtMs < endMs) {
+    return "STARTED";
+  }
+  if (nowMs < endMs + cutoffMs) return null;
+  return completedAtMs !== null ? "WRONG_TIME" : "LAPSED";
 }
 
 /**

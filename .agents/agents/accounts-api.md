@@ -12,7 +12,6 @@ owns:
   - backend/src/reminders/**
   - backend/src/mail/**
   - backend/src/streaks/**
-  - backend/src/daily-push/**
   - backend/src/course-colours/**
   - backend/src/files/**
   - backend/src/prisma/**

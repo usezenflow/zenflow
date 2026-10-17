@@ -46,8 +46,6 @@ import {
 } from "./ingestion/fetch-worker.module";
 import { SchedulerWorkerModule } from "./scheduler/scheduler-worker.module";
 import { RemindersWorkerModule } from "./reminders/reminders-worker.module";
-import { DailyPushModule } from "./daily-push/daily-push.module";
-import { DailyPushWorkerModule } from "./daily-push/daily-push-worker.module";
 import { HealthModule } from "./health/health.module";
 
 const configEnvFile = envFilePath();
@@ -74,7 +72,6 @@ const jobModules = [
         IngestionWorkerModule,
         SchedulerWorkerModule,
         RemindersWorkerModule,
-        DailyPushWorkerModule,
       ]
     : []),
   ...(consumesQueue(role, "notify") ? [NotifyWorkerModule] : []),
@@ -566,7 +563,6 @@ const jobModules = [
     DevicesModule,
     // Per-session reminders: SchedulerRegistry one-shot timers -> notifications.
     RemindersModule,
-    DailyPushModule,
     HealthModule,
     ...jobModules,
   ],

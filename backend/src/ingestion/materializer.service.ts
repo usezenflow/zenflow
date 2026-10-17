@@ -97,6 +97,11 @@ interface ComparableSession {
   scheduledStartTime: Date | null;
 }
 
+/** `submittedAt` for a block seen as submitted on this run; null otherwise. */
+function submittedAtOf(block: ParsedBlock, now: Date): Date | null {
+  return (block as Partial<ParsedLmsItem>).submitted ? now : null;
+}
+
 function differsFromUpstream(
   existing: ComparableSession,
   block: ParsedBlock,
@@ -127,6 +132,7 @@ const EXISTING_SESSION_SELECT = {
   scheduledStartTime: true,
   deleted: true,
   lastMovedAt: true,
+  submittedAt: true,
 } as const;
 
 function isUniqueViolation(error: unknown): boolean {
@@ -210,12 +216,22 @@ export class MaterializerService {
       }
 
       if (!existing) {
-        const createdId = await this.create(userId, block, source);
+        const createdId = await this.create(userId, block, source, now);
         outcome[createdId ? "created" : "unchanged"] += 1;
         if (createdId) {
           runDigest.add(digestItemOf(block, "created", createdId), source);
         }
         continue;
+      }
+
+      if (
+        (block as Partial<ParsedLmsItem>).submitted &&
+        !existing.submittedAt
+      ) {
+        await this.prisma.session.update({
+          where: { id: existing.id },
+          data: { submittedAt: now },
+        });
       }
 
       if (!differsFromUpstream(existing, block)) {
@@ -420,6 +436,7 @@ export class MaterializerService {
     userId: string,
     block: ParsedBlock,
     source: IngestedSource,
+    now: Date,
   ): Promise<string | null> {
     try {
       let newId: string | null = null;
@@ -444,6 +461,7 @@ export class MaterializerService {
             .scheduleStudyUnitId,
           lmsCourseId:
             (block as Partial<ParsedLmsItem>).lmsCourse?.lmsCourseId ?? null,
+          submittedAt: submittedAtOf(block, now),
         });
         newId = row.id;
 
@@ -509,6 +527,7 @@ export class MaterializerService {
     scheduledStartTime: Date | null;
     deleted: boolean;
     lastMovedAt: Date | null;
+    submittedAt: Date | null;
   } | null> {
     const legacyKey = (block as Partial<ParsedPortalItem>).legacyExternalKey;
     if (!legacyKey) return null;

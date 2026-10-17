@@ -1,17 +1,22 @@
 import type { SessionCardState, SessionType } from "@zenflow/shared";
 
 /**
- * Warm Sunrise palette: orange, yellow and lime on warm paper and ink. Hex
+ * Calm palette: teal primary, yellow and lime on warm paper and ink. Orange stays
+ * on the logo only. Hex
  * source of truth for code that paints with raw colours (RN style props, SVG,
  * WebView CSS). The Tailwind tokens in `mobile/app/global.css`,
  * `frontend/src/index.css` and `landing/src/styles/global.css` carry the same
  * values; `mobile/lib/__tests__/palette.test.ts` keeps them in sync.
  */
 export const BRAND = {
-  /** Primary, light scheme. */
+  /** Logo orange, light scheme. Not used for controls. */
   orange: "#FF8E3E",
-  /** Primary, dark scheme. */
+  /** Logo orange, dark scheme. */
   orangeDark: "#FF7A24",
+  /** Primary, light scheme. White text on it is 4.8:1. */
+  teal: "#1B7F76",
+  /** Primary, dark scheme. Dark ink on it is 7.9:1. */
+  tealDark: "#5CC4B8",
   /** Highlights and assignments. */
   yellow: "#F0B101",
   /** Light accent, success and done. Fill only. */
@@ -74,13 +79,13 @@ export const UI: Record<Scheme, UiTokens> = {
     muted: "#F6F3EF",
     mutedForeground: "#6F665B",
     border: "#E8E5DF",
-    primary: BRAND.orange,
-    primaryForeground: "#2B1406",
-    ring: BRAND.orange,
+    primary: BRAND.teal,
+    primaryForeground: "#FFFFFF",
+    ring: BRAND.teal,
     destructive: "#E7000B",
     destructiveForeground: "#FFFFFF",
     glass: "#FFFFFF",
-    glassEdge: BRAND.orange,
+    glassEdge: BRAND.teal,
     success: SUCCESS,
   },
   dark: {
@@ -90,13 +95,13 @@ export const UI: Record<Scheme, UiTokens> = {
     muted: "#2C2822",
     mutedForeground: "#ACA397",
     border: "#36322D",
-    primary: BRAND.orangeDark,
-    primaryForeground: "#2B1406",
-    ring: BRAND.orangeDark,
+    primary: BRAND.tealDark,
+    primaryForeground: "#06231F",
+    ring: BRAND.tealDark,
     destructive: "#FF6467",
     destructiveForeground: BRAND.ink,
-    glass: "#FFECDC",
-    glassEdge: "#FFAA64",
+    glass: "#DDF3EF",
+    glassEdge: "#7FD6CB",
     success: SUCCESS,
   },
 };
@@ -136,8 +141,8 @@ export const SESSION_TONES: Record<SessionTone, SessionToneColors> = {
   exam: { base: "#14A09B", ink: { light: "#0E6F6B", dark: "#6FD3CD" } },
   /** Yellow. */
   assignment: { base: BRAND.yellow, ink: { light: "#7A5A00", dark: "#F6C93C" } },
-  /** Orange: tasks. */
-  task: { base: BRAND.orange, ink: { light: "#9A4A0C", dark: "#FFA866" } },
+  /** Teal: tasks. */
+  task: { base: BRAND.teal, ink: { light: "#0E5850", dark: "#9EE3D9" } },
   /** Soft grey: free time and do not disturb. */
   dnd: { base: BRAND.grey, ink: { light: "#5F574D", dark: "#B8B0A4" } },
   /** Lime: done. */

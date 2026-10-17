@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import type {
-  CreateSessionResponse,
   RemoveSessionResponse,
   RemoveSessionSeriesResponse,
   SeriesSession,
@@ -24,13 +23,8 @@ import {
 import { MAX_SCAN_DAYS } from "../scheduler/constants";
 import { DAY_MS, localDateStr } from "../scheduler/core/slot";
 import { minutesToUtc } from "../common/utils";
-import { CreateSessionDto } from "./dto/create-session.dto";
 import { SessionRow, WITH_TAGS_AND_SERIES } from "./types/session-row";
-import {
-  NO_SLOT_PROPOSAL,
-  toSeriesSessionDto,
-  toSessionDto,
-} from "./session-mapper";
+import { toSeriesSessionDto, toSessionDto } from "./session-mapper";
 import { createEventData, recordCreateEvent } from "./session-events";
 import { placeOrDiscard } from "./placement-compensation";
 
@@ -59,98 +53,6 @@ export class SeriesService {
     private readonly tagsService: TagsService,
     private readonly taskPlacement: TaskPlacementService,
   ) {}
-
-  /**
-   * Create a `TASK` series: one `SessionSeries` (`type: TASK`, shared `deadline`,
-   * no `rrule`) plus `count` linked `Session` rows, then hand the batch to
-   * {@link TaskPlacementService.placeSeriesOnCreate} — each member is spread
-   * across `now … deadline` from ONE series-level 50/50 heuristic-or-LinUCB
-   * roll (#58), `MAX_SERIES_PER_DAY` per calendar day, members at least
-   * `SERIES_GAP_MINUTES` apart and no existing session moved. Each `sessions[]` entry carries its
-   * sitting's `SeriesSittingProposal` fields (≤5 alternatives when sampled).
-   */
-  async createTaskSeries(
-    dto: CreateSessionDto,
-    user: User,
-    cleanTags: string[],
-    deadline: Date,
-    count: number,
-    now: Date,
-  ): Promise<CreateSessionResponse> {
-    const rows = await this.prisma.$transaction(async (tx) => {
-      const tagIds = await this.tagsService.resolveTagIds(
-        tx,
-        user.id,
-        cleanTags,
-      );
-      const series = await tx.sessionSeries.create({
-        data: { type: "TASK", rrule: null, deadline, userId: user.id },
-      });
-
-      const created: SessionRow[] = [];
-      for (let i = 0; i < count; i++) {
-        const s = await tx.session.create({
-          data: {
-            type: "TASK",
-            source: "USER",
-            title: dto.title,
-            note: dto.note ?? null,
-            location: dto.location ?? null,
-            durationMinutes: dto.sessionDurations?.[i] ?? dto.durationMinutes,
-            deadline,
-            seriesId: series.id,
-            sessionIndex: i + 1,
-            sessionTotal: count,
-            tags: { connect: tagIds.map((id) => ({ id })) },
-            userId: user.id,
-          },
-          include: WITH_TAGS_AND_SERIES,
-        });
-        await tx.sessionEvent.create({
-          data: createEventData(s, user.id, series.id),
-        });
-        recordCreateEvent();
-        created.push(s);
-      }
-      return created;
-    });
-
-    // Every member gets a start (last resort on a miss); a throw discards the
-    // whole just-created series rather than leaving it unplaced.
-    const seriesId = rows[0]?.seriesId as string;
-    const placements = await placeOrDiscard(
-      this.prisma,
-      { userId: user.id, sessionIds: rows.map((r) => r.id), seriesId },
-      () =>
-        this.taskPlacement.placeSeriesOnCreate({
-          user,
-          seriesId,
-          members: rows.map((r) => ({
-            id: r.id,
-            durationMinutes: r.durationMinutes,
-          })),
-          deadline,
-          now,
-        }),
-    );
-
-    const placementById = new Map(placements.map((p) => [p.id, p]));
-    const sessions = rows.map((r) => {
-      const p = placementById.get(r.id);
-      return toSeriesSessionDto(
-        { ...r, scheduledStartTime: p?.scheduledStartTime ?? null },
-        p,
-      );
-    });
-    return {
-      ...sessions[0],
-      ...NO_SLOT_PROPOSAL,
-      sessions,
-      ...(placements.some((p) => p.degraded)
-        ? { schedulingDegraded: true }
-        : {}),
-    };
-  }
 
   /**
    * A `TASK` series' deadline moved: hand the still-upcoming sittings to

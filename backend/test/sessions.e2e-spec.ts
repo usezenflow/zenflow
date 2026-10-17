@@ -160,8 +160,6 @@ describe("creating a TASK", () => {
       rejected(task({ colour: "red" }), /colour should not exist/));
     it("rejects a title over 60 characters", () =>
       rejected(task({ title: "x".repeat(61) }), /at most 60 characters/));
-    it("rejects more sittings than the horizon can hold", () =>
-      rejected(task({ sessionCount: 61 }), /sessionCount/));
     it("rejects a fixed session without a start", () =>
       rejected(
         { type: "LECTURE", title: "L", durationMinutes: 60 },
@@ -224,83 +222,6 @@ describe("when the deadline cannot be met", () => {
     await create(student, { ...tight(), infeasiblePolicy: "SHRUG" }).expect(
       400,
     );
-  });
-});
-
-describe("a TASK series", () => {
-  it("spreads the sittings over distinct days without overlap", async () => {
-    const student = await signUp("series");
-    const res = await create(
-      student,
-      task({ sessionCount: 3, deadline: iso(Date.now() + 6 * DAY) }),
-    ).expect(201);
-    const created = data(res);
-    const sittings = created.sessions ?? [];
-    expect(sittings).toHaveLength(3);
-    const seriesIds = new Set(sittings.map((s) => s.seriesId));
-    expect(seriesIds.size).toBe(1);
-    expect([...seriesIds][0]).not.toBeNull();
-    const days = new Set(sittings.map((s) => iso(startOf(s)).slice(0, 10)));
-    expect(days.size).toBe(3);
-    for (const [i, a] of sittings.entries()) {
-      for (const b of sittings.slice(i + 1)) expect(overlaps(a, b)).toBe(false);
-    }
-  });
-
-  it("removes every sitting with the series", async () => {
-    const student = await signUp("series-del");
-    const created = data(
-      await create(
-        student,
-        task({ sessionCount: 3, deadline: iso(Date.now() + 6 * DAY) }),
-      ).expect(201),
-    );
-    const seriesId = created.sessions?.[0].seriesId as string;
-    const res = await student.agent
-      .delete(`${SESSIONS}/series/${seriesId}`)
-      .expect(200);
-    expect(
-      data<{ removedSessionIds: string[] }>(res).removedSessionIds,
-    ).toHaveLength(3);
-    expect(await list(student, "month", Date.now())).toEqual([]);
-  });
-
-  it("removes a sitting and every later one, keeping the earlier ones", async () => {
-    const student = await signUp("series-from");
-    const created = data(
-      await create(
-        student,
-        task({ sessionCount: 3, deadline: iso(Date.now() + 6 * DAY) }),
-      ).expect(201),
-    );
-    const sittings = [...(created.sessions ?? [])].sort(
-      (a, b) => startOf(a) - startOf(b),
-    );
-    const seriesId = sittings[0].seriesId as string;
-    await student.agent
-      .delete(`${SESSIONS}/series/${seriesId}/from/${sittings[1].id}`)
-      .expect(200);
-    const left = (await list(student, "month", Date.now())).filter(
-      (s) => s.type === "TASK",
-    );
-    expect(left.map((s) => s.id)).toEqual([sittings[0].id]);
-  });
-
-  it("refuses to shrink another student's series", async () => {
-    const owner = await signUp("series-owner");
-    const other = await signUp("series-other");
-    const created = data(
-      await create(
-        owner,
-        task({ sessionCount: 2, deadline: iso(Date.now() + 5 * DAY) }),
-      ).expect(201),
-    );
-    const seriesId = created.sessions?.[0].seriesId as string;
-    const res = await other.agent.delete(`${SESSIONS}/series/${seriesId}`);
-    expect([403, 404]).toContain(res.status);
-    expect(
-      (await list(owner, "month", Date.now())).filter((s) => s.type === "TASK"),
-    ).toHaveLength(2);
   });
 });
 

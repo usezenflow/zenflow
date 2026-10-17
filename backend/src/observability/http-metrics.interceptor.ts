@@ -16,6 +16,7 @@ import { httpServerDuration, statusClass } from "./metrics";
 import { activeTraceIds } from "./otel";
 import { shouldLogRequest } from "./request-sampling";
 import { serverTimingHeader } from "./phase-timings";
+import { ActiveUsersService } from "./active-users.service";
 
 /**
  * The one place inbound HTTP is measured + logged:
@@ -39,6 +40,7 @@ export class HttpMetricsInterceptor implements NestInterceptor {
   constructor(
     private readonly logger: PinoLogger,
     private readonly cls: ClsService,
+    private readonly activeUsers: ActiveUsersService,
     config: ConfigService,
   ) {
     this.logger.setContext("http");
@@ -56,6 +58,7 @@ export class HttpMetricsInterceptor implements NestInterceptor {
 
     const userId = req.user?.id;
     if (userId) {
+      void this.activeUsers.record(userId);
       try {
         this.cls.set("userId", userId);
       } catch {

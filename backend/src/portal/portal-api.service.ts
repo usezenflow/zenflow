@@ -4,6 +4,7 @@ import type {
   PortalExamRow,
   PortalTimetableRow,
 } from "../ingestion/core/parse-portal";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import type { PortalRegistHistoryRow } from "../ingestion/core/parse-regist-history";
 import type {
   PortalMarksYear,
@@ -54,6 +55,16 @@ const REJECTED_LOGIN_STATUSES: readonly number[] = [
   Number(HttpStatus.UNAUTHORIZED),
   Number(HttpStatus.FORBIDDEN),
 ];
+
+/** A 401 or 403 on an authenticated call means the bearer token has ended, not that the request was wrong. */
+function rejectIfSessionEnded(
+  res: Response,
+  upstream: "portal" | "dkhp",
+): void {
+  if (res.status === 401 || res.status === 403) {
+    throw new UpstreamSessionRejectedError(upstream);
+  }
+}
 
 /** The two upstream hosts this client talks to; each has its own key and client id. */
 interface Upstream {
@@ -244,6 +255,7 @@ export class PortalAPIService {
       method: "GET",
       headers: this.authHeaders(token),
     });
+    rejectIfSessionEnded(res, "portal");
     if (!res.ok) {
       throw new Error(
         `Portal request to /api/student/info failed (status ${res.status})`,
@@ -304,6 +316,7 @@ export class PortalAPIService {
       body: JSON.stringify({ p1: academicYear, p2: semester }),
     });
 
+    rejectIfSessionEnded(res, "dkhp");
     if (!res.ok) {
       throw new Error(
         `Portal request to ${path} failed (status ${res.status})`,
@@ -321,6 +334,7 @@ export class PortalAPIService {
       headers: this.authHeaders(token),
     });
 
+    rejectIfSessionEnded(res, "portal");
     if (!res.ok) {
       throw new Error(
         `Portal request to ${path.split("?")[0]} failed (status ${res.status})`,

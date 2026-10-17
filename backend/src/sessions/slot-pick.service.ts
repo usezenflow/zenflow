@@ -14,6 +14,7 @@ import { toSessionDto } from "./session-mapper";
 import { moveEventData, recordUserMove } from "./session-events";
 import { SlotPickDto } from "./dto/slot-pick.dto";
 import { SlotTakenException } from "./slot-taken.exception";
+import { schedulerSlotPicks } from "../observability/metrics";
 
 /** The session after an alternative was applied, with its undo group (absent when it was already there). */
 interface AppliedAlternative {
@@ -89,6 +90,10 @@ export class SlotPickService {
       const applied = await this.tryApplyAlternative(sessionId, proposal, user);
       if (applied) {
         await this.recordChosenPolicy(proposal.id, this.otherPolicy(proposal));
+        schedulerSlotPicks.add(1, {
+          policy: proposal.primaryPolicy,
+          chose: "alternative",
+        });
         return {
           session: applied.session,
           chosenByUser: "alternative",
@@ -98,6 +103,10 @@ export class SlotPickService {
     }
 
     await this.recordKeptPrimary(proposal);
+    schedulerSlotPicks.add(1, {
+      policy: proposal.primaryPolicy,
+      chose: "primary",
+    });
     return {
       session: await this.currentSession(sessionId, user),
       chosenByUser: "primary",

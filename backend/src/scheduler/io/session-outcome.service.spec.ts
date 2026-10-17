@@ -197,7 +197,7 @@ describe("SessionOutcomeService.sweep", () => {
       expect(updates).toHaveLength(0);
     });
 
-    it("treats a check-off before the start as no check-off", async () => {
+    it("settles a check-off before the start as WRONG_TIME at 0", async () => {
       const early = new Date("2026-06-15T07:50:00.000Z");
       const r = row({ id: "s1", completedAt: early });
       const { service, events, eventUpdates } = await makeService([[r], [r]], {
@@ -207,13 +207,13 @@ describe("SessionOutcomeService.sweep", () => {
       expect(await service.sweep(SETTLE_NOW)).toBe(0);
       expect(await service.sweep(MISS_NOW)).toBe(1);
       expect(eventUpdates).toHaveLength(0);
-      expect(events[0].eventType).toBe("MISSED");
-      expect(events[0].rewardScore).toBe(-1);
+      expect(events[0].eventType).toBe("WRONG_TIME");
+      expect(events[0].rewardScore).toBe(0);
     });
   });
 
   describe("skip", () => {
-    it("settles a skip as -1 on the SKIP event at end + grace", async () => {
+    it("settles a skip as 0 on the SKIP event at end + grace", async () => {
       const { service, updates, eventUpdates } = await makeService(
         [[row({ id: "s1", skipped: true })]],
         { checkOffEventId: 9n },
@@ -222,7 +222,7 @@ describe("SessionOutcomeService.sweep", () => {
       expect(await service.sweep(SETTLE_NOW)).toBe(1);
 
       expect(updates).toEqual([{ id: "s1", data: { retainedAt: SETTLE_NOW } }]);
-      expect(eventUpdates).toEqual([{ id: 9n, data: { rewardScore: -1 } }]);
+      expect(eventUpdates).toEqual([{ id: 9n, data: { rewardScore: 0 } }]);
     });
 
     it("wins over a completion timestamp", async () => {
@@ -240,7 +240,7 @@ describe("SessionOutcomeService.sweep", () => {
       );
 
       await service.sweep(SETTLE_NOW);
-      expect(eventUpdates[0].data).toEqual({ rewardScore: -1 });
+      expect(eventUpdates[0].data).toEqual({ rewardScore: 0 });
     });
   });
 
@@ -256,7 +256,7 @@ describe("SessionOutcomeService.sweep", () => {
       expect(events).toHaveLength(0);
     });
 
-    it("writes a MISSED event with -1 when no check-off lands by the cutoff", async () => {
+    it("writes a LAPSED event with -0.25 when no start or check-off lands by the cutoff", async () => {
       const { service, updates, events } = await makeService([
         [row({ id: "s1" })],
       ]);
@@ -265,8 +265,8 @@ describe("SessionOutcomeService.sweep", () => {
 
       expect(updates).toEqual([{ id: "s1", data: { retainedAt: MISS_NOW } }]);
       expect(events).toHaveLength(1);
-      expect(events[0].eventType).toBe("MISSED");
-      expect(events[0].rewardScore).toBe(-1);
+      expect(events[0].eventType).toBe("LAPSED");
+      expect(events[0].rewardScore).toBe(-0.25);
       expect(events[0].sessionId).toBe("s1");
     });
   });
@@ -355,7 +355,7 @@ describe("SessionOutcomeService.sweep", () => {
     );
   });
 
-  it("delivers -1 to the LinUCB arm for a missed placement", async () => {
+  it("delivers -0.25 to the LinUCB arm for a lapsed placement", async () => {
     const { service, banditUpdate } = await makeService([[row({ id: "s1" })]], {
       proposal: {
         id: "prop-1",
@@ -368,7 +368,7 @@ describe("SessionOutcomeService.sweep", () => {
     await service.sweep(MISS_NOW);
 
     expect(banditUpdate).toHaveBeenCalledTimes(1);
-    expect(banditUpdate.mock.calls[0][2]).toBe(-1);
+    expect(banditUpdate.mock.calls[0][2]).toBe(-0.25);
   });
 
   it("skips the bandit update when there is no LinUCB proposal", async () => {

@@ -30,7 +30,7 @@ Power is the sum of rarity weights over spirits the student owns. Season one max
 | Power | Account perk |
 |---|---|
 | 3 | One streak shield a week |
-| 6 | Daily brief: the spirit pushes tomorrow's plan at a chosen time |
+| 6 | Plan offers: a push when a new exam or assignment needs prep |
 | 10 | Chat with the spirit in Zalo or Messenger to add, move or finish tasks |
 | 14 | Connect AI tools over MCP with a higher daily limit |
 | 19 | Season title, profile badge, early access to the next season |
@@ -45,12 +45,12 @@ One equip slot at the start, a second at 6 spirits owned. Each spirit gives one 
 | Spirit | Ability | Effect | Built on |
 |---|---|---|---|
 | Cửu vĩ hồ | Rescue | One tap rebuilds the plan for an overdue task before its deadline | Scheduler replan |
-| Phong lang | Exam pack | Spreads revision sessions before each exam in the DLU schedule | Ingestion, session series |
+| Phong lang | Exam pack | Books prep before each new exam automatically | Ingestion, prep plans |
 | Thủy xà | Reflow | Reflows the rest of the week when a class moves or a block is skipped | Scheduler replan |
-| Mộc lộc | Roots | Protects slots for recurring habits | Session series |
+| Mộc lộc | Roots | Keeps one chosen weekly time free for study | Session series |
 | Băng cú | Focus guard | Mutes notifications during study blocks | Reminders, device push |
 | Lôi miêu | Quick capture | Turns a forwarded LMS link or message into a task | Ingestion |
-| Ảnh báo | Night review | Evening recap of today and preview of tomorrow | Daily push |
+| Ảnh báo | Weekly recap | Sunday summary of starts and plans kept | Streaks, session events |
 | Nhật phượng | Rebirth | Restores a broken streak once a month | Streaks |
 
 ## Chat and MCP

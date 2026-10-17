@@ -222,7 +222,7 @@ describe("NotificationsScreen", () => {
         conflictSessionIds: ["t1", "t2"],
       });
 
-    it("reschedules every overlapped task", async () => {
+    it("reschedules every overlapped plan", async () => {
       server.use(
         http.post(`${API}/notifications/c1/reschedule-conflicts`, () =>
           HttpResponse.json({
@@ -234,7 +234,7 @@ describe("NotificationsScreen", () => {
       renderScreen(<NotificationsScreen />);
       await waitForContent();
       fireEvent.click(screen.getByText("Reschedule"));
-      await toastShown("Rescheduled 2 tasks");
+      await toastShown("Rescheduled 2 plans");
     });
 
     it("reports the tasks it couldn't move", async () => {
@@ -261,7 +261,7 @@ describe("NotificationsScreen", () => {
       renderScreen(<NotificationsScreen />);
       await waitForContent();
       fireEvent.click(screen.getByText("Reschedule"));
-      await toastShown("Couldn't reschedule tasks");
+      await toastShown("Couldn't reschedule plans");
     });
 
     it("hides the action once it has been taken", async () => {

@@ -3,7 +3,6 @@ import { useLanguage } from "@/hooks/use-language";
 import { logout as logoutRequest } from "@/api/auth";
 import { listIntegrations } from "@/api/integrations";
 import { LogOut, Moon } from "@/components/Icons";
-import { DailyPushSection } from "@/components/settings/daily-push-section";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
 import { FinishSetupCard } from "@/components/settings/finish-setup-card";
 import { TagsRow } from "@/components/settings/tags-row";
@@ -11,7 +10,7 @@ import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useNotificationState } from "@/hooks/use-notification-toggle";
 import { PreferencesSection } from "@/components/settings/preferences-section";
 import { ProfileRow } from "@/components/settings/profile-row";
-import { StudentCard } from "@/components/settings/student-card";
+import { StudentCard, StudentCardSkeleton } from "@/components/settings/student-card";
 import { useStudent } from "@/hooks/use-student";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
 import { AdvancedSection } from "@/components/settings/advanced-section";
@@ -43,7 +42,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-/** The Me tab: profile, preferences, daily plan, DLU and account. Advanced holds timezone and storage. */
+/** The Me tab: profile, preferences, DLU and account. Advanced holds timezone and storage. */
 export default function SettingsScreen() {
   const offline = useOffline();
   useLanguage();
@@ -64,9 +63,10 @@ export default function SettingsScreen() {
   const integrations = useIntegrationStore((s) => s.integrations);
   const integrationsLoading = useIntegrationStore((s) => s.loading);
   const dluConnected = integrations.some((i) => i.connected);
-  const student = useStudent(
-    integrations.some((i) => i.provider === "PORTAL" && i.connected),
+  const portalConnected = integrations.some(
+    (i) => i.provider === "PORTAL" && i.connected,
   );
+  const student = useStudent(portalConnected);
 
   // Settings stays mounted between visits, so the layout scroll below only covers the first one.
   useEffect(() => {
@@ -167,7 +167,11 @@ export default function SettingsScreen() {
           {user ? (
             <>
               <ProfileRow user={user} onUpdated={setUser} />
-              {student ? <StudentCard profile={student} /> : null}
+              {student ? (
+                <StudentCard profile={student} />
+              ) : portalConnected ? (
+                <StudentCardSkeleton />
+              ) : null}
             </>
           ) : (
             <View className="flex-row items-center gap-[13px] px-4 py-3.5">
@@ -206,10 +210,6 @@ export default function SettingsScreen() {
         ) : (
         <>
         <PreferencesSection />
-        <SettingsSectionLabel>{t("Daily plan")}</SettingsSectionLabel>
-        <OfflineLock>
-          <DailyPushSection />
-        </OfflineLock>
         <OfflineLock>
           <TagsRow />
         </OfflineLock>

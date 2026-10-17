@@ -165,6 +165,7 @@ describe("parseMonthlyView — assignments", () => {
           fullName: COURSE_90002.fullname,
           shortName: COURSE_90002.shortname,
         },
+        submitted: true,
       },
     ]);
   });
@@ -207,6 +208,50 @@ describe("parseMonthlyView — assignments", () => {
     const [item] = parseMonthlyView(view([ASSIGN_DUE_0739]), BEFORE_ALL).items;
     expect(item.externalKey).toBe("lms:assign:800001");
     expect(item.externalKey).not.toContain("700001");
+  });
+
+  it("marks an assignment still offering 'Thêm bài nộp' as not submitted", () => {
+    const event: MoodleCalendarEvent = {
+      ...ASSIGN_DUE_0739,
+      action: {
+        name: "Thêm bài nộp",
+        url: "https://lms.dlu.edu.vn/mod/assign/view.php?id=800001&action=editsubmission",
+        actionable: true,
+      },
+    };
+    const [item] = parseMonthlyView(view([event]), BEFORE_ALL).items;
+    expect(item.submitted).toBe(false);
+  });
+
+  it("marks an assignment with no action as submitted", () => {
+    const [item] = parseMonthlyView(view([ASSIGN_DUE_0739]), BEFORE_ALL).items;
+    expect(item.submitted).toBe(true);
+  });
+
+  it("treats a non-actionable 'Thêm bài nộp' as submitted", () => {
+    const event: MoodleCalendarEvent = {
+      ...ASSIGN_DUE_0739,
+      action: { name: "Thêm bài nộp", actionable: false },
+    };
+    const [item] = parseMonthlyView(view([event]), BEFORE_ALL).items;
+    expect(item.submitted).toBe(true);
+  });
+
+  it("treats any other action as submitted", () => {
+    const event: MoodleCalendarEvent = {
+      ...ASSIGN_DUE_0739,
+      action: { name: "Chỉnh sửa bài nộp", actionable: true },
+    };
+    const [item] = parseMonthlyView(view([event]), BEFORE_ALL).items;
+    expect(item.submitted).toBe(true);
+  });
+
+  it("leaves submitted unset on quizzes", () => {
+    const [item] = parseMonthlyView(
+      view([QUIZ_OPEN], [QUIZ_CLOSE]),
+      BEFORE_ALL,
+    ).items;
+    expect(item.submitted).toBeUndefined();
   });
 });
 

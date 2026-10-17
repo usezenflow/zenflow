@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
- * Warm Sunrise tokens: orange, yellow and lime on warm paper and ink. Keep in
+ * Calm tokens: teal primary, yellow and lime on warm paper and ink. Keep in
  * step with frontend/src/index.css and the hex values in packages/core/src/palette.ts
  * (lib/__tests__/palette.test.ts checks).
  *
@@ -20,8 +20,8 @@
     --card-foreground: 15 13 10;
     --popover: 255 255 255;
     --popover-foreground: 15 13 10;
-    --primary: 255 142 62;
-    --primary-foreground: 43 20 6;
+    --primary: 27 127 118;
+    --primary-foreground: 255 255 255;
     --secondary: 246 243 239;
     --secondary-foreground: 15 13 10;
     --muted: 246 243 239;
@@ -32,13 +32,13 @@
     --destructive-foreground: 255 255 255;
     --border: 232 229 223;
     --input: 232 229 223;
-    --ring: 255 142 62;
+    --ring: 27 127 118;
     --brand-orange: 255 142 62;
     --brand-yellow: 240 177 1;
     --brand-lime: 216 249 152;
     --success: 216 249 152;
     --glass: 255 255 255;
-    --glass-edge: 255 142 62;
+    --glass-edge: 27 127 118;
 
     --session-lecture: 59 130 196;
     --session-lecture-ink: 36 92 148;
@@ -46,8 +46,8 @@
     --session-exam-ink: 14 111 107;
     --session-assignment: 240 177 1;
     --session-assignment-ink: 122 90 0;
-    --session-task: 255 142 62;
-    --session-task-ink: 154 74 12;
+    --session-task: 27 127 118;
+    --session-task-ink: 14 88 80;
     --session-dnd: 168 162 158;
     --session-dnd-ink: 95 87 77;
     --session-done: 216 249 152;
@@ -65,8 +65,8 @@
     --card-foreground: 251 250 248;
     --popover: 29 26 23;
     --popover-foreground: 251 250 248;
-    --primary: 255 122 36;
-    --primary-foreground: 43 20 6;
+    --primary: 92 196 184;
+    --primary-foreground: 6 35 31;
     --secondary: 44 40 34;
     --secondary-foreground: 251 250 248;
     --muted: 44 40 34;
@@ -77,13 +77,13 @@
     --destructive-foreground: 15 13 10;
     --border: 54 50 45;
     --input: 54 50 45;
-    --ring: 255 122 36;
+    --ring: 92 196 184;
     --brand-orange: 255 122 36;
     --brand-yellow: 240 177 1;
     --brand-lime: 216 249 152;
     --success: 216 249 152;
-    --glass: 255 236 220;
-    --glass-edge: 255 170 100;
+    --glass: 221 243 239;
+    --glass-edge: 127 214 203;
 
     --session-lecture: 59 130 196;
     --session-lecture-ink: 143 189 232;
@@ -91,8 +91,8 @@
     --session-exam-ink: 111 211 205;
     --session-assignment: 240 177 1;
     --session-assignment-ink: 246 201 60;
-    --session-task: 255 142 62;
-    --session-task-ink: 255 168 102;
+    --session-task: 27 127 118;
+    --session-task-ink: 158 227 217;
     --session-dnd: 168 162 158;
     --session-dnd-ink: 184 176 164;
     --session-done: 216 249 152;

@@ -39,16 +39,15 @@ model User {
   /// Reminder lead time (minutes) applied to new sessions that omit `reminders`; 0 = none.
   defaultReminderMinutes Int @default(10)
 
+  /// Transport used for commute estimates. Null = not set yet.
+  defaultTransport CommuteTransport?
+
   /// When the user finished (or skipped through) first-run onboarding; null = not yet. Set once, server-side.
   onboardedAt DateTime?
 
   /// User intent for native push (Settings toggle / OS-permission denial, set by mobile). Gates push fan-out only; in-app/SSE unaffected.
   allowNotifications Boolean @default(true)
 
-  /// Morning brief push time (`HH:mm`, user tz); null = off.
-  morningBriefTime   String? @db.VarChar(5)
-  /// Evening check-in push time (`HH:mm`, user tz); null = off.
-  eveningCheckinTime String? @db.VarChar(5)
 
   /// Getting-started checklist steps done, plus `checklist-hidden` (`TIP_IDS` in @zenflow/shared); append-only.
   seenTips String[] @default([])
@@ -206,6 +205,15 @@ enum SessionSource {
   USER
   LMS
   PORTAL
+  // Placed by the system without a user request, e.g. prep for an exam or assignment.
+  AUTO
+}
+
+enum CommuteTransport {
+  WALK
+  BIKE
+  MOTORCYCLE
+  CAR
 }
 
 model Session {
@@ -266,6 +274,9 @@ model Session {
   // Unused on a recurring representative: occurrences use SessionOccurrenceState.
   completedAt DateTime?
   skipped     Boolean   @default(false)
+  // First time an LMS calendar showed the assignment without its "add submission"
+  // action (ingestion/core/parse-lms.ts). Set once; never cleared.
+  submittedAt DateTime?
 
   // How firmly the scheduler may move this session (ADR-0022). AUTO moves
   // freely, CHOSEN only with the user's confirmation, PINNED never. Set by a
@@ -283,6 +294,11 @@ model Session {
   tags Tag[]
 
   events SessionEvent[]
+
+  // The exam or assignment this AUTO prep session exists for. Null otherwise.
+  prepForSessionId String?
+  prepForSession   Session?  @relation("PrepFor", fields: [prepForSessionId], references: [id], onDelete: SetNull)
+  prepSessions     Session[] @relation("PrepFor")
 
   seriesId String? // for series with rrule, only create a representative session and filter sessions belonging to a series whose rrule covers a particular day range
   series   SessionSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
@@ -552,7 +568,10 @@ enum SessionEventType {
   SYSTEM_MOVE // scheduler-initiated move (displacement / conflict reschedule): reward 0, no preference update
   COMPLETE // user checked the session off; removed on undo. rewardScore +1 once settled in its slot
   SKIP // user marked the session skipped; removed on undo. rewardScore -1 once settled
-  MISSED // unmoved session with no check-off by the cutoff (rewardScore -1), ADR-0023
+  MISSED // legacy: unmoved session with no check-off by the cutoff (rewardScore -1), ADR-0023; replaced by LAPSED
+  START // unmoved session started inside its slot (rewardScore +1), level-up plan
+  WRONG_TIME // unmoved session checked off before its start (rewardScore 0)
+  LAPSED // unmoved session with no start or check-off by the cutoff (rewardScore -0.25)
 }
 
 /// Range-partitioned by month on `occurredAt` (hand-written migration, ADR-0016); children are `SessionEvent_YYYY_MM`.

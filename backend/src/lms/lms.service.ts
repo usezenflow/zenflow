@@ -4,6 +4,7 @@ import {
   OutboundBreakers,
 } from "../common/outbound-breaker";
 import { ConfigService } from "@nestjs/config";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import type { MoodleMonthlyView } from "../ingestion/core/parse-lms";
 import type { MoodleEnrolledCourse } from "../ingestion/core/parse-enrolled-courses";
 import { lmsClientDuration } from "../observability/metrics";
@@ -67,6 +68,12 @@ function lmsOperation(url: string): string {
  * than to loop forever inside one sync pass.
  */
 const MAX_ENROLLED_COURSE_PAGES = 50;
+
+/** Moodle error codes for an AJAX call made without a live login or a valid sesskey. */
+const SESSION_ENDED_ERROR_CODES = new Set<string | undefined>([
+  "requireloginerror",
+  "invalidsesskey",
+]);
 
 /** One authenticated Moodle session: the cookie plus its bound CSRF token. */
 export interface LmsSession {
@@ -324,16 +331,27 @@ export class LMSService {
       body: JSON.stringify([{ index: 0, methodname, args }]),
     });
 
+    // Moodle sends a dead session to the login page; fetch follows that redirect.
+    if (res.url.includes("/login/")) {
+      throw new UpstreamSessionRejectedError("lms");
+    }
     if (!res.ok) {
       throw new Error(`LMS ${label} request failed (status ${res.status})`);
     }
 
     const payload = (await res.json()) as
-      | { error?: unknown; data?: T; exception?: unknown }[]
+      | {
+          error?: unknown;
+          data?: T;
+          exception?: { errorcode?: string } & Record<string, unknown>;
+        }[]
       | null;
     const envelope = payload?.[0];
     if (!envelope) throw new Error(`Empty LMS ${label} response`);
     if (envelope.error) {
+      if (SESSION_ENDED_ERROR_CODES.has(envelope.exception?.errorcode)) {
+        throw new UpstreamSessionRejectedError("lms");
+      }
       throw new Error(
         `LMS ${label} returned an error: ${JSON.stringify(envelope.exception ?? envelope.error)}`,
       );

@@ -13,6 +13,7 @@ import { LmsWatcherService } from "./lms-watcher.service";
 import { MaterializerService } from "./materializer.service";
 import { OccurrenceCacheService } from "./occurrence-cache.service";
 import { OccurrenceFanoutService } from "./occurrence-fanout.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
 
 // ── in-memory Prisma double ────────────────────────────────────────────────
 
@@ -253,6 +254,7 @@ async function makeWatcher(
   // prisma double — everything else that touches the network/DLU is mocked.
   const module: TestingModule = await Test.createTestingModule({
     providers: [
+      { provide: UpstreamSessionCache, useValue: passThroughSessionCache },
       LmsWatcherService,
       IngestionJobsService,
       { provide: PrismaService, useValue: prisma },
@@ -302,6 +304,13 @@ async function makeWatcher(
     fanOutLms,
   };
 }
+
+/** A session cache that always signs in, so these specs run without Redis. */
+const passThroughSessionCache = {
+  getOrLogin: (_userId: string, _kind: string, login: () => Promise<unknown>) =>
+    login(),
+  invalidate: jest.fn(),
+};
 
 describe("LmsWatcherService", () => {
   describe("the INGESTION_ENABLED gate", () => {

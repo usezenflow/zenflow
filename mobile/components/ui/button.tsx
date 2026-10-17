@@ -1,3 +1,4 @@
+import { Spinner } from "@/components/ui/spinner";
 import { TextClassContext } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { type VariantProps, cva } from "class-variance-authority";
@@ -66,6 +67,8 @@ type ButtonProps = {
   className?: string;
   children?: React.ReactNode;
   disabled?: boolean;
+  /** Shows the logo spinner in place of the label and blocks presses. */
+  loading?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
   style?: any;
@@ -76,26 +79,42 @@ type ButtonProps = {
   delayLongPress?: number;
 } & VariantProps<typeof buttonVariants>;
 
+/** The spinner's ink on each variant: dark on the filled ones, primary on the rest. */
+const SPINNER_TONE = {
+  default: "onPrimary",
+  destructive: "onPrimary",
+  outline: "primary",
+  secondary: "primary",
+  ghost: "primary",
+  link: "primary",
+} as const;
+
 const Button = React.forwardRef<
   React.ElementRef<typeof Pressable>,
   ButtonProps
->(({ className, variant, size, ...props }, ref) => {
+>(({ className, variant, size, loading = false, children, ...props }, ref) => {
+  const disabled = props.disabled || loading;
+  const tone = SPINNER_TONE[variant ?? "default"];
   return (
     <TextClassContext.Provider
       value={cn(
-        props.disabled && "web:pointer-events-none",
+        disabled && "web:pointer-events-none",
         buttonTextVariants({ variant, size }),
       )}
     >
       <Pressable
         className={cn(
-          props.disabled && "opacity-50 web:pointer-events-none",
+          disabled && "opacity-50 web:pointer-events-none",
           buttonVariants({ variant, size, className }),
         )}
         ref={ref}
         role="button"
         {...props}
-      />
+        disabled={disabled}
+        accessibilityState={{ disabled, busy: loading }}
+      >
+        {loading ? <Spinner size={24} tone={tone} testID="button.spinner" /> : children}
+      </Pressable>
     </TextClassContext.Provider>
   );
 });

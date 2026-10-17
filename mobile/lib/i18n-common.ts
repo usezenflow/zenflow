@@ -39,8 +39,8 @@ export default {
   Minute: "Phút",
   "+{count} more": "+{count} nữa",
   "Back online": "Có mạng lại rồi",
-  "Your calendar and tasks are up to date.":
-    "Lịch và task của bạn đã được cập nhật.",
+  "Your calendar and plans are up to date.":
+    "Lịch và kế hoạch của bạn đã được cập nhật.",
   "You're offline": "Bạn đang offline",
   "Showing saved days. Changes can't be saved until you reconnect.":
     "Đang hiện lịch đã lưu. Có mạng lại mới lưu được nha.",

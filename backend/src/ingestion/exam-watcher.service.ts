@@ -7,6 +7,8 @@ import {
   ingestionSignInFailures,
 } from "../observability/metrics";
 import { IntegrationsService } from "../integrations/integrations.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import { PortalAPIService } from "../portal/portal-api.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { parseExams } from "./core/parse-portal";
@@ -65,6 +67,7 @@ export class ExamWatcherService {
     private readonly materializer: MaterializerService,
     @Inject(forwardRef(() => IntegrationsService))
     private readonly integrations: IntegrationsService,
+    private readonly sessions: UpstreamSessionCache,
   ) {
     this.endpoint = this.config.get<string>("PORTAL_API_URL") ?? "";
     this.dluTimezone = this.config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
@@ -156,6 +159,9 @@ export class ExamWatcherService {
         );
       }
     } catch (error) {
+      if (error instanceof UpstreamSessionRejectedError) {
+        await this.sessions.invalidate(target.userId, "portal");
+      }
       if (error instanceof UpstreamUnavailableError) {
         // Nothing was requested and nothing succeeded: drop the run rather
         // than record a student failure; the ticker releases the claim.
@@ -196,9 +202,10 @@ export class ExamWatcherService {
         target.userId,
         "PORTAL",
       );
-      const result = await this.portal.authenticate(
-        creds.username,
-        creds.password,
+      const result = await this.sessions.getOrLogin(
+        target.userId,
+        "portal",
+        () => this.portal.authenticate(creds.username, creds.password),
       );
       if (!result.ok) {
         await this.jobs.finishJob("PORTAL", jobId, "FAILED");

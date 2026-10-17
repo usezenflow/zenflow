@@ -17,7 +17,7 @@ export async function rescheduleWithToast(
     toast({
       title: failed
         ? t("Rescheduled {ok}, {failed} left", { ok, failed })
-        : t("Rescheduled {count} tasks", { count: ok }),
+        : t("Rescheduled {count} plans", { count: ok }),
       description: failed
         ? t("The rest still overlap. Move them by hand.")
         : undefined,
@@ -27,7 +27,7 @@ export async function rescheduleWithToast(
     return true;
   } catch {
     toast({
-      title: t("Couldn't reschedule tasks"),
+      title: t("Couldn't reschedule plans"),
       description: t("Try again in a moment."),
       variant: "destructive",
       icon: "calendar-x",

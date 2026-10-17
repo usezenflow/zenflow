@@ -80,7 +80,7 @@ describe("placementToastMessage", () => {
     );
     expect(message).not.toContain("A very long assignment title");
     expect(splitToastMessage(message)).toEqual({
-      title: "Task created",
+      title: "Plan created",
       description: "No time found before its deadline.",
     });
   });

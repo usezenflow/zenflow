@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import type {
   CreateSessionResponse,
@@ -40,7 +36,7 @@ import { createEventData, recordCreateEvent } from "./session-events";
 import { insertFixedSession } from "./fixed-session-writer";
 import { mapSessionPrismaError } from "./prisma-error";
 import { placeOrDiscard } from "./placement-compensation";
-import { NO_FEASIBLE_SLOT_MESSAGE, SeriesService } from "./series.service";
+import { SeriesService } from "./series.service";
 
 type OccurrenceCheckOff = Pick<SharedSession, "completedAt" | "skipped">;
 
@@ -63,8 +59,7 @@ function occurrenceCheckOff(
 
 /**
  * Plain session CRUD: `create` (dispatches by type — single `TASK`,
- * recurring-fixed, one-off-fixed; a `sessionCount > 1` `TASK` goes to
- * {@link SeriesService}), `list` (fans recurring reps into virtual occurrences),
+ * recurring-fixed, one-off-fixed), `list` (fans recurring reps into virtual occurrences),
  * `suggestions`, `findById`, `remove`. A single `TASK` create is placed via
  * {@link TaskPlacementService}; nothing else on the calendar moves. A `TASK`
  * (or series) with no feasible slot before its deadline is rejected by a
@@ -89,49 +84,19 @@ export class SessionCrudService {
 
     if (dto.type === "TASK") {
       const deadline = new Date(dto.deadline as string);
-      const sessionCount = Math.max(1, Math.trunc(dto.sessionCount ?? 1));
 
       // Pre-flight feasibility — BEFORE any row is inserted, so an
-      // infeasible request never leaves an unplaced task/series behind (no
-      // rollback needed; see NO_FEASIBLE_SLOT_MESSAGE).
-      const durations = dto.sessionDurations;
-      if (durations && durations.length !== sessionCount) {
-        throw new BadRequestException(
-          "sessionDurations must have one entry per session.",
-        );
-      }
-      if (sessionCount > 1) {
-        const feasible = await this.taskPlacement.canPlaceSeries({
-          user,
-          durationMinutes: dto.durationMinutes,
-          sessionCount,
-          durations,
-          deadline,
-          now,
-        });
-        if (!feasible) throw new BadRequestException(NO_FEASIBLE_SLOT_MESSAGE);
-      } else {
-        // Single TASK: a free slot, or a flexible-task repack, or the user's
-        // accept-conflicts / accept-late choice — else 409 (issue #62 B).
-        await this.taskPlacement.preflightTask({
-          user,
-          durationMinutes: dto.durationMinutes,
-          deadline,
-          now,
-          policy: dto.infeasiblePolicy,
-        });
-      }
-
-      if (sessionCount > 1) {
-        return this.series.createTaskSeries(
-          dto,
-          user,
-          cleanTags,
-          deadline,
-          sessionCount,
-          now,
-        );
-      }
+      // infeasible request never leaves an unplaced task behind (no rollback
+      // needed; see NO_FEASIBLE_SLOT_MESSAGE). A free slot, a flexible-task
+      // repack, or the user's accept-conflicts / accept-late choice — else 409
+      // (issue #62 B).
+      await this.taskPlacement.preflightTask({
+        user,
+        durationMinutes: dto.durationMinutes,
+        deadline,
+        now,
+        policy: dto.infeasiblePolicy,
+      });
       return this.createSingleTask(dto, user, cleanTags, deadline, now);
     }
 

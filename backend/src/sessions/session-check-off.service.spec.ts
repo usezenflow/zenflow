@@ -36,6 +36,8 @@ function row(overrides: Partial<SessionRow> = {}): SessionRow {
     scheduledStartTime: new Date("2026-10-14T08:00:00.000Z"),
     userId: user.id,
     lastMovedAt: null,
+    submittedAt: null,
+    prepForSessionId: null,
     retainedAt: null,
     syncConfirmedAt: null,
     syncMissedAt: null,

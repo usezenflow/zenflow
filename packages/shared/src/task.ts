@@ -18,7 +18,7 @@ import type { PlacementReason } from "./placement";
 export type SessionType = "TASK" | "ASSIGNMENT" | "EXAM" | "LECTURE" | "DND";
 
 /** Where a session came from. */
-export type SessionSource = "USER" | "LMS" | "PORTAL";
+export type SessionSource = "USER" | "LMS" | "PORTAL" | "AUTO";
 
 /**
  * How firmly the scheduler may move a flexible `TASK` (ADR-0022). `AUTO`:
@@ -290,19 +290,6 @@ export interface CreateTaskInput {
   durationMinutes: number;
   /** ISO-8601 deadline — required for a `TASK`; shared by every session of a series. */
   deadline: string;
-  /**
-   * Number of study sessions. Omitted or `1` → one ordinary task. `> 1` →
-   * a `TASK` series: N linked `Session` rows sharing one `seriesId` and
-   * `deadline`, each placed independently and spaced roughly evenly across
-   * `now … deadline` (see `services/bandit/README.md`).
-   */
-  sessionCount?: number;
-  /**
-   * Minutes of each session when a series splits one total unevenly. Length
-   * equals `sessionCount`, each a multiple of 15; `durationMinutes` is then the
-   * first one. Omitted → every session is `durationMinutes`.
-   */
-  sessionDurations?: number[];
   tags?: string[];
   /**
    * Minutes-before-start reminders (max MAX_REMINDERS_PER_SESSION, each an

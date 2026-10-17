@@ -6,6 +6,7 @@ import { ClsModule } from "nestjs-cls";
 import { LoggerModule } from "nestjs-pino";
 import type { IncomingMessage } from "node:http";
 import { AllExceptionsFilter } from "./all-exceptions.filter";
+import { ActiveUsersService } from "./active-users.service";
 import { HttpMetricsInterceptor } from "./http-metrics.interceptor";
 import { buildPinoParams } from "./logging";
 import { activeTraceIds } from "./otel";
@@ -51,6 +52,7 @@ import { activeTraceIds } from "./otel";
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: HttpMetricsInterceptor },
+    ActiveUsersService,
   ],
   exports: [LoggerModule, ClsModule],
 })

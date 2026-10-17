@@ -1121,7 +1121,7 @@ export function DayTimeline({
         ? t("Moving. Release to reschedule")
         : tasks.length === 0
           ? t("{now}, nothing scheduled", { now: nowLabel })
-          : t("{now}, {count} tasks today", {
+          : t("{now}, {count} plans today", {
               now: nowLabel,
               count: tasks.length,
             });

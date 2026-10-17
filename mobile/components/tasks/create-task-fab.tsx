@@ -19,7 +19,7 @@ import { type Href, useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 
 /**
- * Builds the "New task" screen's `Href`, pre-filled with "now" snapped to
+ * Builds the "New plan" screen's `Href`, pre-filled with "now" snapped to
  * the next 15-minute mark — shared by the FAB below and the Day screen's
  * long-press-empty-area gesture (`app/(app)/index.tsx`), which needs the
  * exact same computation without going through the FAB itself.
@@ -78,7 +78,7 @@ export function CreateSessionFab({
           navigateOnce(() => router.push(createSessionAtNowHref(tz)))
         }
         accessibilityRole="button"
-        accessibilityLabel={t("New task")}
+        accessibilityLabel={t("New plan")}
         testID="fab.new-task"
         style={[FAB_GLOW_INNER, { width: FAB_SIZE, height: FAB_SIZE, borderRadius: FAB_SIZE / 2 }]}
         className="items-center justify-center bg-primary"

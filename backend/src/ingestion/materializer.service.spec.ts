@@ -32,6 +32,8 @@ interface SessionRow {
   durationMinutes: number;
   scheduledStartTime: Date | null;
   lastMovedAt: Date | null;
+  submittedAt: Date | null;
+  prepForSessionId: string | null;
   deleted: boolean;
   scheduleStudyUnitId: string | null;
   createdAt: Date;
@@ -155,6 +157,8 @@ function makePrismaDouble() {
           durationMinutes: data.durationMinutes as number,
           scheduledStartTime: (data.scheduledStartTime as Date) ?? null,
           lastMovedAt: null,
+          submittedAt: (data.submittedAt as Date | null) ?? null,
+          prepForSessionId: null,
           deleted: false,
           scheduleStudyUnitId:
             (data.scheduleStudyUnitId as string | null) ?? null,
@@ -517,6 +521,8 @@ describe("MaterializerService", () => {
         durationMinutes: 15,
         scheduledStartTime: new Date("2026-09-10T03:00:00.000Z"),
         lastMovedAt: null,
+        submittedAt: null,
+        prepForSessionId: null,
         deleted: false,
         scheduleStudyUnitId: null,
         createdAt: new Date(),
@@ -535,6 +541,41 @@ describe("MaterializerService", () => {
       expect(outcome.unchanged).toBe(1);
       expect(db.sessions).toHaveLength(1);
       expect(db.notifications).toHaveLength(0);
+    });
+  });
+
+  describe("submission", () => {
+    const submitted = (): ParsedBlock & { submitted: boolean } => ({
+      ...block(),
+      submitted: true,
+    });
+    const FIRST = new Date("2026-09-09T10:00:00.000Z");
+    const LATER = new Date("2026-09-09T12:00:00.000Z");
+
+    it("stamps submittedAt when the first sighting is already submitted", async () => {
+      const { db, service } = await makeService();
+
+      await service.materialize(USER, [submitted()], "LMS", FIRST);
+
+      expect(db.sessions[0].submittedAt).toEqual(FIRST);
+    });
+
+    it("leaves submittedAt null while the assignment is still open", async () => {
+      const { db, service } = await makeService();
+
+      await service.materialize(USER, [block()], "LMS", FIRST);
+
+      expect(db.sessions[0].submittedAt).toBeNull();
+    });
+
+    it("stamps an existing row once and keeps the first observation", async () => {
+      const { db, service } = await makeService();
+      await service.materialize(USER, [block()], "LMS", FIRST);
+
+      await service.materialize(USER, [submitted()], "LMS", LATER);
+      await service.materialize(USER, [submitted()], "LMS", LATER);
+
+      expect(db.sessions[0].submittedAt).toEqual(LATER);
     });
   });
 

@@ -13,6 +13,5 @@ export * from "./placement";
 export * from "./file";
 export * from "./file-limits";
 export * from "./streak";
-export * from "./daily-push";
 export * from "./course-colour";
 export * from "./student";

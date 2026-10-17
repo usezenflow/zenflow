@@ -146,6 +146,29 @@ def test_single_heuristic_prefers_the_default_morning_hour() -> None:
     assert res["requestId"] == "test-1"
 
 
+def _eight_am_matrix() -> list[float]:
+    """A matrix whose only high cell is 08:00 on every weekday (row-major, 7 x 24)."""
+    return [1.0 if h == 8 else 0.0 for _ in range(7) for h in range(24)]
+
+
+def test_quiet_hours_depend_on_the_focus_band() -> None:
+    def start(band: str | None) -> int:
+        user: dict[str, Any] = {
+            "preferenceMatrix": _eight_am_matrix(),
+            "observationCount": 0,
+        }
+        if band is not None:
+            user["focusBand"] = band
+        return ok(make_req(user=user))["results"][0]["startMs"]
+
+    # No band: the 08:00 cell is free, so the plan starts right at now.
+    assert start(None) == NOW
+    # LATE_NIGHT is quiet until 09:00, so the same cell is refused.
+    assert start("LATE_NIGHT") >= NOW + HOUR
+    # A morning student is not quiet at 08:00.
+    assert start("MORNING") == NOW
+
+
 def test_timezone_wall_clock_is_respected() -> None:
     tz = "Asia/Ho_Chi_Minh"  # UTC+7: 'now' is 15:00 local
     days = make_days(6, tz)

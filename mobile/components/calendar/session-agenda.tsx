@@ -25,7 +25,7 @@ import { subscribeToSessionMutations } from "@/lib/session-cache";
 import { useTabBarOverlayHeight } from "@/lib/tab-bar-metrics";
 import { deriveState, SESSION_TONES, sessionTone, splitZoned } from "@zenflow/core";
 import type { Session, SessionSearchDirection } from "@zenflow/shared";
-import { SunriseIcon } from "@/components/brand/icons";
+import { Logo } from "@/components/logo";
 import { NoResultsMark } from "@/components/brand/state-marks";
 import { type Href, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -295,7 +295,7 @@ export function SessionAgenda({
         {hasQuery ? (
           <NoResultsMark size={72} />
         ) : (
-          <SunriseIcon size={56} color="#FF8E3E" />
+          <Logo className="h-14 w-14" />
         )}
         <Text className="text-center text-[15px] text-muted-foreground">
           {hasQuery ? t("No sessions match") : t("No sessions yet")}

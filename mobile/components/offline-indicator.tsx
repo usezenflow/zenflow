@@ -67,7 +67,7 @@ export function OfflineIndicator({ dayKey }: { dayKey: string }) {
       announcedOffline = false;
       toast({
         title: t("Back online"),
-        description: t("Your calendar and tasks are up to date."),
+        description: t("Your calendar and plans are up to date."),
         icon: SyncedToastIcon,
         variant: "success",
       });

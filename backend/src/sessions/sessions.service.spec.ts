@@ -58,6 +58,8 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     conflict: false,
     scheduledStartTime: null,
     lastMovedAt: null,
+    submittedAt: null,
+    prepForSessionId: null,
     retainedAt: null,
     syncConfirmedAt: null,
     syncMissedAt: null,
@@ -322,99 +324,6 @@ describe("SessionsService.create", () => {
     expect(result.scheduledStartTime).toBe(slot.toISOString());
   });
 
-  it("TASK series (sessionCount > 1): one SessionSeries + N rows, handed to the series placer", async () => {
-    const rows = [
-      session({
-        id: "s-1",
-        seriesId: "series-1",
-        sessionIndex: 1,
-        sessionTotal: 3,
-      }),
-      session({
-        id: "s-2",
-        seriesId: "series-1",
-        sessionIndex: 2,
-        sessionTotal: 3,
-      }),
-      session({
-        id: "s-3",
-        seriesId: "series-1",
-        sessionIndex: 3,
-        sessionTotal: 3,
-      }),
-    ];
-    let n = 0;
-    const sessionCreate = jest.fn(() => Promise.resolve(rows[n++]));
-    const seriesCreate = jest
-      .fn()
-      .mockResolvedValue({ id: "series-1", type: "TASK" });
-    const eventCreate = jest.fn().mockResolvedValue({});
-    const sessionUpdate = jest.fn().mockResolvedValue({});
-    const prisma = {
-      $transaction: (arg: unknown) =>
-        typeof arg === "function"
-          ? (arg as (t: unknown) => unknown)({
-              session: { create: sessionCreate },
-              sessionEvent: { create: eventCreate },
-              sessionSeries: { create: seriesCreate },
-            })
-          : Promise.all(arg as Promise<unknown>[]),
-      session: { update: sessionUpdate },
-    };
-    const placement = fakeTaskPlacement();
-    placement.placeSeriesOnCreate.mockResolvedValue([
-      { id: "s-1", scheduledStartTime: new Date("2026-06-02T09:00:00.000Z") },
-      { id: "s-2", scheduledStartTime: new Date("2026-06-05T09:00:00.000Z") },
-      { id: "s-3", scheduledStartTime: null },
-    ]);
-    const service = await makeService(
-      prisma,
-      fakeTagsService(),
-      placement,
-      fakeSchedulingFeedback(),
-    );
-
-    const dto: CreateSessionDto = {
-      type: "TASK",
-      title: "Exam prep",
-      durationMinutes: 60,
-      deadline: "2026-06-08T00:00:00.000Z",
-      sessionCount: 3,
-    };
-    const result = await service.create(dto, user);
-
-    expect(seriesCreate).toHaveBeenCalledTimes(1);
-    expect(seriesCreate.mock.calls[0][0].data.type).toBe("TASK");
-    expect(seriesCreate.mock.calls[0][0].data.rrule).toBeNull();
-    expect(sessionCreate).toHaveBeenCalledTimes(3);
-    expect(placement.placeSeriesOnCreate).toHaveBeenCalledWith({
-      user,
-      seriesId: "series-1",
-      members: [
-        { id: "s-1", durationMinutes: 60 },
-        { id: "s-2", durationMinutes: 60 },
-        { id: "s-3", durationMinutes: 60 },
-      ],
-      deadline: new Date("2026-06-08T00:00:00.000Z"),
-      now: expect.any(Date),
-    });
-    expect(result.sessions).toHaveLength(3);
-    expect(result.sessions!.map((s) => s.scheduledStartTime)).toEqual([
-      "2026-06-02T09:00:00.000Z",
-      "2026-06-05T09:00:00.000Z",
-      null,
-    ]);
-    // Top-level fields mirror the first session.
-    expect(result.id).toBe("s-1");
-    // All 3 CREATE events are tagged with the shared series id, which also
-    // rides back on every response row and groups the batch for revert.
-    expect(result.sessions!.every((s) => s.seriesId === "series-1")).toBe(true);
-    const seriesIds = eventCreate.mock.calls.map(
-      (c) => (c[0].data as { seriesId?: string }).seriesId,
-    );
-    expect(seriesIds).toEqual(["series-1", "series-1", "series-1"]);
-  });
-
   it("TASK: rejects and creates nothing when no slot fits before the deadline", async () => {
     const sessionCreate = jest.fn();
     const eventCreate = jest.fn();
@@ -447,47 +356,6 @@ describe("SessionsService.create", () => {
     expect(sessionCreate).not.toHaveBeenCalled();
     expect(eventCreate).not.toHaveBeenCalled();
     expect(placement.placeOnCreate).not.toHaveBeenCalled();
-  });
-
-  it("TASK series: rejects and creates nothing when any member has no feasible slot", async () => {
-    const sessionCreate = jest.fn();
-    const seriesCreate = jest.fn();
-    const eventCreate = jest.fn();
-    const prisma = {
-      $transaction: (fn: (t: unknown) => unknown) =>
-        fn({
-          session: { create: sessionCreate },
-          sessionEvent: { create: eventCreate },
-          sessionSeries: { create: seriesCreate },
-        }),
-    };
-    const placement = fakeTaskPlacement();
-    placement.canPlaceSeries.mockResolvedValue(false);
-    const service = await makeService(
-      prisma,
-      fakeTagsService(),
-      placement,
-      fakeSchedulingFeedback(),
-    );
-
-    const dto: CreateSessionDto = {
-      type: "TASK",
-      title: "Exam prep",
-      durationMinutes: 60,
-      deadline: "2026-06-08T00:00:00.000Z",
-      sessionCount: 5,
-    };
-
-    await expect(service.create(dto, user)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-    expect(placement.canPlaceSeries).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionCount: 5, durationMinutes: 60 }),
-    );
-    expect(seriesCreate).not.toHaveBeenCalled();
-    expect(sessionCreate).not.toHaveBeenCalled();
-    expect(eventCreate).not.toHaveBeenCalled();
-    expect(placement.placeSeriesOnCreate).not.toHaveBeenCalled();
   });
 
   it("ASSIGNMENT: pins scheduledStartTime, leaves deadline null, never runs a placer", async () => {
@@ -1078,50 +946,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     expect(batch).toHaveBeenCalledWith(["del-events", "del-sessions"]);
   });
 
-  it("TASK series: a placement that throws discards every member and the series", async () => {
-    const rows = [1, 2].map((i) =>
-      session({ id: `s-${i}`, seriesId: "series-1", sessionIndex: i }),
-    );
-    let n = 0;
-    const { prisma, discard, batch } = prismaForDiscard({
-      sessionSeries: {
-        create: jest.fn().mockResolvedValue({ id: "series-1" }),
-      },
-      session: { create: jest.fn(() => Promise.resolve(rows[n++])) },
-      sessionEvent: { create: jest.fn().mockResolvedValue({}) },
-    });
-    const placement = fakeTaskPlacement();
-    placement.placeSeriesOnCreate.mockRejectedValue(new Error("down"));
-    const service = await makeService(prisma, fakeTagsService(), placement);
-
-    await expect(
-      service.create(
-        {
-          type: "TASK",
-          title: "T",
-          durationMinutes: 60,
-          sessionCount: 2,
-          deadline: "2026-06-12T17:00:00.000Z",
-        },
-        user,
-      ),
-    ).rejects.toThrow("down");
-
-    expect(discard.session.deleteMany).toHaveBeenCalledWith({
-      where: { userId: user.id, id: { in: ["s-1", "s-2"] } },
-    });
-    expect(discard.sessionSeries.deleteMany).toHaveBeenCalledWith({
-      where: { userId: user.id, id: "series-1" },
-    });
-    expect(batch).toHaveBeenCalledWith([
-      "del-events",
-      "del-sessions",
-      "del-series",
-    ]);
-  });
-});
-
-describe("SessionsService.update", () => {
   it("rejects PATCH scheduledStartTime: null on a TASK (400) and writes nothing", async () => {
     const existing = session({
       id: "session-1",

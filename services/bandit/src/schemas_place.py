@@ -109,6 +109,7 @@ class InfeasibleContext(_Req):
 class UserWire(_Req):
     preference_matrix: list[float]
     observation_count: float = Field(ge=0)
+    focus_band: Literal["MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT"] | None = None
 
     @model_validator(mode="after")
     def _check(self) -> UserWire:

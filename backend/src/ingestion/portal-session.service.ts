@@ -1,12 +1,20 @@
 import { forwardRef, Inject, Injectable, Logger } from "@nestjs/common";
+import {
+  SessionOutcome,
+  UpstreamSessionCache,
+} from "../integrations/upstream-session-cache.service";
 import { IntegrationsService } from "../integrations/integrations.service";
 import { ingestionSignInFailures } from "../observability/metrics";
 import { PortalAPIService } from "../portal/portal-api.service";
 
 /**
- * Signs a student into the DLU portal with their stored credentials.
+ * Runs portal calls with a signed-in bearer token.
  *
- * Returns `null` when the portal rejects the login or the credentials cannot be
+ * The token comes from the {@link UpstreamSessionCache}, so a sync reuses a
+ * recent sign-in. A token the portal rejects is replaced once; see
+ * {@link UpstreamSessionCache.withSession}.
+ *
+ * `ok: false` when the portal refuses the sign-in or the credentials cannot be
  * read. An open upstream breaker surfaces as `UpstreamUnavailableError` so the
  * queue job can park behind it instead of counting a failure.
  */
@@ -18,9 +26,13 @@ export class PortalSessionService {
     private readonly portal: PortalAPIService,
     @Inject(forwardRef(() => IntegrationsService))
     private readonly integrations: IntegrationsService,
+    private readonly sessions: UpstreamSessionCache,
   ) {}
 
-  async token(userId: string): Promise<string | null> {
+  async withToken<R>(
+    userId: string,
+    use: (token: string) => Promise<R>,
+  ): Promise<SessionOutcome<R>> {
     let creds: { username: string; password: string };
     try {
       creds = await this.integrations.revealCredentials(userId, "PORTAL");
@@ -29,19 +41,21 @@ export class PortalSessionService {
       this.logger.warn(
         `Could not read portal credentials for user ${userId}: ${(error as Error).message}`,
       );
-      return null;
+      return { ok: false };
     }
-    const result = await this.portal.authenticate(
-      creds.username,
-      creds.password,
+
+    const outcome = await this.sessions.withSession(
+      userId,
+      "portal",
+      () => this.portal.authenticate(creds.username, creds.password),
+      (session) => use(session.token),
     );
-    if (!result.ok) {
+    if (!outcome.ok) {
       ingestionSignInFailures.add(1, {
         provider: "PORTAL",
         reason: "rejected",
       });
-      return null;
     }
-    return result.token;
+    return outcome;
   }
 }

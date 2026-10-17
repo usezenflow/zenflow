@@ -86,23 +86,6 @@ describe("with the bandit service", () => {
     expect(startOf(a) < endOf(b) && startOf(b) < endOf(a)).toBe(false);
   });
 
-  it("spreads a series over distinct days", async () => {
-    const student = await signUp("bandit-series");
-    const created = data(
-      await create(
-        student,
-        task({ sessionCount: 3, deadline: iso(Date.now() + 6 * DAY) }),
-      ).expect(201),
-    );
-    const sittings = created.sessions ?? [];
-    expect(sittings).toHaveLength(3);
-    expect(
-      new Set(sittings.map((s) => iso(startOf(s)).slice(0, 10))).size,
-    ).toBe(3);
-    // The flag is on the response, not on each sitting.
-    expect(created.schedulingDegraded).toBeFalsy();
-  });
-
   describe("when the deadline cannot be met", () => {
     async function wall(student: Student) {
       // A fixed class covering the whole window: it never moves, so nothing is conflict-free.

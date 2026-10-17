@@ -55,19 +55,14 @@ import {
 } from "@zenflow/shared";
 
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { sittingMinutes } from "@/lib/split-sittings";
 import { useMemo, useRef, useState } from "react";
 
 const DEFAULT_DURATION = 60;
-const DEFAULT_SESSION_COUNT = 1;
 
 const EMPTY_DEFAULTS: SessionFormValues = {
   type: "TASK",
   title: "",
   duration: DEFAULT_DURATION,
-  sessionCount: DEFAULT_SESSION_COUNT,
-  // `duration` is the whole task; the count splits it into equal sittings.
-  splitTotal: true,
   tags: [],
   note: "",
   location: "",
@@ -88,22 +83,11 @@ function toCreateInput(
     ...(values.type === "DND" ? {} : { reminders: values.reminders ?? [] }),
   };
   if (values.type === "TASK") {
-    const count = values.splitTotal ? (values.sessionCount ?? 1) : 1;
-    const parts = sittingMinutes(values.duration ?? DEFAULT_DURATION, count);
     return {
       ...base,
       type: "TASK",
-      // A split task sends the length of one sitting: the series is N of them.
-      durationMinutes: parts[0],
-      // The series sums to the total; the last sitting takes the remainder.
-      ...(parts.length > 1 ? { sessionDurations: parts } : {}),
+      durationMinutes: values.duration ?? DEFAULT_DURATION,
       deadline: values.deadline as string,
-      // Omitted/1 → one ordinary task; >1 → a series (issue #33) — see
-      // SessionCountField.
-      sessionCount:
-        values.sessionCount && values.sessionCount > 1
-          ? values.sessionCount
-          : undefined,
     };
   }
 
@@ -154,7 +138,7 @@ export default function NewSessionScreen() {
 
 function NewSessionForm() {
   useLanguage();
-  const { start, deadline, sessions, title } = useLocalSearchParams<{
+  const { start, deadline, title } = useLocalSearchParams<{
     start?: string;
     /** UTC ISO instant — pre-selects the deadline (used by the Day/Week
      * block long-press "Add study session before this"). */
@@ -195,8 +179,6 @@ function NewSessionForm() {
     };
     if (deadline) base.deadline = deadline;
     if (title) base.title = title;
-    const n = sessions ? Number.parseInt(sessions, 10) : Number.NaN;
-    if (Number.isFinite(n) && n > 1) base.sessionCount = n;
     if (start) {
       const { date, startTime } = splitZoned(start, tz);
       base.date = date;
@@ -204,7 +186,7 @@ function NewSessionForm() {
       base.endTime = shiftHhmm(startTime, DEFAULT_DURATION);
     }
     return base;
-  }, [start, deadline, sessions, title, tz, user?.defaultReminderMinutes]);
+  }, [start, deadline, title, tz, user?.defaultReminderMinutes]);
 
   // A draft from an earlier swipe-down wins over the route prefill.
   const [draft] = useState(() => useComposerStore.getState().drafts[DRAFT_NEW]);

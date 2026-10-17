@@ -160,7 +160,6 @@ def test_alt_plan_does_not_share_the_applied_plans_ledger() -> None:
     s0, s1 = got[0], got[1]
     assert s0.linucb is not None and s0.start_ms == s0.linucb.start_ms
     assert local_date_str(s0.start_ms, "UTC") == "2026-09-21"
-    assert s0.start_ms + 120 * MS_PER_MINUTE > NOW + 16 * HOUR  # past midnight
     # ...but s1's heuristic alternative is from the heuristic plan: one gap
     # after its own s0 (08:00 to 10:00), not placed around the applied LinUCB s0.
     assert s1.heuristic is not None and shared[1].heuristic is not None

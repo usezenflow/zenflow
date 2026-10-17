@@ -42,6 +42,7 @@ from src.core.displacement import (
     plan_displacement,
 )
 from src.core.preference import preference_score_at
+from src.core.quiet_hours import quiet_intervals, quiet_window
 from src.core.reason import (
     PlacementReason,
     count_free_starts,
@@ -162,7 +163,13 @@ class _Placer:
         self.today = local_date_str(req.now_ms, req.timezone)
         self.day_by_str: dict[str, PlacementDay] = {d.day_str: d for d in req.days}
         self.occ: dict[str, Intervals] = {
-            d.day_str: _ivals(d.occupied) for d in req.days
+            d.day_str: [
+                *_ivals(d.occupied),
+                *quiet_intervals(
+                    d.day_str, req.timezone, *quiet_window(req.user.focus_band)
+                ),
+            ]
+            for d in req.days
         }
         self.heuristic_policy = HeuristicPolicy(self.matrix, self.tz)
         self.linucb_policy = LinucbPolicy(req.bandit, self.tz)

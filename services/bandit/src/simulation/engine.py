@@ -21,12 +21,13 @@ from numpy.typing import NDArray
 
 from src.core import constants as consts
 from src.core.arms import seeded_tie_break_order
-from src.core.constants import COMPLETED_REWARD, MISSED_REWARD
+from src.core.constants import COMPLETED_REWARD, LAPSED_REWARD
 from src.core.context_vector import build_context_vector
 from src.core.linucb_best_slot import LinucbCandidateDay, best_linucb_slot
+from src.core.quiet_hours import quiet_intervals
 from src.core.reward import drag_distance_reward
 from src.core.series_spread import series_day_windows
-from src.core.slot import ceil_to_slot
+from src.core.slot import ceil_to_slot, local_date_str
 from src.core.slot_score import (
     best_free_slot,
     free_start_mask,
@@ -123,6 +124,12 @@ class _Day:
     flex_hours: float
 
 
+def _blocked(day: _Day) -> list[Interval]:
+    """Fixed occupancy plus quiet hours, the rule ``/v1/place`` applies too."""
+    dates = local_date_str(day.start_ms, TZ)
+    return [*day.occupied, *quiet_intervals(dates, TZ)]
+
+
 @dataclass
 class _Proposal:
     start_ms: int
@@ -201,7 +208,7 @@ class World:
         if lower + dur_ms > upper:
             return np.empty(0, dtype=np.int64)
         n = (upper - dur_ms - lower) // consts.SLOT_MS + 1
-        mask = free_start_mask(lower, n, dur_ms, [*day.occupied, *extra])
+        mask = free_start_mask(lower, n, dur_ms, [*_blocked(day), *extra])
         return np.asarray(
             lower + np.arange(n, dtype=np.int64)[mask] * consts.SLOT_MS, dtype=np.int64
         )
@@ -229,7 +236,7 @@ class World:
         for d in days:
             slot = best_free_slot(
                 duration,
-                [*d.occupied, *extra],
+                [*_blocked(d), *extra],
                 max(now_ms, d.start_ms),
                 min(deadline_ms, d.end_ms),
                 self.prefs.matrix,
@@ -278,7 +285,7 @@ class World:
                 day_str=str(d.idx),
                 day_start_ms=d.start_ms,
                 day_end_ms=d.end_ms,
-                occupied=d.occupied,
+                occupied=_blocked(d),
                 vector=xs[i].tolist(),
                 arm_scores={a: float(v[i]) for a, v in scores.items()},
             )
@@ -462,7 +469,7 @@ class World:
             if self.cfg.reward == "completion":
                 if done:
                     self.prefs.retained(final)
-                reward = COMPLETED_REWARD if done else MISSED_REWARD
+                reward = COMPLETED_REWARD if done else LAPSED_REWARD
             else:
                 self.prefs.retained(final)
                 reward = RETAINED_REWARD

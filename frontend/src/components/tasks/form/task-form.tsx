@@ -280,33 +280,31 @@ export function SessionForm({
                 />
               )}
 
-              {/* Sessions — multi-sitting series count; editable in both
-                  create and edit mode (edit bounds its feasible-max window
-                  off the edited sitting's own schedule, not raw "now"). */}
-              <FormField
-                control={form.control}
-                name="sessionCount"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel className="text-xs font-semibold">
-                      Sessions
-                    </FormLabel>
-                    <SessionCountField
-                      value={field.value ?? 1}
-                      onChange={field.onChange}
-                      deadline={form.watch("deadline")}
-                      duration={form.watch("duration")}
-                      from={
-                        editingInstance
-                          ? effectiveNowForSessionCountEdit(editingInstance)
-                          : undefined
-                      }
-                      disabled={loading}
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Sessions — multi-sitting series count, edit only. Create
+                  always makes one session. Edit bounds its feasible-max window
+                  off the edited sitting's own schedule, not raw "now". */}
+              {editingInstance && (
+                <FormField
+                  control={form.control}
+                  name="sessionCount"
+                  render={({ field }) => (
+                    <FormItem className="space-y-2">
+                      <FormLabel className="text-xs font-semibold">
+                        Sessions
+                      </FormLabel>
+                      <SessionCountField
+                        value={field.value ?? 1}
+                        onChange={field.onChange}
+                        deadline={form.watch("deadline")}
+                        duration={form.watch("duration")}
+                        from={effectiveNowForSessionCountEdit(editingInstance)}
+                        disabled={loading}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {/* Deadline — quick-action chips; required for a TASK. */}
               <FormField

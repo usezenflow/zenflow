@@ -11,9 +11,12 @@ import { OUTCOME_BATCH_SIZE } from "../../common/constants";
 import {
   PREFERENCE_RETAINED_WEIGHT,
   SESSION_COMPLETED_REWARD,
-  SESSION_MISSED_REWARD,
+  SESSION_LAPSED_REWARD,
+  SESSION_SKIPPED_REWARD,
+  SESSION_STARTED_REWARD,
+  SESSION_WRONG_TIME_REWARD,
 } from "../constants";
-import { completionReward, type CompletionOutcome } from "../core/reward";
+import { completionOutcome, type CompletionOutcome } from "../core/reward";
 import { SchedulingFeedbackService } from "./scheduling-feedback.service";
 import { runCronJob } from "../../observability/cron";
 import { schedulerSessionEvents } from "../../observability/metrics";
@@ -51,14 +54,40 @@ type Settled = {
  * (`retainedAt == null`; the column stamps the settlement). The pure
  * {@link completionReward} decides the outcome:
  *
- * - checked off inside the slot: `COMPLETED`, `+1`, settled at `end + grace`;
- * - skipped: `SKIPPED`, `-1`, settled at `end + grace`;
- * - no check-off by `end + cutoff`: `MISSED`, `-1`. A `MISSED` event is written.
+ * - checked off inside the slot: `DONE`, `+1`, settled at `end + grace`;
+ * - started inside the slot without a check-off: `STARTED`, `+1`;
+ * - skipped: `SKIPPED`, `0`, settled at `end + grace`;
+ * - checked off before the start: `WRONG_TIME`, `0`, settled at `end + cutoff`;
+ * - no start or check-off by `end + cutoff`: `LAPSED`, `-0.25`.
  *
  * The settled reward is delivered to the LinUCB arm behind the placement via
  * {@link SchedulingFeedbackService.applyDelayedReward}. A completion also
  * reinforces the user's preference matrix at the kept hour.
  */
+/** Reward written on the settled event, per outcome. */
+const OUTCOME_REWARD: Record<CompletionOutcome, number> = {
+  DONE: SESSION_COMPLETED_REWARD,
+  STARTED: SESSION_STARTED_REWARD,
+  SKIPPED: SESSION_SKIPPED_REWARD,
+  WRONG_TIME: SESSION_WRONG_TIME_REWARD,
+  LAPSED: SESSION_LAPSED_REWARD,
+};
+
+/** The event a user writes for an outcome they chose; the outcome updates its reward. */
+const USER_EVENT_OF: Partial<Record<CompletionOutcome, SessionEventType>> = {
+  DONE: SessionEventType.COMPLETE,
+  SKIPPED: SessionEventType.SKIP,
+};
+
+/** The event written when the system settles an outcome with no user event. */
+const EVENT_OF: Record<CompletionOutcome, SessionEventType> = {
+  DONE: SessionEventType.COMPLETE,
+  STARTED: SessionEventType.START,
+  SKIPPED: SessionEventType.SKIP,
+  WRONG_TIME: SessionEventType.WRONG_TIME,
+  LAPSED: SessionEventType.LAPSED,
+};
+
 @Injectable()
 export class SessionOutcomeService {
   private readonly logger = new Logger(SessionOutcomeService.name);
@@ -140,12 +169,13 @@ export class SessionOutcomeService {
     const out: { session: OutcomeCandidate; outcome: CompletionOutcome }[] = [];
     for (const session of candidates) {
       const start = session.scheduledStartTime!.getTime();
-      const outcome = completionReward(
+      const outcome = completionOutcome(
         start,
         start + session.durationMinutes * 60_000,
         session.completedAt ? session.completedAt.getTime() : null,
         session.skipped,
         now.getTime(),
+        null,
       );
       if (outcome) out.push({ session, outcome });
     }
@@ -172,10 +202,7 @@ export class SessionOutcomeService {
           userId: session.userId,
           eventId,
           outcome,
-          reward:
-            outcome === "COMPLETED"
-              ? SESSION_COMPLETED_REWARD
-              : SESSION_MISSED_REWARD,
+          reward: OUTCOME_REWARD[outcome],
           scheduledStartMs: session.scheduledStartTime!.getTime(),
           timezone: session.user.timezone,
         });
@@ -186,7 +213,7 @@ export class SessionOutcomeService {
 
   /**
    * Sets the reward on the check-off `SessionEvent` the user wrote (`COMPLETE`
-   * or `SKIP`), or writes a `MISSED` event when there is none. Returns the id
+   * or `SKIP`), or writes the outcome's own event when there is none. Returns the id
    * of the event that carries the reward.
    */
   private async writeOutcomeEvent(
@@ -194,16 +221,8 @@ export class SessionOutcomeService {
     session: OutcomeCandidate,
     outcome: CompletionOutcome,
   ): Promise<bigint> {
-    const checkOff =
-      outcome === "COMPLETED"
-        ? SessionEventType.COMPLETE
-        : outcome === "SKIPPED"
-          ? SessionEventType.SKIP
-          : null;
-    const reward =
-      outcome === "COMPLETED"
-        ? SESSION_COMPLETED_REWARD
-        : SESSION_MISSED_REWARD;
+    const checkOff = USER_EVENT_OF[outcome] ?? null;
+    const reward = OUTCOME_REWARD[outcome];
 
     if (checkOff) {
       const existing = await tx.sessionEvent.findFirst({
@@ -228,7 +247,7 @@ export class SessionOutcomeService {
       data: {
         sessionId: session.id,
         userId: session.userId,
-        eventType: checkOff ?? SessionEventType.MISSED,
+        eventType: checkOff ?? EVENT_OF[outcome],
         oldSnapshot: Prisma.JsonNull,
         newSnapshot: this.snapshot(session),
         rewardScore: reward,
@@ -236,7 +255,7 @@ export class SessionOutcomeService {
       select: { id: true },
     });
     schedulerSessionEvents.add(1, {
-      type: checkOff ?? SessionEventType.MISSED,
+      type: checkOff ?? EVENT_OF[outcome],
     });
     return event.id;
   }
@@ -254,7 +273,7 @@ export class SessionOutcomeService {
         s.reward,
         null,
       );
-      if (s.outcome === "COMPLETED") {
+      if (s.outcome === "DONE") {
         await this.schedulingFeedback.reinforcePreferenceMatrix(
           s.userId,
           s.scheduledStartMs,

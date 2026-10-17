@@ -22,7 +22,7 @@ describe('month widget calendar', () => {
   });
 
   it('includes upcoming tasks when the month response is empty and deduplicates overlaps', () => {
-    const future = { id: 'future', title: 'Task', start: '2026-10-14T07:00:00Z', end: '2026-10-14T08:00:00Z', type: 'TASK' as const, location: null };
+    const future = { id: 'future', title: 'Plan', start: '2026-10-14T07:00:00Z', end: '2026-10-14T08:00:00Z', type: 'TASK' as const, location: null };
     const calendar = monthCalendar({ ...snapshot, calendarEvents: [future], events: [future] }, Date.parse('2026-10-14T03:00:00Z'));
     expect(calendar.events.map((event) => event.id)).toEqual(['future']);
     expect(monthCalendar({ ...snapshot, calendarEvents: [], events: [future] }, Date.parse('2026-10-14T03:00:00Z')).events).toEqual([future]);
@@ -31,7 +31,7 @@ describe('month widget calendar', () => {
   it('hides Do not disturb', () => {
     const today = Date.parse('2026-10-14T03:00:00Z');
     const events: WidgetSnapshot['events'] = [
-      { id: 'task', title: 'Task', start: '2026-10-14T07:00:00Z', end: '2026-10-14T08:00:00Z', type: 'TASK', location: null },
+      { id: 'task', title: 'Plan', start: '2026-10-14T07:00:00Z', end: '2026-10-14T08:00:00Z', type: 'TASK', location: null },
       { id: 'exam', title: 'Exam', start: '2026-10-14T08:00:00Z', end: '2026-10-14T09:00:00Z', type: 'EXAM', location: null },
       { id: 'dnd', title: 'Busy', start: '2026-10-14T09:00:00Z', end: '2026-10-14T10:00:00Z', type: 'DND', location: null },
     ];

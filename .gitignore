@@ -25,3 +25,6 @@ backend/.vault-dev/
 .claude/settings.local.json
 .DS_Store
 backend/state/
+
+# Live LMS capture: holds a sesskey and user id.
+lms_response.json

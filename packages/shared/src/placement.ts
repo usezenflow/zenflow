@@ -135,7 +135,12 @@ export interface PlaceRequest {
   /** Loaded once for the whole scan range. */
   days: PlacementDay[];
   /** `preferenceMatrix` = 168 floats (7 ISO weekdays x 24 hours, row-major). */
-  user: { preferenceMatrix: number[]; observationCount: number };
+  user: {
+    preferenceMatrix: number[];
+    observationCount: number;
+    /** Sets the user's quiet hours; omitted when onboarding has not asked. */
+    focusBand?: FocusBand;
+  };
   /** Required iff any member can run LINUCB. `[]` = cold prior. */
   bandit?: {
     alpha: number;
