@@ -82,6 +82,17 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # CMake picks the launcher up from these env vars, so React Native's C++
+      # (Hermes glue, Fabric, codegen) is compiled once per source change.
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: android-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: android-
+          max-size: 1G
+      - name: Use ccache for CMake
+        run: |
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
       - uses: gradle/actions/setup-gradle@v4
         with:
           # Only main writes the Gradle cache; PR builds read it, so they do
@@ -171,6 +182,15 @@ jobs:
         with:
           path: mobile/ios/Pods
           key: pods-${{ runner.os }}-${{ hashFiles('mobile/ios/Podfile.lock') }}
+      # Pods compile into derived data; restoring it lets xcodebuild skip
+      # unchanged targets. Falls back to the newest cache when the lock moves.
+      - uses: actions/cache@v4
+        with:
+          path: mobile/ios/build-device
+          key: ios-derived-${{ runner.os }}-${{ hashFiles('mobile/ios/Podfile.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ios-derived-${{ runner.os }}-${{ hashFiles('mobile/ios/Podfile.lock') }}-
+            ios-derived-${{ runner.os }}-
       # prebuild exits 0 even when its own pod install fails, so install here
       # where a failure is visible, and retry runner I/O blips.
       - name: Install pods
