@@ -94,6 +94,69 @@ services:
       - storage
     
   
+  edge:
+    container_name: zenflow-edge-dev
+    image: nginx:1.27-alpine
+    # Dev edge for the campus map: basemap at /maps/, routing at /osrm/foot/ and
+    # /osrm/car/. Phones reach it at http://<lan-ip>:8090, not localhost.
+    ports:
+      - "8090:80"
+    volumes:
+      - ./nginx/edge.dev.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tiles:/srv/maps:ro
+    depends_on:
+      - osrm-foot
+      - osrm-car
+    networks:
+      - maps
+
+  osrm-foot:
+    container_name: zenflow-osrm-foot-dev
+    image: osrm/osrm-backend
+    # Graphs come from scripts/osrm-prepare.sh.
+    command: osrm-routed --algorithm mld --max-table-size 1000 /data/map.osrm
+    volumes:
+      - ./osrm/data/foot:/data:ro
+    networks:
+      - maps
+
+  osrm-car:
+    container_name: zenflow-osrm-car-dev
+    image: osrm/osrm-backend
+    command: osrm-routed --algorithm mld --max-table-size 1000 /data/map.osrm
+    volumes:
+      - ./osrm/data/car:/data:ro
+    networks:
+      - maps
+
+  nominatim:
+    container_name: zenflow-nominatim-dev
+    image: mediagis/nominatim:5.1
+    # Place search for the location screen (NOMINATIM_URL=http://localhost:8088).
+    # Run scripts/nominatim-extract.sh first. The first start imports the Lam Dong
+    # extract (a few minutes); search answers once /status returns OK.
+    ports:
+      - "8088:8080"
+    shm_size: 1gb
+    environment:
+      PBF_PATH: /pbf/lamdong.osm.pbf
+      NOMINATIM_PASSWORD: nominatim
+      IMPORT_STYLE: full
+      THREADS: 2
+    mem_limit: 2g
+    cpus: 2
+    volumes:
+      - ./nominatim/lamdong.osm.pbf:/pbf/lamdong.osm.pbf:ro
+      - nominatim_data:/var/lib/postgresql/16/main
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    networks:
+      - maps
+
   mail:
     container_name: zenflow-mail-dev
     image: axllent/mailpit:v1.31.4
@@ -114,9 +177,12 @@ networks:
     driver: bridge
   bandit:
     driver: bridge
+  maps:
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_killswitch_data:
   redis_queue_data:
   storage_data:
+  nominatim_data:

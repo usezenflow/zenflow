@@ -1,0 +1,135 @@
+# Load-test stack with ingestion: Postgres, the five Redis instances, Mailpit, bandit and the fake DLU
+# server, under fixed resource limits. The API container is under the `api` profile; the ingestion
+# benchmark (backend/scripts/fixtures/dlu/bench.sh) runs the API on the host against the infra only.
+# Time is scaled 60x against production: LMS calendar 15 min -> 15 s, portal 3 h -> 3 min,
+# token TTLs 50 min / 100 min -> 50 s / 100 s.
+name: zf-lt-ing
+x-log: &log
+  logging: { driver: json-file, options: { max-size: "20m", max-file: "2" } }
+x-redis: &redis
+  image: redis:8.8.0-alpine
+  <<: *log
+  cpus: 0.5
+  mem_limit: 256m
+  memswap_limit: 256m
+services:
+  postgres:
+    container_name: zf-lt-ing-db
+    image: postgres:18.4-alpine
+    <<: *log
+    cpus: 2
+    mem_limit: 2g
+    memswap_limit: 2g
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=all", "-c", "pg_stat_statements.max=10000"]
+    ports: ["5741:5432"]
+    environment: { POSTGRES_USER: admin, POSTGRES_PASSWORD: admin, POSTGRES_DB: zenflow }
+  session-redis:
+    container_name: zf-lt-ing-redis-session
+    <<: *redis
+    ports: ["6761:6379"]
+  redis-ratelimit:
+    container_name: zf-lt-ing-redis-ratelimit
+    <<: *redis
+    ports: ["6762:6379"]
+  redis-queue:
+    container_name: zf-lt-ing-redis-queue
+    <<: *redis
+    command: ["redis-server", "--maxmemory-policy", "noeviction", "--appendonly", "yes"]
+    ports: ["6763:6379"]
+  redis-killswitch:
+    container_name: zf-lt-ing-redis-killswitch
+    <<: *redis
+    command: ["redis-server", "--maxmemory-policy", "noeviction", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports: ["6764:6379"]
+  redis-pubsub:
+    container_name: zf-lt-ing-redis-pubsub
+    <<: *redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["6765:6379"]
+  mail:
+    container_name: zf-lt-ing-mail
+    image: axllent/mailpit:v1.31.4
+    <<: *log
+    cpus: 0.5
+    mem_limit: 512m
+    ports: ["1741:1025", "8741:8025"]
+  bandit:
+    container_name: zf-lt-ing-bandit
+    build: ../services/bandit
+    <<: *log
+    cpus: 2
+    mem_limit: 1g
+    memswap_limit: 1g
+    ports: ["8841:8000"]
+
+  # Stand-in for lms.dlu.edu.vn / portal-api.dlu.edu.vn / dkhp-api.dlu.edu.vn. Any credentials work
+  # except the password "wrongpass". Stats: GET /_/stats, reset: POST /_/reset.
+  fake-dlu:
+    container_name: zf-lt-ing-fake-dlu
+    image: node:24-alpine
+    <<: *log
+    profiles: ["api"]
+    working_dir: /repo/backend
+    command: ["node", "/repo/node_modules/ts-node/dist/bin.js", "--transpile-only", "scripts/fake-dlu-server.ts"]
+    environment:
+      FAKE_DLU_PORT: "4100"
+      FAKE_DLU_LATENCY_MS: ${FAKE_DLU_LATENCY_MS:-4}
+      FAKE_DLU_JITTER_MS: ${FAKE_DLU_JITTER_MS:-4}
+    volumes:
+      - ..:/repo:ro
+    ports: ["4141:4100"]
+
+  # Built from the checked-out tree: docker build -f loadtest/Dockerfile.api -t zf-lt-api:ing .
+  api:
+    container_name: zf-lt-ing-api
+    image: ${API_IMAGE:-zf-lt-api:ing}
+    <<: *log
+    profiles: ["api"]
+    cpus: 2
+    mem_limit: 2g
+    memswap_limit: 2g
+    restart: "no"
+    depends_on: [postgres, session-redis, redis-ratelimit, redis-queue, redis-killswitch, redis-pubsub, mail, bandit, fake-dlu]
+    ports: ["5841:8000"]
+    environment:
+      NODE_ENV: production
+      PORT: "8000"
+      DB_HOST: postgres
+      DB_SSLMODE: disable
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: zenflow
+      SESSION_REDIS_HOST: session-redis
+      RATE_LIMIT_REDIS_HOST: redis-ratelimit
+      QUEUE_REDIS_HOST: redis-queue
+      REDIS_KILLSWITCH_HOST: redis-killswitch
+      REDIS_PUBSUB_HOST: redis-pubsub
+      MAIL_HOST: mail
+      MAIL_PORT: "1025"
+      MAIL_FROM: zenflow@example.com
+      SESSION_SECRET: loadtest
+      CORS_ORIGIN: http://localhost:5173
+      COOKIE_SECURE: "false"
+      MASTER_LMS_ENCRYPTION_KEY_V1: 65a8fe6953c0e6cbd8fe74ea254d57f0be098f85bf4c79a0ab81330896759ff7
+      MASTER_PORTAL_ENCRYPTION_KEY_V1: 191171d8481639929cb6ec18f973540298c14379ee3ed7a9f71434c853ef8227
+      # Pinned: synthetic accounts must only ever reach the fake server, never the real DLU.
+      LMS_URL: http://fake-dlu:4100
+      PORTAL_API_URL: http://fake-dlu:4100
+      PORTAL_API_KEY: loadtest
+      DKHP_API_URL: http://fake-dlu:4100
+      DKHP_API_KEY: loadtest
+      INGESTION_ENABLED: "true"
+      INGESTION_REQUEST_DELAY_MS: "0"
+      INGESTION_LMS_CALENDAR_PERIOD_MS: ${INGESTION_LMS_CALENDAR_PERIOD_MS:-15000}
+      INGESTION_TIMETABLE_PERIOD_MS: ${INGESTION_TIMETABLE_PERIOD_MS:-180000}
+      INGESTION_EXAM_PERIOD_MS: ${INGESTION_EXAM_PERIOD_MS:-180000}
+      UPSTREAM_SESSION_TTL_PORTAL_S: ${UPSTREAM_SESSION_TTL_PORTAL_S:-100}
+      UPSTREAM_SESSION_TTL_LMS_S: ${UPSTREAM_SESSION_TTL_LMS_S:-50}
+      OTEL_SDK_DISABLED: "true"
+      LOG_LEVEL: warn
+      OTP_REQUEST_IP_LIMIT: "1000000"
+      OTP_REQUEST_EMAIL_LIMIT: "1000000"
+      OTP_VERIFY_IP_LIMIT: "1000000"
+      OTP_VERIFY_EMAIL_LIMIT: "1000000"
+      OTP_REQUEST_IP_HOURLY_LIMIT: "1000000"
+      BANDIT_SERVICE_URL: http://bandit:8000

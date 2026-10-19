@@ -16,6 +16,7 @@ FROM base AS builder
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY patches ./patches
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/spirits/package.json ./packages/spirits/
 COPY backend/package.json ./backend/
 
 # Full install (incl. devDeps) for the backend and its workspace deps.
@@ -23,11 +24,13 @@ RUN pnpm install --frozen-lockfile --filter backend...
 
 # Sources.
 COPY packages/shared ./packages/shared
+COPY packages/spirits ./packages/spirits
 COPY backend ./backend
 
-# @zenflow/shared must be built first (the backend imports its compiled dist),
+# Workspace packages must be built first (the backend imports their compiled dist),
 # then generate the Prisma client and compile the Nest app.
 RUN pnpm --filter @zenflow/shared build \
+ && pnpm --filter @zenflow/spirits build \
  && pnpm --filter backend exec prisma generate \
  && pnpm --filter backend build
 
