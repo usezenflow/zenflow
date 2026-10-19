@@ -12,7 +12,7 @@ import {
   REDIS_CLIENT,
 } from "../common/redis/redis.constants";
 
-const CHECK_TIMEOUT_MS = 2_000;
+const CHECK_TIMEOUT_MS = 8_000;
 
 export interface DependencyStatus {
   status: "up" | "down";

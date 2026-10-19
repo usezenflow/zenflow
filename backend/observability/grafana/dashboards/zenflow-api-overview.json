@@ -230,7 +230,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/sync\"}[$__rate_interval])) by (le))"
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/(sync|health(/.*)?)\"}[$__rate_interval])) by (le))"
         }
       ],
       "description": "95% of requests finish faster than this. Calendar syncs are excluded because they wait on the university by design. An alert fires above 2 s for 10 minutes."
@@ -292,7 +292,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/sync\"}[$__rate_interval])) by (le))"
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/(sync|health(/.*)?)\"}[$__rate_interval])) by (le))"
         }
       ],
       "description": "99% of requests finish faster than this: the worst-case experience, ignoring syncs."
@@ -434,7 +434,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/sync\"}[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/(sync|health(/.*)?)\"}[$__rate_interval])) by (le))",
           "legendFormat": "p50"
         },
         {
@@ -443,7 +443,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.90, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/sync\"}[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/(sync|health(/.*)?)\"}[$__rate_interval])) by (le))",
           "legendFormat": "p90"
         },
         {
@@ -452,7 +452,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/sync\"}[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/(sync|health(/.*)?)\"}[$__rate_interval])) by (le))",
           "legendFormat": "p99"
         }
       ],
@@ -624,7 +624,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (http_request_method, route, le) (rate(http_server_request_duration_seconds_bucket{route!=\"\"}[$__range])))"
+          "expr": "histogram_quantile(0.95, sum by (http_request_method, route, le) (rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/health(/.*)?\"}[$__range])))"
         }
       ],
       "transformations": [
@@ -703,7 +703,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk(8, histogram_quantile(0.95, sum by (le, http_request_method, route) (rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/sync\"}[$__rate_interval]))))",
+          "expr": "topk(8, histogram_quantile(0.95, sum by (le, http_request_method, route) (rate(http_server_request_duration_seconds_bucket{route!=\"\",route!~\".*/(sync|health(/.*)?)\"}[$__rate_interval]))))",
           "legendFormat": "{{http_request_method}} {{route}}"
         }
       ]
