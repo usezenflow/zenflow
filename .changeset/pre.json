@@ -3,6 +3,7 @@
   "tag": "beta",
   "changesets": [
     "ab-gap-primary-text-note-skeleton",
+    "android-month-widget",
     "backup-failure-visibility",
     "checklist-day-sheet-spotlight",
     "daily-push-ignore-dnd",
@@ -15,6 +16,7 @@
     "health-all-dependencies",
     "inline-toast-buttons-ci-gating",
     "landing-page-android-updates",
+    "level-up",
     "mobile-nav-and-lag",
     "mobile-test-pyramid",
     "offline-follow-ups",
@@ -33,6 +35,7 @@
     "frontend": "0.0.0",
     "mobile": "0.0.0",
     "@zenflow/core": "0.0.0",
-    "@zenflow/shared": "0.0.0"
+    "@zenflow/shared": "0.0.0",
+    "@zenflow/spirits": "1.0.0-beta.12"
   }
 }

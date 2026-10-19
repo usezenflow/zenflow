@@ -1,5 +1,21 @@
 # mobile
 
+## 1.0.0-beta.13
+
+### Major Changes
+
+- a3f23d9: Plan for students automatically: prep plans for new exams and assignments, a spirits tab, campus places and maps, and inline editing with quick add. Removes the task composer, week view, checklist and daily pushes.
+
+### Minor Changes
+
+- b036590: Add an Android home screen widget that shows the month calendar and your upcoming sessions.
+
+### Patch Changes
+
+- Updated dependencies [a3f23d9]
+  - @zenflow/shared@1.0.0-beta.13
+  - @zenflow/core@1.0.0-beta.13
+
 ## 1.0.0-beta.12
 
 ### Patch Changes
