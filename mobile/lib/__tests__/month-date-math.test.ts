@@ -99,7 +99,7 @@ describe("groupSessionsByDate", () => {
     return { id, scheduledStartTime, durationMinutes };
   }
 
-  it("groups tasks by their user-tz scheduled day", () => {
+  it("groups plans by their user-tz scheduled day", () => {
     const tasks = [
       task("a", "2026-06-15T09:00:00.000Z"),
       task("b", "2026-06-15T14:30:00.000Z"),
@@ -111,7 +111,7 @@ describe("groupSessionsByDate", () => {
     expect(grouped.size).toBe(2);
   });
 
-  it("omits unplaced tasks (null scheduledStartTime)", () => {
+  it("omits unplaced plans (null scheduledStartTime)", () => {
     const tasks = [task("a", null), task("b", "2026-06-15T09:00:00.000Z")];
     const grouped = groupSessionsByDate(tasks, tz);
     expect(grouped.size).toBe(1);
@@ -158,7 +158,7 @@ describe("groupSessionsByDate", () => {
     ]);
   });
 
-  it("keeps API order for tasks sharing a start time (stable sort)", () => {
+  it("keeps API order for plans sharing a start time (stable sort)", () => {
     const tasks = [
       task("first", "2026-06-15T09:00:00.000Z"),
       task("second", "2026-06-15T09:00:00.000Z"),
@@ -188,7 +188,7 @@ describe("groupSessionsByDate", () => {
   });
 
   describe("sessions crossing midnight", () => {
-    it("adds a continuation entry to the next day's bucket for a task spanning 11pm-1am", () => {
+    it("adds a continuation entry to the next day's bucket for a plan spanning 11pm-1am", () => {
       // 2026-06-15T23:00Z + 120min = 2026-06-16T01:00Z.
       const tasks = [task("overnight", "2026-06-15T23:00:00.000Z", 120)];
       const grouped = groupSessionsByDate(tasks, tz);
@@ -224,7 +224,7 @@ describe("groupSessionsByDate", () => {
       expect(isContinuationEntry(grouped.get("2026-06-16")![0])).toBe(true);
     });
 
-    it("does not add a continuation entry for a same-day task (regression)", () => {
+    it("does not add a continuation entry for a same-day plan (regression)", () => {
       const tasks = [task("same-day", "2026-06-15T09:00:00.000Z", 60)];
       const grouped = groupSessionsByDate(tasks, tz);
 
@@ -233,7 +233,7 @@ describe("groupSessionsByDate", () => {
       expect(isContinuationEntry(grouped.get("2026-06-15")![0])).toBe(false);
     });
 
-    it("does not add a continuation entry for a task ending exactly at midnight", () => {
+    it("does not add a continuation entry for a plan ending exactly at midnight", () => {
       // 2026-06-15T22:00Z + 120min = 2026-06-16T00:00Z exactly — no minute
       // actually spills into the next day.
       const tasks = [task("ends-at-midnight", "2026-06-15T22:00:00.000Z", 120)];

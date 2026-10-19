@@ -156,6 +156,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     [
+      "expo-location",
+      {
+        locationWhenInUsePermission: "Allow Zenflow to use your location as the start of a route",
+      },
+    ],
+    [
       "expo-splash-screen",
       {
         image: "./assets/images/splash.png",

@@ -24,6 +24,7 @@ import {
 } from "@zenflow/shared";
 import * as Notifications from "expo-notifications";
 import { type Href, useRouter } from "expo-router";
+import { sessionEditHref } from "@/lib/session-detail";
 import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 import { create } from "zustand";
@@ -203,7 +204,7 @@ export async function jumpToSession(
     if (notificationId) {
       markNotificationActionTaken(notificationId).catch(() => {});
     }
-    const href = `/task/${encodeURIComponent(sessionId)}/edit` as Href;
+    const href = sessionEditHref(sessionId) as Href;
     if (replace) router.replace(href);
     else navigateOnce(() => router.push(href));
   } catch {

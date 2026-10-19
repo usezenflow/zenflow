@@ -1,6 +1,7 @@
 import { scaleType } from "@/lib/type-scale";
 import { useLanguage } from "@/hooks/use-language";
 import { t } from "@/lib/i18n";
+import { useHoldScreenSheet } from "@/lib/screen-sheets";
 import type {
   BottomSheetBackdropProps,
   BottomSheetFooterProps as GBottomSheetFooterProps,
@@ -124,6 +125,12 @@ function ScreenSheetProvider({ children }: React.PropsWithChildren) {
       <BottomSheetModalProvider>{children}</BottomSheetModalProvider>
     </InScreenSheets.Provider>
   );
+}
+
+/** Mounted with an in-screen sheet's content, which is only while the sheet is presented. */
+function HoldScreenSheet() {
+  useHoldScreenSheet();
+  return null;
 }
 
 type BottomSheetContentRef = BottomSheetModalMethods;
@@ -256,6 +263,7 @@ const BottomSheetContent = React.forwardRef<
               `(data) => ReactNode` render-prop form (for the generic
               `present(data)` payload feature) — none of this app's sheets
               use that form, only plain JSX, so this is a safe narrowing. */}
+          {inScreen ? <HoldScreenSheet /> : null}
           {children as React.ReactNode}
         </BottomSheetContext.Provider>
       </BottomSheetModal>

@@ -3,11 +3,12 @@ import { t } from "@/lib/i18n";
 import { Maximize2 } from "@/components/Icons";
 import { NoteSkeleton } from "@/components/tasks/note-skeleton";
 import { Text } from "@/components/ui/text";
+import { useToast } from "@/components/ui/toast";
 import { getBaseURL } from "@/lib/api-client";
 import { resolveNoteFileUrls } from "@/lib/file-link";
 import { noteSnippet } from "@/lib/note-html";
 import { cn } from "@/lib/utils";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import {
   BottomSheet,
@@ -31,12 +32,15 @@ const DescriptionFieldEditor = lazy(() =>
  * second overlay window got covered by it). Panning is off so the editor's own
  * scrolling and selection are never taken by the sheet.
  */
-function NoteScreen({
+export function NoteScreen({
   children,
   onClose,
+  height,
 }: {
   children: React.ReactNode;
   onClose: () => void;
+  /** Pixel height of the sheet. Defaults to 100% of its container. */
+  height?: number;
 }) {
   const sheet = useBottomSheet();
   useEffect(() => {
@@ -48,7 +52,9 @@ function NoteScreen({
     <BottomSheet>
       <BottomSheetContent
         ref={sheet.ref}
-        snapPoints={["100%"]}
+        snapPoints={[height ?? "100%"]}
+        bottomInset={0}
+        backgroundStyle={{ backgroundColor: "transparent", borderWidth: 0 }}
         enableDynamicSizing={false}
         enablePanDownToClose={false}
         enableContentPanningGesture={false}
@@ -97,42 +103,62 @@ function EditorFallback({ onClose }: { onClose: () => void }) {
 export function DescriptionField({
   initialValue: storedValue,
   onChange,
+  onDone,
   onUpload,
   disabled,
+  openRef,
+  hideCard,
 }: {
   initialValue: string;
   onChange: (value: string) => void;
+  /** Runs once when the full-screen editor closes, with the note as edited. */
+  onDone?: (value: string) => void;
   onUpload?: (ids: string[]) => void;
   disabled?: boolean;
+  /** Set to a function that opens the full-screen editor, for a button outside the card. */
+  openRef?: { current: (() => void) | null };
+  /** Render only the full-screen editor; the caller shows the note and opens it through `openRef`. */
+  hideCard?: boolean;
 }) {
   useLanguage();
+  const { toast } = useToast();
   // The API sends file refs origin-relative; the editor WebView needs absolute.
   const initialValue = resolveNoteFileUrls(storedValue, getBaseURL());
   const [value, setValue] = useState(initialValue);
   const [open, setOpen] = useState(false);
+  if (openRef) openRef.current = () => setOpen(true);
+  const valueRef = useRef(initialValue);
   // A genuinely new `initialValue` from the parent (its fetch resolved after
   // mount) replaces what the card shows; echoes of our own edits are no-ops.
   useEffect(() => {
     setValue(initialValue);
+    valueRef.current = initialValue;
   }, [initialValue]);
+  const close = () => {
+    setOpen(false);
+    onDone?.(valueRef.current);
+  };
   const snippet = noteSnippet(value);
   const editor = (
-    <Suspense fallback={<EditorFallback onClose={() => setOpen(false)} />}>
+    <Suspense fallback={<EditorFallback onClose={close} />}>
       <DescriptionFieldEditor
         initialValue={value}
         onChange={(html) => {
+          valueRef.current = html;
           setValue(html);
           onChange(html);
         }}
-        onClose={() => setOpen(false)}
+        onClose={close}
         onUpload={onUpload}
         disabled={disabled}
+        toast={toast}
       />
     </Suspense>
   );
 
   return (
     <>
+      {hideCard ? null : (
       <Pressable
         onPress={() => setOpen(true)}
         disabled={disabled}
@@ -154,7 +180,8 @@ export function DescriptionField({
         </Text>
         <Maximize2 size={16} className="mt-0.5 text-muted-foreground" />
       </Pressable>
-      {open ? <NoteScreen onClose={() => setOpen(false)}>{editor}</NoteScreen> : null}
+      )}
+      {open ? <NoteScreen onClose={close}>{editor}</NoteScreen> : null}
     </>
   );
 }

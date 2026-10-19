@@ -1,8 +1,17 @@
-import { AlertTriangle, Bell, type LucideIcon, Star } from "@/components/Icons";
+import {
+  AlertTriangle,
+  Bell,
+  CheckCircle,
+  type LucideIcon,
+  RefreshCw,
+  Star,
+  Trash2,
+} from "@/components/Icons";
 import { sessionTypeIcon } from "@/components/calendar/session-type-badge";
 import type { ToastAccent } from "@/components/ui/toast";
 import {
   type NotificationCategory,
+  type NotificationEventKind,
   type SessionType,
   notificationCategory,
   notificationEventKind,
@@ -19,6 +28,30 @@ const CATEGORY_SESSION_TYPE: Partial<Record<NotificationCategory, SessionType>> 
   ASSIGNMENT: "ASSIGNMENT",
   EXAM: "EXAM",
   LECTURE: "LECTURE",
+};
+
+/** Event kinds that stand apart from their category: done, changed, removed. */
+const KIND_VISUAL: Partial<
+  Record<
+    NotificationEventKind,
+    { Icon: LucideIcon; tint: string; ink: { light: string; dark: string } }
+  >
+> = {
+  COMPLETED: {
+    Icon: CheckCircle,
+    tint: "border-emerald-500/50 bg-emerald-500/20",
+    ink: { light: "#047857", dark: "#34d399" },
+  },
+  UPDATED: {
+    Icon: RefreshCw,
+    tint: "border-sky-500/50 bg-sky-500/20",
+    ink: { light: "#0369a1", dark: "#38bdf8" },
+  },
+  REMOVED: {
+    Icon: Trash2,
+    tint: "border-rose-500/50 bg-rose-500/20",
+    ink: { light: "#be123c", dark: "#fb7185" },
+  },
 };
 
 export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
@@ -66,6 +99,16 @@ export function notificationVisual(eventName: string): {
     };
   }
   const sessionType = CATEGORY_SESSION_TYPE[category];
+  const kindVisual = sessionType ? KIND_VISUAL[notificationEventKind(eventName)] : undefined;
+  if (kindVisual) {
+    return {
+      Icon: kindVisual.Icon,
+      label: CATEGORY_LABEL[category],
+      tint: kindVisual.tint,
+      ink: kindVisual.ink,
+      accent: kindVisual.ink,
+    };
+  }
   if (sessionType) {
     const tone = SESSION_TYPE_TONE[sessionType];
     const { ink } = SESSION_TONES[tone];

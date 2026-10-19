@@ -27,6 +27,7 @@ export default defineConfig({
       { find: /^expo-file-system$/, replacement: path.resolve(__dirname, "test/mocks/expo-file-system.ts") },
       { find: /^react-native-gesture-handler\/ReanimatedSwipeable$/, replacement: path.resolve(__dirname, "test/mocks/swipeable.tsx") },
       { find: /^expo-notifications$/, replacement: path.resolve(__dirname, "test/mocks/expo-notifications.ts") },
+      { find: /^expo-location$/, replacement: path.resolve(__dirname, "test/mocks/expo-location.ts") },
       { find: /^expo-device$/, replacement: path.resolve(__dirname, "test/mocks/expo-device.ts") },
       { find: /^react-native-android-widget$/, replacement: path.resolve(__dirname, "test/mocks/android-widget.tsx") },
       { find: /^@\//, replacement: `${path.resolve(__dirname)}/` },

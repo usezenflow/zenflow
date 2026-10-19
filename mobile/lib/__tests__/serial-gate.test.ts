@@ -10,7 +10,7 @@ function deferred() {
 }
 
 describe("createSerialGate", () => {
-  it("runs tasks one at a time in call order", async () => {
+  it("runs plans one at a time in call order", async () => {
     const gate = createSerialGate();
     const log: string[] = [];
     const d = deferred();
@@ -49,7 +49,7 @@ describe("createSerialGate", () => {
     expect(log).toEqual(["register", "unregister"]);
   });
 
-  it("skips queued tasks invalidated before they start", async () => {
+  it("skips queued plans invalidated before they start", async () => {
     const gate = createSerialGate();
     const d = deferred();
     const first = gate.run(
@@ -63,7 +63,7 @@ describe("createSerialGate", () => {
     expect(await queued).toBe("skipped");
   });
 
-  it("exposes isCurrent to a running task", async () => {
+  it("exposes isCurrent to a running plan", async () => {
     const gate = createSerialGate();
     const d = deferred();
     const seen: boolean[] = [];
@@ -79,7 +79,7 @@ describe("createSerialGate", () => {
     expect(seen).toEqual([true, false]);
   });
 
-  it("keeps going after a task throws", async () => {
+  it("keeps going after a plan throws", async () => {
     const gate = createSerialGate();
     const bad = gate.run(async () => {
       throw new Error("x");

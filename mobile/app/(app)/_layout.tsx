@@ -6,6 +6,7 @@ import { AppTabBar } from "@/components/tab-bar";
 import {
   ListTabIcon,
   MeTabIcon,
+  SpiritTabIcon,
   WeekTabIcon,
 } from "@/components/tab-icons";
 import { Tabs } from "expo-router";
@@ -42,6 +43,15 @@ export default function AppTabsLayout() {
           title: t("List"),
           tabBarIcon: ({ color, size }) => (
             <ListTabIcon color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="spirits"
+        options={{
+          title: t("Zendeck"),
+          tabBarIcon: ({ color, size }) => (
+            <SpiritTabIcon color={color} size={size} />
           ),
         }}
       />

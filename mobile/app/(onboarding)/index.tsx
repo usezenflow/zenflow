@@ -620,7 +620,7 @@ export default function OnboardingScreen() {
                     </Text>
                   </Pressable>
                 ) : (
-                  <Check size={16} className="text-emerald-500" />
+                  <Check size={16} className="text-brand-lime" />
                 )}
               </View>
             </View>

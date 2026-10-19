@@ -1,7 +1,5 @@
-import { SpotlightAnchor } from "@/components/checklist/spotlight-anchor";
 import { DayBarView } from "@/components/calendar/day-bar";
 import { Text } from "@/components/ui/text";
-import { useSpotlight } from "@/hooks/use-spotlight";
 import type { DayBar } from "@/lib/day-bar";
 import { cn } from "@/lib/utils";
 import { memo } from "react";
@@ -18,8 +16,6 @@ interface MonthCellProps {
   isSelected: boolean;
   /** Load bar for the day; absent while loading or on an empty day. */
   bar?: DayBar;
-  /** The checklist's "open a day" tip points here. */
-  openDayTip: boolean;
   /** A session is being dragged over this day. */
   isDrop?: boolean;
   onPressDay: (day: Date) => void;
@@ -37,11 +33,9 @@ export const MonthCell = memo(function MonthCell({
   isToday,
   isSelected,
   bar,
-  openDayTip,
   isDrop = false,
   onPressDay,
 }: MonthCellProps) {
-  const tipActive = useSpotlight((s) => s.step === "open-day");
   return (
     <Pressable
       onPress={() => onPressDay(day)}
@@ -52,10 +46,6 @@ export const MonthCell = memo(function MonthCell({
       style={{ width: `${100 / 7}%`, height: CELL_HEIGHT }}
       className="items-center gap-1.5 pt-1"
     >
-      {/* Fixed slot: the tip toggling must not shift sibling indexes. */}
-      <View pointerEvents="box-none" className="absolute inset-0">
-        {openDayTip && tipActive ? <SpotlightAnchor step="open-day" /> : null}
-      </View>
       <View
         className={cn(
           "h-[30px] w-[30px] items-center justify-center rounded-full",

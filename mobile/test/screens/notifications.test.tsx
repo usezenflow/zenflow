@@ -237,7 +237,7 @@ describe("NotificationsScreen", () => {
       await toastShown("Rescheduled 2 plans");
     });
 
-    it("reports the tasks it couldn't move", async () => {
+    it("reports the plans it couldn't move", async () => {
       server.use(
         http.post(`${API}/notifications/c1/reschedule-conflicts`, () =>
           HttpResponse.json({

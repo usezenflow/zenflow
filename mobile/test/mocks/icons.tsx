@@ -2,6 +2,11 @@ import * as React from "react";
 
 const Icon = ({ testID }: { testID?: string }) => <svg data-testid={testID} />;
 // Named exports are static in ESM, so list every icon the app imports.
+export const createLucideIcon = () => Icon;
+export const Bike = Icon;
+export const Car = Icon;
+export const Footprints = Icon;
+export const LocateFixed = Icon;
 export const Activity = Icon;
 export const Airplay = Icon;
 export const AlarmClockIcon = Icon;
@@ -120,6 +125,13 @@ export const Upload = Icon;
 export const User = Icon;
 export const UserPlus = Icon;
 export const Users = Icon;
+export const Crown = Icon;
+export const Egg = Icon;
+export const Gem = Icon;
+export const Sprout = Icon;
+export const Target = Icon;
+export const Trophy = Icon;
+export const Zap = Icon;
 export const X = Icon;
 export type LucideIcon = typeof Icon;
 export type IconProps = Record<string, unknown>;

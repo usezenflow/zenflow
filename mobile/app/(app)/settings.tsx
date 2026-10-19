@@ -1,3 +1,4 @@
+import { Spinner } from "@/components/ui/spinner";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { logout as logoutRequest } from "@/api/auth";
@@ -238,7 +239,7 @@ export default function SettingsScreen() {
             className="flex-row items-center gap-[13px] bg-card px-4 py-3.5"
           >
             <View className="h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl bg-muted">
-              <LogOut size={18} className="text-destructive" />
+              {loggingOut ? <Spinner size={18} tone="muted" /> : <LogOut size={18} className="text-destructive" />}
             </View>
             <Text className="text-[15px] font-semibold text-destructive">
               {loggingOut ? t("Signing out…") : t("Sign out")}

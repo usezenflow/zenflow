@@ -11,6 +11,7 @@ import {
   BAR_RIGHT_MARGIN,
   BAR_RADIUS,
 } from "@/lib/tab-bar-metrics";
+import { useScreenSheetOpen } from "@/lib/screen-sheets";
 import { scaleType } from "@/lib/type-scale";
 import { useColorScheme } from "@/lib/useColorScheme";
 // `expo-router` (bumped for SDK 58) vendors its own bottom-tabs
@@ -139,19 +140,17 @@ export function AppTabBar({
   const theme = isDarkColorScheme ? NAV_THEME.dark : NAV_THEME.light;
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const sheetOpen = useScreenSheetOpen();
 
   const count = state.routes.length;
   // Row width lives on the UI thread: the bar's width animates when the create
   // button comes and goes (it is hidden on Settings), and the pill must follow.
   const rowWidth = useSharedValue(0);
-  const onSettings = state.routes[state.index]?.name === "settings";
   // `right` is a plain style, not animated: animating a layout prop runs a
   // Fabric relayout (and a blur re-render inside `Glass`) every frame of the
   // tab switch, exactly while the incoming screen is mounting. The bar snaps
   // between the narrow (create button beside it) and wide (Settings) width.
   // No create button beside the bar on Settings or offline: use the full width.
-  const offline = useOffline();
-  const barRight = onSettings || offline ? BAR_MARGIN : BAR_RIGHT_MARGIN;
 
   // Fractional tab index the pill and every tab's styling derive from. It
   // springs toward the focused tab, so a mid-flight tap retargets smoothly.
@@ -226,9 +225,10 @@ export function AppTabBar({
     // the shadow the moment `overflow: hidden` meets `borderRadius` on the
     // same view), so the rounding + clipping live in `Glass`.
     <Animated.View
-      pointerEvents="box-none"
+      pointerEvents={sheetOpen ? "none" : "box-none"}
       style={[
         {
+          opacity: sheetOpen ? 0 : 1,
           position: "absolute",
           left: BAR_MARGIN,
           bottom: insets.bottom + BAR_LIFT,
@@ -238,11 +238,12 @@ export function AppTabBar({
           shadowOpacity: isDarkColorScheme ? 0.4 : 0.14,
           shadowRadius: 18,
           shadowOffset: { width: 0, height: 10 },
-          right: barRight,
+          right: BAR_MARGIN,
         },
       ]}
     >
       <Glass radius={BAR_RADIUS} clear style={{ flex: 1 }}>
+        <View className="flex-1 flex-row items-stretch">
         <View
           className="flex-1 flex-row items-stretch"
           style={{ paddingHorizontal: ROW_PADDING }}
@@ -270,6 +271,7 @@ export function AppTabBar({
               ]}
             />
           {state.routes.map(renderTab)}
+        </View>
         </View>
       </Glass>
     </Animated.View>

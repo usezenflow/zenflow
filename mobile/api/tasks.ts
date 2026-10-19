@@ -163,20 +163,6 @@ export async function removeSeriesFrom(
   return data.data;
 }
 
-/** Pin a `TASK` in place: the scheduler never moves it (ADR-0022). */
-export async function pinSession(id: string): Promise<Session> {
-  const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/pin`);
-  notifySessionsMutated();
-  return data.data;
-}
-
-/** Unpin a `TASK`: back to `AUTO`. */
-export async function unpinSession(id: string): Promise<Session> {
-  const { data } = await api.delete(`/sessions/${encodeURIComponent(id)}/pin`);
-  notifySessionsMutated();
-  return data.data;
-}
-
 /**
  * Apply a plan the scheduler held for confirmation (`NEEDS_CONFIRMATION`).
  * Single use: a 409 `PLACEMENT_STALE` means the plan no longer holds.

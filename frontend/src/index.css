@@ -142,7 +142,7 @@ body {
      rotated through charts/series for variety. */
   --brand-orange: oklab(75.64% 0.1002 0.12979);
   --brand-yellow: oklch(0.798 0.164 83);
-  --brand-lime: oklch(0.937 0.127 124);
+  --brand-lime: oklch(0.543 0.143 130);
 
   --background: oklch(0.992 0.003 75);
   --foreground: oklch(0.16 0.006 75);

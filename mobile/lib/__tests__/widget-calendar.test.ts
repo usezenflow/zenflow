@@ -39,7 +39,7 @@ describe('month widget calendar', () => {
   });
 
   it('opens the tapped session details, including a virtual occurrence id', () => {
-    expect(widgetEventHref('series::2026-10-14T07:00:00Z')).toBe('zenflow://task/series%3A%3A2026-10-14T07%3A00%3A00Z/edit');
+    expect(widgetEventHref('series::2026-10-14T07:00:00Z')).toBe('zenflow://?open=series%3A%3A2026-10-14T07%3A00%3A00Z');
   });
 
   it('builds a Monday-first month and colors Sundays', () => {
@@ -54,11 +54,11 @@ describe('month widget calendar', () => {
   });
 
   it('opens Month view and seeds a task deadline on the displayed day', () => {
-    expect(widgetMonthHref()).toBe('zenflow://month');
+    expect(widgetMonthHref()).toBe('zenflow://?view=month');
     const href = widgetNewTaskHref('2026-10-14', snapshot.tz);
     const url = new URL(href);
-    expect(`${url.protocol}//${url.host}${url.pathname}`).toBe('zenflow://task/new');
-    expect(url.searchParams.get('start')).toBe('2026-10-14T16:45:00.000Z');
+    expect(`${url.protocol}//${url.host}${url.pathname}`).toBe('zenflow://');
+    expect(url.searchParams.get('quickAdd')).toBe('1');
     expect(url.searchParams.get('deadline')).toBe('2026-10-14T16:45:00.000Z');
   });
 

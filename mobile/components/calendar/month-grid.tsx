@@ -43,10 +43,6 @@ export const MonthGrid = memo(function MonthGrid({
   onPressDay,
 }: MonthGridProps) {
   useLanguage();
-  const openDay =
-    days.find((d) => isSameDay(d, today) && !isOutsideMonth(d, monthDate)) ??
-    new Date(monthDate.getFullYear(), monthDate.getMonth(), 15);
-  const openDayKey = dateKey(openDay);
   return (
     <View className="px-1">
       <View className="flex-row border-b border-border pb-1.5">
@@ -72,7 +68,6 @@ export const MonthGrid = memo(function MonthGrid({
                 isToday={isSameDay(day, today)}
                 isSelected={key === selectedKey}
                 bar={bars.get(key)}
-                openDayTip={key === openDayKey}
                 isDrop={key === dropKey}
                 onPressDay={onPressDay}
               />

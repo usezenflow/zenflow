@@ -53,19 +53,22 @@ export function monthCalendar(snapshot: WidgetSnapshot | null, now = Date.now())
   return { month, selected, today, days, events };
 }
 
+/** The calendar in Month view. Month is a `view` of the calendar screen, not a route of its own. */
 export function widgetMonthHref() {
-  return 'zenflow://month';
+  return 'zenflow://?view=month';
 }
 
+/** Opens a session's detail sheet on the calendar. */
 export function widgetEventHref(id: string) {
-  return `zenflow://task/${encodeURIComponent(id)}/edit`;
+  return `zenflow://?open=${encodeURIComponent(id)}`;
 }
 
+/** Opens the quick add sheet with the deadline set to the end of `date`. */
 export function widgetNewTaskHref(date: string, timezone: string) {
   const [year, month, day] = date.split('-').map(Number);
   const wall = new Date(year, month - 1, day, 23, 45);
   const deadline = zonedWallClockToUtc(wall, timezone).toISOString();
-  return `zenflow://task/new?start=${encodeURIComponent(deadline)}&deadline=${encodeURIComponent(deadline)}`;
+  return `zenflow://?quickAdd=1&deadline=${encodeURIComponent(deadline)}`;
 }
 
 export function widgetEventTime(event: WidgetEvent, timezone: string, language: 'en' | 'vi') {

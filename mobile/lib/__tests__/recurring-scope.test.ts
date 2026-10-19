@@ -70,7 +70,7 @@ describe("resolveMoveScope", () => {
     expect(openTaskSheet).not.toHaveBeenCalled();
   });
 
-  it("moves one sitting of a multi-sitting task alone, with no sheet", () => {
+  it("moves one sitting of a multi-sitting plan alone, with no sheet", () => {
     const toast = vi.fn();
     const onResolve = vi.fn();
     const openTaskSheet = vi.fn();

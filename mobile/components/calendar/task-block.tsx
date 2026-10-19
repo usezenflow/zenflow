@@ -1,9 +1,9 @@
-import { SpotlightAnchor } from "@/components/checklist/spotlight-anchor";
 import { t } from "@/lib/i18n";
 import { SessionTypeBadge, sessionTypeIcon } from "./session-type-badge";
 import { useLanguage } from "@/hooks/use-language";
 import { locale } from "@/lib/i18n";
 import { Text } from "@/components/ui/text";
+import { stripeColor } from "@/lib/stripe-color";
 import { useColorScheme } from "@/lib/useColorScheme";
 import { cn } from "@/lib/utils";
 import {
@@ -19,10 +19,10 @@ import {
   SESSION_TONES,
   hexAlpha,
   sessionTone,
+  type SessionTone,
 } from "@zenflow/core";
-import type { DaySegment, SessionAnchor } from "@zenflow/shared";
-import { Hand, Lock, SkipForward } from "@/components/Icons";
-import { anchorMark } from "@/lib/anchor";
+import type { DaySegment } from "@zenflow/shared";
+import { Car, SkipForward } from "@/components/Icons";
 import { toZonedTime } from "date-fns-tz";
 import * as Haptics from "expo-haptics";
 import { Fragment, memo, useCallback, useEffect, useState } from "react";
@@ -56,8 +56,6 @@ import {
   minToY,
 } from "@/lib/day-grid";
 import { LocationChip } from "@/components/calendar/location-chip";
-import { CheckOffButton } from "@/components/calendar/check-off-button";
-import { useCheckOff } from "@/hooks/use-check-off";
 import type { CheckState } from "@/lib/today-summary";
 import { useToast } from "@/components/ui/toast";
 import { showErrorToast } from "@/lib/task-toasts";
@@ -68,16 +66,12 @@ import {
   useSlotAlternative,
 } from "@/lib/slot-alternatives";
 
-/** Blocks shorter than this have no room for the check-off disc. */
-const CHECKABLE_MIN_HEIGHT = 40;
-/** Right gutter that keeps a block's title clear of the check-off disc. */
-const CHECK_GUTTER_PX = 40;
-
-/** Left stripe of a block that is done. */
-const DONE_GREEN = "#22C55E";
-
 /** Gap (px) between the DND hatch's diagonal lines. */
 const HATCH_SPACING = 7;
+/** A travel zone is never thinner than this, so a short trip still shows. */
+const MIN_BUFFER_PX = 6;
+/** Below this height a travel zone has no room for its label. */
+const BUFFER_LABEL_MIN_PX = 20;
 
 /** One SVG path of parallel 45° lines covering a `width`×`height` box. */
 function hatchPath(width: number, height: number, spacing: number): string {
@@ -166,22 +160,10 @@ interface SessionBlockProps {
   deadline?: string | null;
   /** `Session.late` — placed past its deadline ("accept late deadline"). */
   late?: boolean;
-  /** `Session.anchor`: a hand marks a time the user chose, a lock a pinned one. */
-  anchor?: SessionAnchor;
   onReschedule?: (taskId: string, startISO: string) => void;
   onDragStateChange?: (snap: DragSnap | null) => void;
   onDragEnd?: (snap: DragSnap | null) => void;
   onPress?: (taskId: string) => void;
-  /** Fired when a still-finger long-press lands on this block — the Day/Week
-   * "Move to…" trigger. `DayTimeline` looks the full `Session` up by this id
-   * and opens the `RescheduleSheet`. Replaces the old edge-drag cross-day
-   * mechanic. */
-  onRequestReschedule?: (taskId: string) => void;
-  /** When set, a still-finger long-press opens this action menu instead of
-   * going straight to the reschedule sheet — the menu offers "Move to…" and
-   * "Add study session before this". Falls back to `onRequestReschedule` when
-   * unset. */
-  onLongPressMenu?: (taskId: string) => void;
   /** In the extended-grid timeline, a block whose task runs past midnight is
    * drawn at its TRUE height through the 24:00 line into the dimmed tail —
    * instead of clamping its bottom to midnight (`continues`). */
@@ -206,20 +188,15 @@ interface SessionBlockProps {
    * scale up + a brief primary ring) — set right after this session was created,
    * rescheduled, or the calendar teleported to it. */
   flash?: boolean;
-  /** Carry the checklist's "Move a task" / "Hold a task" spotlight anchors (the
-   * timeline sets it on one block per page). */
-  tip?: boolean;
   /** Bumped by the parent when a drop didn't move the session (save failed,
    * scope sheet cancelled) — releases the drop pin so the card snaps back. */
   settleKey?: number;
   /** Always draw the one-line title, whatever the block's height (week grid). */
   titleOnly?: boolean;
-  /** The session's done or skipped state; `undefined` hides the check-off disc. */
+  /** The session's done or skipped state, which restyles the block. */
   checkState?: CheckState;
-  /** Put the check-off disc at the top edge: another block covers the middle. */
-  checkAtTop?: boolean;
-  /** Draw the check-off disc. Off in the week grid, where a column is too narrow. */
-  showCheck?: boolean;
+  /** Travel minutes kept clear on each side: drawn as a hatched zone inside the block. */
+  commuteMinutes?: number | null;
   /** Width (px) of one day column. Set in the week grid, it lets a lifted block
    * also move sideways, one whole day per column. */
   dayWidth?: number;
@@ -238,31 +215,25 @@ function SessionBlockImpl({
   blockWidth,
   deadline,
   late = false,
-  anchor,
   onReschedule,
   onDragStateChange,
   onDragEnd,
   onPress,
-  onRequestReschedule,
-  onLongPressMenu,
   drawThroughMidnight = false,
   autoScrollDeltaSV,
   dragPreviewMinSV,
   onDragVerticalEdge,
   bottomInset = 0,
   flash = false,
-  tip = false,
   settleKey = 0,
   titleOnly = false,
   checkState,
-  showCheck = true,
-  checkAtTop = false,
+  commuteMinutes,
   dayWidth = 0,
   minDayShift = 0,
   maxDayShift = 0,
 }: SessionBlockProps) {
   useLanguage();
-  const checkOff = useCheckOff();
   const { toast } = useToast();
   const alternative = useSlotAlternative(segment.taskId);
   const takeOtherTime = useCallback(() => {
@@ -312,6 +283,17 @@ function SessionBlockImpl({
   const topPx = minToY(grid, startMin);
   const height = Math.max(minToY(grid, endMin) - topPx, 16);
   const tier = titleOnly ? "title" : blockTier(height);
+  // Travel time on each side is part of the block: the wrapper grows by these
+  // heights and the main part is inset by them.
+  const commute = Math.max(0, commuteMinutes ?? 0);
+  const rawBefore =
+    commute > 0 && !segment.continued ? topPx - minToY(grid, startMin - commute) : 0;
+  const rawAfter =
+    commute > 0 && !(segment.continues && !drawsThrough)
+      ? minToY(grid, endMin + commute) - minToY(grid, endMin)
+      : 0;
+  const beforePx = rawBefore > 0 ? Math.max(MIN_BUFFER_PX, rawBefore) : 0;
+  const afterPx = rawAfter > 0 ? Math.max(MIN_BUFFER_PX, rawAfter) : 0;
 
   // Overlapping blocks render in their normal type colour — no conflict state,
   // no annotation. `layout` still cascades them (see `DayTimeline`).
@@ -359,7 +341,6 @@ function SessionBlockImpl({
   const fingerTYSV = useSharedValue(0);
   // 1 once the finger moved after the hold lifted the block (vs. a still hold).
   const movedSV = useSharedValue(0);
-  const hasMenu = !!onRequestReschedule || !!onLongPressMenu;
   // Last reported vertical auto-scroll direction (fire `onDragVerticalEdge`
   // only on change).
   const vEdgeSV = useSharedValue<-1 | 0 | 1>(0);
@@ -492,7 +473,7 @@ function SessionBlockImpl({
     const effectiveStart =
       pinnedStartMin.value != null ? pinnedStartMin.value : startMin;
     return {
-      top: minToY(grid, effectiveStart) + topOffset,
+      top: minToY(grid, effectiveStart) + topOffset - beforePx,
       zIndex: isDragging.value ? 40 : isNested ? 30 : 10 + cascadeLayer,
     };
   });
@@ -580,11 +561,6 @@ function SessionBlockImpl({
   const liftHaptic = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   }, []);
-
-  const openMenu = useCallback(() => {
-    if (onLongPressMenu) onLongPressMenu(segment.taskId);
-    else onRequestReschedule?.(segment.taskId);
-  }, [onLongPressMenu, onRequestReschedule, segment.taskId]);
 
   // The drag is hold-then-drag: a swipe that starts on a block scrolls the
   // day / pages the week right away, and only a finger held still for 350ms
@@ -705,8 +681,6 @@ function SessionBlockImpl({
         snapOffsetY.value = 0;
         translateY.value = withSpring(0, { damping: 20, stiffness: 300 });
         translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
-        // Held and released in place: open the "Move to…" sheet.
-        if (movedSV.value === 0 && hasMenu) runOnJS(openMenu)();
       }
     })
     .onFinalize(() => {
@@ -735,30 +709,7 @@ function SessionBlockImpl({
       runOnJS(triggerPress)();
     });
 
-  // The carried-over tail can't be dragged, but holding it still opens the
-  // same actions sheet as the head (it acts on the whole session).
-  const menuGesture = Gesture.LongPress()
-    .enabled(isSplit && !offline)
-    .minDuration(LIFT_HOLD_MS)
-    .onStart(() => {
-      runOnJS(liftHaptic)();
-      runOnJS(openMenu)();
-    });
-
-  const composedGesture = Gesture.Simultaneous(panGesture, tapGesture, menuGesture);
-
-  // The check-off disc sits outside the drag gesture so a tap on it never
-  // opens the session; it fades while the block is lifted for a move.
-  const checkable =
-    !!checkState &&
-    showCheck &&
-    segment.type === "TASK" &&
-    isInteractive &&
-    !drawsThrough &&
-    height >= CHECKABLE_MIN_HEIGHT;
-  const checkFadeStyle = useAnimatedStyle(() => ({
-    opacity: 1 - liftProgress.value,
-  }));
+  const composedGesture = Gesture.Simultaneous(panGesture, tapGesture);
 
   // Glass edge: each state tints its own rim (below); the only extra ring is
   // the "landing" flash on create / reschedule / teleport.
@@ -776,12 +727,13 @@ function SessionBlockImpl({
   // Translucent tone fill (12% light, 22% dark) so overlapping blocks blend.
   // One even 1px rim per tone; the 3px stripe is a separate rounded bar inset
   // inside the block, like Apple Calendar.
-  const tone = sessionTone(state, overdue);
+  // A done block turns gray so it recedes behind the work still to do.
+  const isDone = checkState === "done";
+  const tone = isDone ? "dnd" : sessionTone(state, overdue);
   // The session kind owns the colour (see `SESSION_TONES`), not its course.
   const stateClasses = `${flashRing} ${SESSION_TONE_CLASSES[tone].tint}`;
   // Solid single-colour rim, drawn as its own overlay ABOVE the blur: a border on
   // the blurred container itself came out jagged (the blur mask isn't anti-aliased).
-  const isDone = checkState === "done";
   const edgeColor = hexAlpha(
     SESSION_TONES[tone].base,
     isDarkColorScheme ? 0.45 : 0.55,
@@ -793,11 +745,11 @@ function SessionBlockImpl({
     : isSkipped
       ? ({ opacity: 0.45 } as const)
       : null;
-  const topRadius = segment.continued ? 0 : 14;
-  const bottomRadius = segment.continues && !drawsThrough ? 0 : 14;
+  const topRadius = segment.continued || beforePx > 0 ? 0 : 14;
+  const bottomRadius = (segment.continues && !drawsThrough) || afterPx > 0 ? 0 : 14;
 
   const accentColor = isDone
-    ? DONE_GREEN
+    ? stripeColor("done", isDarkColorScheme)
     : isSkipped
       ? SESSION_TONES.dnd.base
       : SESSION_TONES[tone].base;
@@ -805,11 +757,8 @@ function SessionBlockImpl({
   const timeClass = SESSION_TONE_CLASSES[tone].text;
   // The type icon wears the course ink on a course block, so the type stays
   // visible without a badge.
-  // A hand on a time the user chose, a lock on a pinned one; none otherwise.
-  const mark = anchorMark(anchor);
   const TypeIcon = sessionTypeIcon(segment.type);
   const typeInk = SESSION_TONES[tone].ink[isDarkColorScheme ? "dark" : "light"];
-  const MarkIcon = mark === "hand" ? Hand : mark === "lock" ? Lock : null;
 
   const horizontal = {
     left: leftOffset + nestOffset,
@@ -821,7 +770,7 @@ function SessionBlockImpl({
       className="absolute"
       style={[
         wrapperStyle,
-        { ...horizontal, height },
+        { ...horizontal, height: height + beforePx + afterPx },
         // No shadow and no opaque backing: on a translucent block a shadow shows
         // through as gray, and a stacked block must let the one beneath show.
         isStacked && { borderRadius: 14 },
@@ -834,12 +783,6 @@ function SessionBlockImpl({
           className="absolute inset-0 rounded-[14px] border-[1.5px] border-dashed border-muted-foreground/40 bg-muted/40"
         />
       )}
-      {tip && !segment.continued ? (
-        <>
-          <SpotlightAnchor step="move-task" />
-          <SpotlightAnchor step="block-actions" />
-        </>
-      ) : null}
       {flashing && (
         <Animated.View
           pointerEvents="none"
@@ -847,17 +790,56 @@ function SessionBlockImpl({
           className="absolute -inset-[3px] rounded-[17px] border-2 border-primary"
         />
       )}
+      {beforePx > 0 && (
+        <Animated.View
+          testID={`commute.before.${segment.taskId}`}
+          pointerEvents="none"
+          style={[
+            moveStyle,
+            bufferStyle(0, beforePx, "before"),
+            doneBlockStyle,
+          ]}
+        >
+          <BufferZone
+            edge="before"
+            width={horizontal.width}
+            height={beforePx}
+            minutes={commute}
+            tone={tone}
+            dark={isDarkColorScheme}
+          />
+        </Animated.View>
+      )}
+      {afterPx > 0 && (
+        <Animated.View
+          testID={`commute.after.${segment.taskId}`}
+          pointerEvents="none"
+          style={[
+            moveStyle,
+            bufferStyle(beforePx + height, afterPx, "after"),
+            doneBlockStyle,
+          ]}
+        >
+          <BufferZone
+            edge="after"
+            width={horizontal.width}
+            height={afterPx}
+            minutes={commute}
+            tone={tone}
+            dark={isDarkColorScheme}
+          />
+        </Animated.View>
+      )}
       <GestureDetector gesture={composedGesture}>
         <Animated.View
           testID={`task-block.${segment.taskId}`}
           style={[
             moveStyle,
-            { height },
+            { position: "absolute", top: beforePx, left: 0, right: 0, height },
             // Title at the top of a tall block; centred only when it is one line high.
             tier !== "full"
               ? { paddingTop: Math.max(0, Math.min(5, (height - 14) / 2)) }
               : null,
-            checkable ? { paddingRight: CHECK_GUTTER_PX } : null,
             doneBlockStyle,
           ]}
           className={cn(
@@ -865,8 +847,9 @@ function SessionBlockImpl({
             tier !== "full"
               ? "flex-row items-start gap-1 pl-3.5 pr-2"
               : "flex-col gap-0.5 pl-4 pr-2.5 py-1.5",
-            segment.continues && !drawsThrough && "rounded-b-none",
-            segment.continued && "rounded-t-none [border-top-style:dashed]",
+            ((segment.continues && !drawsThrough) || afterPx > 0) && "rounded-b-none",
+            (segment.continued || beforePx > 0) && "rounded-t-none",
+            segment.continued && "[border-top-style:dashed]",
             isInteractive && "cursor-grab",
             stateClasses,
           )}
@@ -980,11 +963,6 @@ function SessionBlockImpl({
               >
                 {segment.title}
               </Text>
-              {MarkIcon && (
-                <View testID={`anchor-mark.${segment.taskId}`} className="shrink-0">
-                  <MarkIcon size={11} className={timeClass} />
-                </View>
-              )}
               {isSkipped && (
                 <View testID={`skip-mark.${segment.taskId}`} className="shrink-0">
                   <SkipForward size={11} className="text-muted-foreground" />
@@ -1015,11 +993,6 @@ function SessionBlockImpl({
                 >
                   {segment.title}
                 </Text>
-                {MarkIcon && (
-                  <View testID={`anchor-mark.${segment.taskId}`} className="shrink-0">
-                    <MarkIcon size={12} className={timeClass} />
-                  </View>
-                )}
                 {isSkipped && (
                   <View testID={`skip-mark.${segment.taskId}`} className="shrink-0">
                     <SkipForward size={12} className="text-muted-foreground" />
@@ -1055,36 +1028,92 @@ function SessionBlockImpl({
           accessibilityRole="button"
           accessibilityLabel={t("Move to {time}", { time: otherTimeLabel })}
           testID={`other-time.${segment.taskId}`}
-          className="absolute bottom-1.5 rounded-full border border-primary/40 bg-background/90 px-2.5 py-1"
-          style={{ right: checkable ? CHECK_GUTTER_PX : 8 }}
+          className="absolute rounded-full border border-primary/40 bg-background/90 px-2.5 py-1"
+          style={{ right: 8, bottom: afterPx + 6 }}
         >
           <Text className="text-[11px] font-semibold leading-[14px] text-primary">
             {t("Or {time}", { time: otherTimeLabel })}
           </Text>
         </Pressable>
       ) : null}
-      {checkable && checkState ? (
-        <Animated.View
-          pointerEvents="box-none"
-          style={[
-            checkFadeStyle,
-            {
-              position: "absolute",
-              right: 0,
-              top: checkAtTop || tier === "full" ? 0 : (height - 44) / 2,
-            },
-          ]}
-        >
-          <CheckOffButton
-            state={checkState}
-            title={segment.title}
-            onToggle={(next) =>
-              checkOff({ id: segment.taskId, title: segment.title }, "complete", next === "done")
-            }
-          />
-        </Animated.View>
-      ) : null}
     </Animated.View>
+  );
+}
+
+/** Placement of a travel zone inside the wrapper. */
+function bufferStyle(top: number, height: number, edge: "before" | "after") {
+  return {
+    position: "absolute" as const,
+    top,
+    left: 0,
+    right: 0,
+    height,
+    overflow: "hidden" as const,
+    ...(edge === "before"
+      ? { borderTopLeftRadius: 14, borderTopRightRadius: 14 }
+      : { borderBottomLeftRadius: 14, borderBottomRightRadius: 14 }),
+  };
+}
+
+/**
+ * The travel time of a session, inside its block: the block's own tone, a
+ * lighter fill and diagonal hatching so it reads as time to cross, not time in
+ * the session.
+ */
+function BufferZone({
+  edge,
+  width,
+  height,
+  minutes,
+  tone,
+  dark,
+}: {
+  edge: "before" | "after";
+  width: number;
+  height: number;
+  minutes: number;
+  tone: SessionTone;
+  dark: boolean;
+}) {
+  const color = SESSION_TONES[tone].base;
+  const ink = SESSION_TONES[tone].ink[dark ? "dark" : "light"];
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          backgroundColor: hexAlpha(color, dark ? 0.1 : 0.07),
+          borderColor: hexAlpha(color, dark ? 0.45 : 0.55),
+          borderWidth: 1,
+          borderTopWidth: edge === "before" ? 1 : 0,
+          borderBottomWidth: edge === "after" ? 1 : 0,
+          borderTopLeftRadius: edge === "before" ? 14 : 0,
+          borderTopRightRadius: edge === "before" ? 14 : 0,
+          borderBottomLeftRadius: edge === "after" ? 14 : 0,
+          borderBottomRightRadius: edge === "after" ? 14 : 0,
+        },
+      ]}
+    >
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+        <Path
+          d={hatchPath(width, height, HATCH_SPACING)}
+          stroke={color}
+          strokeWidth={1}
+          strokeOpacity={dark ? 0.3 : 0.28}
+        />
+      </Svg>
+      {height >= BUFFER_LABEL_MIN_PX && (
+        <View
+          className="absolute left-3.5 right-2 top-0 bottom-0 flex-row items-center gap-1"
+        >
+          <Car size={11} color={ink} />
+          <Text className="text-[11px] font-semibold" style={{ color: ink }} numberOfLines={1}>
+            {t("{minutes} min", { minutes: String(minutes) })}
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 

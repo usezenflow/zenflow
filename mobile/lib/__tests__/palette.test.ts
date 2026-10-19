@@ -66,7 +66,9 @@ describe("palette tokens", () => {
       channels(scheme === "light" ? BRAND.orange : BRAND.orangeDark),
     );
     expect(vars["brand-yellow"]).toBe(channels(BRAND.yellow));
-    expect(vars["brand-lime"]).toBe(channels(BRAND.lime));
+    expect(vars["brand-lime"]).toBe(
+      channels(scheme === "light" ? BRAND.limeLight : BRAND.lime),
+    );
     expect(vars.background).toBe(channels(SURFACES[scheme].background));
     expect(vars.card).toBe(channels(SURFACES[scheme].card));
     for (const tone of tones) {

@@ -5,6 +5,8 @@ import {
 } from "@/components/calendar/session-row-skeleton";
 import { LocationChip } from "@/components/calendar/location-chip";
 import { useSessionCheck } from "@/components/calendar/session-check";
+import { stripeColor } from "@/lib/stripe-color";
+import { useColorScheme } from "@/lib/useColorScheme";
 import { cn } from "@/lib/utils";
 import { Text } from "@/components/ui/text";
 import { useAfterPaint } from "@/hooks/use-after-paint";
@@ -25,9 +27,10 @@ import { subscribeToSessionMutations } from "@/lib/session-cache";
 import { useTabBarOverlayHeight } from "@/lib/tab-bar-metrics";
 import { deriveState, SESSION_TONES, sessionTone, splitZoned } from "@zenflow/core";
 import type { Session, SessionSearchDirection } from "@zenflow/shared";
-import { Logo } from "@/components/logo";
+import { CompanionMark } from "@/components/spirits/companion-mark";
 import { NoResultsMark } from "@/components/brand/state-marks";
 import { type Href, useRouter } from "expo-router";
+import { sessionEditHref } from "@/lib/session-detail";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
 
@@ -65,7 +68,8 @@ function AgendaRow({
   testIDPrefix: string;
   onOpen: (session: Session) => void;
 }) {
-  const { done, check } = useSessionCheck(session);
+  const { done } = useSessionCheck(session);
+  const { isDarkColorScheme } = useColorScheme();
   const tone = done ? "done" : sessionTone(deriveState(session), session.late);
   const location = session.location?.trim();
   return (
@@ -76,7 +80,7 @@ function AgendaRow({
         accessibilityRole="button"
         accessibilityLabel={session.title}
         className="min-w-0 flex-1 rounded-r-xl active:opacity-70"
-        style={{ borderLeftWidth: 3, borderLeftColor: SESSION_TONES[tone].base }}
+        style={{ borderLeftWidth: 3, borderLeftColor: stripeColor(tone, isDarkColorScheme) }}
       >
         <View className="gap-0.5 py-2 pl-3">
           <Text testID={`${testIDPrefix}.time.${session.id}`} className="text-[12px] text-muted-foreground">
@@ -102,7 +106,6 @@ function AgendaRow({
           {location ? <LocationChip location={location} /> : null}
         </View>
       </Pressable>
-      {check}
     </View>
   );
 }
@@ -261,7 +264,7 @@ export function SessionAgenda({
 
   const openSession = (session: Session) => {
     onOpenSession?.();
-    navigateOnce(() => router.push(`/task/${encodeURIComponent(session.id)}/edit` as Href));
+    navigateOnce(() => router.navigate(sessionEditHref(session.id) as Href));
   };
 
   const hasQuery = term.length > 0;
@@ -295,7 +298,7 @@ export function SessionAgenda({
         {hasQuery ? (
           <NoResultsMark size={72} />
         ) : (
-          <Logo className="h-14 w-14" />
+          <CompanionMark />
         )}
         <Text className="text-center text-[15px] text-muted-foreground">
           {hasQuery ? t("No sessions match") : t("No sessions yet")}

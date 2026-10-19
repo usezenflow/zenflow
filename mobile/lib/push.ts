@@ -13,6 +13,7 @@ import {
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import type { Href } from "expo-router";
+import { sessionEditHref } from "@/lib/session-detail";
 import { Platform } from "react-native";
 import { t } from "./i18n";
 
@@ -172,7 +173,7 @@ export function hrefFromPushData(
 ): Href {
   const sessionId = data?.sessionId;
   if (sessionId) {
-    return `/task/${encodeURIComponent(sessionId)}/edit` as Href;
+    return sessionEditHref(sessionId) as Href;
   }
   return "/notifications" as Href;
 }

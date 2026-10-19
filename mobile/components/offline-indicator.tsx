@@ -1,4 +1,3 @@
-import { SUCCESS } from "@zenflow/core";
 import { CloudOffIcon, SyncedIcon } from "@/components/brand/icons";
 import { GlassButton } from "@/components/ui/glass-button";
 import { type ToastIcon, useToast } from "@/components/ui/toast";
@@ -7,25 +6,24 @@ import { selectOffline, useConnectivity } from "@/lib/connectivity";
 import { t } from "@/lib/i18n";
 import { format } from "@/lib/i18n";
 import { getCachedSavedAt } from "@/lib/session-cache";
-import { useColorScheme } from "@/lib/useColorScheme";
 import { useEffect } from "react";
 
-// The toast renders its icon through the lucide contract (`size`); ours are
-// plain SVG with a fixed colour, so adapt them.
-// Dark navy on light toasts, a lighter blue on dark ones so it stays legible.
-const OFFLINE_INK = { light: "#1E3A8A", dark: "#93C5FD" };
-const OfflineToastIcon = (({ size }: { size?: number }) => {
-  const { isDarkColorScheme } = useColorScheme();
-  return (
-    <CloudOffIcon
-      size={size}
-      color={isDarkColorScheme ? OFFLINE_INK.dark : OFFLINE_INK.light}
-    />
-  );
-}) as unknown as ToastIcon;
-const SyncedToastIcon = (({ size }: { size?: number }) => (
-  <SyncedIcon size={size} color={SUCCESS} />
-)) as unknown as ToastIcon;
+// The toast renders its icon through the lucide contract (`size`, `color`); ours
+// are plain SVG, so adapt them and take the variant's themed accent.
+const OfflineToastIcon = (({
+  size,
+  color,
+}: {
+  size?: number;
+  color: string;
+}) => <CloudOffIcon size={size} color={color} />) as unknown as ToastIcon;
+const SyncedToastIcon = (({
+  size,
+  color,
+}: {
+  size?: number;
+  color: string;
+}) => <SyncedIcon size={size} color={color} />) as unknown as ToastIcon;
 // Glass buttons pass the theme ink colour; the glyph takes it as-is.
 const OfflineGlyph = ({ size, color }: { size?: number; color: string }) => (
   <CloudOffIcon size={size} color={color} />
@@ -46,7 +44,6 @@ let announcedOffline = false;
 export function OfflineIndicator({ dayKey }: { dayKey: string }) {
   const offline = useConnectivity(selectOffline);
   const { toast } = useToast();
-  const { isDarkColorScheme } = useColorScheme();
   // Tab screens stay mounted, so only the visible one may toast (not one per tab).
   const focused = useScreenFocusedRef();
 
