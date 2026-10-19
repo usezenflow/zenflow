@@ -91,7 +91,7 @@ groups:
           - refId: A
             relativeTimeRange: {from: 600, to: 0}
             datasourceUid: prometheus
-            model: {refId: A, expr: 'histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{route!="",route!~".*/sync"}[5m])) by (le))', instant: true}
+            model: {refId: A, expr: 'histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{route!="",route!~".*/(sync|health(/.*)?)"}[5m])) by (le))', instant: true}
           - refId: B
             datasourceUid: __expr__
             model: {refId: B, type: reduce, expression: A, reducer: last}
