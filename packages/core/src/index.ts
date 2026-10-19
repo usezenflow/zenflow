@@ -13,3 +13,4 @@ export * from "./reminders";
 export * from "./location";
 export * from "./palette";
 export * from "./course-colour";
+export * from "./campus";
