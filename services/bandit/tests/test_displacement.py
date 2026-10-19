@@ -71,7 +71,7 @@ def test_urgent_task_evicts_chill_tasks_that_spill_to_a_later_day() -> None:
     # nearest free slot to its old start: day+2 00:00 (everything before is packed)
     assert mv["toMs"] == MIDNIGHT + 2 * DAY_MS
     assert mv["toMs"] + by_id["a2"]["durationMinutes"] * 60_000 <= week
-    assert mv["anchor"] == "AUTO" and mv["cost"] == 1 + 32 + 10
+    assert mv["cost"] == 1 + 32 + 10
 
 
 # ---- core planner -------------------------------------------------------

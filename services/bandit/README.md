@@ -2,7 +2,7 @@
 
 For developers. A small Python (FastAPI + numpy) service that owns all slot placement for Zenflow's scheduler.
 
-- Hosts the Disjoint LinUCB model and the heuristic policy; the backend calls it over internal HTTP (`BANDIT_SERVICE_URL`).
+- Hosts the LinUCB model (disjoint arms plus a shared `beta`) and the heuristic policy; the backend calls it over internal HTTP (`BANDIT_SERVICE_URL`).
 - Authoritative for placement ([ADR-0003](../../docs/adr/0003-python-authoritative-placement.md)); fail-open: Nest falls back to the frozen TS heuristic on any error, timeout or empty pick.
 - Stateless: the backend owns per-student `(A, b)` (`BanditArmState`) and sends all 6 arms' state with each request.
 - Reproducible: no clock, no module-global RNG; tie-breaks use a seeded order.
@@ -44,7 +44,9 @@ uv run python -m src.main                         # offline demo: LinUCB vs rand
 | `GET /health` | Liveness: `{"status":"ok"}` |
 | `GET /ready` | Readiness (numpy import, tz cache warm-up, self-test placement): `200 {"status":"ready"}` or `503`. Compose healthcheck target |
 | `POST /v1/place` | Authoritative placement for both A/B policies |
-| `POST /v1/update` | Delayed reward: returns the new `{A, b}` for one arm |
+| `POST /v1/update` | Delayed reward: returns the new `{A, b}` for one arm (and the shared `beta` when `z` is sent) |
+| `POST /v1/init` | Starting state for a new student: band prior per arm, marks prior on `beta` |
+| `POST /v1/prep/size` | Prep length and window from the marks profile |
 
 - Errors: `422` validation or `CONTRACT_VERSION`, `413` body over 2 MB, `401` bad token.
 - Detail (scan window, series, displacement, last resort, latency): [docs/bandit/placement.md](../../docs/bandit/placement.md).

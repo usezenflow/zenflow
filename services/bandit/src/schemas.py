@@ -11,6 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.schemas_prep import MarkWire
+
 #: Canonical time-of-day arms (``SchedulingArm`` in ``@zenflow/shared``),
 #: half-open and lower-inclusive: 00-06 / 06-11 / 11-14 / 14-17 / 17-20 / 20-24.
 ArmId = Literal["EARLY_MORNING", "MORNING", "MIDDAY", "AFTERNOON", "EVENING", "NIGHT"]
@@ -43,6 +45,12 @@ class UpdateRequest(BaseModel):
     x: list[float] = Field(min_length=1)
     reward: float
     state: ArmState
+    # Seeds a cold arm with the band prior (level-up plan). Omitted: plain ridge prior.
+    focus_band: Literal["MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT"] | None = None
+    # Hybrid (level-up LinUCB v2): the cross features of this (arm, day) and the
+    # shared beta block. Both omitted: the disjoint update only.
+    z: list[float] | None = None
+    shared: ArmState | None = None
 
     @model_validator(mode="after")
     def _check_dims(self) -> UpdateRequest:
@@ -61,3 +69,18 @@ class UpdateRequest(BaseModel):
 class UpdateResponse(BaseModel):
     A: list[float]
     b: list[float]
+    shared: ArmState | None = None
+
+
+class InitRequest(BaseModel):
+    """A new student's starting state (level-up plan, ``POST /v1/init``)."""
+
+    ridge: float = Field(gt=0)
+    focus_band: Literal["MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT"] | None = None
+    marks: list[MarkWire] = Field(default_factory=list, max_length=200)
+    avg_gpa4: float | None = Field(default=None, ge=0, le=4)
+
+
+class InitResponse(BaseModel):
+    arms: dict[ArmId, ArmState]
+    shared: ArmState

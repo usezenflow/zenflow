@@ -31,6 +31,7 @@ from src.core import constants as consts
 from src.core.arms import seeded_tie_break_order
 from src.core.constants import DAY_MS, FEATURE_DIM, MS_PER_MINUTE
 from src.core.context_vector import build_context_vector
+from src.core.hybrid import days_left_on, shared_tensor
 from src.core.preference import default_preference_matrix
 from src.core.series_spread import series_day_windows
 from src.core.slot import (
@@ -44,7 +45,12 @@ from src.models.linucb import score as linucb_score
 from src.place import _ivals, _Ledger, _Placer, _Timer
 from src.policies.selector import PolicySelector
 from src.schemas import ARM_IDS, ArmId
-from src.schemas_place import PLACEMENT_CONTRACT_VERSION, PlacedMember, PlaceRequest
+from src.schemas_place import (
+    PLACEMENT_CONTRACT_VERSION,
+    PlacedMember,
+    PlacementDay,
+    PlaceRequest,
+)
 
 HOUR = 60 * MS_PER_MINUTE
 NOW = 1_789_977_600_000  # Mon 2026-09-21 08:00 UTC
@@ -187,6 +193,16 @@ def _old_run(req: PlaceRequest) -> list[PlacedMember]:
         score_cache[duration] = out
         return out
 
+    def day_crosses(m: Any, d: PlacementDay) -> NDArray[np.float64]:
+        """Per-day hybrid cross features, one day at a time (the pre-batch way)."""
+        lecture = d.workload_by_type.get("LECTURE")
+        return shared_tensor(
+            req.user.weak,
+            [m.plan_kind],
+            np.array([[days_left_on(req.deadline_ms, d.day_start_ms)]]),
+            np.array([[lecture.hours if lecture is not None else 0.0]]),
+        )[0, 0]
+
     def old_linucb(m: Any, days: Any, extra: Any) -> Any:
         if not placer.linucb_policy.enabled or not days:
             return None
@@ -195,6 +211,7 @@ def _old_run(req: PlaceRequest) -> list[PlacedMember]:
         except np.linalg.LinAlgError:
             return None
         vecs = vectors(m.duration_minutes)
+        crosses = {d.day_str: day_crosses(m, d) for d in days}
         return placer.linucb_policy.best_slot(
             m,
             days,
@@ -205,7 +222,7 @@ def _old_run(req: PlaceRequest) -> list[PlacedMember]:
             placer.next15,
             req.deadline_ms,
             seeded_tie_break_order(f"{req.request_id}|{m.id}"),
-            placer.matrix,
+            crosses,
         )
 
     def old_place_member(
@@ -364,8 +381,8 @@ def test_dense_overlapping_series_threads_siblings_correctly() -> None:
 
 def test_all_cold_arms_matches_oracle() -> None:
     """Every arm cold (no A/b) -> all arms tie on the same exploration bonus (the
-    batch tensor's arm-score slices, not just the final pick), so the default
-    preference matrix alone puts the picks in the 09:00-12:00 study window."""
+    batch tensor's arm-score slices, not just the final pick), so the seeded
+    tie-break order plus gap quality pick the band and the exact slot."""
     req = make_req(
         members=[member(dur=60), member("t2", dur=60)],
         deadlineMs=NOW + 3 * DAY_MS,
@@ -389,7 +406,7 @@ def test_all_cold_arms_matches_oracle() -> None:
         np.testing.assert_allclose(arm_scores, scores["MORNING"])
     for r in results:
         assert r.start_ms is not None
-        assert 9 <= (r.start_ms % DAY_MS) / HOUR < 12
+        assert r.applied_policy == "LINUCB"
 
 
 def test_dst_boundary_day_matches_oracle() -> None:

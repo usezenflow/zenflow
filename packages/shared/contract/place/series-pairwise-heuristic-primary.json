@@ -703,7 +703,7 @@
   "response": {
     "contractVersion": 3,
     "requestId": "00000000-0000-4000-8000-000000000002-3",
-    "paramsVersion": "py-arms6-v3-46a0e88a66be",
+    "paramsVersion": "py-arms6-v3-23695319e1db",
     "results": [
       {
         "id": "s0",
@@ -714,9 +714,9 @@
           "score": 1.0
         },
         "linucb": {
-          "startMs": 1789981200000,
-          "score": 1.2862147711946288,
-          "selectedArm": "MORNING",
+          "startMs": 1790002800000,
+          "score": 0.7554455404253981,
+          "selectedArm": "AFTERNOON",
           "featureVector": [
             -0.9,
             -0.75,
@@ -725,6 +725,12 @@
             0.0,
             0.0,
             1.0
+          ],
+          "crossFeatures": [
+            0.025,
+            0.0,
+            0.0,
+            0.0
           ],
           "weights": {
             "wL": 1.0,
@@ -746,9 +752,9 @@
           "score": 1.0
         },
         "linucb": {
-          "startMs": 1790067600000,
-          "score": 1.2846068720193777,
-          "selectedArm": "MORNING",
+          "startMs": 1790089200000,
+          "score": 0.7538376412501469,
+          "selectedArm": "AFTERNOON",
           "featureVector": [
             -0.9,
             -0.75,
@@ -757,6 +763,12 @@
             0.0,
             0.0,
             1.0
+          ],
+          "crossFeatures": [
+            0.016666666666666666,
+            0.0,
+            0.0,
+            0.0
           ],
           "weights": {
             "wL": 1.0,
@@ -775,12 +787,12 @@
         "appliedPolicy": "HEURISTIC",
         "heuristic": {
           "startMs": 1790150400000,
-          "score": 1.0
+          "score": 0.9916666666666667
         },
         "linucb": {
-          "startMs": 1790154000000,
-          "score": 1.2830415658387366,
-          "selectedArm": "MORNING",
+          "startMs": 1790172000000,
+          "score": 0.6939390017361726,
+          "selectedArm": "AFTERNOON",
           "featureVector": [
             -0.9,
             -0.75,
@@ -789,6 +801,12 @@
             0.0,
             0.0,
             1.0
+          ],
+          "crossFeatures": [
+            0.008333333333333333,
+            0.0,
+            0.0,
+            0.0
           ],
           "weights": {
             "wL": 1.0,
@@ -803,12 +821,12 @@
       }
     ],
     "timingsMs": {
-      "decode": 0.098,
-      "context": 0.028,
-      "predict": 0.157,
-      "scan": 0.859,
+      "decode": 0.204,
+      "context": 0.094,
+      "predict": 0.101,
+      "scan": 0.769,
       "displace": 0.0,
-      "total": 1.446
+      "total": 1.523
     }
   }
 }

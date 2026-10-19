@@ -111,7 +111,7 @@ def _log(
     n: int, regret: float, accept: float, start_shift: int = 0
 ) -> dict[str, np.ndarray]:
     ids = np.arange(n, dtype=np.float64)
-    return {
+    log = {
         "task_id": ids,
         "member": np.zeros(n),
         "obs_before": ids,
@@ -120,7 +120,11 @@ def _log(
         "drag": np.full(n, (1 - accept) * 100.0),
         "start": ids * 3_600_000 + start_shift,
         "used_linucb": np.ones(n),
+        "completed": np.zeros(n),
     }
+    for k in ("started", "done", "lapsed", "skipped", "wrong_time", "chose_option"):
+        log[k] = np.zeros(n)
+    return log
 
 
 def _results(n_students: int = 8, n: int = 50) -> list[StudentResult]:

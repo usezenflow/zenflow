@@ -79,6 +79,25 @@ def render_markdown(report: dict[str, Any]) -> str:
         _metric_row("acceptance", o["accept"]),
         _metric_row("drag (min)", o["drag"], 1),
         "",
+        "### Lazy-user primary metrics",
+        "",
+        *_head(
+            [
+                "metric",
+                "heuristic",
+                "LinUCB",
+                "diff [95% CI]",
+                "Wilcoxon p",
+                "Cliff's d",
+            ]
+        ),
+        _metric_row("started", o["started"]),
+        _metric_row("done", o["done"]),
+        _metric_row("lapsed", o["lapsed"]),
+        _metric_row("skipped", o["skipped"]),
+        _metric_row("wrong_time", o["wrong_time"]),
+        _metric_row("chose_option", o["chose_option"]),
+        "",
         f"Divergence: the policies chose different starts for "
         f"{o['divergence']['rate']:.1%} of paired placements "
         f"(95% CI {o['divergence']['ci95'][0]:.1%}-{o['divergence']['ci95'][1]:.1%}); "
@@ -119,6 +138,32 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"{t['median_heuristic']:.0f} | {t['median_linucb']:.0f} | "
             f"{t['mean_diff']:+.1f} [{t['ci95'][0]:+.1f}, {t['ci95'][1]:+.1f}] | "
             f"{t['wilcoxon_p']:.3f} | {t['cliffs_delta']:+.2f} |"
+        )
+    out += [
+        "",
+        "## Time to first start",
+        "",
+        "Placements until the student first starts one (censored at the horizon).",
+        "",
+        *_head(
+            [
+                "scenario",
+                "started H",
+                "started L",
+                "median H",
+                "median L",
+                "mean diff [95% CI]",
+                "Wilcoxon p",
+                "Cliff's d",
+            ]
+        ),
+    ]
+    for n, f in report["time_to_first_start"].items():
+        out.append(
+            f"| {n} | {f['started_heuristic']:.0%} | {f['started_linucb']:.0%} | "
+            f"{f['median_heuristic']:.0f} | {f['median_linucb']:.0f} | "
+            f"{f['mean_diff']:+.1f} [{f['ci95'][0]:+.1f}, {f['ci95'][1]:+.1f}] | "
+            f"{f['wilcoxon_p']:.3f} | {f['cliffs_delta']:+.2f} |"
         )
     out += [
         "",

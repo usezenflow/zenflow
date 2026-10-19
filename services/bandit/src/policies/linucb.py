@@ -6,9 +6,11 @@ import math
 from collections.abc import Sequence
 
 import numpy as np
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import NDArray
 
 from src.core import constants as consts
+from src.core.band_prior import FocusBand
+from src.core.hybrid import Z_DIM
 from src.core.linucb_best_slot import LinucbCandidateDay, best_linucb_slot
 from src.core.slot import Intervals
 from src.models.linucb import score as linucb_score
@@ -20,7 +22,7 @@ from src.schemas_place import (
     PlacementMember,
     Weights,
 )
-from src.serialization import hydrate_arms, is_cold
+from src.serialization import hydrate_arms, hydrate_shared, is_cold
 from src.telemetry import cold_arms
 
 
@@ -35,16 +37,28 @@ class LinucbPolicy:
     touches the arm models.
     """
 
-    def __init__(self, bandit: BanditWire | None, timezone: str) -> None:
+    def __init__(
+        self,
+        bandit: BanditWire | None,
+        timezone: str,
+        focus_band: FocusBand | None = None,
+    ) -> None:
         self.tz = timezone
         self.alpha = bandit.alpha if bandit is not None else 0.0
         self._arms = (
-            hydrate_arms(bandit.state, consts.FEATURE_DIM, bandit.ridge)
+            hydrate_arms(bandit.state, consts.FEATURE_DIM, bandit.ridge, focus_band)
             if bandit is not None
             else {}
         )
         if bandit is not None:
             cold_arms.record(sum(is_cold(bandit.state.get(a)) for a in ARM_IDS))
+        # beta of the hybrid model; zero when the request carries no shared block.
+        shared_a, shared_b = hydrate_shared(
+            bandit.shared if bandit is not None else None,
+            bandit.ridge if bandit else 1.0,
+            Z_DIM,
+        )
+        self._beta: NDArray[np.float64] = np.linalg.solve(shared_a, shared_b)
 
     @property
     def enabled(self) -> bool:
@@ -52,7 +66,9 @@ class LinucbPolicy:
         return bool(self._arms)
 
     def arm_scores_batch(
-        self, x: NDArray[np.float64]
+        self,
+        x: NDArray[np.float64],
+        z: NDArray[np.float64] | None = None,
     ) -> dict[ArmId, NDArray[np.float64]]:
         """Score every arm against a batched ``(M, N, D)`` context tensor.
 
@@ -81,6 +97,9 @@ class LinucbPolicy:
                 linucb_score(params.A, params.b, flat, self.alpha), dtype=np.float64
             )
             out[arm] = scored.reshape(m, n)
+            if z is not None:
+                # hybrid: z[m, n, arm] @ beta, the shared term of the arm's score
+                out[arm] = out[arm] + z[:, :, ARM_IDS.index(arm), :] @ self._beta
         return out
 
     def best_slot(
@@ -94,8 +113,9 @@ class LinucbPolicy:
         next_ms: int,
         deadline_ms: int,
         tie_break_order: Sequence[str],
-        pref_matrix: ArrayLike | None = None,
+        crosses: dict[str, NDArray[np.float64]] | None = None,
     ) -> LinucbPick | None:
+        """``crosses[day]`` is that day's ``(len(ARM_IDS), Z_DIM)`` cross features."""
         if not self.enabled or not days:
             return None
         cand = [
@@ -118,15 +138,23 @@ class LinucbPolicy:
             extra,
             member.prev_start_ms,
             tie_break_order,
-            pref_matrix,
+            gap_weight=consts.LINUCB_GAP_WEIGHT,
+            deadline_weight=consts.DEADLINE_PENALTY_WEIGHT,
         )
         if best is None or not math.isfinite(best.score):
             return None
         arm: ArmId = next(a for a in ARM_IDS if a == best.arm)
+        cross = [0.0] * Z_DIM
+        if crosses is not None:
+            day = next(
+                d for d in days if d.day_start_ms <= best.start_ms < d.day_end_ms
+            )
+            cross = crosses[day.day_str][ARM_IDS.index(arm)].tolist()
         return LinucbPick(
             start_ms=best.start_ms,
             score=best.score,
             selected_arm=arm,
             feature_vector=best.vector,
+            cross_features=cross,
             weights=Weights(wL=1.0, wS=best.stability_weight),
         )

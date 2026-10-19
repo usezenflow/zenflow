@@ -1,8 +1,7 @@
-"""Anchors and cost-based displacement (issue #250, ADR-0022).
+"""Cost-based displacement (issue #250).
 
-Edge cases: Chosen confirmation, Pinned blocking, frozen by time, cascade
-chains, cross-day cost, deadlines, multi-sitting series, ties and
-determinism, no feasible plan, and the wire defaults.
+Edge cases: frozen by time, cascade chains, cross-day cost, deadlines,
+multi-sitting series, ties and determinism, and no feasible plan.
 """
 
 from __future__ import annotations
@@ -36,7 +35,6 @@ def fx(
     start: int,
     minutes: int = 60,
     deadline: int = WEEK,
-    anchor: str | None = None,
     **extra: Any,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
@@ -46,8 +44,6 @@ def fx(
         "startMs": start,
         **extra,
     }
-    if anchor is not None:
-        out["anchor"] = anchor
     return out
 
 
@@ -68,7 +64,6 @@ def body(
     fixed: list[tuple[int, int]],
     deadline: int,
     dur: int = 60,
-    chosen: str | None = None,
     policy: str | None = None,
 ) -> dict[str, Any]:
     occ = [(f["startMs"], f["startMs"] + f["durationMinutes"] * MIN) for f in flex]
@@ -78,12 +73,10 @@ def body(
         "fixed": [{"startMs": a, "endMs": b} for a, b in fixed],
         "horizonOccupied": [{"startMs": a, "endMs": b} for a, b in occ],
     }
-    if chosen is not None:
-        ctx["chosenMoves"] = chosen
     if policy is not None:
         ctx["policy"] = policy
     return make_req(
-        requestId="anchors-2",
+        requestId="displacement-2",
         days=make_days(3, occupied=_split_by_day(occ, 3)),
         deadlineMs=deadline,
         members=[member(dur=dur)],
@@ -96,95 +89,11 @@ def result(b: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def moves(r: dict[str, Any]) -> list[tuple[str, int, int, str, float]]:
-    return [
-        (m["id"], m["fromMs"], m["toMs"], m["anchor"], m["cost"]) for m in r["moves"]
-    ]
+def moves(r: dict[str, Any]) -> list[tuple[str, int, int, float]]:
+    return [(m["id"], m["fromMs"], m["toMs"], m["cost"]) for m in r["moves"]]
 
 
 LECTURE = (at(8), at(10))  # fixed, also covers the frozen window
-
-
-# ---- Chosen needs confirmation ------------------------------------------
-
-
-def _two_hour_squeeze(chosen: str | None) -> dict[str, Any]:
-    """A 120 min task due 12:00: Chosen C (10-11) and Auto A (11-12) both move.
-    12:00-14:00 is free, then a wall until day+2."""
-    flex = [fx("c", at(10), anchor="CHOSEN"), fx("a", at(11), anchor="AUTO")]
-    wall = (at(14), at(0, day=2))
-    return body(flex, [LECTURE, wall], at(12), dur=120, chosen=chosen)
-
-
-def test_chosen_move_needs_confirmation_with_the_full_plan() -> None:
-    r = result(_two_hour_squeeze(None))
-    assert r["outcome"] == "NEEDS_CONFIRMATION"
-    assert r["startMs"] == at(10) and r["appliedPolicy"] == "HEURISTIC"
-    assert moves(r) == [
-        ("c", at(10), at(12), "CHOSEN", 10 + 2),
-        ("a", at(11), at(13), "AUTO", 1 + 2),
-    ]
-
-
-def test_allow_returns_the_same_plan_as_displaced() -> None:
-    ask = result(_two_hour_squeeze("ASK"))
-    allow = result(_two_hour_squeeze("ALLOW"))
-    assert allow["outcome"] == "DISPLACED"
-    assert (allow["startMs"], allow["moves"]) == (ask["startMs"], ask["moves"])
-
-
-def test_forbid_keeps_chosen_put_and_falls_back() -> None:
-    r = result(_two_hour_squeeze("FORBID"))
-    assert r["outcome"] == "ACCEPTED_LAST_RESORT" and r["moves"] == []
-
-
-def test_cheaper_auto_plan_leaves_chosen_alone() -> None:
-    """Moving A to 12:00 costs 2; moving C costs 12. No confirmation needed."""
-    flex = [fx("c", at(10), anchor="CHOSEN"), fx("a", at(11))]
-    r = result(body(flex, [LECTURE, (at(13), at(0, day=2))], at(12)))
-    assert r["outcome"] == "DISPLACED" and r["startMs"] == at(11)
-    assert moves(r) == [("a", at(11), at(12), "AUTO", 2)]
-
-
-def _chosen_vs_far_auto(chosen: str | None) -> dict[str, Any]:
-    """C (10-11, Chosen) can shift to the 13:30 gap for 13.5; the 2 h Auto A
-    (11-13, Pinned P right after) only fits on day+2, for 1 + 37 + 10 = 48."""
-    flex = [
-        fx("c", at(10), anchor="CHOSEN"),
-        fx("a", at(11), minutes=120),
-        fx("p", at(13), minutes=30, anchor="PINNED"),
-    ]
-    return body(flex, [LECTURE, (at(14.5), at(0, day=2))], at(12), chosen=chosen)
-
-
-def test_cost_picks_the_chosen_move_over_a_far_auto_move() -> None:
-    r = result(_chosen_vs_far_auto(None))
-    assert r["outcome"] == "NEEDS_CONFIRMATION" and r["startMs"] == at(10)
-    assert moves(r) == [("c", at(10), at(13.5), "CHOSEN", 13.5)]
-
-
-def test_forbid_takes_the_dearer_auto_only_plan() -> None:
-    r = result(_chosen_vs_far_auto("FORBID"))
-    assert r["outcome"] == "DISPLACED" and r["startMs"] == at(11)
-    assert moves(r) == [("a", at(11), at(0, day=2), "AUTO", 48)]
-
-
-# ---- Pinned and fixed ----------------------------------------------------
-
-
-def test_pinned_blocks_and_never_moves() -> None:
-    """P (Pinned, 11-12) sits next to Chosen C: only C can make room."""
-    flex = [fx("c", at(10), anchor="CHOSEN"), fx("p", at(11), anchor="PINNED")]
-    r = result(body(flex, [LECTURE, (at(13), at(0, day=2))], at(12)))
-    assert r["outcome"] == "NEEDS_CONFIRMATION"
-    assert moves(r) == [("c", at(10), at(12), "CHOSEN", 12)]
-
-
-def test_pinned_alone_in_the_way_is_infeasible() -> None:
-    flex = [fx("p", at(10), minutes=120, anchor="PINNED")]
-    r = result(body(flex, [LECTURE], at(12)))
-    assert r["outcome"] == "ACCEPTED_LAST_RESORT" and r["moves"] == []
-    assert r["conflicting"] is True
 
 
 # ---- frozen by time ------------------------------------------------------
@@ -196,7 +105,6 @@ def test_pinned_alone_in_the_way_is_infeasible() -> None:
         (at(9.75), {}, True),  # starts within 2 h of now
         (at(10), {}, False),  # exactly 2 h out: movable
         (at(10), {"completed": True}, True),
-        (at(10), {"anchor": "CHOSEN", "completed": True}, True),
     ],
 )
 def test_frozen_sessions_never_move(
@@ -208,7 +116,7 @@ def test_frozen_sessions_never_move(
         assert r["outcome"] == "ACCEPTED_LAST_RESORT" and r["moves"] == []
     else:
         assert r["outcome"] == "DISPLACED"
-        assert moves(r) == [("f", start, start + HOUR, "AUTO", 2)]
+        assert moves(r) == [("f", start, start + HOUR, 2)]
 
 
 def test_started_session_is_frozen() -> None:
@@ -229,33 +137,19 @@ def test_started_session_is_frozen() -> None:
 # ---- cascade chains -------------------------------------------------------
 
 
-def _chain(anchor: str) -> dict[str, Any]:
+def _chain() -> dict[str, Any]:
     """E (due 12:00) must leave 10-11 and can only go to 11:00, over L."""
-    flex = [fx("e", at(10), deadline=at(12)), fx("l", at(11), anchor=anchor)]
+    flex = [fx("e", at(10), deadline=at(12)), fx("l", at(11))]
     return body(flex, [LECTURE, (at(13), at(0, day=2))], at(11))
 
 
-def test_cascade_chain_through_autos() -> None:
-    r = result(_chain("AUTO"))
+def test_cascade_chain() -> None:
+    r = result(_chain())
     assert r["outcome"] == "DISPLACED" and r["startMs"] == at(10)
     assert moves(r) == [
-        ("e", at(10), at(11), "AUTO", 2),
-        ("l", at(11), at(12), "AUTO", 2),
+        ("e", at(10), at(11), 2),
+        ("l", at(11), at(12), 2),
     ]
-
-
-def test_cascade_chain_through_chosen_needs_confirmation() -> None:
-    r = result(_chain("CHOSEN"))
-    assert r["outcome"] == "NEEDS_CONFIRMATION"
-    assert moves(r) == [
-        ("e", at(10), at(11), "AUTO", 2),
-        ("l", at(11), at(12), "CHOSEN", 11),
-    ]
-
-
-def test_cascade_chain_stops_at_pinned() -> None:
-    r = result(_chain("PINNED"))
-    assert r["outcome"] == "ACCEPTED_LAST_RESORT" and r["moves"] == []
 
 
 def test_move_cap_bounds_the_chain() -> None:
@@ -271,16 +165,16 @@ def test_move_cap_bounds_the_chain() -> None:
 
 
 def test_move_cost_formula() -> None:
-    assert move_cost("AUTO", at(10), at(12), "UTC") == 1 + 2
-    assert move_cost("CHOSEN", at(10), at(9.75), "UTC") == 10 + 0.25
-    assert move_cost("AUTO", at(23), at(1, day=1), "UTC") == 1 + 2 + 10
-    assert move_cost("CHOSEN", at(10), at(10, day=1), "UTC") == 10 + 24 + 10
+    assert move_cost(at(10), at(12), "UTC") == 1 + 2
+    assert move_cost(at(10), at(9.75), "UTC") == 1 + 0.25
+    assert move_cost(at(23), at(1, day=1), "UTC") == 1 + 2 + 10
+    assert move_cost(at(10), at(10, day=1), "UTC") == 1 + 24 + 10
 
 
 def test_cross_day_uses_the_local_day() -> None:
     """16:00 -> 18:00 UTC stays on one UTC day but crosses midnight in Saigon."""
-    assert move_cost("AUTO", at(16), at(18), "UTC") == 3
-    assert move_cost("AUTO", at(16), at(18), "Asia/Ho_Chi_Minh") == 13
+    assert move_cost(at(16), at(18), "UTC") == 3
+    assert move_cost(at(16), at(18), "Asia/Ho_Chi_Minh") == 13
 
 
 def test_relocation_prefers_a_farther_same_day_slot_over_a_closer_other_day() -> None:
@@ -350,7 +244,7 @@ def _tie_body() -> dict[str, Any]:
 def test_equal_cost_plans_take_the_earliest_start() -> None:
     r = result(_tie_body())
     assert r["startMs"] == at(10)
-    assert moves(r) == [("a", at(10), at(2, day=2), "AUTO", 1 + 40 + 10)]
+    assert moves(r) == [("a", at(10), at(2, day=2), 1 + 40 + 10)]
 
 
 def test_same_input_same_plan_whatever_the_order() -> None:
@@ -365,10 +259,9 @@ def test_same_input_same_plan_whatever_the_order() -> None:
 # ---- no feasible plan -------------------------------------------------------
 
 
-@pytest.mark.parametrize("anchor", ["AUTO", "CHOSEN"])
-def test_no_feasible_plan_uses_the_fallback_policy(anchor: str) -> None:
-    """A is due 11:00 and can't go anywhere: never a confirmation prompt."""
-    flex = [fx("a", at(10), deadline=at(11), anchor=anchor)]
+def test_no_feasible_plan_uses_the_fallback_policy() -> None:
+    """A is due 11:00 and can't go anywhere."""
+    flex = [fx("a", at(10), deadline=at(11))]
     r = result(body(flex, [LECTURE], at(11), policy="ACCEPT_CONFLICTS"))
     assert r["outcome"] == "ACCEPTED_CONFLICTS" and r["moves"] == []
 
@@ -376,24 +269,9 @@ def test_no_feasible_plan_uses_the_fallback_policy(anchor: str) -> None:
 # ---- wire -------------------------------------------------------------------
 
 
-def test_anchor_defaults_to_auto() -> None:
-    flex = [fx("a", at(10))]
-    assert "anchor" not in flex[0]
-    r = result(body(flex, [LECTURE], at(11)))
-    assert r["outcome"] == "DISPLACED" and r["moves"][0]["anchor"] == "AUTO"
-
-
-@pytest.mark.parametrize(
-    ("path", "value"),
-    [(("flexible", 0, "anchor"), "FIXED"), (("chosenMoves",), "MAYBE")],
-)
-def test_unknown_anchor_values_are_rejected(path: tuple[Any, ...], value: str) -> None:
-    b = body([fx("a", at(10))], [LECTURE], at(11))
-    node: Any = b["infeasible"]
-    for k in path[:-1]:
-        node = node[k]
-    node[path[-1]] = value
-    assert post(b).status_code == 422
+def test_a_session_moves_by_default() -> None:
+    r = result(body([fx("a", at(10))], [LECTURE], at(11)))
+    assert r["outcome"] == "DISPLACED" and len(r["moves"]) == 1
 
 
 def test_old_contract_version_is_refused() -> None:
@@ -406,9 +284,8 @@ def test_old_contract_version_is_refused() -> None:
 # ---- invariants over generated calendars ------------------------------------
 
 
-def _random_body(seed: int, chosen: str) -> dict[str, Any]:
+def _random_body(seed: int) -> dict[str, Any]:
     rng = random.Random(seed)
-    anchors = ["AUTO", "AUTO", "CHOSEN", "PINNED"]
     flex: list[dict[str, Any]] = []
     t0 = t = at(rng.choice([9, 9.5, 10]))
     for i in range(rng.randint(3, 7)):
@@ -420,20 +297,18 @@ def _random_body(seed: int, chosen: str) -> dict[str, Any]:
                 t,
                 minutes,
                 deadline,
-                rng.choice(anchors),
                 **({"completed": True} if rng.random() < 0.1 else {}),
             )
         )
         t += minutes * MIN + rng.choice([0, 0, 0, 15]) * MIN
     walls = [(at(8), t0), (t, t + rng.choice([2, 6, 20]) * HOUR)]
     deadline = rng.choice([at(11), at(12), at(14)])
-    return body(flex, walls, deadline, rng.choice([30, 60, 120]), chosen)
+    return body(flex, walls, deadline, rng.choice([30, 60, 120]))
 
 
-@pytest.mark.parametrize("chosen", ["ASK", "ALLOW", "FORBID"])
 @pytest.mark.parametrize("seed", range(60))
-def test_plan_invariants(seed: int, chosen: str) -> None:
-    b = _random_body(seed, chosen)
+def test_plan_invariants(seed: int) -> None:
+    b = _random_body(seed)
     r = result(b)
     assert result(b) == r  # deterministic
     ctx = b["infeasible"]
@@ -443,17 +318,9 @@ def test_plan_invariants(seed: int, chosen: str) -> None:
     for fid, f in by_id.items():
         if fid not in moved:
             continue
-        assert f.get("anchor", "AUTO") in ("AUTO", "CHOSEN")
         assert not f.get("completed", False)
         assert f["startMs"] >= NOW + 2 * HOUR
-    has_chosen = any(m["anchor"] == "CHOSEN" for m in r["moves"])
-    if chosen == "ASK":
-        assert has_chosen == (r["outcome"] == "NEEDS_CONFIRMATION")
-    else:
-        assert r["outcome"] != "NEEDS_CONFIRMATION"
-    if chosen == "FORBID":
-        assert not has_chosen
-    if r["outcome"] not in ("DISPLACED", "NEEDS_CONFIRMATION"):
+    if r["outcome"] != "DISPLACED":
         assert r["moves"] == []
         return
 
@@ -462,11 +329,11 @@ def test_plan_invariants(seed: int, chosen: str) -> None:
     placed = [(r["startMs"], r["startMs"] + dur)]
     for m in r["moves"]:
         f = by_id[m["id"]]
-        assert m["fromMs"] == f["startMs"] and m["anchor"] == f.get("anchor", "AUTO")
+        assert m["fromMs"] == f["startMs"]
         assert m["toMs"] % (15 * MIN) == 0 and m["toMs"] >= ceil_to_slot(NOW)
         end = m["toMs"] + f["durationMinutes"] * MIN
         assert end <= f["deadlineMs"]
-        assert m["cost"] == move_cost(m["anchor"], m["fromMs"], m["toMs"], "UTC")
+        assert m["cost"] == move_cost(m["fromMs"], m["toMs"], "UTC")
         placed.append((m["toMs"], end))
     staying = [(a["startMs"], a["endMs"]) for a in ctx["fixed"]] + [
         (f["startMs"], f["startMs"] + f["durationMinutes"] * MIN)

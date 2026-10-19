@@ -17,11 +17,12 @@ TINY = SimConfig(
 
 
 def _synthetic(seed: int, regret_diff: float, n: int = 4) -> rs.SeedRecord:
-    grid = np.zeros((n, 2, 5, 4))
+    n_cols = 1 + len(rs._NON_TTT_METRICS)
+    grid = np.zeros((n, 2, 5, n_cols))
     grid[:, :, 0, 0] = 10.0  # 10 placements per student per scenario, bucket 0
     grid[:, :, 0, 1] = regret_diff * 10.0
     grid[:, :, 0, 2] = 2.0  # accept diff sum
-    grid[:, :, 0, 3] = -5.0
+    grid[:, :, 0, 3] = -5.0  # drag diff sum
     cells = np.array(["night_owl/stable", "early_bird/stable"] * (n // 2))
     return rs.SeedRecord(seed, cells, grid, np.full((n, 2), -3.0), ("a", "b"))
 

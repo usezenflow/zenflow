@@ -37,8 +37,10 @@ from numpy.typing import ArrayLike, NDArray
 
 from .arms import ARM_BANDS, TIE_BREAK_ARM_ORDER, overlap_rate
 from .constants import LINUCB_PREF_WEIGHT, MS_PER_MINUTE, SLOT_MS
+from .gap_quality import gap_quality_scores
 from .slot import Intervals, ceil_to_slot, utc_to_minutes
 from .slot_score import (
+    deadline_penalty_scores,
     free_start_mask,
     proximity_stability_scores,
     slot_preference_scores,
@@ -95,6 +97,8 @@ def best_linucb_slot(
     tie_break_order: Sequence[str] = TIE_BREAK_ARM_ORDER,
     pref_matrix: ArrayLike | None = None,
     pref_weight: float = LINUCB_PREF_WEIGHT,
+    gap_weight: float = 0.0,
+    deadline_weight: float = 0.0,
 ) -> BestLinucbSlot | None:
     tie_rank = {a: i for i, a in enumerate(tie_break_order)}
     rank_by_band = np.array([tie_rank[a] for a in _ARM_NAMES], dtype=np.int64)
@@ -145,6 +149,28 @@ def best_linucb_slot(
             total = total + pref_weight * (
                 slot_preference_scores(pref_matrix, starts, duration_minutes, timezone)
                 / hours
+            )
+        if gap_weight:
+            # Quiet hours are already in ``occupied``, so the day edges are the
+            # plain day bounds.
+            busy = [*day.occupied, *extra]
+            gaps = gap_quality_scores(
+                (starts - day.day_start_ms) // MS_PER_MINUTE,
+                duration_minutes,
+                [
+                    (
+                        (s - day.day_start_ms) // MS_PER_MINUTE,
+                        (e - day.day_start_ms) // MS_PER_MINUTE,
+                    )
+                    for s, e in busy
+                ],
+                0,
+                (day.day_end_ms - day.day_start_ms) // MS_PER_MINUTE,
+            )
+            total = total + gap_weight * gaps
+        if deadline_weight:
+            total = total + deadline_penalty_scores(
+                starts + duration_ms, deadline_ms, deadline_weight
             )
         if prev_start_ms is not None:
             total = total + proximity_stability_scores(prev_start_ms, starts, next_ms)

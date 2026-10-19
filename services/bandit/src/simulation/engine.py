@@ -14,15 +14,15 @@ layer (a parity test pins it to ``/v1/place``).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 from numpy.typing import NDArray
 
 from src.core import constants as consts
 from src.core.arms import seeded_tie_break_order
-from src.core.constants import COMPLETED_REWARD, LAPSED_REWARD
 from src.core.context_vector import build_context_vector
+from src.core.hybrid import cohort_shared_prior, days_left_on, shared_tensor
 from src.core.linucb_best_slot import LinucbCandidateDay, best_linucb_slot
 from src.core.quiet_hours import quiet_intervals
 from src.core.reward import drag_distance_reward
@@ -30,13 +30,28 @@ from src.core.series_spread import series_day_windows
 from src.core.slot import ceil_to_slot, local_date_str
 from src.core.slot_score import (
     best_free_slot,
+    deadline_penalty,
     free_start_mask,
     slot_preference_score,
 )
+from src.schemas import ARM_IDS
 
-from .archetypes import StudentProfile, make_student
-from .learner import RETAINED_REWARD, LinUCBState, PreferenceMatrix
-from .reaction import completes, decide, draw_reaction
+from .archetypes import (
+    DEFAULT_INTERACTION_MIX,
+    INTERACTION_STYLES,
+    StudentProfile,
+    interaction_style_from_mix,
+    make_student,
+)
+from .learner import LinUCBState, PreferenceMatrix
+from .reaction import (
+    choose_offer,
+    completion_outcome,
+    decide,
+    draw_reaction,
+    reaction_label,
+)
+from .rng import stream
 from .utility import DayContext, slot_utility
 from .world import (
     SCENARIO_BY_NAME,
@@ -70,15 +85,40 @@ class SimConfig:
     ridge: float = 1.0
     scenarios: tuple[str, ...] = tuple(s.name for s in SCENARIOS)
     balanced: bool = True
-    # weight of the preference matrix in the LinUCB slot score (0 = pure arm band)
-    pref_weight: float = consts.LINUCB_PREF_WEIGHT
-    # "completion": kept and checked off +1, kept and missed -1 (ADR-0023).
-    # "retained": the pre-ADR-0023 rule, kept +1 whatever the outcome.
+    # LinUCB v2 (default): hour inside a band from gap quality. v1 is the
+    # preference matrix instead: ``pref_weight=LINUCB_PREF_WEIGHT, gap_weight=0``.
+    pref_weight: float = 0.0
+    gap_weight: float = consts.LINUCB_GAP_WEIGHT
+    # Deadline-pressure penalty (heuristic and LinUCB); 0 disables it.
+    deadline_weight: float = consts.DEADLINE_PENALTY_WEIGHT
+    # Hybrid LinUCB (level-up plan): shared beta over the cross features. False is
+    # the disjoint model of the previous step, for ablation.
+    hybrid: bool = True
+    # Hypothesis knob for the weak-student effect in the hidden utility (0 = none).
+    weak_effect: float = 0.0
+    # Cohort warm start for the shared beta (plan step 5): each student's beta starts
+    # from the other students' pooled statistics (leave-one-out, two passes).
+    cohort: bool = False
+    # Interaction-style mix. Keys are ``INTERACTION_STYLES``; values are shares.
+    # The legacy drag-only simulator is ``{"dragger": 1.0}``.
+    interaction_mix: dict[str, float] = field(
+        default_factory=lambda: dict(DEFAULT_INTERACTION_MIX)
+    )
+    # Where the alternative time chip comes from.
+    offer_source: str = "runner_up"  # "runner_up" | "other_policy"
+    # "completion": start/done/lapse/skip model. "retained": old keep-everything rule.
     reward: str = "completion"
 
     def __post_init__(self) -> None:
         if self.reward not in ("completion", "retained"):
             raise ValueError(f"unknown reward mode: {self.reward}")
+        total = sum(self.interaction_mix.get(s, 0.0) for s in INTERACTION_STYLES)
+        if not math.isclose(total, 1.0, rel_tol=1e-6):
+            raise ValueError(f"interaction_mix must sum to 1, got {total}")
+
+    def interaction_style_for(self, student_id: int) -> str:
+        rng = stream(self.seed, "interaction", student_id)
+        return interaction_style_from_mix(rng, self.interaction_mix)
 
 
 def linucb_label(alpha: float) -> str:
@@ -98,6 +138,18 @@ class PlacementLog:
     start: list[int] = field(default_factory=list)
     used_linucb: list[float] = field(default_factory=list)
     completed: list[float] = field(default_factory=list)
+    # New lazy-user telemetry.
+    started: list[float] = field(default_factory=list)
+    done: list[float] = field(default_factory=list)
+    lapsed: list[float] = field(default_factory=list)
+    skipped: list[float] = field(default_factory=list)
+    wrong_time: list[float] = field(default_factory=list)
+    chose_option: list[float] = field(
+        default_factory=list
+    )  # 1 = tapped alternative chip
+    label: list[str] = field(
+        default_factory=list
+    )  # moved/lapsed/skipped/done/started/wrong_time
     infeasible: int = 0
 
     def arrays(self) -> dict[str, NDArray[np.float64]]:
@@ -111,6 +163,12 @@ class PlacementLog:
             "start": np.asarray(self.start, dtype=np.float64),
             "used_linucb": np.asarray(self.used_linucb, dtype=np.float64),
             "completed": np.asarray(self.completed, dtype=np.float64),
+            "started": np.asarray(self.started, dtype=np.float64),
+            "done": np.asarray(self.done, dtype=np.float64),
+            "lapsed": np.asarray(self.lapsed, dtype=np.float64),
+            "skipped": np.asarray(self.skipped, dtype=np.float64),
+            "wrong_time": np.asarray(self.wrong_time, dtype=np.float64),
+            "chose_option": np.asarray(self.chose_option, dtype=np.float64),
         }
 
 
@@ -138,6 +196,7 @@ class _Proposal:
     day_ctx: DayContext
     arm: str | None  # set only when LinUCB made the pick
     x: NDArray[np.float64] | None
+    z: NDArray[np.float64] | None  # hybrid cross features of the picked (day, arm)
     regret: float
     utility: float
     cand_days: list[_Day]
@@ -155,19 +214,24 @@ class World:
         alpha: float,
         scenario: str,
         daytime: NDArray[np.float64] | None = None,
+        shared_prior: tuple[NDArray[np.float64], NDArray[np.float64]] | None = None,
     ) -> None:
         self.cfg = cfg
         self.daytime = (
             build_daytime(cfg.seed, profile, len(drift)) if daytime is None else daytime
         )
-        self.p = profile
+        self.p = replace(profile, weak_effect=cfg.weak_effect)
         self.tasks = tasks
         self.cal = calendar
         self.drift = drift
         self.policy = policy
         self.scenario = scenario
         self.prefs = PreferenceMatrix(TZ)
-        self.linucb = LinUCBState(alpha, cfg.ridge) if policy != HEURISTIC else None
+        self.linucb = (
+            LinUCBState(alpha, cfg.ridge, hybrid=cfg.hybrid, shared_prior=shared_prior)
+            if policy != HEURISTIC
+            else None
+        )
         self.placed: list[Interval] = []
         self.log = PlacementLog()
         self._last_day = 0
@@ -243,10 +307,15 @@ class World:
                 TZ,
                 min(deadline_ms, d.end_ms + overhang),
                 None,
+                deadline_ms,
+                self.cfg.deadline_weight,
             )
             if slot is None:
                 continue
             score = slot_preference_score(self.prefs.matrix, slot, slot + dur_ms, TZ)
+            score += deadline_penalty(
+                slot + dur_ms, deadline_ms, self.cfg.deadline_weight
+            )
             if best is None or score > best[0]:
                 best = (score, slot)
         return None if best is None else best[1]
@@ -260,7 +329,7 @@ class World:
         extra: list[Interval],
         tie_seed: str,
         flex_days: list[float],
-    ) -> tuple[int, str, NDArray[np.float64]] | None:
+    ) -> tuple[int, str, NDArray[np.float64], NDArray[np.float64]] | None:
         assert self.linucb is not None
         remaining = max(0, math.floor((task.deadline_ms - task.now_ms) / consts.DAY_MS))
         today = day_index(task.now_ms)
@@ -279,7 +348,10 @@ class World:
                 for d, c, fl in zip(days, ctxs, flex_days, strict=True)
             ]
         )
-        scores = self.linucb.arm_scores(xs)
+        dl = np.array([days_left_on(task.deadline_ms, d.start_ms) for d in days])
+        lect = np.array([d.fixed_hours for d in days])
+        zs = shared_tensor(self.p.weak, [task.kind], dl[None], lect[None])[0]
+        scores = self.linucb.arm_scores(xs, zs)
         cand = [
             LinucbCandidateDay(
                 day_str=str(d.idx),
@@ -302,10 +374,21 @@ class World:
             seeded_tie_break_order(tie_seed),
             self.prefs.matrix,
             self.cfg.pref_weight,
+            self.cfg.gap_weight,
+            self.cfg.deadline_weight,
         )
         if best is None or not math.isfinite(best.score):
             return None
-        return best.start_ms, best.arm, np.asarray(best.vector, dtype=np.float64)
+        di = next(
+            i for i, d in enumerate(days) if d.start_ms <= best.start_ms < d.end_ms
+        )
+        arm_idx = ARM_IDS.index(best.arm)
+        return (
+            best.start_ms,
+            best.arm,
+            np.asarray(best.vector, dtype=np.float64),
+            zs[di, arm_idx],
+        )
 
     def _windows(self, task: Task, next_ms: int) -> list[tuple[int, int]]:
         first = day_index(next_ms)
@@ -328,6 +411,7 @@ class World:
         sibling_days: set[int],
         flex: dict[int, float],
         tie_seed: str,
+        extra_blocked: list[Interval] | None = None,
     ) -> _Proposal | None:
         next_ms = ceil_to_slot(task.now_ms)
         cap = SINGLE_SCAN_DAYS if task.n_members == 1 else SERIES_SCAN_DAYS
@@ -339,12 +423,13 @@ class World:
         days = [self._day(i, flex) for i in idxs]
         dl_day = day_index(task.deadline_ms - 1)
         ctxs = [self._ctx(d, dl_day) for d in days]
+        extra = [*siblings, *(extra_blocked or [])]
 
         # oracle: best free slot in the window by the student's true utility
         best_u = -math.inf
         for d, c in zip(days, ctxs, strict=True):
             starts = self._free_starts(
-                d, task.duration, next_ms, task.deadline_ms, siblings
+                d, task.duration, next_ms, task.deadline_ms, extra
             )
             if starts.size:
                 best_u = max(
@@ -356,21 +441,22 @@ class World:
         start: int | None = None
         arm: str | None = None
         x: NDArray[np.float64] | None = None
+        z: NDArray[np.float64] | None = None
         if self.linucb is not None:
             pick = self._linucb_pick(
                 days,
                 ctxs,
                 task,
                 next_ms,
-                siblings,
+                extra,
                 tie_seed,
                 [d.flex_hours for d in days],
             )
             if pick is not None:
-                start, arm, x = pick
+                start, arm, x, z = pick
         if start is None:
             start = self._heuristic_pick(
-                days, task.duration, next_ms, task.now_ms, task.deadline_ms, siblings
+                days, task.duration, next_ms, task.now_ms, task.deadline_ms, extra
             )
         if start is None:
             return None
@@ -387,6 +473,7 @@ class World:
             ctxs[di],
             arm,
             x,
+            z,
             max(0.0, best_u - u),
             u,
             days,
@@ -400,23 +487,46 @@ class World:
             f"|{task.task_id}|{member}"
         )
 
+    def _runner_up_prop(
+        self,
+        default: _Proposal,
+        task: Task,
+        window: tuple[int, int],
+        siblings: list[Interval],
+        sibling_days: set[int],
+        flex: dict[int, float],
+        tie_seed: str,
+    ) -> _Proposal | None:
+        """Second-best proposal after blocking the default start."""
+        dur_ms = task.duration * consts.MS_PER_MINUTE
+        blocked: list[Interval] = [(default.start_ms, default.start_ms + dur_ms)]
+        return self._propose(
+            task, window, siblings, sibling_days, flex, tie_seed, blocked
+        )
+
     def _propose_all(
         self, task: Task, flex: dict[int, float]
-    ) -> list[_Proposal | None]:
-        """Place every member (series: per-member window, one sitting per day)."""
+    ) -> list[tuple[_Proposal | None, _Proposal | None]]:
+        """Place every member and, for tappers, its runner-up alternative."""
         next_ms = ceil_to_slot(task.now_ms)
         siblings: list[Interval] = []
         sibling_days: set[int] = set()
-        props: list[_Proposal | None] = []
-        for m, win in enumerate(self._windows(task, next_ms)):
+        out: list[tuple[_Proposal | None, _Proposal | None]] = []
+        windows = list(self._windows(task, next_ms))
+        for m, win in enumerate(windows):
             tie = self._tie_seed(task, m)
             prop = self._propose(task, win, siblings, sibling_days, flex, tie)
-            props.append(prop)
+            runner_up: _Proposal | None = None
+            if prop is not None and self.p.interaction_style == "tapper":
+                runner_up = self._runner_up_prop(
+                    prop, task, win, siblings, sibling_days, flex, tie
+                )
+            out.append((prop, runner_up))
             if prop is not None:
                 dur_ms = task.duration * consts.MS_PER_MINUTE
                 siblings.append((prop.start_ms, prop.start_ms + dur_ms))
                 sibling_days.add(day_index(prop.start_ms))
-        return props
+        return out
 
     def _event(self, task: Task) -> None:
         today = day_index(task.now_ms)
@@ -426,23 +536,24 @@ class World:
         self.placed = [
             (s, e) for s, e in self.placed if e > day_start_ms(today) - consts.DAY_MS
         ]
-        props = self._propose_all(task, self._flex_hours())
+        pairs = self._propose_all(task, self._flex_hours())
         dur_ms = task.duration * consts.MS_PER_MINUTE
         current: list[Interval] = [
-            (0, 0) if p is None else (p.start_ms, p.start_ms + dur_ms) for p in props
+            (0, 0) if p is None else (p.start_ms, p.start_ms + dur_ms) for p, _ in pairs
         ]
-        for m, prop in enumerate(props):
+        for m, (prop, runner_up) in enumerate(pairs):
             if prop is None:
                 self.log.infeasible += 1
                 continue
             others = [iv for j, iv in enumerate(current) if j != m and iv[1] > iv[0]]
-            self._react(task, m, prop, others, current)
+            self._react(task, m, prop, runner_up, others, current)
 
     def _react(
         self,
         task: Task,
         m: int,
         prop: _Proposal,
+        runner_up: _Proposal | None,
         others: list[Interval],
         current: list[Interval],
     ) -> None:
@@ -453,44 +564,99 @@ class World:
         )
         utils = self._utility(day, prop.day_ctx, starts, task.duration)
         draws = draw_reaction(self.cfg.seed, self.p.student_id, task.task_id, m)
-        target = decide(self.p, draws, prop.start_ms, prop.utility, starts, utils)
+
+        final_ms = prop.start_ms
+        final_utility = prop.utility
+        moved = False
+        chose_option = False
+        option_arm: str | None = None
+        option_x: NDArray[np.float64] | None = None
+        option_z: NDArray[np.float64] | None = None
+
+        if self.p.interaction_style == "dragger":
+            target = decide(self.p, draws, prop.start_ms, prop.utility, starts, utils)
+            if target is not None:
+                final_ms = target
+                moved = True
+                final_utility = float(utils[int(np.flatnonzero(starts == target)[0])])
+        elif self.p.interaction_style == "tapper" and runner_up is not None:
+            choice = choose_offer(
+                self.p,
+                draws,
+                prop.start_ms,
+                prop.utility,
+                runner_up.start_ms,
+                runner_up.utility,
+            )
+            if choice == "option":
+                final_ms = runner_up.start_ms
+                final_utility = runner_up.utility
+                moved = True
+                chose_option = True
+                option_arm = runner_up.arm
+                option_x = runner_up.x
+                option_z = runner_up.z
+
+        completion = completion_outcome(self.p, draws, final_utility)
+        drag_min = abs(final_ms - prop.start_ms) / consts.MS_PER_MINUTE
+
+        if self.cfg.reward == "retained":
+            # Legacy parity path: drags update the move model, everything else retained.
+            if moved:
+                self.prefs.moved(prop.start_ms, final_ms, drag_min)
+                reward = drag_distance_reward(drag_min)
+            else:
+                self.prefs.retained(final_ms)
+                reward = 1.0
+            if self.linucb is not None and prop.arm is not None and prop.x is not None:
+                self.linucb.observe(prop.arm, prop.x, reward, prop.z)
+                if chose_option and option_arm is not None and option_x is not None:
+                    self.linucb.observe(option_arm, option_x, -0.2, option_z)
+        else:
+            # Completion-based reward (level-up plan). The matrix learns from what
+            # the student did in the kept slot, the same label LinUCB gets.
+            if moved:
+                self.prefs.moved(prop.start_ms, final_ms, drag_min)
+            if not completion.wrong_time:
+                self.prefs.labelled(final_ms, completion.reward())
+
+            if self.linucb is not None and prop.arm is not None and prop.x is not None:
+                self.linucb.observe(prop.arm, prop.x, completion.reward(), prop.z)
+                if chose_option and option_arm is not None and option_x is not None:
+                    # Pairwise: option chosen over default.
+                    self.linucb.observe(option_arm, option_x, 1.0, option_z)
+                    self.linucb.observe(prop.arm, prop.x, -0.2, prop.z)
+                elif (
+                    runner_up is not None
+                    and runner_up.arm is not None
+                    and runner_up.x is not None
+                    and not chose_option
+                    and not moved
+                ):
+                    # Default kept/ignored: option was shown but not chosen.
+                    self.linucb.observe(runner_up.arm, runner_up.x, -0.2, runner_up.z)
 
         dur_ms = task.duration * consts.MS_PER_MINUTE
-        if target is None:
-            final = prop.start_ms
-            drag = 0.0
-            final_utility = prop.utility
-        else:
-            final = target
-            drag = (target - prop.start_ms) / consts.MS_PER_MINUTE
-            final_utility = float(utils[int(np.flatnonzero(starts == target)[0])])
-        done = completes(final_utility, draws)
-        if target is None:
-            if self.cfg.reward == "completion":
-                if done:
-                    self.prefs.retained(final)
-                reward = COMPLETED_REWARD if done else LAPSED_REWARD
-            else:
-                self.prefs.retained(final)
-                reward = RETAINED_REWARD
-        else:
-            self.prefs.moved(prop.start_ms, target, drag)
-            reward = drag_distance_reward(drag)
-        if self.linucb is not None and prop.arm is not None and prop.x is not None:
-            self.linucb.observe(prop.arm, prop.x, reward)
-        current[m] = (final, final + dur_ms)
-        self.placed.append((final, final + dur_ms))
+        current[m] = (final_ms, final_ms + dur_ms)
+        self.placed.append((final_ms, final_ms + dur_ms))
 
         log = self.log
         log.obs_before.append(len(log.task_id))
         log.task_id.append(task.task_id)
         log.member.append(m)
         log.regret.append(prop.regret)
-        log.accepted.append(1.0 if target is None else 0.0)
-        log.drag.append(abs(drag))
+        log.accepted.append(0.0 if moved else 1.0)
+        log.drag.append(drag_min)
         log.start.append(prop.start_ms)
         log.used_linucb.append(1.0 if prop.arm is not None else 0.0)
-        log.completed.append(1.0 if done else 0.0)
+        log.completed.append(1.0 if completion.done else 0.0)
+        log.started.append(1.0 if completion.started else 0.0)
+        log.done.append(1.0 if completion.done else 0.0)
+        log.lapsed.append(1.0 if completion.lapsed else 0.0)
+        log.skipped.append(1.0 if completion.skipped else 0.0)
+        log.wrong_time.append(1.0 if completion.wrong_time else 0.0)
+        log.chose_option.append(1.0 if chose_option else 0.0)
+        log.label.append(reaction_label(completion, moved))
 
     def run(self) -> PlacementLog:
         for task in self.tasks:
@@ -505,25 +671,57 @@ class StudentResult:
     behavior: str
     logs: dict[str, dict[str, dict[str, NDArray[np.float64]]]]
     # logs[scenario][policy label] -> columns
+    # own shared-beta statistics per "scenario|label", without any cohort prior
+    shared: dict[str, tuple[NDArray[np.float64], NDArray[np.float64], int]] = field(
+        default_factory=dict
+    )
 
 
-def run_student(cfg: SimConfig, student_id: int) -> StudentResult:
-    """Every scenario x policy world of one student (heuristic once, LinUCB/alpha)."""
-    profile = make_student(cfg.seed, student_id, cfg.balanced)
+def run_student(
+    cfg: SimConfig,
+    student_id: int,
+    cohort: dict[str, tuple[NDArray[np.float64], NDArray[np.float64], int]]
+    | None = None,
+) -> StudentResult:
+    """Every scenario x policy world of one student (heuristic once, LinUCB/alpha).
+
+    ``cohort`` maps ``"scenario|label"`` to the other students' pooled shared-beta
+    statistics; it seeds each LinUCB world's beta when ``cfg.cohort`` is set.
+    """
+    style = cfg.interaction_style_for(student_id)
+    profile = make_student(cfg.seed, student_id, cfg.balanced, style)
     n_days = n_calendar_days(cfg.n_events)
     calendar = build_calendar(cfg.seed, student_id, n_days)
     drift = build_drift(cfg.seed, profile, n_days)
     daytime = build_daytime(cfg.seed, profile, n_days)
     out: dict[str, dict[str, dict[str, NDArray[np.float64]]]] = {}
+    shared: dict[str, tuple[NDArray[np.float64], NDArray[np.float64], int]] = {}
     for name in cfg.scenarios:
         tasks = build_tasks(cfg.seed, student_id, SCENARIO_BY_NAME[name], cfg.n_events)
         worlds: dict[str, dict[str, NDArray[np.float64]]] = {}
         h = World(cfg, profile, tasks, calendar, drift, HEURISTIC, 0.0, name, daytime)
         worlds[HEURISTIC] = h.run().arrays()
         for alpha in cfg.alphas:
+            label = linucb_label(alpha)
+            key = f"{name}|{label}"
+            prior = None
+            if cohort is not None and key in cohort:
+                a_sum, b_sum, n_obs = cohort[key]
+                prior = cohort_shared_prior(a_sum, b_sum, n_obs, cfg.ridge)
             lw = World(
-                cfg, profile, tasks, calendar, drift, "linucb", alpha, name, daytime
+                cfg,
+                profile,
+                tasks,
+                calendar,
+                drift,
+                "linucb",
+                alpha,
+                name,
+                daytime,
+                shared_prior=prior,
             )
-            worlds[linucb_label(alpha)] = lw.run().arrays()
+            worlds[label] = lw.run().arrays()
+            if lw.linucb is not None:
+                shared[key] = lw.linucb.own_shared_stats()
         out[name] = worlds
-    return StudentResult(student_id, profile.chronotype, profile.behavior, out)
+    return StudentResult(student_id, profile.chronotype, profile.behavior, out, shared)

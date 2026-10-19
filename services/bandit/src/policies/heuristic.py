@@ -6,7 +6,12 @@ from collections.abc import Sequence
 
 from src.core import constants as consts
 from src.core.slot import Intervals
-from src.core.slot_score import best_free_slot, slot_preference_score, stability_score
+from src.core.slot_score import (
+    best_free_slot,
+    deadline_penalty,
+    slot_preference_score,
+    stability_score,
+)
 from src.schemas_place import HeuristicPick, PlacementDay, PlacementMember
 
 
@@ -48,12 +53,16 @@ class HeuristicPolicy:
                 self.tz,
                 fit_ceil,
                 member.prev_start_ms,
+                deadline_ms,
             )
             if slot is None:
                 continue
             score = slot_preference_score(self.matrix, slot, slot + dur_ms, self.tz)
             if member.prev_start_ms is not None:
                 score += stability_score(member.prev_start_ms, slot)
+            score += deadline_penalty(
+                slot + dur_ms, deadline_ms, consts.DEADLINE_PENALTY_WEIGHT
+            )
             if best is None or score > best.score:
                 best = HeuristicPick(start_ms=slot, score=score)
         return best

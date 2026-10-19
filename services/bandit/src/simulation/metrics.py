@@ -140,8 +140,30 @@ def paired_rows(
     for r in results:
         scen: list[NDArray[np.int64]] = []
         buckets: list[NDArray[np.int64]] = []
-        cols_h: dict[str, list[Floats]] = {"regret": [], "accept": [], "drag": []}
-        cols_l: dict[str, list[Floats]] = {"regret": [], "accept": [], "drag": []}
+        metrics = [
+            "regret",
+            "accept",
+            "drag",
+            "started",
+            "done",
+            "lapsed",
+            "skipped",
+            "wrong_time",
+            "chose_option",
+        ]
+        source_map = {
+            "regret": "regret",
+            "accept": "accepted",
+            "drag": "drag",
+            "started": "started",
+            "done": "done",
+            "lapsed": "lapsed",
+            "skipped": "skipped",
+            "wrong_time": "wrong_time",
+            "chose_option": "chose_option",
+        }
+        cols_h: dict[str, list[Floats]] = {m: [] for m in metrics}
+        cols_l: dict[str, list[Floats]] = {m: [] for m in metrics}
         div: list[Floats] = []
         gap: list[Floats] = []
         for si, name in enumerate(scenarios):
@@ -149,11 +171,8 @@ def paired_rows(
             _, ih, il = np.intersect1d(_key(h), _key(ln), return_indices=True)
             scen.append(np.full(ih.size, si, dtype=np.int64))
             buckets.append(bucket_index(ln["obs_before"][il]))
-            for m, src in (
-                ("regret", "regret"),
-                ("accept", "accepted"),
-                ("drag", "drag"),
-            ):
+            for m in metrics:
+                src = source_map[m]
                 cols_h[m].append(h[src][ih])
                 cols_l[m].append(ln[src][il])
             delta = np.abs(h["start"][ih] - ln["start"][il]) / 60_000.0
@@ -188,6 +207,17 @@ def aggregate(
     n_boot: int = N_BOOT,
 ) -> dict[str, object]:
     """Paired LinUCB-vs-heuristic summary for a slice of the placements."""
+    metrics = [
+        "regret",
+        "accept",
+        "drag",
+        "started",
+        "done",
+        "lapsed",
+        "skipped",
+        "wrong_time",
+        "chose_option",
+    ]
     parts: list[tuple[int, dict[str, tuple[float, float]], float, float]] = []
     for s in rows:
         if cell is not None and s.cell != cell:
@@ -201,8 +231,7 @@ def aggregate(
         if n == 0:
             continue
         sums = {
-            m: (float(s.h[m][mask].sum()), float(s.ln[m][mask].sum()))
-            for m in ("regret", "accept", "drag")
+            m: (float(s.h[m][mask].sum()), float(s.ln[m][mask].sum())) for m in metrics
         }
         parts.append(
             (n, sums, float(s.diverged[mask].sum()), float(s.start_gap_min[mask].sum()))
@@ -214,7 +243,7 @@ def aggregate(
     if not parts:
         return out
     n_arr = np.array([p[0] for p in parts], dtype=np.float64)
-    for m in ("regret", "accept", "drag"):
+    for m in metrics:
         h_sum = np.array([p[1][m][0] for p in parts])
         l_sum = np.array([p[1][m][1] for p in parts])
         rng = _rng(seed, tag, m)
@@ -298,6 +327,51 @@ def ttt_summary(
     }
 
 
+def first_start_index(started: Floats) -> tuple[int, bool]:
+    """Placements before the first start (level-up plan: time to a good pick);
+    ``(horizon, False)`` when the student never starts one (censored)."""
+    hit = np.flatnonzero(started > 0.5)
+    if hit.size == 0:
+        return started.size, False
+    return int(hit[0]) + 1, True
+
+
+def first_start_summary(
+    results: list[StudentResult],
+    scenario: str,
+    label: str,
+    seed: int,
+    n_boot: int = N_BOOT,
+) -> dict[str, object]:
+    fh: list[int] = []
+    fl: list[int] = []
+    rh: list[bool] = []
+    rl: list[bool] = []
+    for r in results:
+        t1, r1 = first_start_index(r.logs[scenario][HEURISTIC]["started"])
+        t2, r2 = first_start_index(r.logs[scenario][label]["started"])
+        fh.append(t1)
+        fl.append(t2)
+        rh.append(r1)
+        rl.append(r2)
+    ah, al = np.array(fh, dtype=np.float64), np.array(fl, dtype=np.float64)
+    diff = al - ah
+    rng = _rng(seed, "first-start", scenario, label)
+    lo, hi = cluster_bootstrap_ratio(diff, np.ones_like(diff), rng, n_boot)
+    _, _, _, p = wilcoxon_signed_rank(diff)
+    return {
+        "n_students": len(fh),
+        "started_heuristic": _r(float(np.mean(rh))),
+        "started_linucb": _r(float(np.mean(rl))),
+        "median_heuristic": _r(float(np.median(ah))),
+        "median_linucb": _r(float(np.median(al))),
+        "mean_diff": _r(float(diff.mean())),
+        "ci95": [_r(lo), _r(hi)],
+        "wilcoxon_p": _r(p),
+        "cliffs_delta": _r(cliffs_delta(al, ah)),
+    }
+
+
 # ---- report -----------------------------------------------------------------------
 
 
@@ -324,9 +398,15 @@ def build_report(
             "ridge": cfg.ridge,
             "scenarios": list(scenarios),
             "balanced_archetypes": cfg.balanced,
+            "interaction_mix": dict(cfg.interaction_mix),
+            "reward": cfg.reward,
             "primary_alpha": alpha,
         },
-        "convention": "diff = LinUCB - heuristic; regret and drag: lower is better",
+        "convention": (
+            "diff = LinUCB - heuristic; regret and drag: lower is better; "
+            "started/done/accept/chose_option: higher is better; "
+            "lapsed/skipped/wrong_time: lower is better"
+        ),
         "overall": aggregate(rows, cfg.seed, "overall", n_boot=n_boot),
         "by_scenario": {
             name: aggregate(rows, cfg.seed, f"scn-{name}", scenario=i, n_boot=n_boot)
@@ -344,6 +424,10 @@ def build_report(
         },
         "time_to_threshold": {
             name: ttt_summary(results, name, label, cfg.seed, n_boot)
+            for name in scenarios
+        },
+        "time_to_first_start": {
+            name: first_start_summary(results, name, label, cfg.seed, n_boot)
             for name in scenarios
         },
     }

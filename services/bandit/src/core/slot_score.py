@@ -7,6 +7,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .constants import (
+    DEADLINE_PENALTY_HORIZON_HOURS,
+    DEADLINE_PENALTY_WEIGHT,
     HOUR_MS,
     MS_PER_MINUTE,
     SLOT_MS,
@@ -36,6 +38,24 @@ def stability_scores(
     dist_h = np.abs(starts_ms - prev_start_ms) / HOUR_MS
     sat = np.minimum(dist_h, STABILITY_SATURATION_HOURS) / STABILITY_SATURATION_HOURS
     return np.asarray(-STABILITY_WEIGHT * sat, dtype=np.float64)
+
+
+def deadline_penalty_scores(
+    ends_ms: NDArray[np.int64], deadline_ms: int, weight: float
+) -> NDArray[np.float64]:
+    """``-weight`` for a slot ending at the deadline, fading linearly to 0 at
+    ``DEADLINE_PENALTY_HORIZON_HOURS`` before it."""
+    left_h = (deadline_ms - ends_ms) / HOUR_MS
+    near = 1.0 - np.maximum(left_h, 0.0) / DEADLINE_PENALTY_HORIZON_HOURS
+    return np.asarray(-weight * np.maximum(near, 0.0), dtype=np.float64)
+
+
+def deadline_penalty(end_ms: int, deadline_ms: int, weight: float) -> float:
+    return float(
+        deadline_penalty_scores(
+            np.array([end_ms], dtype=np.int64), deadline_ms, weight
+        )[0]
+    )
 
 
 def stability_weight(prev_start_ms: float, now_ms: float) -> float:
@@ -122,6 +142,8 @@ def best_free_slot(
     timezone: str,
     fit_window_end_ms: int | None = None,
     prev_start_ms: int | None = None,
+    deadline_ms: int | None = None,
+    deadline_weight: float = DEADLINE_PENALTY_WEIGHT,
 ) -> int | None:
     """Free 15-min-aligned start with the highest preference score (earliest
     wins ties); ``None`` when nothing fits."""
@@ -141,5 +163,9 @@ def best_free_slot(
     total = slot_preference_scores(pref_matrix, starts, duration_minutes, timezone)
     if prev_start_ms is not None:
         total = total + stability_scores(prev_start_ms, starts)
+    if deadline_ms is not None:
+        total = total + deadline_penalty_scores(
+            starts + duration_ms, deadline_ms, deadline_weight
+        )
     total = np.round(total, _TIE_DECIMALS)
     return int(starts[int(np.argmax(total))])  # argmax -> first (earliest) max

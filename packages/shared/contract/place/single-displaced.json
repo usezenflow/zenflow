@@ -1,6 +1,6 @@
 {
   "name": "single-displaced",
-  "description": "08:00-12:00 is two movable 2 h tasks (deadline next day); the new 60 min task has deadline 12:00. f1 starts within 2 h of now (frozen), so the cheapest plan takes 10:00 and shifts f2 to 11:00 (cost 1+1). Anchors are omitted, so both default to AUTO.",
+  "description": "08:00-12:00 is two movable 2 h tasks (deadline next day); the new 60 min task has deadline 12:00. f1 starts within 2 h of now (frozen), so the cheapest plan takes 10:00 and shifts f2 to 11:00 (cost 1+1).",
   "ignore": [
     "paramsVersion",
     "timingsMs"
@@ -256,7 +256,7 @@
   "response": {
     "contractVersion": 3,
     "requestId": "00000000-0000-4000-8000-000000000002-2",
-    "paramsVersion": "py-arms6-v3-46a0e88a66be",
+    "paramsVersion": "py-arms6-v3-23695319e1db",
     "results": [
       {
         "id": "t1",
@@ -270,7 +270,6 @@
             "id": "f2",
             "fromMs": 1789984800000,
             "toMs": 1789988400000,
-            "anchor": "AUTO",
             "cost": 2.0
           }
         ],
@@ -280,12 +279,12 @@
       }
     ],
     "timingsMs": {
-      "decode": 0.078,
+      "decode": 0.105,
       "context": 0.0,
       "predict": 0.0,
-      "scan": 0.036,
-      "displace": 0.447,
-      "total": 0.622
+      "scan": 0.029,
+      "displace": 0.515,
+      "total": 0.804
     }
   }
 }

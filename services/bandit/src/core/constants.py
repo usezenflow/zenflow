@@ -56,16 +56,25 @@ ARM_LAYOUT = "arms6-v3"
 # lets a user who keeps moving tasks to 10:00 pull the pick off the band centre.
 # Sits between the stability weights and the LinUCB arm spread.
 LINUCB_PREF_WEIGHT = 1.0
+# LinUCB v2 (level-up plan): the hour inside a band comes from gap quality, not
+# the preference matrix. Weight stays under the arm spread so it orders slots
+# inside a band and never overrides the learned band.
+LINUCB_GAP_WEIGHT = 0.2
+
+# Deadline pressure: a slot ending within DEADLINE_PENALTY_HORIZON_HOURS of the
+# deadline loses up to DEADLINE_PENALTY_WEIGHT (linear). Slot-level only, so it
+# touches neither the feature vector nor the learned arm state.
+DEADLINE_PENALTY_WEIGHT = 0.2
+DEADLINE_PENALTY_HORIZON_HOURS = 24
 
 # Displacement (issue #62 B).
 MAX_DISPLACED_TASKS = 6
 
-# Anchors and displacement cost (issue #250, ADR-0022). A flexible session
-# starting within FROZEN_WINDOW_HOURS of now never moves. A move costs its
-# anchor's base plus the hours moved, plus CROSS_DAY when its local day changes.
+# Displacement cost. A flexible session starting within FROZEN_WINDOW_HOURS of
+# now never moves. A move costs a base plus the hours moved, plus CROSS_DAY when
+# its local day changes.
 FROZEN_WINDOW_HOURS = 2
 DISPLACE_COST_AUTO = 1
-DISPLACE_COST_CHOSEN = 10
 DISPLACE_COST_CROSS_DAY = 10
 
 # Placement scan scope (ADR-0003; owned by Python, echoed via ``paramsVersion``).

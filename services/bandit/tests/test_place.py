@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api import app
+from src.core import constants as consts
 from src.core import displacement
 from src.core.arms import seeded_tie_break_order
 from src.core.constants import (
@@ -21,6 +22,7 @@ from src.core.constants import (
 )
 from src.core.linucb_best_slot import best_linucb_slot, days_from_dicts
 from src.core.preference import default_preference_matrix
+from src.core.quiet_hours import quiet_intervals, quiet_window
 from src.core.slot import add_days_str, local_date_str, local_midnight_ms
 from src.models.linucb import score as linucb_score
 from src.schemas import ARM_IDS, ArmState
@@ -252,10 +254,15 @@ def test_in_process_arm_scores_match_the_core() -> None:
         a: float(linucb_score(p.A, p.b, np.asarray(vec), 0.15)) for a, p in arms.items()
     }
     # Recompute the pick with the core: days lacking the picked day's vector are
-    # not needed, restrict to the picked day only.
+    # not needed, restrict to the picked day only. Mirror the API's occupied_by_day
+    # which includes the default quiet hours alongside explicit occupied slots.
     start = r["linucb"]["startMs"]
     day_str = local_date_str(start, "UTC")
     day = next(d for d in body["days"] if d["dayStr"] == day_str)
+    core_occupied = [
+        {"start": s, "end": e}
+        for s, e in quiet_intervals(day_str, "UTC", *quiet_window(None))
+    ]
     core = best_linucb_slot(
         days_from_dicts(
             [
@@ -263,7 +270,7 @@ def test_in_process_arm_scores_match_the_core() -> None:
                     "dayStr": day_str,
                     "dayStartMs": day["dayStartMs"],
                     "dayEndMs": day["dayEndMs"],
-                    "occupied": [],
+                    "occupied": core_occupied,
                     "vector": vec,
                     "armScores": pred,
                 }
@@ -276,7 +283,9 @@ def test_in_process_arm_scores_match_the_core() -> None:
         None,
         None,
         seeded_tie_break_order(f"{body['requestId']}|t1"),
-        default_preference_matrix(),
+        None,
+        0.0,
+        consts.LINUCB_GAP_WEIGHT,
     )
     assert core is not None
     assert core.start_ms == start and core.arm == r["linucb"]["selectedArm"]

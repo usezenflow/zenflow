@@ -17,7 +17,7 @@ from .engine import SimConfig
 _ROOT = Path(__file__).resolve().parents[2]  # services/bandit
 DEFAULT_CACHE_DIR = _ROOT / ".sim_cache"
 _SOURCE_DIRS = ("core", "models", "policies", "simulation")
-_SCHEMA = 1  # bump when the report layout changes
+_SCHEMA = 2  # bump when the report layout changes
 
 
 def source_hash(src_root: Path | None = None) -> str:

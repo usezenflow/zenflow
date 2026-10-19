@@ -12,10 +12,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+import numpy as np
+
 from .rng import stream
 
 CHRONOTYPES = ("early_bird", "night_owl", "midday")
 BEHAVIORS = ("stable", "erratic", "crammer", "planner", "weekender")
+INTERACTION_STYLES = ("dragger", "tapper", "ignorer")
+
+# Default mix: old behaviour (drag-only) for parity. Level-up runs override this.
+DEFAULT_INTERACTION_MIX = {"dragger": 1.0, "tapper": 0.0, "ignorer": 0.0}
+# Level-up plan: most students tap or ignore, few drag (`--profile lazy`).
+LAZY_INTERACTION_MIX = {"dragger": 0.1, "tapper": 0.6, "ignorer": 0.3}
 
 # peak hour of the hidden time-of-day field: (centre, sd, lowest, highest). The
 # ranges overlap (early birds up to 11:30, midday from 10:00), so a late early bird
@@ -72,6 +80,11 @@ class StudentProfile:
     sleep_penalty: float = 0.45  # how bad the hours opposite the peak are
     load_sensitivity: float = 0.35  # how much a busy day damps the field
     evening_hour: float = 20.0  # where a busy day pulls the field to
+    interaction_style: str = "dragger"  # dragger | tapper | ignorer
+    # marks profile (0 strong .. 1 failing); ``weak_effect`` is the hypothesis
+    # knob: how much weak students pull their work earlier (0 = no effect).
+    weak: float = 0.0
+    weak_effect: float = 0.0
 
     @property
     def cell(self) -> str:
@@ -102,7 +115,12 @@ def draw_archetype(
     )
 
 
-def make_student(seed: int, student_id: int, balanced: bool = True) -> StudentProfile:
+def make_student(
+    seed: int,
+    student_id: int,
+    balanced: bool = True,
+    interaction_style: str | None = None,
+) -> StudentProfile:
     chrono, behavior = draw_archetype(seed, student_id, balanced)
     rng = stream(seed, "profile", student_id)
     noise, thr, p_edit, inertia, drift, cram, plan, wknd = _BEHAVIOR[behavior]
@@ -123,6 +141,7 @@ def make_student(seed: int, student_id: int, balanced: bool = True) -> StudentPr
     peak = float(rng.normal(centre, sd))
     while not lo <= peak <= hi:  # truncated normal: no pile-up at the bounds
         peak = float(rng.normal(centre, sd))
+    style = interaction_style if interaction_style is not None else "dragger"
     sp = StudentProfile(
         student_id=student_id,
         chronotype=chrono,
@@ -138,6 +157,7 @@ def make_student(seed: int, student_id: int, balanced: bool = True) -> StudentPr
         cram_weight=trait(cram, 0.9),
         plan_weight=trait(plan, 0.5),
         weekend_weight=trait(wknd, 0.7),
+        interaction_style=style,
     )
     # drawn last (and always), so adding the pull shifts no earlier draw
     d_str, d_freq, d_exam = _DAYTIME_PULL.get(chrono, (0.0, 0.0, 0.0))
@@ -149,4 +169,18 @@ def make_student(seed: int, student_id: int, balanced: bool = True) -> StudentPr
         sleep_penalty=float(rng.uniform(0.2, 0.7)),
         load_sensitivity=float(rng.uniform(0.15, 0.6)),
         evening_hour=float(rng.uniform(18.5, 22.0)),
+        weak=float(rng.uniform(0.0, 1.0)),
     )
+
+
+def interaction_style_from_mix(rng: np.random.Generator, mix: dict[str, float]) -> str:
+    """Draw a style from a distribution; ``dragger``-only mix returns without
+    consuming randomness so legacy parity stays byte-for-byte."""
+    if mix.get("dragger", 0.0) >= 1.0:
+        return "dragger"
+    styles = list(INTERACTION_STYLES)
+    weights = np.array([max(0.0, mix.get(s, 0.0)) for s in styles])
+    total = weights.sum()
+    if total <= 0:
+        return "dragger"
+    return str(styles[int(rng.choice(len(styles), p=weights / total))])
