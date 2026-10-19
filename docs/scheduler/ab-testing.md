@@ -30,8 +30,10 @@ the task.
 
 A sampled subset shows both policies' proposed slots side by side, policy identity hidden,
 presentation position randomized 50/50. Recorded (`SlotProposal.pairwiseShown`,
-`pairwisePositions`, `chosenByUser`) for the win-rate metric only — **not** a LinUCB weight
-update (§4).
+`pairwisePositions`, `chosenByUser`) for the win-rate metric. Picking LinUCB's option also
+rewards its arm with `PAIRWISE_WIN_REWARD` (§5).
+
+Rescheduling a lecture's prep plan shows the pair as two equal toast buttons (`mobile/lib/prep-toast.ts`); picking posts `slot-pick`. Button order is a stable client-side coin flip, not the logged `pairwisePositions`.
 
 A pair is only offered when the two starts are at least `MIN_ALTERNATIVE_GAP_MINUTES` (60)
 apart; closer picks (9:00 vs 9:15) aren't a real choice. They are still recorded, with
@@ -53,10 +55,11 @@ LinUCB reward to avoid misattributing credit and mixing signal scales.
 ## 5. Reward — the only thing that updates learned state
 
 `preferenceMatrix` and LinUCB `(A, b)` are updated **only** by the move-or-keep signal
-(`MOVE` graded by drag distance, a checked-off placement `+1`, a skipped or missed one `-1`;
+(`MOVE` graded by drag distance, a started or checked-off placement `+1`, a lapsed one `-0.25`)
+and by a pairwise pick of LinUCB's option (`+0.5`, `PAIRWISE_WIN_REWARD`). Only LinUCB-proposed
+arms learn; heuristic outcomes move the preference matrix alone;
 [ADR-0001](../adr/0001-linucb-model-design.md) §7, [ADR-0023](../adr/0023-completion-reward.md),
-[`services/bandit/README.md`](../../services/bandit/README.md)). Pairwise choices and
-👍/👎 are offline-analysis data, nothing more.
+[`services/bandit/README.md`](../../services/bandit/README.md)). 👍/👎 is offline-analysis data.
 
 ## 6. Metrics
 
@@ -64,6 +67,8 @@ LinUCB reward to avoid misattributing credit and mixing signal scales.
 
 **Secondary:** completion rate (`COMPLETE` vs `SKIP` / `MISSED`), drag frequency/distance, deletion
 rate, like/dislike rate, pairwise win rate, time to first modification, policy divergence.
+
+`pnpm --filter backend ab:report [--since DATE]` prints these per primary policy.
 
 ## 7. Cold-start / adaptation
 

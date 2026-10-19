@@ -43,6 +43,7 @@ Constants: `MAX_SCAN_DAYS = 60`, `DURATION_DIVISOR = 480`, `WORKLOAD_HOURS_DIVIS
 
 - Scores every feasible 15-min start on all days as `armTerm + wP * preference + wS * stability`.
   - `preference` is the user's matrix averaged over the hours the slot covers; `wP = LINUCB_PREF_WEIGHT` (`constants.py`). It picks the hour inside a band, where the arm term is flat, and follows the user's drags (learning rate `PREFERENCE_LEARNING_RATE = 0.2`).
+- A slot ending within `DEADLINE_PENALTY_HORIZON_HOURS` (24h) of the deadline loses up to `DEADLINE_PENALTY_WEIGHT` (0.2), linearly. Applied in both the heuristic and LinUCB scores; no feature, reward or arm-state change.
 - `wS = stability_weight(prevStart, now)`: `1.0` while the old start is <= 24h away, fading linearly to `0.05` at 7 days (`STABILITY_*` in `constants.py`).
 - Exact ties (within 1e-9) break in order:
   1. seeded band order per request (`seeded_tie_break_order`, `EARLY_MORNING` last);

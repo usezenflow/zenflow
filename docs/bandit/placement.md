@@ -34,8 +34,8 @@ One request = one placement event: a single `TASK` or one materialized series. A
 
 ## Policies
 
-- **HEURISTIC**: best preference slot per day, best score across days; the earlier day wins ties.
-- **LINUCB**: slot-first scan over all days, scoring arm term plus proximity-scaled stability (see [core.md](./core.md)).
+- **HEURISTIC**: best preference slot per day minus the deadline-proximity penalty, best score across days; the earlier day wins ties.
+- **LINUCB**: slot-first scan over all days, scoring arm term plus proximity-scaled stability and a deadline-proximity penalty (see [core.md](./core.md)).
 - LINUCB falls back to the heuristic (`appliedPolicy: "HEURISTIC"`) on no bandit state, a singular matrix or no surviving slot.
 - `mode: "PREFLIGHT"` runs the heuristic only.
 - Response: `heuristic` / `linucb` appear only if requested (primary or `computeBoth`; heuristic also on fallback). `startMs` is the applied pick.
@@ -62,12 +62,12 @@ One request = one placement event: a single `TASK` or one materialized series. A
 ## No free slot (single member)
 
 1. First call returns `NEEDS_INFEASIBLE_CONTEXT`.
-2. Second call (with `infeasible`) runs cost-based displacement over the deadline day and +/-1 day ([ADR-0022](../adr/0022-anchor-levels-and-cost-based-displacement.md)).
-   - Never moves: `fixed`, `PINNED`, completed, started or starting within 2 h of `nowMs`.
-   - Move cost: `AUTO` 1, `CHOSEN` 10, plus hours moved, plus 10 when the local day changes.
+2. Second call (with `infeasible`) runs cost-based displacement over the deadline day and +/-1 day ([ADR-0028](../adr/0028-drop-session-anchors.md)).
+   - Never moves: `fixed`, completed, started or starting within 2 h of `nowMs`.
+   - Move cost: 1, plus hours moved, plus 10 when the local day changes.
    - Every start clear of immovable blocks is tried; the cheapest cascade wins (ties: earlier window, earlier start).
    - Colliding tasks settle in deadline order, each at its cheapest free start up to its own deadline (within `horizonOccupied`), never on a sibling sitting's day.
-   - Result: `DISPLACED`, or `NEEDS_CONFIRMATION` when the plan moves a `CHOSEN` task and `chosenMoves` is `ASK`. `moves[]` carry `anchor` and `cost`.
+   - Result: `DISPLACED`. `moves[]` carry `cost`.
 3. Otherwise the user's policy applies:
    - `ACCEPT_CONFLICTS` gives `ACCEPTED_CONFLICTS` (min-overlap start; `conflicting` only if it really overlaps `horizonOccupied`).
    - `ACCEPT_LATE_DEADLINE` gives `ACCEPTED_LATE` (`late: true`).
