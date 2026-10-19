@@ -8,6 +8,8 @@ owns:
   - backend/test/golden/**
   - backend/scripts/export-golden-fixtures.ts
   - backend/scripts/backfill-unplaced-tasks.ts
+  - backend/scripts/backfill-prep-plans.ts
+  - backend/scripts/ab-report.ts
   - backend/scripts/upgrade-matrix-*.sql
   - packages/shared/contract/**
 tools: Read, Edit, Write, Grep, Glob, Bash

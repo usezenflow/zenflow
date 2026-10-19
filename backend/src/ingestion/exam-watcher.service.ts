@@ -7,9 +7,12 @@ import {
   ingestionSignInFailures,
 } from "../observability/metrics";
 import { IntegrationsService } from "../integrations/integrations.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import { PortalAPIService } from "../portal/portal-api.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { parseExams } from "./core/parse-portal";
+import { examsCoverEnrolment } from "./core/seasonal-policy";
 import { resolveSemester } from "./core/semester";
 import { SyncDigest } from "./core/sync-digest";
 import { IngestionJobsService } from "./ingestion-jobs.service";
@@ -65,6 +68,7 @@ export class ExamWatcherService {
     private readonly materializer: MaterializerService,
     @Inject(forwardRef(() => IntegrationsService))
     private readonly integrations: IntegrationsService,
+    private readonly sessions: UpstreamSessionCache,
   ) {
     this.endpoint = this.config.get<string>("PORTAL_API_URL") ?? "";
     this.dluTimezone = this.config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
@@ -94,6 +98,8 @@ export class ExamWatcherService {
 
     // Changes are announced once per item type at the end of the run.
     const digest = new SyncDigest(new Date());
+
+    let deferUntil: Date | undefined;
 
     // One request, so one failure is a total failure — there is no partial
     // picture to salvage, unlike the week-by-week timetable walk.
@@ -129,6 +135,31 @@ export class ExamWatcherService {
         digest,
       );
 
+      // Enrolment discovery is the yardstick: once every enrolled section has an exam
+      // in the response there is nothing left to wait for this term.
+      const enrolled = await this.prisma.portalSectionEnrollment.findMany({
+        where: {
+          userId: target.userId,
+          yearStudy: academicYear,
+          termId: semester,
+          droppedAt: null,
+        },
+        select: { scheduleStudyUnitId: true },
+      });
+      const examSections = new Set(
+        rows
+          .map((row) => row?.ScheduleStudyUnitID)
+          .filter((id): id is string => typeof id === "string" && id !== ""),
+      );
+      if (
+        examsCoverEnrolment(
+          enrolled.map((e) => e.scheduleStudyUnitId),
+          examSections,
+        )
+      ) {
+        deferUntil = new Date(term.endDate.getTime() + 1);
+      }
+
       await this.jobs.completeItem("PORTAL", itemId, {
         status: "COMPLETED",
         statusCode: 200,
@@ -156,6 +187,9 @@ export class ExamWatcherService {
         );
       }
     } catch (error) {
+      if (error instanceof UpstreamSessionRejectedError) {
+        await this.sessions.invalidate(target.userId, "portal");
+      }
       if (error instanceof UpstreamUnavailableError) {
         // Nothing was requested and nothing succeeded: drop the run rather
         // than record a student failure; the ticker releases the claim.
@@ -184,7 +218,11 @@ export class ExamWatcherService {
 
     await this.jobs.finishJob("PORTAL", jobId, "COMPLETED");
 
-    return { ok, servedFromCache: false };
+    return {
+      ok,
+      servedFromCache: false,
+      ...(ok && deferUntil ? { deferUntil } : {}),
+    };
   }
 
   private async signIn(
@@ -196,9 +234,10 @@ export class ExamWatcherService {
         target.userId,
         "PORTAL",
       );
-      const result = await this.portal.authenticate(
-        creds.username,
-        creds.password,
+      const result = await this.sessions.getOrLogin(
+        target.userId,
+        "portal",
+        () => this.portal.authenticate(creds.username, creds.password),
       );
       if (!result.ok) {
         await this.jobs.finishJob("PORTAL", jobId, "FAILED");

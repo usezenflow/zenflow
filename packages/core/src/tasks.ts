@@ -61,6 +61,14 @@ export const sessionSchema = z
     note: z.string().optional(),
     /** Free-text location (room / building). Optional for every session type. */
     location: z.string().optional(),
+    /** Map point of `location`, when it was picked on the map. */
+    locationLat: z.number().nullable().optional(),
+    locationLng: z.number().nullable().optional(),
+    /** Where the commute starts, its map point and travel minutes each way. */
+    originLocation: z.string().nullable().optional(),
+    originLat: z.number().nullable().optional(),
+    originLng: z.number().nullable().optional(),
+    commuteMinutes: z.number().nullable().optional(),
 
     // TASK-only
     duration: z

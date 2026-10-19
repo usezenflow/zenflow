@@ -1,5 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { router } from "expo-router";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { type RefObject, createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -54,7 +53,7 @@ beforeEach(() => {
 });
 
 describe("SessionDetailSheet", () => {
-  it("opens on the calendar with the session details", async () => {
+  it("shows every field as an editable input on a saved session", async () => {
     const ref = renderSheet();
     act(() =>
       ref.current?.open(
@@ -62,7 +61,6 @@ describe("SessionDetailSheet", () => {
           id: "a",
           title: "Algorithms lecture",
           type: "TASK",
-          anchor: "PINNED",
           // 03:00Z is 10:00 in UTC+7.
           scheduledStartTime: "2026-10-15T03:00:00.000Z",
           durationMinutes: 90,
@@ -73,18 +71,15 @@ describe("SessionDetailSheet", () => {
         }),
       ),
     );
-    expect((await screen.findByTestId("session-detail-title")).textContent).toBe(
-      "Algorithms lecture",
-    );
+    await screen.findByTestId("session.editor");
     await waitForContent();
-    expect(screen.getByText(/10:00 AM – 11:30 AM/)).toBeTruthy();
+    expect(screen.getByDisplayValue("Algorithms lecture")).toBeTruthy();
     expect(screen.getByText("Room B201")).toBeTruthy();
     expect(screen.getByText("Algorithms")).toBeTruthy();
-    expect(screen.getByText("Pinned in place")).toBeTruthy();
-    expect(screen.getByTestId("session-detail-edit")).toBeTruthy();
+    expect(screen.getByTestId("session.delete")).toBeTruthy();
   });
 
-  it("shows the localized reason for the placed start", async () => {
+  it("never explains why the scheduler picked the start", async () => {
     const ref = renderSheet();
     act(() =>
       ref.current?.open(
@@ -95,79 +90,296 @@ describe("SessionDetailSheet", () => {
         }),
       ),
     );
-    await screen.findByTestId("session-detail-title");
+    await screen.findByTestId("session.editor");
     await waitForContent();
-    expect(screen.getByTestId("session-detail-reason").textContent).toBe(
-      "Placed at 9:00 PM, you usually study then",
-    );
-  });
-
-  it("shows no reason when the start was not placed by the scheduler", async () => {
-    const ref = renderSheet();
-    act(() =>
-      ref.current?.open(
-        makeSession({
-          id: "a",
-          scheduledStartTime: "2026-10-15T14:00:00.000Z",
-          placementReason: null,
-        }),
-      ),
-    );
-    await screen.findByTestId("session-detail-title");
     expect(screen.queryByTestId("session-detail-reason")).toBeNull();
+    expect(screen.queryByText(/you usually study then/)).toBeNull();
   });
 
-  it("shows the note with the details", async () => {
+  it("shows the note as rich text with an expand button", async () => {
     const ref = renderSheet();
     act(() =>
       ref.current?.open(makeSession({ id: "a", note: "<p>Read chapter 4</p>" })),
     );
-    await screen.findByTestId("session-detail-title");
+    await screen.findByTestId("session.editor");
     await waitForContent();
-    const note = await screen.findByTestId("session-note");
-    expect(note.getAttribute("data-html")).toContain("<p>Read chapter 4</p>");
+    expect(screen.getByTestId("session-note").getAttribute("data-html")).toContain("Read chapter 4");
+    expect(screen.getByTestId("session.note.expand")).toBeTruthy();
   });
 
-  it("does not show a note section for an empty note", async () => {
+  it("shows the empty note prompt when there is no note", async () => {
     const ref = renderSheet();
     act(() => ref.current?.open(makeSession({ id: "a", note: "<p></p>" })));
-    await screen.findByTestId("session-detail-title");
+    await screen.findByTestId("session.editor");
     await waitForContent();
-    expect(screen.queryByTestId("session-note")).toBeNull();
+    expect(screen.getByText("Add notes…")).toBeTruthy();
   });
 
-  it("opens the composer for this session when Edit is pressed", async () => {
-    const id = "series1::2026-10-15T03:00:00.000Z";
+  it("opens a draft with its title and a schedule button, without a delete", async () => {
     const ref = renderSheet();
-    act(() =>
-      ref.current?.open(
-        makeSession({ id, seriesId: "series1", rrule: "FREQ=WEEKLY" }),
-      ),
-    );
-    fireEvent.click(await screen.findByTestId("session-detail-edit"));
-    await waitFor(() =>
-      expect(router.push).toHaveBeenCalledWith(`/task/${encodeURIComponent(id)}/edit`),
-    );
+    act(() => ref.current?.openDraft({ title: "Essay draft" }));
+    await screen.findByTestId("session.editor");
+    await waitForContent();
+    expect(screen.getByTestId("session-detail-draft").textContent).toBe("New plan");
+    expect(screen.getByDisplayValue("Essay draft")).toBeTruthy();
+    expect(screen.getByTestId("session.place")).toBeTruthy();
+    expect(screen.queryByTestId("session.delete")).toBeNull();
   });
 
-  it("marks the session done from the disc and keeps the sheet open", async () => {
-    let completed = false;
+  it("saves the title while typing, once the typing pauses", async () => {
+    let body: Record<string, unknown> | null = null;
     server.use(
-      http.post(`${API}/sessions/a/complete`, () => {
-        completed = true;
-        return HttpResponse.json({
-          data: {
-            session: { id: "a", completedAt: "2026-10-15T05:00:00.000Z", skipped: false },
-            streak: { current: 1, longest: 1 },
-          },
-        });
+      http.patch(`${API}/sessions/a`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: makeSession({ id: "a", title: "Typed" }) });
       }),
     );
     const ref = renderSheet();
     act(() => ref.current?.open(makeSession({ id: "a", title: "Algorithms lecture", type: "TASK" })));
-    fireEvent.click(await screen.findByRole("checkbox", { name: "Mark Algorithms lecture done" }));
-    await waitFor(() => expect(completed).toBe(true));
-    expect(await screen.findByRole("checkbox", { name: "Mark Algorithms lecture not done" })).toBeTruthy();
-    expect(screen.getByTestId("session-detail-title").textContent).toBe("Algorithms lecture");
+    const input = await screen.findByTestId("session.title");
+    await waitForContent();
+    fireEvent.change(input, { target: { value: "Typed" } });
+    expect(body).toBeNull();
+    await waitFor(() => expect(body).toMatchObject({ title: "Typed" }));
+    await screen.findByTestId("session.saved");
+  });
+
+  describe("prep plans", () => {
+    const lecture = (iso: string) =>
+      makeSession({ id: "lec", title: "Math", type: "LECTURE", scheduledStartTime: iso });
+    const prep = (over = {}) =>
+      makeSession({
+        id: "prep-1",
+        title: "Prepare for Math",
+        type: "TASK",
+        scheduledStartTime: "2099-01-01T01:00:00.000Z",
+        completedAt: null,
+        ...over,
+      });
+    const details = (prepSessions: unknown[]) =>
+      http.get(`${API}/sessions/lec`, () =>
+        HttpResponse.json({ data: { ...lecture("2099-01-01T03:00:00.000Z"), prepSessions } }),
+      );
+
+    it("hides Prepare in advance for a lecture that already started", async () => {
+      server.use(details([]));
+      const ref = renderSheet();
+      act(() => ref.current?.open(lecture("2020-01-01T03:00:00.000Z")));
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      expect(screen.queryByTestId("session-detail-prepare")).toBeNull();
+    });
+
+    it("offers Prepare in advance for an upcoming lecture with no plan", async () => {
+      server.use(details([]));
+      const ref = renderSheet();
+      act(() => ref.current?.open(lecture("2099-01-01T03:00:00.000Z")));
+      await screen.findByTestId("session-detail-prepare");
+    });
+
+    it("offers Prepare in advance for an upcoming assignment and exam", async () => {
+      for (const type of ["ASSIGNMENT", "EXAM"] as const) {
+        server.use(
+          http.get(`${API}/sessions/x`, () =>
+            HttpResponse.json({ data: { ...lecture("2099-01-01T03:00:00.000Z"), id: "x", type, prepSessions: [] } }),
+          ),
+        );
+        const ref = renderSheet();
+        act(() =>
+          ref.current?.open(makeSession({ id: "x", title: "Essay", type, scheduledStartTime: "2099-01-01T03:00:00.000Z" })),
+        );
+        await screen.findByTestId("session-detail-prepare");
+        cleanup();
+      }
+    });
+
+    it("hides Prepare in advance once the session is skipped", async () => {
+      const ref = renderSheet();
+      act(() =>
+        ref.current?.open(
+          makeSession({ id: "x", type: "EXAM", skipped: true, scheduledStartTime: "2099-01-01T03:00:00.000Z" }),
+        ),
+      );
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      expect(screen.queryByTestId("session-detail-prepare")).toBeNull();
+    });
+
+    it("shows what a plan prepares for and opens it", async () => {
+      const plan = prep({ prepForSessionId: "lec" });
+      server.use(
+        http.get(`${API}/sessions/prep-1`, () =>
+          HttpResponse.json({
+            data: { ...plan, prepSessions: [], prepTarget: lecture("2099-01-01T03:00:00.000Z") },
+          }),
+        ),
+      );
+      const ref = renderSheet();
+      act(() => ref.current?.open(plan));
+      const card = await screen.findByTestId("session-detail-prep-target");
+      expect(card.textContent).toContain("Preparing for");
+      expect(card.textContent).toContain("Math");
+    });
+
+    it("puts a done checkbox in the header of a plan", async () => {
+      let called = false;
+      const plan = prep({ prepForSessionId: "lec" });
+      server.use(
+        http.get(`${API}/sessions/prep-1`, () =>
+          HttpResponse.json({ data: { ...plan, prepSessions: [], prepTarget: null } }),
+        ),
+        http.post(`${API}/sessions/prep-1/complete`, () => {
+          called = true;
+          return HttpResponse.json({
+            data: { session: { ...plan, completedAt: "2099-01-01T01:30:00.000Z" }, streak: null },
+          });
+        }),
+      );
+      const ref = renderSheet();
+      act(() => ref.current?.open(plan));
+      fireEvent.click(await screen.findByTestId("session-detail-plan-check"));
+      await waitFor(() => expect(called).toBe(true));
+    });
+
+    it("has no header checkbox on a plain session", async () => {
+      const ref = renderSheet();
+      act(() => ref.current?.open(makeSession({ id: "t", type: "TASK" })));
+      await screen.findByTestId("session.editor");
+      expect(screen.queryByTestId("session-detail-plan-check")).toBeNull();
+    });
+
+    it("lists the linked plan instead of the button", async () => {
+      server.use(details([prep()]));
+      const ref = renderSheet();
+      act(() => ref.current?.open(lecture("2099-01-01T03:00:00.000Z")));
+      await screen.findByTestId("session-detail-prep-prep-1");
+      expect(screen.queryByTestId("session-detail-prepare")).toBeNull();
+    });
+
+    it("marks a plan done on a long press", async () => {
+      let called = false;
+      server.use(
+        details([prep()]),
+        http.post(`${API}/sessions/prep-1/complete`, () => {
+          called = true;
+          return HttpResponse.json({
+            data: { session: prep({ completedAt: "2099-01-01T01:30:00.000Z" }), streak: null },
+          });
+        }),
+      );
+      const ref = renderSheet();
+      act(() => ref.current?.open(lecture("2099-01-01T03:00:00.000Z")));
+      const row = await screen.findByTestId("session-detail-prep-prep-1");
+      fireEvent.mouseDown(row);
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      fireEvent.mouseUp(row);
+      await waitFor(() => expect(called).toBe(true));
+    });
+  });
+
+  describe("skip", () => {
+    const exam = makeSession({ id: "exam-1", title: "Final", type: "EXAM", scheduledStartTime: "2099-01-01T03:00:00.000Z" });
+
+    it("skips a one-off exam in one tap", async () => {
+      let called = false;
+      server.use(
+        http.get(`${API}/sessions/exam-1`, () => HttpResponse.json({ data: { ...exam, prepSessions: [] } })),
+        http.post(`${API}/sessions/exam-1/skip`, () => {
+          called = true;
+          return HttpResponse.json({ data: { session: { ...exam, skipped: true }, streak: null } });
+        }),
+      );
+      const ref = renderSheet();
+      act(() => ref.current?.open(exam));
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      fireEvent.click(await screen.findByTestId("session-detail-skip"));
+      await waitFor(() => expect(called).toBe(true));
+    });
+
+    it("undoes a skip on a timetable row without a scope", async () => {
+      const skipped = makeSession({
+        id: "tt-1",
+        type: "LECTURE",
+        source: "PORTAL",
+        skipped: true,
+        scheduledStartTime: "2099-01-01T03:00:00.000Z",
+      });
+      let url = "";
+      server.use(
+        http.get(`${API}/sessions/tt-1`, () => HttpResponse.json({ data: { ...skipped, prepSessions: [] } })),
+        http.delete(`${API}/sessions/tt-1/skip`, ({ request }) => {
+          url = request.url;
+          return HttpResponse.json({ data: { session: { ...skipped, skipped: false }, streak: null } });
+        }),
+      );
+      const ref = renderSheet();
+      act(() => ref.current?.open(skipped));
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      fireEvent.click(await screen.findByTestId("session-detail-skip"));
+      await waitFor(() => expect(url).toContain("/sessions/tt-1/skip"));
+      expect(url).not.toContain("scope");
+    });
+
+    it("offers no skip for a task", async () => {
+      const ref = renderSheet();
+      act(() => ref.current?.open(makeSession({ id: "t", type: "TASK" })));
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      expect(screen.queryByTestId("session-detail-skip")).toBeNull();
+    });
+  });
+
+  describe("synced sessions", () => {
+    it("shows no delete and a read-only title for a portal lecture", async () => {
+      const ref = renderSheet();
+      act(() =>
+        ref.current?.open(
+          makeSession({ id: "p", title: "Algorithms", type: "LECTURE", source: "PORTAL", scheduledStartTime: "2020-01-01T03:00:00.000Z" }),
+        ),
+      );
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      expect(screen.queryByTestId("session.delete")).toBeNull();
+      expect((screen.getByTestId("session.title") as HTMLInputElement).readOnly).toBe(true);
+    });
+
+    it("shows no chevron on the time the sync owns", async () => {
+      const ref = renderSheet();
+      act(() =>
+        ref.current?.open(
+          makeSession({ id: "p", type: "LECTURE", source: "PORTAL", scheduledStartTime: "2020-01-01T03:00:00.000Z" }),
+        ),
+      );
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      // Only the tile icon, no chevron.
+      expect(screen.getByTestId("session.when").querySelectorAll("svg")).toHaveLength(1);
+    });
+
+    it("keeps the chevron on the fields of a lecture the student made", async () => {
+      const ref = renderSheet();
+      act(() =>
+        ref.current?.open(
+          makeSession({ id: "u", type: "LECTURE", source: "USER", scheduledStartTime: "2020-01-01T03:00:00.000Z" }),
+        ),
+      );
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      expect(screen.getByTestId("session.when").querySelectorAll("svg")).toHaveLength(2);
+    });
+
+    it("keeps delete for a lecture the student made", async () => {
+      const ref = renderSheet();
+      act(() =>
+        ref.current?.open(
+          makeSession({ id: "u", title: "Mine", type: "LECTURE", source: "USER", scheduledStartTime: "2020-01-01T03:00:00.000Z" }),
+        ),
+      );
+      await screen.findByTestId("session.editor");
+      await waitForContent();
+      expect(screen.getByTestId("session.delete")).toBeTruthy();
+    });
   });
 });

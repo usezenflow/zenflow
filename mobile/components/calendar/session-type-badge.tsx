@@ -23,7 +23,7 @@ import type { SessionType } from "@zenflow/shared";
 import { View } from "react-native";
 
 /** Per-type icon — kept here (not in the RN-free `lib/session-type.ts`) and
- * matched to `components/tasks/composer/task-composer.tsx`. */
+ * matched to `components/calendar/session-detail-sheet.tsx`. */
 const TYPE_ICON: Record<SessionType, LucideIcon> = {
   TASK: CheckSquare,
   ASSIGNMENT: ClipboardList,

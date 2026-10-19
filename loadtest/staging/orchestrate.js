@@ -50,6 +50,8 @@ async function up() {
   fs.mkdirSync(path.join(BACKEND, "state"), { recursive: true });
   fs.writeFileSync(path.join(BACKEND, "state/upstream.api.conf"), "server api-blue:8000;\n");
   compose("up", "-d", "--build");
+  // nginx resolves api-blue once at load; a recreated replica gets a new IP, so reload to pick it up.
+  sh("docker", ["exec", "nginx-staging", "nginx", "-s", "reload"]);
   await waitApi();
 }
 

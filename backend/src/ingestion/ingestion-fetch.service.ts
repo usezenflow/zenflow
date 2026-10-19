@@ -221,6 +221,7 @@ export class IngestionFetchService {
         await this.schedule.recordOutcome(data.scheduleId, {
           ok: outcome.ok,
           servedFromCache: outcome.servedFromCache,
+          deferUntil: outcome.deferUntil,
           now,
         });
       } else if (outcome.ok) {

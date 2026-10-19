@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -38,9 +39,14 @@ import {
 } from "./session-mapper";
 import { createEventData, recordCreateEvent } from "./session-events";
 import { insertFixedSession } from "./fixed-session-writer";
+import { assertSyncedDeletable } from "./synced-lock";
 import { mapSessionPrismaError } from "./prisma-error";
 import { placeOrDiscard } from "./placement-compensation";
-import { NO_FEASIBLE_SLOT_MESSAGE, SeriesService } from "./series.service";
+import { SeriesService } from "./series.service";
+
+/** How far ahead, and how many occurrences, to look for the next unskipped class. */
+const NEXT_OCCURRENCE_WINDOW_DAYS = 120;
+const NEXT_OCCURRENCE_SCAN = 8;
 
 type OccurrenceCheckOff = Pick<SharedSession, "completedAt" | "skipped">;
 
@@ -52,19 +58,19 @@ function occurrenceCheckOff(
   states: Map<string, OccurrenceCheckOff>,
   seriesId: string,
   start: Date,
+  skippedFrom: Date | null = null,
 ): OccurrenceCheckOff {
-  return (
-    states.get(occurrenceStateKey(seriesId, start)) ?? {
-      completedAt: null,
-      skipped: false,
-    }
-  );
+  const state = states.get(occurrenceStateKey(seriesId, start)) ?? {
+    completedAt: null,
+    skipped: false,
+  };
+  const exempt = skippedFrom !== null && start >= skippedFrom;
+  return exempt && !state.completedAt ? { ...state, skipped: true } : state;
 }
 
 /**
  * Plain session CRUD: `create` (dispatches by type — single `TASK`,
- * recurring-fixed, one-off-fixed; a `sessionCount > 1` `TASK` goes to
- * {@link SeriesService}), `list` (fans recurring reps into virtual occurrences),
+ * recurring-fixed, one-off-fixed), `list` (fans recurring reps into virtual occurrences),
  * `suggestions`, `findById`, `remove`. A single `TASK` create is placed via
  * {@link TaskPlacementService}; nothing else on the calendar moves. A `TASK`
  * (or series) with no feasible slot before its deadline is rejected by a
@@ -89,49 +95,19 @@ export class SessionCrudService {
 
     if (dto.type === "TASK") {
       const deadline = new Date(dto.deadline as string);
-      const sessionCount = Math.max(1, Math.trunc(dto.sessionCount ?? 1));
 
       // Pre-flight feasibility — BEFORE any row is inserted, so an
-      // infeasible request never leaves an unplaced task/series behind (no
-      // rollback needed; see NO_FEASIBLE_SLOT_MESSAGE).
-      const durations = dto.sessionDurations;
-      if (durations && durations.length !== sessionCount) {
-        throw new BadRequestException(
-          "sessionDurations must have one entry per session.",
-        );
-      }
-      if (sessionCount > 1) {
-        const feasible = await this.taskPlacement.canPlaceSeries({
-          user,
-          durationMinutes: dto.durationMinutes,
-          sessionCount,
-          durations,
-          deadline,
-          now,
-        });
-        if (!feasible) throw new BadRequestException(NO_FEASIBLE_SLOT_MESSAGE);
-      } else {
-        // Single TASK: a free slot, or a flexible-task repack, or the user's
-        // accept-conflicts / accept-late choice — else 409 (issue #62 B).
-        await this.taskPlacement.preflightTask({
-          user,
-          durationMinutes: dto.durationMinutes,
-          deadline,
-          now,
-          policy: dto.infeasiblePolicy,
-        });
-      }
-
-      if (sessionCount > 1) {
-        return this.series.createTaskSeries(
-          dto,
-          user,
-          cleanTags,
-          deadline,
-          sessionCount,
-          now,
-        );
-      }
+      // infeasible request never leaves an unplaced task behind (no rollback
+      // needed; see NO_FEASIBLE_SLOT_MESSAGE). A free slot, a flexible-task
+      // repack, or the user's accept-conflicts / accept-late choice — else 409
+      // (issue #62 B).
+      await this.taskPlacement.preflightTask({
+        user,
+        durationMinutes: dto.durationMinutes,
+        deadline,
+        now,
+        policy: dto.infeasiblePolicy,
+      });
       return this.createSingleTask(dto, user, cleanTags, deadline, now);
     }
 
@@ -155,13 +131,24 @@ export class SessionCrudService {
     undoGroupId?: string,
   ): Promise<SessionRow> {
     const tagIds = await this.tagsService.resolveTagIds(tx, user.id, cleanTags);
+    const prepFor = dto.prepForSessionId
+      ? await this.resolvePrepTarget(tx, user, dto.prepForSessionId)
+      : null;
     const s = await tx.session.create({
       data: {
         type: "TASK",
         source: "USER",
+        prepForSessionId: prepFor?.id ?? null,
+        prepForOccurrenceStart: prepFor?.occurrenceStart ?? null,
         title: dto.title,
         note: dto.note ?? null,
         location: dto.location ?? null,
+        locationLat: dto.locationLat ?? null,
+        locationLng: dto.locationLng ?? null,
+        originLocation: dto.originLocation ?? null,
+        originLat: dto.originLocation ? (dto.originLat ?? null) : null,
+        originLng: dto.originLocation ? (dto.originLng ?? null) : null,
+        commuteMinutes: dto.commuteMinutes ?? null,
         durationMinutes: dto.durationMinutes,
         deadline,
         tags: { connect: tagIds.map((id) => ({ id })) },
@@ -177,6 +164,41 @@ export class SessionCrudService {
     });
     recordCreateEvent();
     return s;
+  }
+
+  /**
+   * The real row a prep `TASK` links to. A lecture occurrence id resolves to its
+   * series representative plus the occurrence start. One live prep per target.
+   */
+  private async resolvePrepTarget(
+    tx: Prisma.TransactionClient,
+    user: User,
+    ref: string,
+  ): Promise<{ id: string; occurrenceStart: Date | null }> {
+    const occ = parseOccurrenceId(ref);
+    const target = await tx.session.findFirst({
+      where: occ
+        ? { seriesId: occ.seriesId, userId: user.id, deleted: false }
+        : { id: ref, userId: user.id, deleted: false },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, type: true },
+    });
+    if (!target)
+      throw new NotFoundException(`Cannot find session with id ${ref}`);
+    if (!["LECTURE", "EXAM", "ASSIGNMENT"].includes(target.type))
+      throw new BadRequestException("Prep needs a lecture, exam or assignment");
+    const occurrenceStart = occ ? new Date(occ.startISO) : null;
+    const existing = await tx.session.findFirst({
+      where: {
+        userId: user.id,
+        deleted: false,
+        prepForSessionId: target.id,
+        prepForOccurrenceStart: occurrenceStart,
+      },
+      select: { id: true },
+    });
+    if (existing) throw new ConflictException("Prep already exists");
+    return { id: target.id, occurrenceStart };
   }
 
   /** A flexible, deadline-driven `TASK` — inserted, then engine-placed. */
@@ -369,7 +391,12 @@ export class SessionCrudService {
             ...base,
             id: occurrenceId(row.seriesId, occ),
             scheduledStartTime: occ.toISOString(),
-            ...occurrenceCheckOff(states, row.seriesId, occ),
+            ...occurrenceCheckOff(
+              states,
+              row.seriesId,
+              occ,
+              row.series.skippedFrom,
+            ),
           });
         }
       } else {
@@ -474,6 +501,7 @@ export class SessionCrudService {
     if (occ) {
       const rep = await this.prisma.session.findFirst({
         where: { seriesId: occ.seriesId, userId: user.id, deleted: false },
+        orderBy: { createdAt: "asc" },
         include: WITH_TAGS_AND_SERIES,
       });
       if (!rep)
@@ -489,7 +517,19 @@ export class SessionCrudService {
         ...toSessionDto(rep),
         id,
         scheduledStartTime: occ.startISO,
-        ...occurrenceCheckOff(states, occ.seriesId, start),
+        ...occurrenceCheckOff(
+          states,
+          occ.seriesId,
+          start,
+          rep.series?.skippedFrom ?? null,
+        ),
+        prepSessions: await this.prepSessionsOf(user, rep.id, start),
+        nextPrepOccurrenceStart: await this.nextPrepOccurrence(
+          user,
+          rep,
+          start,
+        ),
+        prepTarget: null,
       };
     }
 
@@ -500,7 +540,92 @@ export class SessionCrudService {
     if (!session)
       throw new NotFoundException(`Cannot find session with id ${id}`);
 
-    return toSessionDto(session);
+    return {
+      ...toSessionDto(session),
+      prepSessions: await this.prepSessionsOf(user, session.id, null),
+      nextPrepOccurrenceStart: null,
+      prepTarget: await this.prepTargetOf(user, session),
+    };
+  }
+
+  /** The session a prep plan prepares for; a recurring occurrence keeps its occurrence id and start. */
+  private async prepTargetOf(
+    user: User,
+    plan: SessionRow,
+  ): Promise<SharedSession | null> {
+    if (!plan.prepForSessionId) return null;
+    const target = await this.prisma.session.findFirst({
+      where: { id: plan.prepForSessionId, userId: user.id, deleted: false },
+      include: WITH_TAGS_AND_SERIES,
+    });
+    if (!target) return null;
+    const dto = toSessionDto(target);
+    const at = plan.prepForOccurrenceStart;
+    if (!at || !target.seriesId) return dto;
+    return {
+      ...dto,
+      id: occurrenceId(target.seriesId, at),
+      scheduledStartTime: at.toISOString(),
+    };
+  }
+
+  /** The next occurrence after `after` that is not skipped, unless it already has a prep plan. */
+  private async nextPrepOccurrence(
+    user: User,
+    rep: SessionRow,
+    after: Date,
+  ): Promise<string | null> {
+    const series = rep.series;
+    if (!series?.rrule || !rep.scheduledStartTime) return null;
+    const to = new Date(after.getTime() + NEXT_OCCURRENCE_WINDOW_DAYS * DAY_MS);
+    const candidates = expandRrule(
+      series.rrule,
+      rep.scheduledStartTime,
+      new Date(after.getTime() + 1),
+      to,
+      user.timezone,
+      series.exdates,
+    ).slice(0, NEXT_OCCURRENCE_SCAN);
+    if (candidates.length === 0) return null;
+    const states = await this.occurrenceStates(
+      user.id,
+      [rep],
+      candidates[0],
+      new Date(candidates[candidates.length - 1].getTime() + 1),
+    );
+    const next = candidates.find(
+      (c) =>
+        !occurrenceCheckOff(states, series.id, c, series.skippedFrom).skipped,
+    );
+    if (!next) return null;
+    const taken = await this.prisma.session.findFirst({
+      where: {
+        userId: user.id,
+        deleted: false,
+        prepForSessionId: rep.id,
+        prepForOccurrenceStart: next,
+      },
+      select: { id: true },
+    });
+    return taken ? null : next.toISOString();
+  }
+
+  private async prepSessionsOf(
+    user: User,
+    targetId: string,
+    occurrenceStart: Date | null,
+  ): Promise<SharedSession[]> {
+    const rows = await this.prisma.session.findMany({
+      where: {
+        userId: user.id,
+        deleted: false,
+        prepForSessionId: targetId,
+        prepForOccurrenceStart: occurrenceStart,
+      },
+      include: WITH_TAGS_AND_SERIES,
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map(toSessionDto);
   }
 
   async remove(id: string, user: User): Promise<RemoveSessionResponse> {
@@ -521,6 +646,7 @@ export class SessionCrudService {
         });
         if (!existing)
           throw new NotFoundException(`Cannot find session with id ${id}`);
+        assertSyncedDeletable(existing);
         // Soft-delete: an ingested item's externalKey stays unique, so the
         // materializer recognizes this row on the next re-fetch and leaves
         // it alone instead of recreating it.

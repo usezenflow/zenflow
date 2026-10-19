@@ -71,6 +71,8 @@ export interface PassOutcome {
    * `consecutiveFailures` and releases the claim so the row stays due.
    */
   upstreamDown?: UpstreamUnavailableError;
+  /** A clean pass with nothing left to fetch before this instant parks the row until then. */
+  deferUntil?: Date;
 }
 
 /** A pass that never got off the ground — a rejected or unreachable login. */

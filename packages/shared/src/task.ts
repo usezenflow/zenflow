@@ -18,15 +18,7 @@ import type { PlacementReason } from "./placement";
 export type SessionType = "TASK" | "ASSIGNMENT" | "EXAM" | "LECTURE" | "DND";
 
 /** Where a session came from. */
-export type SessionSource = "USER" | "LMS" | "PORTAL";
-
-/**
- * How firmly the scheduler may move a flexible `TASK` (ADR-0022). `AUTO`:
- * displaced freely. `CHOSEN`: set by a drag, "move to" or time pick; moved
- * only after the user confirms a plan. `PINNED`: never moved by the scheduler.
- * Fixed types are always `AUTO` and never move.
- */
-export type SessionAnchor = "AUTO" | "CHOSEN" | "PINNED";
+export type SessionSource = "USER" | "LMS" | "PORTAL" | "AUTO";
 
 export interface Session {
   id: string;
@@ -39,6 +31,16 @@ export interface Session {
    * upstream room for an ingested fixed session.
    */
   location: string | null;
+  /** Map point of `location`, when it was picked on the map. */
+  locationLat: number | null;
+  locationLng: number | null;
+  /** Where the commute starts: a campus place or free text, or `null`. */
+  originLocation: string | null;
+  /** Map point of `originLocation`, when known. */
+  originLat: number | null;
+  originLng: number | null;
+  /** Minutes to travel between the origin and the location, each way. The scheduler keeps it clear on both sides. */
+  commuteMinutes: number | null;
   /** Always a positive multiple of 15. */
   durationMinutes: number;
   /**
@@ -48,6 +50,10 @@ export interface Session {
   deadline: string | null;
   type: SessionType;
   source: SessionSource;
+  /** Real id of the lecture, exam or assignment this prep `TASK` is for, or `null`. */
+  prepForSessionId: string | null;
+  /** ISO-8601 start of the prepared lecture occurrence, or `null` when not a recurring lecture. */
+  prepForOccurrenceStart: string | null;
   /** Free-form labels. */
   tags: string[];
   /**
@@ -102,10 +108,6 @@ export interface Session {
   completedAt: string | null;
   /** The user marked the session skipped (missed). Never `true` with `completedAt`. */
   skipped: boolean;
-  /** How firmly the scheduler may move it (see {@link SessionAnchor}). */
-  anchor: SessionAnchor;
-  /** ISO-8601 instant the anchor was last set by the user, or `null` while `AUTO`. */
-  anchoredAt: string | null;
   /**
    * Why the scheduler picked the current start. `null` when unscheduled, when
    * the start was set by the user or a move since, or for a fallback placement.
@@ -152,8 +154,6 @@ export interface PlacementPlanMove {
   from: string;
   /** ISO-8601 planned start. */
   to: string;
-  /** `AUTO` or `CHOSEN` (a `CHOSEN` move is why the plan needs confirming). */
-  anchor: "AUTO" | "CHOSEN";
   /** Scheduler cost of the move (higher is worse). */
   cost: number;
 }
@@ -286,23 +286,18 @@ export interface CreateTaskInput {
   note?: string | null;
   /** Free-text location (room / building), optional. */
   location?: string | null;
+  /** Map point of `location`. `null` clears it; omit to leave unchanged. */
+  locationLat?: number | null;
+  locationLng?: number | null;
+  /** Where the commute starts, with its map point and travel minutes each way. */
+  originLocation?: string | null;
+  originLat?: number | null;
+  originLng?: number | null;
+  commuteMinutes?: number | null;
   /** Positive multiple of 15. */
   durationMinutes: number;
   /** ISO-8601 deadline — required for a `TASK`; shared by every session of a series. */
   deadline: string;
-  /**
-   * Number of study sessions. Omitted or `1` → one ordinary task. `> 1` →
-   * a `TASK` series: N linked `Session` rows sharing one `seriesId` and
-   * `deadline`, each placed independently and spaced roughly evenly across
-   * `now … deadline` (see `services/bandit/README.md`).
-   */
-  sessionCount?: number;
-  /**
-   * Minutes of each session when a series splits one total unevenly. Length
-   * equals `sessionCount`, each a multiple of 15; `durationMinutes` is then the
-   * first one. Omitted → every session is `durationMinutes`.
-   */
-  sessionDurations?: number[];
   tags?: string[];
   /**
    * Minutes-before-start reminders (max MAX_REMINDERS_PER_SESSION, each an
@@ -311,6 +306,8 @@ export interface CreateTaskInput {
    * `[]` -> none. On update: omit to keep, an array replaces.
    */
   reminders?: number[];
+  /** The lecture, exam or assignment this task prepares for. A recurring lecture occurrence id pins that occurrence. */
+  prepForSessionId?: string;
   /** Answer to a prior 409 {@link ScheduleInfeasibleError}; omit on the first attempt. */
   infeasiblePolicy?: InfeasiblePolicy;
 }
@@ -322,6 +319,9 @@ export interface CreateFixedSessionInput {
   note?: string | null;
   /** Free-text location (room / building), optional. */
   location?: string | null;
+  /** Map point of `location`. `null` clears it; omit to leave unchanged. */
+  locationLat?: number | null;
+  locationLng?: number | null;
   /** Positive multiple of 15 (the client derives it from start/end pickers). */
   durationMinutes: number;
   /** ISO-8601 instant — required; there is no deadline for a fixed session. */
@@ -349,6 +349,9 @@ export interface CreateDndInput {
   note?: string | null;
   /** Free-text location (room / building), optional. */
   location?: string | null;
+  /** Map point of `location`. `null` clears it; omit to leave unchanged. */
+  locationLat?: number | null;
+  locationLng?: number | null;
   durationMinutes: number;
   scheduledStartTime: string;
   /** RFC 5545 RRULE; omit for a one-off block. */
@@ -387,9 +390,21 @@ export type UpdateScope = "occurrence" | "following" | "series";
  */
 export interface UpdateSessionInput {
   title?: string;
+  /** A prep `TASK` only: the lecture occurrence it prepares for (ISO-8601). */
+  prepForOccurrenceStart?: string;
   note?: string | null;
   /** Free-text location (room / building). `null` clears it; omit to leave unchanged. */
   location?: string | null;
+  /** Map point of `location`. `null` clears it; omit to leave unchanged. */
+  locationLat?: number | null;
+  locationLng?: number | null;
+  /** Where the commute starts. `null` clears it; omit to leave unchanged. */
+  originLocation?: string | null;
+  /** Map point of `originLocation`. `null` clears it; omit to leave unchanged. */
+  originLat?: number | null;
+  originLng?: number | null;
+  /** Travel minutes each way, 0 to 180. `null` clears it; omit to leave unchanged. */
+  commuteMinutes?: number | null;
   durationMinutes?: number;
   /** ISO-8601 deadline (TASK only). Omit to leave unchanged. */
   deadline?: string;
@@ -538,7 +553,17 @@ export interface UpdateSessionResponse extends Session, SlotProposalFields {
    */
   skippedReminders?: number[];
 }
-export type SessionDetailResponse = Session;
+export interface SessionDetailResponse extends Session {
+  /** Live prep `TASK`s linked to this session (or, for a recurring occurrence id, to that occurrence). */
+  prepSessions: Session[];
+  /**
+   * For a recurring occurrence id: the start of the next occurrence that is not
+   * skipped and has no prep plan yet, else `null`.
+   */
+  nextPrepOccurrenceStart: string | null;
+  /** For a prep plan: the lecture occurrence, exam or assignment it prepares for, else `null`. */
+  prepTarget: Session | null;
+}
 
 /**
  * `POST /sessions/:id/slot-pick` — records which side of a shown pairwise

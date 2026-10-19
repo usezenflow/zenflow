@@ -8,7 +8,7 @@ import { format, formatTitle } from "@/lib/i18n";
 import { listSessions, updateSession } from "@/api/tasks";
 import { checkStateOf } from "@/lib/today-summary";
 import { undoMove } from "@/lib/move-undo";
-import { dropOnDay } from "@/lib/anchor";
+import { dropOnDay } from "@/lib/drop-preview";
 import {
   GraduationCap,
   Plus,
@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
-import { useLastCreated } from "@/hooks/use-last-created";
 import { type DayStatus, deriveDayStatus } from "@/lib/day-status";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useNow } from "@/hooks/use-now";
@@ -33,8 +32,9 @@ import {
   showErrorToast,
   showSkippedToast,
 } from "@/lib/task-toasts";
-import { useSpotlight } from "@/hooks/use-spotlight";
 import { showMovedToast } from "@/lib/move-toast";
+import { offerPrepReschedule } from "@/lib/prep-toast";
+import { isSyncedSession } from "@/lib/synced-session";
 import {
   fetchDaySessions,
   getCachedDaySessions,
@@ -221,14 +221,7 @@ interface DayTimelineProps {
   onSubtitleChange?: (subtitle: string) => void;
   /** Fired when a session drag starts/stops (used to lock the pager). */
   onDragChange?: (dragging: boolean) => void;
-  /** Fired when a still-finger long-press on a block asks to move it — the
-   * screen opens the "Move to…" sheet. This timeline resolves the id to the
-   * full `Session` from its own list before calling up. */
-  onRequestReschedule?: (session: Session) => void;
-  /** When set, a block long-press asks the screen to open its action menu
-   * (Move to… / Add study session before this) rather than jumping straight
-   * to the "Move to…" sheet. */
-  onRequestBlockMenu?: (session: Session) => void;
+  /** When set, a block long-press asks the screen to open its action menu. */
   /** When a drag-drop's target session belongs to a series
    * (`getSeriesKind` !== "none"), defers the commit to the caller's
    * scope-confirmation sheet (`UpdateRecurringSheet`) instead of committing
@@ -272,8 +265,6 @@ export function DayTimeline({
   contentBottomInset,
   onSubtitleChange,
   onDragChange,
-  onRequestReschedule,
-  onRequestBlockMenu,
   onRequestScopedUpdate,
   isActive = true,
   syncScroll = false,
@@ -497,18 +488,7 @@ export function DayTimeline({
   const totalHeight = grid.height;
   const hourLineMins = useMemo(() => visibleHourMinutes(grid), [grid]);
 
-  // The block the checklist's "Move a task" / "Hold a task" spotlights point at:
-  // the task the user just created when it's on this day, else the first whole
-  // one. Only plain tasks: timetable lectures, exams etc. aren't the ones to demo.
-  const lastCreatedId = useLastCreated((s) => s.id);
-  const tipSegmentId = useMemo(() => {
-    const whole = segments.filter((s) => !s.continued && s.type === "TASK");
-    return (
-      (whole.find((s) => s.taskId === lastCreatedId) ?? whole[0])?.segmentId ??
-      null
-    );
-  }, [segments, lastCreatedId]);
-  const { shifts: topShifts, covered: coveredIds } = useMemo(
+  const { shifts: topShifts } = useMemo(
     () =>
       stackShifts(segments, layout, (s) =>
         minToY(grid, minuteSpanOf(s, tz).startMin),
@@ -537,6 +517,14 @@ export function DayTimeline({
     const map = new Map<string, string>();
     for (const t of tasks) {
       if (t.deadline) map.set(t.id, t.deadline);
+    }
+    return map;
+  }, [tasks]);
+
+  const commuteBySession = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of tasks) {
+      if (t.commuteMinutes && t.commuteMinutes > 0) map.set(t.id, t.commuteMinutes);
     }
     return map;
   }, [tasks]);
@@ -643,42 +631,6 @@ export function DayTimeline({
   useEffect(() => {
     positionScroll();
   }, [positionScroll]);
-
-  // Getting-started "Move a task" / "Hold a task": the spotlight can only point
-  // at a block that is on screen, and the timeline opens scrolled to "now" (or
-  // to the shared week position) — so bring the tip block into view first, or
-  // the checklist gives up and points at + instead. Declared after
-  // `positionScroll`'s effect so it runs later in the same commit and wins.
-  const tipStep = useSpotlight((s) =>
-    s.step === "move-task" || s.step === "block-actions" ? s.step : null,
-  );
-  const segmentsRef = useRef(segments);
-  segmentsRef.current = segments;
-  useEffect(() => {
-    if (!tipStep || !isActive || loading || error || !tipSegmentId) return;
-    const segment = segmentsRef.current.find(
-      (s) => s.segmentId === tipSegmentId,
-    );
-    if (!segment) return;
-    const start = toZonedTime(new Date(segment.start), tz);
-    const end = toZonedTime(new Date(segment.end), tz);
-    const startMin = start.getHours() * 60 + start.getMinutes();
-    const durationMin = Math.max(
-      15,
-      (end.getTime() - start.getTime()) / 60_000,
-    );
-    const top = minToY(grid, startMin);
-    const height = minToY(grid, startMin + durationMin) - top;
-    const viewport = viewportHRef.current || 500;
-    const y =
-      height >= viewport - 48 ? top - 24 : top - (viewport - height) / 2;
-    // Next tick: let the ScrollView finish its own layout/positioning first.
-    const timer = setTimeout(
-      () => scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: false }),
-      60,
-    );
-    return () => clearTimeout(timer);
-  }, [tipStep, isActive, loading, error, tipSegmentId, grid, tz]);
 
   // Teleport to a session (`flashSessionId` — notification tap, create/edit,
   // cross-day move): once this day has it loaded and is the visible page,
@@ -836,9 +788,7 @@ export function DayTimeline({
     if (isActive) onStatusChange?.(dayStatus);
   }, [isActive, statusKey, onStatusChange]);
 
-  // Tapping the empty-day zone opens the new-task form seeded at 8:00 (or the
-  // next quarter hour when today is already past it) — it never creates a
-  // session by itself.
+  // Tapping the empty-day zone opens quick add. It never creates a session by itself.
   const router = useRouter();
   const dluConnected = useDluConnected();
   const openTimetableImport = useCallback(
@@ -851,32 +801,25 @@ export function DayTimeline({
       ),
     [router],
   );
+  // A plan is placed by the scheduler, so the empty zone only opens a draft in the session sheet.
   const openNewTaskForm = useCallback(() => {
-    let startMin = emptyZoneStartMin;
-    if (isToday) {
-      const wall = zonedNow(tz);
-      startMin = Math.max(
-        startMin,
-        Math.min(
-          snapToNearestLaterQuarterHour(wall.getHours() * 60 + wall.getMinutes()),
-          23 * 60 + 45,
-        ),
-      );
-    }
-    const start = new Date(date);
-    start.setHours(0, startMin, 0, 0);
-    navigateOnce(() =>
-      router.push({
-        pathname: "/task/new",
-        params: { start: zonedWallClockToUtc(start, tz).toISOString() },
-      } as Href),
-    );
-  }, [date, isToday, router, tz, emptyZoneStartMin]);
+    router.navigate({ pathname: "/", params: { quickAdd: "1" } } as Href);
+  }, [router]);
 
   const handleReschedule = useCallback(
     async (taskId: string, startISO: string) => {
       // A drop onto a pinned or fixed session bounces back (ADR-0022).
       const dragged = tasks.find((t) => t.id === taskId);
+      if (isSyncedSession(dragged)) {
+        toast({
+          title: t("Synced sessions can't be moved"),
+          description: t("Skip it instead."),
+          variant: "warning",
+          icon: "calendar-x",
+        });
+        setSettleKey((k) => k + 1);
+        return;
+      }
       if (dragged && dropOnDay(dragged, startISO, tasks, tz).blocked) {
         toast({
           title: t("Can't move here"),
@@ -929,6 +872,12 @@ export function DayTimeline({
                     )
               : undefined,
           });
+          void offerPrepReschedule(
+            toast,
+            updated,
+            updated.scheduledStartTime ?? startISO,
+            tz,
+          );
         } catch (error) {
           showErrorToast(
             toast,
@@ -943,8 +892,7 @@ export function DayTimeline({
       };
 
       // A dragged session that belongs to a series defers to the
-      // scope-confirmation sheet before committing — same lookup
-      // `handleRequestReschedule` already does. `onResolve(null)` (cancel)
+      // scope-confirmation sheet before committing. `onResolve(null)` (cancel)
       // takes the same revert path as the past-deadline cancel below
       // (`refetch()`), since nothing was optimistically written yet.
       const commitWithScope = () => {
@@ -1021,26 +969,6 @@ export function DayTimeline({
       }
     },
     [onDragChange, autoScrollDeltaSV],
-  );
-
-  // Resolve the block id from a long-press up to the full `Session` for the
-  // screen's "Move to…" sheet.
-  const handleRequestReschedule = useCallback(
-    (taskId: string) => {
-      const session = tasks.find((t) => t.id === taskId);
-      if (session) onRequestReschedule?.(session);
-    },
-    [tasks, onRequestReschedule],
-  );
-
-  // Long-press → the screen's block action menu (falls back to the plain
-  // reschedule sheet when the screen didn't wire a menu — see `SessionBlock`).
-  const handleRequestBlockMenu = useCallback(
-    (taskId: string) => {
-      const session = tasks.find((t) => t.id === taskId);
-      if (session) onRequestBlockMenu?.(session);
-    },
-    [tasks, onRequestBlockMenu],
   );
 
   const formatSnapLabel = useCallback(
@@ -1121,7 +1049,7 @@ export function DayTimeline({
         ? t("Moving. Release to reschedule")
         : tasks.length === 0
           ? t("{now}, nothing scheduled", { now: nowLabel })
-          : t("{now}, {count} tasks today", {
+          : t("{now}, {count} plans today", {
               now: nowLabel,
               count: tasks.length,
             });
@@ -1345,20 +1273,15 @@ export function DayTimeline({
                       grid={grid}
                       leftOffset={leftOffsetPx}
                       topShift={topShifts.get(segment.segmentId) ?? 0}
-                      checkAtTop={coveredIds.has(segment.segmentId)}
                       blockWidth={blockWidthPx}
                       deadline={deadlineBySession.get(segment.taskId) ?? null}
                       late={lateSessionIds.has(segment.taskId)}
-                      anchor={tasks.find((t) => t.id === segment.taskId)?.anchor}
                       checkState={checkStateById.get(segment.taskId)}
+                      commuteMinutes={commuteBySession.get(segment.taskId)}
                       onReschedule={handleReschedule}
                       settleKey={settleKey}
                       onDragStateChange={handleDragStateChange}
                       onPress={onSessionPress}
-                      onRequestReschedule={handleRequestReschedule}
-                      onLongPressMenu={
-                        onRequestBlockMenu ? handleRequestBlockMenu : undefined
-                      }
                       autoScrollDeltaSV={
                         !segment.continued ? autoScrollDeltaSV : undefined
                       }
@@ -1368,7 +1291,6 @@ export function DayTimeline({
                       onDragVerticalEdge={handleDragVerticalEdge}
                       bottomInset={tabBarOverlay}
                       flash={segment.taskId === flashTarget}
-                      tip={isActive && segment.segmentId === tipSegmentId}
                     />
                   );
                 })}

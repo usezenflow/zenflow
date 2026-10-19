@@ -3,6 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import { fromZonedTime } from "date-fns-tz";
 import { UpstreamUnavailableError } from "../common/outbound-breaker";
 import { IntegrationsService } from "../integrations/integrations.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import { LMSService, type LmsSession } from "../lms/lms.service";
 import {
   ingestionLastSuccess,
@@ -63,6 +65,7 @@ export class LmsMonthService {
     private readonly cache: OccurrenceCacheService,
     private readonly fanout: OccurrenceFanoutService,
     private readonly schedule: IngestionScheduleService,
+    private readonly sessions: UpstreamSessionCache,
   ) {
     this.tz = this.config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
     this.discoveryMaxAgeMs = positiveConfig(
@@ -189,7 +192,9 @@ export class LmsMonthService {
         data.userId,
         "LMS",
       );
-      const login = await this.lms.login(creds.username, creds.password);
+      const login = await this.sessions.getOrLogin(data.userId, "lms", () =>
+        this.lms.login(creds.username, creds.password),
+      );
       if (!login.ok) {
         ingestionSignInFailures.add(1, { provider: "LMS", reason: "rejected" });
         await this.jobs.finishJob("LMS", jobId, "FAILED");
@@ -265,6 +270,9 @@ export class LmsMonthService {
       ingestionLastSuccess.record(now.getTime() / 1000, { provider: "LMS" });
       return { ok: true, fetched: true };
     } catch (error) {
+      if (error instanceof UpstreamSessionRejectedError) {
+        await this.sessions.invalidate(data.userId, "lms");
+      }
       if (error instanceof UpstreamUnavailableError) {
         await this.jobs.discardJob("LMS", jobId);
         throw error;

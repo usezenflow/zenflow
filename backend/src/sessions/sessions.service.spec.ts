@@ -49,6 +49,12 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     title: "Session",
     note: null,
     location: null,
+    locationLat: null,
+    locationLng: null,
+    originLocation: null,
+    originLat: null,
+    originLng: null,
+    commuteMinutes: null,
     durationMinutes: 60,
     deadline: new Date("2026-01-05T12:00:00.000Z"),
     tags: [],
@@ -58,13 +64,14 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     conflict: false,
     scheduledStartTime: null,
     lastMovedAt: null,
+    submittedAt: null,
+    prepForSessionId: null,
+    prepForOccurrenceStart: null,
     retainedAt: null,
     syncConfirmedAt: null,
     syncMissedAt: null,
     completedAt: null,
     skipped: false,
-    anchor: "AUTO",
-    anchoredAt: null,
     placementReason: null,
     placementReasonStartAt: null,
     deleted: false,
@@ -197,6 +204,85 @@ function prismaWithTx(tx: Record<string, unknown>) {
 }
 
 describe("SessionsService.create", () => {
+  describe("prep link", () => {
+    const dto = (prepForSessionId: string) =>
+      ({
+        type: "TASK",
+        title: "Prepare for Math",
+        durationMinutes: 60,
+        deadline: "2026-06-10T17:00:00.000Z",
+        prepForSessionId,
+      }) as CreateSessionDto;
+
+    const build = async (found: unknown, existing: unknown) => {
+      const sessionCreate = jest.fn((args: CreateCall) => {
+        void args;
+        return Promise.resolve(session({ id: "prep-1" }));
+      });
+      const findFirst = jest
+        .fn()
+        .mockResolvedValueOnce(found)
+        .mockResolvedValueOnce(existing);
+      const prisma = prismaWithTx({
+        session: { create: sessionCreate, findFirst },
+        sessionEvent: { create: jest.fn().mockResolvedValue({}) },
+      });
+      const service = await makeService(
+        prisma,
+        fakeTagsService(),
+        fakeTaskPlacement(),
+        fakeSchedulingFeedback(),
+      );
+      return { service, sessionCreate, findFirst };
+    };
+
+    it("links a recurring lecture occurrence to its series row and start", async () => {
+      const { service, sessionCreate, findFirst } = await build(
+        { id: "rep-1", type: "LECTURE" },
+        null,
+      );
+
+      await service.create(dto("series-1::2026-06-10T09:00:00.000Z"), user);
+
+      expect(findFirst.mock.calls[0][0].where).toMatchObject({
+        seriesId: "series-1",
+      });
+      const [args] = sessionCreate.mock.calls[0];
+      expect(args.data.prepForSessionId).toBe("rep-1");
+      expect(args.data.prepForOccurrenceStart).toEqual(
+        new Date("2026-06-10T09:00:00.000Z"),
+      );
+    });
+
+    it("rejects a second prep for the same target", async () => {
+      const { service, sessionCreate } = await build(
+        { id: "exam-1", type: "EXAM" },
+        { id: "prep-0" },
+      );
+
+      await expect(service.create(dto("exam-1"), user)).rejects.toThrow(
+        "Prep already exists",
+      );
+      expect(sessionCreate).not.toHaveBeenCalled();
+    });
+
+    it("rejects a target that is not a lecture, exam or assignment", async () => {
+      const { service } = await build({ id: "t-1", type: "TASK" }, null);
+
+      await expect(service.create(dto("t-1"), user)).rejects.toThrow(
+        "Prep needs a lecture, exam or assignment",
+      );
+    });
+
+    it("rejects a target the user does not own", async () => {
+      const { service } = await build(null, null);
+
+      await expect(service.create(dto("nope"), user)).rejects.toThrow(
+        "Cannot find session with id nope",
+      );
+    });
+  });
+
   it("TASK: inserts the row, writes a CREATE event, places it in its best slot, maps the wire shape", async () => {
     const created = session({
       id: "session-1",
@@ -256,17 +342,23 @@ describe("SessionsService.create", () => {
 
     expect(result).toEqual({
       id: "session-1",
-      anchor: "AUTO",
-      anchoredAt: null,
       placementReason: null,
       undoGroupId: expect.any(String),
       title: "Write report",
       note: null,
       location: null,
+      locationLat: null,
+      locationLng: null,
+      originLocation: null,
+      originLat: null,
+      originLng: null,
+      commuteMinutes: null,
       durationMinutes: 30,
       deadline: "2026-06-10T17:00:00.000Z",
       type: "TASK",
       source: "USER",
+      prepForSessionId: null,
+      prepForOccurrenceStart: null,
       tags: ["work"],
       scheduledStartTime: null,
       seriesId: null,
@@ -322,99 +414,6 @@ describe("SessionsService.create", () => {
     expect(result.scheduledStartTime).toBe(slot.toISOString());
   });
 
-  it("TASK series (sessionCount > 1): one SessionSeries + N rows, handed to the series placer", async () => {
-    const rows = [
-      session({
-        id: "s-1",
-        seriesId: "series-1",
-        sessionIndex: 1,
-        sessionTotal: 3,
-      }),
-      session({
-        id: "s-2",
-        seriesId: "series-1",
-        sessionIndex: 2,
-        sessionTotal: 3,
-      }),
-      session({
-        id: "s-3",
-        seriesId: "series-1",
-        sessionIndex: 3,
-        sessionTotal: 3,
-      }),
-    ];
-    let n = 0;
-    const sessionCreate = jest.fn(() => Promise.resolve(rows[n++]));
-    const seriesCreate = jest
-      .fn()
-      .mockResolvedValue({ id: "series-1", type: "TASK" });
-    const eventCreate = jest.fn().mockResolvedValue({});
-    const sessionUpdate = jest.fn().mockResolvedValue({});
-    const prisma = {
-      $transaction: (arg: unknown) =>
-        typeof arg === "function"
-          ? (arg as (t: unknown) => unknown)({
-              session: { create: sessionCreate },
-              sessionEvent: { create: eventCreate },
-              sessionSeries: { create: seriesCreate },
-            })
-          : Promise.all(arg as Promise<unknown>[]),
-      session: { update: sessionUpdate },
-    };
-    const placement = fakeTaskPlacement();
-    placement.placeSeriesOnCreate.mockResolvedValue([
-      { id: "s-1", scheduledStartTime: new Date("2026-06-02T09:00:00.000Z") },
-      { id: "s-2", scheduledStartTime: new Date("2026-06-05T09:00:00.000Z") },
-      { id: "s-3", scheduledStartTime: null },
-    ]);
-    const service = await makeService(
-      prisma,
-      fakeTagsService(),
-      placement,
-      fakeSchedulingFeedback(),
-    );
-
-    const dto: CreateSessionDto = {
-      type: "TASK",
-      title: "Exam prep",
-      durationMinutes: 60,
-      deadline: "2026-06-08T00:00:00.000Z",
-      sessionCount: 3,
-    };
-    const result = await service.create(dto, user);
-
-    expect(seriesCreate).toHaveBeenCalledTimes(1);
-    expect(seriesCreate.mock.calls[0][0].data.type).toBe("TASK");
-    expect(seriesCreate.mock.calls[0][0].data.rrule).toBeNull();
-    expect(sessionCreate).toHaveBeenCalledTimes(3);
-    expect(placement.placeSeriesOnCreate).toHaveBeenCalledWith({
-      user,
-      seriesId: "series-1",
-      members: [
-        { id: "s-1", durationMinutes: 60 },
-        { id: "s-2", durationMinutes: 60 },
-        { id: "s-3", durationMinutes: 60 },
-      ],
-      deadline: new Date("2026-06-08T00:00:00.000Z"),
-      now: expect.any(Date),
-    });
-    expect(result.sessions).toHaveLength(3);
-    expect(result.sessions!.map((s) => s.scheduledStartTime)).toEqual([
-      "2026-06-02T09:00:00.000Z",
-      "2026-06-05T09:00:00.000Z",
-      null,
-    ]);
-    // Top-level fields mirror the first session.
-    expect(result.id).toBe("s-1");
-    // All 3 CREATE events are tagged with the shared series id, which also
-    // rides back on every response row and groups the batch for revert.
-    expect(result.sessions!.every((s) => s.seriesId === "series-1")).toBe(true);
-    const seriesIds = eventCreate.mock.calls.map(
-      (c) => (c[0].data as { seriesId?: string }).seriesId,
-    );
-    expect(seriesIds).toEqual(["series-1", "series-1", "series-1"]);
-  });
-
   it("TASK: rejects and creates nothing when no slot fits before the deadline", async () => {
     const sessionCreate = jest.fn();
     const eventCreate = jest.fn();
@@ -447,47 +446,6 @@ describe("SessionsService.create", () => {
     expect(sessionCreate).not.toHaveBeenCalled();
     expect(eventCreate).not.toHaveBeenCalled();
     expect(placement.placeOnCreate).not.toHaveBeenCalled();
-  });
-
-  it("TASK series: rejects and creates nothing when any member has no feasible slot", async () => {
-    const sessionCreate = jest.fn();
-    const seriesCreate = jest.fn();
-    const eventCreate = jest.fn();
-    const prisma = {
-      $transaction: (fn: (t: unknown) => unknown) =>
-        fn({
-          session: { create: sessionCreate },
-          sessionEvent: { create: eventCreate },
-          sessionSeries: { create: seriesCreate },
-        }),
-    };
-    const placement = fakeTaskPlacement();
-    placement.canPlaceSeries.mockResolvedValue(false);
-    const service = await makeService(
-      prisma,
-      fakeTagsService(),
-      placement,
-      fakeSchedulingFeedback(),
-    );
-
-    const dto: CreateSessionDto = {
-      type: "TASK",
-      title: "Exam prep",
-      durationMinutes: 60,
-      deadline: "2026-06-08T00:00:00.000Z",
-      sessionCount: 5,
-    };
-
-    await expect(service.create(dto, user)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-    expect(placement.canPlaceSeries).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionCount: 5, durationMinutes: 60 }),
-    );
-    expect(seriesCreate).not.toHaveBeenCalled();
-    expect(sessionCreate).not.toHaveBeenCalled();
-    expect(eventCreate).not.toHaveBeenCalled();
-    expect(placement.placeSeriesOnCreate).not.toHaveBeenCalled();
   });
 
   it("ASSIGNMENT: pins scheduledStartTime, leaves deadline null, never runs a placer", async () => {
@@ -534,6 +492,7 @@ describe("SessionsService.create", () => {
       deadline: null,
       rrule: "FREQ=WEEKLY;BYDAY=MO",
       exdates: [],
+      skippedFrom: null,
       userId: user.id,
     };
     const created = session({
@@ -586,6 +545,7 @@ describe("SessionsService.create", () => {
       deadline: null,
       rrule: "FREQ=WEEKLY;BYDAY=MO,WE",
       exdates: [],
+      skippedFrom: null,
       userId: user.id,
     };
     const created = session({
@@ -665,6 +625,7 @@ describe("SessionsService.list", () => {
       deadline: null,
       rrule: "FREQ=DAILY",
       exdates: [],
+      skippedFrom: null,
       userId: user.id,
     };
     const rep = session({
@@ -707,6 +668,7 @@ describe("SessionsService.list", () => {
       deadline: null,
       rrule: "FREQ=DAILY",
       exdates: [],
+      skippedFrom: null,
       userId: user.id,
     };
     const rep = session({
@@ -853,6 +815,7 @@ describe("SessionsService.list", () => {
       deadline: null,
       rrule: "FREQ=DAILY",
       exdates: [],
+      skippedFrom: null,
       userId: user.id,
     };
     const rep = session({
@@ -997,10 +960,158 @@ describe("SessionsService.suggestions", () => {
 });
 
 describe("SessionsService.findById", () => {
+  describe("prep target", () => {
+    it("returns the exam a plan prepares for", async () => {
+      const plan = session({ id: "plan-1", prepForSessionId: "exam-1" });
+      const exam = session({ id: "exam-1", type: "EXAM", title: "Final" });
+      const findFirst = jest
+        .fn()
+        .mockResolvedValueOnce(plan)
+        .mockResolvedValueOnce(exam);
+      const service = await makeService(
+        { session: { findFirst, findMany: jest.fn().mockResolvedValue([]) } },
+        fakeTagsService(),
+        fakeTaskPlacement(),
+        fakeSchedulingFeedback(),
+      );
+
+      const res = await service.findById("plan-1", user);
+
+      expect(res.prepTarget).toMatchObject({ id: "exam-1", title: "Final" });
+    });
+
+    it("keeps the occurrence id and start for a recurring lecture", async () => {
+      const at = new Date("2026-09-14T07:00:00.000Z");
+      const plan = session({
+        id: "plan-1",
+        prepForSessionId: "lec-1",
+        prepForOccurrenceStart: at,
+      });
+      const lecture = session({
+        id: "lec-1",
+        type: "LECTURE",
+        seriesId: "series-2",
+        scheduledStartTime: new Date("2026-09-07T07:00:00.000Z"),
+      });
+      const findFirst = jest
+        .fn()
+        .mockResolvedValueOnce(plan)
+        .mockResolvedValueOnce(lecture);
+      const service = await makeService(
+        { session: { findFirst, findMany: jest.fn().mockResolvedValue([]) } },
+        fakeTagsService(),
+        fakeTaskPlacement(),
+        fakeSchedulingFeedback(),
+      );
+
+      const res = await service.findById("plan-1", user);
+
+      expect(res.prepTarget).toMatchObject({
+        id: "series-2::2026-09-14T07:00:00.000Z",
+        scheduledStartTime: "2026-09-14T07:00:00.000Z",
+      });
+    });
+
+    it("is null for a session that is not a plan", async () => {
+      const findFirst = jest.fn().mockResolvedValue(session({ id: "s-1" }));
+      const service = await makeService(
+        { session: { findFirst, findMany: jest.fn().mockResolvedValue([]) } },
+        fakeTagsService(),
+        fakeTaskPlacement(),
+        fakeSchedulingFeedback(),
+      );
+
+      expect((await service.findById("s-1", user)).prepTarget).toBeNull();
+    });
+  });
+
+  describe("next prep occurrence", () => {
+    const series = {
+      id: "series-2",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "LECTURE" as const,
+      deadline: null,
+      rrule: "FREQ=WEEKLY;BYDAY=MO,WE",
+      exdates: [],
+      skippedFrom: null as Date | null,
+      userId: user.id,
+    };
+    const rep = (over: Partial<typeof series> = {}) =>
+      session({
+        id: "lec-1",
+        type: "LECTURE",
+        deadline: null,
+        seriesId: "series-2",
+        series: { ...series, ...over },
+        scheduledStartTime: new Date("2026-09-07T07:00:00.000Z"),
+      });
+    const MONDAY = "series-2::2026-09-14T07:00:00.000Z";
+
+    async function detail(opts: {
+      row: SessionRow;
+      states?: unknown[];
+      taken?: unknown;
+    }) {
+      const prisma = {
+        session: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValueOnce(opts.row)
+            .mockResolvedValue(opts.taken ?? null),
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        sessionOccurrenceState: {
+          findMany: jest.fn().mockResolvedValue(opts.states ?? []),
+        },
+      };
+      const service = await makeService(
+        prisma,
+        fakeTagsService(),
+        fakeTaskPlacement(),
+        fakeSchedulingFeedback(),
+      );
+      return service.findById(MONDAY, user);
+    }
+
+    it("is the next class when it is free", async () => {
+      const res = await detail({ row: rep() });
+      expect(res.nextPrepOccurrenceStart).toBe("2026-09-16T07:00:00.000Z");
+    });
+
+    it("steps over a class the student skipped", async () => {
+      const res = await detail({
+        row: rep(),
+        states: [
+          {
+            seriesId: "series-2",
+            occurrenceStart: new Date("2026-09-16T07:00:00.000Z"),
+            completedAt: null,
+            skipped: true,
+          },
+        ],
+      });
+      expect(res.nextPrepOccurrenceStart).toBe("2026-09-21T07:00:00.000Z");
+    });
+
+    it("is null when the rest of the course is skipped", async () => {
+      const res = await detail({
+        row: rep({ skippedFrom: new Date("2026-09-14T07:00:00.000Z") }),
+      });
+      expect(res.nextPrepOccurrenceStart).toBeNull();
+    });
+
+    it("is null when the next class already has a prep plan", async () => {
+      const res = await detail({ row: rep(), taken: { id: "prep-9" } });
+      expect(res.nextPrepOccurrenceStart).toBeNull();
+    });
+  });
+
   it("returns the mapped session when found", async () => {
     const row = session({ id: "session-1" });
     const findFirst = jest.fn().mockResolvedValue(row);
-    const prisma = { session: { findFirst } };
+    const prep = session({ id: "prep-1", prepForSessionId: "session-1" });
+    const findMany = jest.fn().mockResolvedValue([prep]);
+    const prisma = { session: { findFirst, findMany } };
     const service = await makeService(
       prisma,
       fakeTagsService(),
@@ -1010,6 +1121,15 @@ describe("SessionsService.findById", () => {
 
     const result = await service.findById("session-1", user);
     expect(result.id).toBe("session-1");
+    expect(result.prepSessions.map((p) => p.id)).toEqual(["prep-1"]);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          prepForSessionId: "session-1",
+          prepForOccurrenceStart: null,
+        }),
+      }),
+    );
   });
 
   it("throws NotFoundException when missing", async () => {
@@ -1078,50 +1198,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     expect(batch).toHaveBeenCalledWith(["del-events", "del-sessions"]);
   });
 
-  it("TASK series: a placement that throws discards every member and the series", async () => {
-    const rows = [1, 2].map((i) =>
-      session({ id: `s-${i}`, seriesId: "series-1", sessionIndex: i }),
-    );
-    let n = 0;
-    const { prisma, discard, batch } = prismaForDiscard({
-      sessionSeries: {
-        create: jest.fn().mockResolvedValue({ id: "series-1" }),
-      },
-      session: { create: jest.fn(() => Promise.resolve(rows[n++])) },
-      sessionEvent: { create: jest.fn().mockResolvedValue({}) },
-    });
-    const placement = fakeTaskPlacement();
-    placement.placeSeriesOnCreate.mockRejectedValue(new Error("down"));
-    const service = await makeService(prisma, fakeTagsService(), placement);
-
-    await expect(
-      service.create(
-        {
-          type: "TASK",
-          title: "T",
-          durationMinutes: 60,
-          sessionCount: 2,
-          deadline: "2026-06-12T17:00:00.000Z",
-        },
-        user,
-      ),
-    ).rejects.toThrow("down");
-
-    expect(discard.session.deleteMany).toHaveBeenCalledWith({
-      where: { userId: user.id, id: { in: ["s-1", "s-2"] } },
-    });
-    expect(discard.sessionSeries.deleteMany).toHaveBeenCalledWith({
-      where: { userId: user.id, id: "series-1" },
-    });
-    expect(batch).toHaveBeenCalledWith([
-      "del-events",
-      "del-sessions",
-      "del-series",
-    ]);
-  });
-});
-
-describe("SessionsService.update", () => {
   it("rejects PATCH scheduledStartTime: null on a TASK (400) and writes nothing", async () => {
     const existing = session({
       id: "session-1",
@@ -1334,79 +1410,6 @@ describe("SessionsService.update", () => {
     expect(result.sessions).toBeUndefined();
   });
 
-  it("a deadline change on a series member redistributes the whole series", async () => {
-    const memberRows = [
-      session({
-        id: "s-1",
-        seriesId: "series-1",
-        sessionIndex: 1,
-        sessionTotal: 2,
-        series: {
-          id: "series-1",
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-          type: "TASK",
-          deadline: new Date("2026-06-20T00:00:00.000Z"),
-          rrule: null,
-          exdates: [],
-          userId: user.id,
-        },
-      }),
-      session({
-        id: "s-2",
-        seriesId: "series-1",
-        sessionIndex: 2,
-        sessionTotal: 2,
-      }),
-    ];
-    const updated = {
-      ...memberRows[0],
-      deadline: new Date("2026-06-12T00:00:00.000Z"),
-    };
-    const findFirst = jest.fn().mockResolvedValue(memberRows[0]);
-    const update = jest.fn().mockResolvedValue(updated);
-    const findMany = jest.fn().mockResolvedValue(memberRows);
-    const prisma = {
-      $transaction: (arg: unknown) =>
-        typeof arg === "function"
-          ? (arg as (t: unknown) => unknown)({
-              session: { findFirst, update },
-              sessionEvent: { create: jest.fn().mockResolvedValue({}) },
-            })
-          : Promise.all(arg as Promise<unknown>[]),
-      session: { findMany, findFirst },
-    };
-    const placement = fakeTaskPlacement();
-    placement.redistributeSeries.mockResolvedValue([
-      { id: "s-1", scheduledStartTime: new Date("2026-06-02T09:00:00.000Z") },
-      { id: "s-2", scheduledStartTime: new Date("2026-06-06T09:00:00.000Z") },
-    ]);
-    const service = await makeService(
-      prisma,
-      fakeTagsService(),
-      placement,
-      fakeSchedulingFeedback(),
-    );
-
-    const result = await service.update(
-      "s-1",
-      { deadline: "2026-06-12T00:00:00.000Z" },
-      user,
-    );
-
-    expect(placement.redistributeSeries).toHaveBeenCalledTimes(1);
-    expect(placement.redistributeSeries.mock.calls[0][0]).toMatchObject({
-      user,
-      seriesId: "series-1",
-      newDeadline: new Date("2026-06-12T00:00:00.000Z"),
-    });
-    expect(result.sessions).toHaveLength(2);
-    expect(result.sessions!.map((s) => s.scheduledStartTime)).toEqual([
-      "2026-06-02T09:00:00.000Z",
-      "2026-06-06T09:00:00.000Z",
-    ]);
-    expect(placement.placeOnDeadlineChange).not.toHaveBeenCalled();
-  });
-
   it("throws NotFoundException when the session doesn't belong to the user", async () => {
     const findFirst = jest.fn().mockResolvedValue(null);
     const prisma = prismaWithTx({
@@ -1474,6 +1477,7 @@ describe("SessionsService.remove", () => {
       id: "series-1",
       rrule: "FREQ=DAILY",
       exdates: [],
+      skippedFrom: null,
     });
     const seriesUpdate = jest.fn().mockResolvedValue({});
     const del = jest.fn();
@@ -1507,6 +1511,7 @@ describe("SessionsService.remove", () => {
       id: "series-1",
       rrule: "FREQ=DAILY",
       exdates: ["2026-09-03T09:00:00.000Z"],
+      skippedFrom: null,
     });
     const seriesUpdate = jest.fn();
     const prisma = {
@@ -1580,6 +1585,7 @@ describe("SessionsService.truncateSeriesFrom", () => {
       id: "series-1",
       rrule: "FREQ=WEEKLY;BYDAY=MO",
       exdates: ["2026-09-07T09:00:00.000Z", "2026-10-12T09:00:00.000Z"],
+      skippedFrom: null,
       sessions: [
         {
           id: "rep-1",
@@ -1629,6 +1635,7 @@ describe("SessionsService.truncateSeriesFrom", () => {
       id: "series-1",
       rrule: "FREQ=DAILY",
       exdates: [],
+      skippedFrom: null,
       sessions: [
         {
           id: "rep-1",

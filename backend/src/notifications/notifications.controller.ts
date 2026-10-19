@@ -135,7 +135,7 @@ export class NotificationsController {
     await this.notifications.markActionTaken(user, id);
     return {
       success: true,
-      message: `Rescheduled ${result.rescheduled.length} task(s)`,
+      message: `Rescheduled ${result.rescheduled.length} plan(s)`,
       data: {
         rescheduled: result.rescheduled.map((r) => ({
           id: r.id,

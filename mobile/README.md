@@ -37,6 +37,7 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 | Variable                | Used for                                                                      |
 | ----------------------- | ----------------------------------------------------------------------------- |
 | `EXPO_PUBLIC_API_URL`   | API base URL (`.env.local`; example `http://localhost:8000/api/v1`)           |
+| `EXPO_PUBLIC_MAPS_URL`  | Optional. Map base URL; defaults to `<API origin>/maps` |
 | `EXPO_IOS_BUNDLE_ID`    | Override iOS bundle id (default `com.zenflow.app`) for personal-team builds   |
 | `EXPO_APPLE_TEAM_ID`    | Apple team for local device builds (set by `pnpm ios:personal-team`)          |
 
@@ -65,9 +66,9 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 mobile/
 ├── app/            # Expo Router: _layout (Stack.Protected guards), (auth), (onboarding), (app) tabs, task/, notifications
 ├── api/            # the only HTTP layer: auth, tasks, users, tags, files, devices, integrations, notifications
-├── components/     # ui/, primitives/ (.native/.web), calendar/, tasks/ (+ form/), settings/, checklist/, onboarding/
-├── hooks/          # use-user-store, use-task-form, use-checklist, use-notifications, use-push-registration, ...
-├── lib/            # api-client, session, i18n*, push, blocks, overlap, date math, checklist, spotlight, ...
+├── components/     # ui/, primitives/ (.native/.web), calendar/, tasks/ (+ form/), settings/, onboarding/
+├── hooks/          # use-user-store, use-task-form, use-notifications, use-push-registration, ...
+├── lib/            # api-client, session, i18n*, push, blocks, overlap, date math, ...
 ├── plugins/        # Expo config plugins: withAndroidBuildFixes, withIosBuildFixes
 ├── scripts/        # iOS personal-team helpers
 └── global.css, tailwind.config.ts, metro.config.js, babel.config.js   # NativeWind wiring
@@ -95,15 +96,6 @@ A calendar block opens its detail sheet in place (`components/calendar/session-d
 Session model, series-scope editing, recurrence and reschedule match web: see
 [ADR-0002](../docs/adr/0002-scheduling-simplification.md).
 Task composer is `components/tasks/composer/` (fields in `composer-fields.tsx`, reminders in `reminder-field.tsx`, hidden for `DND`); quick-add parsing is `lib/task-parser.ts`; labels and the no-duplicate rule come from `@zenflow/core`.
-
-## Getting started checklist
-
-- A "Getting started" pill in the calendar header ([`components/checklist/getting-started.tsx`](components/checklist/getting-started.tsx)) opens a sheet of three steps.
-- A step ticks itself via `completeStep(id)` ([`hooks/use-checklist.ts`](hooks/use-checklist.ts)) where the action succeeds.
-- Steps and copy: [`lib/checklist.ts`](lib/checklist.ts). Ids: `CHECKLIST_STEPS` in `@zenflow/shared`; retired ids stay in `LEGACY_TIP_IDS` so stored progress still validates.
-- Done steps and `checklist-hidden` live on `User.seenTips` via `PATCH /users/update/basic-info { seenTip }`, so progress follows the user.
-- The pill disappears when every step is done or hidden.
-- Steps needing a task (`STEP_NEEDS`) point at the + button until one exists. Placement math: [`lib/spotlight.ts`](lib/spotlight.ts).
 
 ## Push and live notifications
 

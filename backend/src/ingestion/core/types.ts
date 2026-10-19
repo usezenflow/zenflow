@@ -46,6 +46,12 @@ export interface ParsedLmsItem extends ParsedBlock {
    * the session. Null when the event carried no usable `course` block.
    */
   lmsCourse: ParsedLmsCourse | null;
+  /**
+   * Set on an `ASSIGNMENT` only. True when the calendar event no longer offers
+   * the "add submission" action, i.e. the student has submitted (see
+   * `parse-lms.ts`).
+   */
+  submitted?: boolean;
 }
 
 /** A distinct Moodle course seen in a calendar response — upserted as `LmsCourse`. */

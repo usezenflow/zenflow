@@ -46,12 +46,12 @@ export const options = {
 
 // Cumulative weights (%). W9 (auth) and W10 (sync) run as separate k6 processes.
 const MIX = [
-  [45, week],
-  [60, month],
-  [75, postTask],
-  [80, postSeries],
-  [88, edit],
-  [92, remove],
+  [62, week],
+  [86, month],
+  [88, postTask],
+  [89, postSeries],
+  [92, edit],
+  [93, remove],
   [94, infeasible],
   [100, settings],
 ];

@@ -139,3 +139,23 @@ describe("SchedulingFeedbackService.onFirstMove", () => {
     await expect(svc.onFirstMove("u1", "s1", 1n, 60)).resolves.toBeUndefined();
   });
 });
+
+describe("SchedulingFeedbackService.onPairwiseWin", () => {
+  it("folds a positive reward into the arm LinUCB proposed", async () => {
+    const { svc, bandit, armStates } = await makeSvc({});
+
+    await svc.onPairwiseWin("u1", "p1");
+
+    expect(bandit.update).toHaveBeenCalledWith("MORNING", X, 0.5, {
+      A: [1, 0, 0, 1],
+      b: [0.5, 0.5],
+    });
+    expect(armStates.save).toHaveBeenCalledWith("u1", "MORNING", [1], [0.5], 3);
+  });
+
+  it("does nothing when the proposal has no model pick", async () => {
+    const { svc, bandit } = await makeSvc({ proposal: null });
+    await svc.onPairwiseWin("u1", "p1");
+    expect(bandit.update).not.toHaveBeenCalled();
+  });
+});

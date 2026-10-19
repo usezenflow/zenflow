@@ -144,6 +144,10 @@ export interface DluFixtures {
   examRows: Record<string, FixtureExamRow[]>;
   /** `studentId` → DKHP registration events (the whole log, every term). */
   registHistory: Record<string, unknown[]>;
+  /** `studentId` → GET /api/student/marks years (every term, the student's own). */
+  marks: Record<string, unknown[]>;
+  /** `studentId` → GET /api/student/info and getstudyprogram bodies. */
+  profile: Record<string, { info: unknown; studyPrograms: unknown[] }>;
   yearTerm: unknown;
   lmsCourses: Map<number, FixtureLmsCourse>;
   /** `studentId` → Moodle course ids. */
@@ -176,6 +180,10 @@ export function loadDluFixtures(): DluFixtures {
   );
   const registHistory = load<Record<string, unknown[]>>(
     "portal-regist-history",
+  );
+  const marks = load<Record<string, unknown[]>>("portal-marks");
+  const profile = load<Record<string, { info: unknown; studyPrograms: unknown[] }>>(
+    "portal-profile",
   );
   const yearTerm = load<unknown>("portal-year-term");
   const lmsCourses = load<FixtureLmsCourse[]>("lms-courses");
@@ -227,6 +235,8 @@ export function loadDluFixtures(): DluFixtures {
     referenceTerm: timetable.hocky,
     examRows: exams.rows,
     registHistory,
+    marks,
+    profile,
     yearTerm,
     lmsCourses: courseById,
     enrollments: lmsEvents.enrolledCourses,

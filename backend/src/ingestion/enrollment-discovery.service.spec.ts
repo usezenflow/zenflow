@@ -8,6 +8,7 @@ import { EnrollmentDiscoveryService } from "./enrollment-discovery.service";
 import { IngestionJobsService } from "./ingestion-jobs.service";
 import type { PortalRegistHistoryRow } from "./core/parse-regist-history";
 import { IngestionScheduleService } from "./ingestion-schedule.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
 
 // ── in-memory Prisma double ────────────────────────────────────────────────
 
@@ -313,6 +314,7 @@ async function makeService(
 
   const module: TestingModule = await Test.createTestingModule({
     providers: [
+      { provide: UpstreamSessionCache, useValue: passThroughSessionCache },
       EnrollmentDiscoveryService,
       // The real jobs service over the fake Prisma — the deliberate seam: only
       // the network is mocked, so the job/item lifecycle is genuinely exercised.
@@ -346,6 +348,13 @@ async function makeService(
     revealCredentials,
   };
 }
+
+/** A session cache that always signs in, so these specs run without Redis. */
+const passThroughSessionCache = {
+  getOrLogin: (_userId: string, _kind: string, login: () => Promise<unknown>) =>
+    login(),
+  invalidate: jest.fn(),
+};
 
 describe("EnrollmentDiscoveryService — the kill switch", () => {
   it("does nothing at all when ingestion is disabled", async () => {

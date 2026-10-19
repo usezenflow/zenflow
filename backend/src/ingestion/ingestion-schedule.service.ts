@@ -46,17 +46,21 @@ type KindsAgree = SyncKindName extends IngestionSyncKind
 const _kindsAgree: KindsAgree = true;
 void _kindsAgree;
 
+/** How many due rows past the batch a preferred claim may scan for its users. */
+const PREFERRED_WINDOW = 10;
+
 /** Every kind's default target period, in ms, and the env var that overrides it. */
 const PLAN_DEFAULTS: Record<
   SyncKindName,
   { env: string; defaultMs: number; order: number }
 > = {
   // Discovery first, and cheap: one DKHP history call answers "which sections is
-  // this student in" for a whole term, so the period is a semester and the rows
-  // spread across it through the claim batching.
+  // this student in" for a whole term. A clean pass parks the row until the next
+  // term's lookahead (`markDiscovered`), so the hourly period only paces the
+  // changeover: every student is discovered within about an hour of a term opening.
   PORTAL_DISCOVERY: {
     env: "INGESTION_PORTAL_DISCOVERY_PERIOD_MS",
-    defaultMs: 120 * 24 * 60 * 60_000,
+    defaultMs: 60 * 60_000,
     order: 1,
   },
   LMS_DISCOVERY: {
@@ -64,17 +68,19 @@ const PLAN_DEFAULTS: Record<
     defaultMs: 24 * 60 * 60_000,
     order: 2,
   },
-  // A published timetable moves a handful of times a term, so daily is already
-  // generous — and the walk is the expensive one (up to ~22 requests).
+  // Rolling every 3 h while discovery is still filling in; once 95% of students are
+  // discovered the ticker moves each row to the start of the next ISO week
+  // (`timetableNextDue`). The walk is the expensive one (up to ~22 requests).
   PORTAL_TIMETABLE: {
     env: "INGESTION_TIMETABLE_PERIOD_MS",
-    defaultMs: 24 * 60 * 60_000,
+    defaultMs: 3 * 60 * 60_000,
     order: 10,
   },
-  // One request answers a whole term, so the period is about freshness alone.
+  // One request answers a whole term. Live only in the exam window (the ticker gates
+  // it), hourly until the response covers the student's enrolment, then parked.
   PORTAL_EXAM: {
     env: "INGESTION_EXAM_PERIOD_MS",
-    defaultMs: 24 * 60 * 60_000,
+    defaultMs: 60 * 60_000,
     order: 11,
   },
   // The only genuinely frequent kind: an assignment deadline can be published
@@ -82,7 +88,7 @@ const PLAN_DEFAULTS: Record<
   // time to react.
   LMS_CALENDAR: {
     env: "INGESTION_LMS_CALENDAR_PERIOD_MS",
-    defaultMs: 60 * 60_000,
+    defaultMs: 15 * 60_000,
     order: 12,
   },
 };
@@ -123,6 +129,8 @@ export interface PassOutcome {
   ok: boolean;
   /** True when the pass issued no upstream requests at all. */
   servedFromCache: boolean;
+  /** A clean pass that has nothing left to fetch before this instant sets the row's `nextDueAt` to it. */
+  deferUntil?: Date;
 }
 
 @Injectable()
@@ -267,12 +275,20 @@ export class IngestionScheduleService {
     batchSize: number,
     /** Extra filter, e.g. "enrolment already discovered" for a walk kind. */
     gate: Prisma.IngestionScheduleWhereInput = {},
+    /** When a claimed row is due again; defaults to one target period out. */
+    nextDueAt?: Date,
+    /** User ids to claim first, in order; the rest follow in the usual order. */
+    preferred: readonly string[] = [],
   ): Promise<ClaimedTarget[]> {
     if (batchSize <= 0) return [];
     const plan = this.planFor(kind);
+    const rank = new Map(preferred.map((userId, index) => [userId, index]));
+    // Read a wider due window so the preferred users can be found in it.
+    const window = rank.size > 0 ? batchSize * PREFERRED_WINDOW : batchSize;
 
     const due = await this.prisma.ingestionSchedule.findMany({
       where: { kind: kind, nextDueAt: { lte: now }, ...gate },
+      take: window,
       // Never-synced first, then least recently synced; `id` breaks ties so a
       // population seeded at one instant drains in a stable order.
       orderBy: [
@@ -280,7 +296,6 @@ export class IngestionScheduleService {
         { nextDueAt: "asc" },
         { id: "asc" },
       ],
-      take: batchSize,
       select: {
         id: true,
         nextDueAt: true,
@@ -289,6 +304,15 @@ export class IngestionScheduleService {
         integration: { select: { userId: true } },
       },
     });
+    if (rank.size > 0) {
+      // Stable: rows the plan does not name keep their due order.
+      due.sort(
+        (a, b) =>
+          (rank.get(a.integration.userId) ?? preferred.length) -
+          (rank.get(b.integration.userId) ?? preferred.length),
+      );
+    }
+    due.splice(batchSize);
 
     const claimed: ClaimedTarget[] = [];
     for (const row of due) {
@@ -298,7 +322,7 @@ export class IngestionScheduleService {
         // update matches nothing and we simply skip the row.
         where: { id: row.id, nextDueAt: row.nextDueAt },
         data: {
-          nextDueAt: nextDueAfterRun(now, plan.targetPeriodMs),
+          nextDueAt: nextDueAt ?? nextDueAfterRun(now, plan.targetPeriodMs),
           lastClaimedAt: now,
         },
       });
@@ -403,6 +427,9 @@ export class IngestionScheduleService {
         ...(outcome.ok && outcome.servedFromCache
           ? { cacheHitStreak: { increment: 1 } }
           : { cacheHitStreak: 0 }),
+        ...(outcome.ok && outcome.deferUntil
+          ? { nextDueAt: outcome.deferUntil }
+          : {}),
       },
     });
   }
@@ -495,6 +522,22 @@ export class IngestionScheduleService {
       data: { nextDueAt: now },
     });
     return count;
+  }
+
+  /**
+   * Share of portal integrations whose discovery has covered `term` (0 to 1);
+   * the timetable drops from rolling to weekly once this is high enough.
+   */
+  async discoveredShare(term: string): Promise<number> {
+    const [total, done] = await Promise.all([
+      this.prisma.ingestionSchedule.count({
+        where: { kind: "PORTAL_DISCOVERY" },
+      }),
+      this.prisma.ingestionSchedule.count({
+        where: { kind: "PORTAL_DISCOVERY", lastSuccessTerm: term },
+      }),
+    ]);
+    return total === 0 ? 0 : done / total;
   }
 
   /** How many schedule rows exist for `kind` — the batch-sizing population. */

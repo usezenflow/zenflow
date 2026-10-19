@@ -14,6 +14,8 @@ x-loadtest-env: &loadtest-env
   LMS_URL: http://fake-dlu:4100
   PORTAL_API_URL: http://fake-dlu:4100
   PORTAL_API_KEY: fake-portal-key
+  DKHP_API_URL: http://fake-dlu:4100
+  DKHP_API_KEY: fake-dkhp-key
 
 x-fake-dlu-net: &fake-dlu-net
   networks:

@@ -60,6 +60,8 @@ export function format(
           .replace(/^MMMM yyyy$/, "'tháng' M/yyyy")
           .replace(/h:mm a/g, "HH:mm")
           .replace(/h:mm/g, "HH:mm")
+          .replace(/EEE d MMM/g, "EEE, d/M")
+          .replace(/d MMM yyyy/g, "d/M/yyyy")
           .replace(/EEE MMM d/g, "EEE, d/M")
           .replace(/MMM d yyyy/g, "d/M/yyyy")
           .replace(/MMMM d/g, "d MMMM")

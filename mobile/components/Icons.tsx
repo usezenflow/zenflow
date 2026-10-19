@@ -101,6 +101,11 @@ import {
   RefreshCw,
   RotateCw,
   Scale,
+  Bike,
+  Car,
+  Footprints,
+  createLucideIcon,
+  LocateFixed,
   Search,
   Send,
   Settings,
@@ -122,6 +127,13 @@ import {
   UserPlus,
   Users,
   X,
+  Crown,
+  Egg,
+  Gem,
+  Sprout,
+  Target,
+  Trophy,
+  Zap,
 } from "lucide-react-native";
 import { cssInterop } from "nativewind";
 function interopIcon(icon: LucideIcon) {
@@ -136,6 +148,13 @@ function interopIcon(icon: LucideIcon) {
   });
 }
 interopIcon(Settings);
+interopIcon(Crown);
+interopIcon(Egg);
+interopIcon(Gem);
+interopIcon(Sprout);
+interopIcon(Target);
+interopIcon(Trophy);
+interopIcon(Zap);
 interopIcon(Sun);
 interopIcon(Sunrise);
 interopIcon(Sunset);
@@ -181,6 +200,20 @@ interopIcon(AlignLeft);
 interopIcon(Info);
 interopIcon(X);
 interopIcon(Search);
+interopIcon(LocateFixed);
+interopIcon(Bike);
+interopIcon(Car);
+interopIcon(Footprints);
+
+/** Lucide's motorbike, which the installed version predates. */
+const Motorbike = createLucideIcon("Motorbike", [
+  ["path", { d: "m18 14-1-3", key: "3790ln" }],
+  ["path", { d: "m3 9 6 2a2 2 0 0 1 2-2h2a2 2 0 0 1 1.99 1.81", key: "1cfmyg" }],
+  ["path", { d: "M8 17h3a1 1 0 0 0 1-1 6 6 0 0 1 6-6 1 1 0 0 0 1-1v-.75A5 5 0 0 0 17 5", key: "1ycpfs" }],
+  ["circle", { cx: "19", cy: "17", r: "3", key: "1o7tz1" }],
+  ["circle", { cx: "5", cy: "17", r: "3", key: "1kv5t1" }],
+]);
+interopIcon(Motorbike);
 interopIcon(ChevronRight);
 interopIcon(ChevronLeft);
 interopIcon(ChevronUp);
@@ -351,6 +384,11 @@ export {
   RefreshCw,
   RotateCw,
   Scale,
+  Bike,
+  Car,
+  Footprints,
+  Motorbike,
+  LocateFixed,
   Search,
   Sparkles,
   Sun,
@@ -378,4 +416,11 @@ export {
   Moon,
   Palette,
   Smartphone,
+  Crown,
+  Egg,
+  Gem,
+  Sprout,
+  Target,
+  Trophy,
+  Zap,
 };

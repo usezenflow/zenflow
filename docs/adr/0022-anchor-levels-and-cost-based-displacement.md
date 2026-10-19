@@ -1,6 +1,6 @@
 # ADR-0022: Anchor levels and cost-based displacement
 
-**Status:** accepted
+**Status:** superseded by ADR-0028
 **Date:** 2026-10-14
 **Issue:** #250 (Nest side: #251)
 

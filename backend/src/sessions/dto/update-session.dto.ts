@@ -7,6 +7,7 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -19,9 +20,9 @@ import type {
   UpdateScope,
   UpdateSessionInput,
 } from "@zenflow/shared";
-import { TIME_GRANULARITY } from "../../common/constants";
+import { MAX_COMMUTE_MINUTES, TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
-import { INFEASIBLE_POLICIES, MAX_SESSION_COUNT } from "./create-session.dto";
+import { INFEASIBLE_POLICIES } from "./create-session.dto";
 import {
   MAX_REMINDER_MINUTES,
   MAX_REMINDERS_PER_SESSION,
@@ -51,6 +52,51 @@ export class UpdateSessionDto implements UpdateSessionInput {
   @MaxLength(200, { message: "Location must be at most 200 characters." })
   location?: string | null;
 
+  /** Map point of the location, set together with `location`. `null` clears it. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  locationLat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  locationLng?: number | null;
+
+  /** Where the commute starts. `null` clears it; omit to leave unchanged. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(200, { message: "Origin must be at most 200 characters." })
+  originLocation?: string | null;
+
+  /** Map point of the origin, set together with `originLocation`. `null` clears it. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  originLat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  originLng?: number | null;
+
+  /** Travel minutes between origin and location, each way. `null` clears it. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsInt()
+  @Min(0)
+  @Max(MAX_COMMUTE_MINUTES)
+  commuteMinutes?: number | null;
+
   @IsOptional()
   @IsInt()
   @Min(TIME_GRANULARITY)
@@ -62,17 +108,10 @@ export class UpdateSessionDto implements UpdateSessionInput {
   @IsISO8601()
   deadline?: string;
 
-  /**
-   * New total sitting count for a TASK series (TASK only). Raising it grows
-   * the series; lowering it shrinks it (rejected if a to-be-removed sitting
-   * already started). A plain single TASK is promoted into a series when
-   * raised above 1.
-   */
+  /** A prep `TASK` only: the lecture occurrence it prepares for. */
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(MAX_SESSION_COUNT)
-  sessionCount?: number;
+  @IsISO8601()
+  prepForOccurrenceStart?: string;
 
   @IsOptional()
   @IsArray()

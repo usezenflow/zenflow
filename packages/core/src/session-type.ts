@@ -6,7 +6,7 @@ import { zonedDate } from "./tz";
 /**
  * Per-session-type presentation — human label and Tailwind tint classes, keyed
  * by the raw {@link SessionType} (not the derived `SessionCardState`, so a
- * conflicting `TASK` still reads as a Task). Classes come from
+ * conflicting `TASK` still reads as a Plan). Classes come from
  * {@link SESSION_TONE_CLASSES} so a badge, a stripe and a month pill agree.
  * Per-type icons live in each app's `session-type-badge` component (they pull
  * in a platform icon set this RN-and-DOM-free module must not).
@@ -27,7 +27,7 @@ const meta = (label: string, type: SessionType): SessionTypeMeta => {
 };
 
 export const SESSION_TYPE_META: Record<SessionType, SessionTypeMeta> = {
-  TASK: meta("Task", "TASK"),
+  TASK: meta("Plan", "TASK"),
   ASSIGNMENT: meta("Assignment", "ASSIGNMENT"),
   EXAM: meta("Exam", "EXAM"),
   LECTURE: meta("Lecture", "LECTURE"),

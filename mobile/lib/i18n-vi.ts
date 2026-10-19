@@ -16,7 +16,7 @@ export default {
   "Open page": "Mở trang",
   "Auto-scheduled": "Tự động xếp lịch",
   "Tell Zenflow what needs doing. It finds the time.":
-    "Cứ quăng task vào, Zenflow lo phần giờ giấc.",
+    "Cứ quăng kế hoạch vào, Zenflow lo phần giờ giấc.",
   Account: "Tài khoản",
   "No conflict-free slot before the deadline":
     "Hết giờ trống trước deadline rồi",
@@ -121,7 +121,6 @@ export default {
   "New session": "Lịch mới",
   "Next month": "Tháng sau",
   "No matches": "Không thấy gì hết",
-  "No tasks": "Chưa có task",
   None: "Không nhắc",
   "Not connected": "Chưa kết nối",
   "Not now": "Để sau",
@@ -138,7 +137,6 @@ export default {
   "Open system settings": "Mở cài đặt hệ thống",
   Overdue: "Quá hạn",
   Password: "Mật khẩu",
-  "Pick your tags": "Chọn tag",
   Preferences: "Tùy chọn",
   "Press and hold a session on your calendar to move or resize it.":
     "Nhấn giữ một lịch để di chuyển hoặc thay đổi thời lượng.",
@@ -280,7 +278,7 @@ export default {
   Fri: "T6",
   Sat: "T7",
   Sun: "CN",
-  Task: "Task",
+  Plan: "Kế hoạch",
   Assignment: "Bài tập",
   Exam: "Kỳ thi",
   Lecture: "Buổi học",
@@ -311,7 +309,7 @@ export default {
   "cont. → {time}": "tiếp → {time}",
   "due {date}": "hạn {date}",
   "{category} conflict": "Trùng lịch {category}",
-  "Rescheduled {count} tasks": "Đã xếp lại {count} task",
+  "Rescheduled {count} plans": "Đã xếp lại {count} kế hoạch",
   "Deleted {count} notifications": "Đã xóa {count} thông báo",
   "Sent to {email}": "Đã gửi đến {email}",
   "Created {date}": "Tạo ngày {date}",
@@ -331,7 +329,7 @@ export default {
   "Sign in to your {provider}": "Đăng nhập {provider}",
   "Sign in to see your schedule": "Đăng nhập để xem lịch",
   "Update your {provider} login": "Cập nhật đăng nhập {provider}",
-  "Task created": "Đã tạo task",
+  "Plan created": "Đã tạo kế hoạch",
   "{count} sittings have an alternative": "{count} buổi có giờ thay thế",
   "All {total} are already scheduled. Swap any you like.":
     "Cả {total} buổi đã có lịch. Bạn có thể đổi buổi tùy ý.",
@@ -363,8 +361,8 @@ export default {
   "Connecting…": "Đang kết nối…",
   "{now}, nothing scheduled":
     "{now}, chưa có lịch",
-  "{now}, {count} tasks today":
-    "{now}, {count} task hôm nay",
+  "{now}, {count} plans today":
+    "{now}, {count} kế hoạch hôm nay",
   "{sign}{count} days": "{sign}{count} ngày",
   Forbidden: "Bạn không có quyền làm việc này.",
   "Provide both username and password to connect this provider for the first time.":
@@ -380,54 +378,34 @@ export default {
     "Không có chỗ trống trước deadline\nChọn deadline muộn hơn hoặc giảm số buổi rồi thử lại.",
   "Won't fit before the deadline\nPick a later deadline.":
     "Không đủ thời gian trước deadline\nChọn deadline muộn hơn.",
-  "Getting started":
-    "Làm quen nhanh",
-  "Getting started, {done} of {total} done":
-    "Làm quen nhanh, xong {done}/{total}",
-  "Show me: {title}":
-    "Chỉ mình: {title}",
-  "Create a task first.":
-    "Tạo một task trước đã.",
-  "Hide this checklist":
-    "Ẩn danh sách này",
-  "Got it":
-    "Ok, hiểu rồi",
   "Week view":
     "Chế độ tuần",
   "Month view":
     "Chế độ tháng",
-  "Switch day":
-    "Đổi ngày",
-  "Swipe the calendar, or tap a day at the top.":
-    "Vuốt lịch, hoặc chạm vào một ngày ở trên cùng.",
-  "Create a task":
-    "Tạo task",
-  "Tap +, or long-press an empty slot.":
-    "Chạm +, hoặc nhấn giữ một ô trống.",
-  "Move a task":
-    "Di chuyển task",
-  "Hold one of your tasks and drag it to reschedule in 15-minute steps.":
-    "Nhấn giữ một task của bạn rồi kéo để đổi lịch theo từng 15 phút.",
-  "Hold a task for more actions":
-    "Nhấn giữ task để xem thêm thao tác",
-  "Hold it without moving. Move to… changes the day.":
-    "Nhấn giữ mà không kéo. “Chuyển đến…” để đổi ngày.",
-  "Open the Month view":
-    "Mở chế độ tháng",
-  "Tap Month in the tab bar.":
-    "Chạm Tháng trên thanh tab.",
-  "Open a day":
-    "Mở một ngày",
-  "Tap a day in the month to see its tasks.":
-    "Chạm vào một ngày trong tháng để xem task của ngày đó.",
-  "Move a task to another day":
-    "Chuyển task sang ngày khác",
-  "Hold one of your tasks in the day's list, then drag it onto another day.":
-    "Nhấn giữ một task của bạn trong danh sách của ngày rồi kéo sang ngày khác.",
-  "Nice! You moved a task.": "Đỉnh! Bạn vừa dời một task.",
-  "Zenflow learns from every move to place tasks better.":
-    "Mỗi lần bạn dời, Zenflow lại hiểu bạn hơn một chút.",
   "Moved to {when}": "Đã chuyển sang {when}",
+  "Reschedule prep plans?": "Dời kế hoạch ôn bài?",
+  "Plan around the new lecture time.": "Xếp lại theo giờ học mới.",
+  "Prep plans rescheduled": "Đã dời kế hoạch ôn bài",
+  "Pick a time for your prep": "Chọn giờ ôn bài",
+  "Kept {when}": "Giữ lúc {when}",
+  "Prep": "Ôn bài",
+  "Preparing for": "Đang chuẩn bị cho",
+  "Mark done": "Đánh dấu xong",
+  "Skip recurring session": "Bỏ qua buổi lặp lại",
+  "Only {date} is skipped.": "Chỉ bỏ qua {date}.",
+  "Skipped from {date} to the end.": "Bỏ qua từ {date} đến hết.",
+  "Skip the whole course.": "Bỏ qua cả môn học.",
+  "Synced sessions can't be moved": "Không thể dời buổi đã đồng bộ",
+  "Skip it instead.": "Hãy bỏ qua buổi này.",
+  "Couldn't update prep plans": "Không cập nhật được kế hoạch ôn bài",
+  "Delete plan": "Xóa kế hoạch",
+  "Prep plans deleted": "Đã xóa kế hoạch ôn bài",
+  "Next class": "Buổi kế tiếp",
+  "Prep moved to {when}": "Đã chuyển ôn bài sang {when}",
+  "Keep your prep plan?": "Giữ kế hoạch ôn bài?",
+  "It stays unless you pick one.": "Kế hoạch được giữ nếu bạn không chọn.",
+  "Hold to mark done": "Nhấn giữ để đánh dấu xong",
+  "Couldn't reschedule prep plans": "Không dời được kế hoạch ôn bài",
   "{title}, {count} of {total} have alternatives":
     "{title}, {count}/{total} buổi có thời gian thay thế",
   "Pick a time, then confirm.":
@@ -448,8 +426,9 @@ export default {
     "Thêm buổi vào ngày này",
   "Tap to add a session":
     "Chạm để thêm buổi",
-  "Tap +, or tap an empty day.":
-    "Chạm +, hoặc chạm vào một ngày trống.",
+  "Prepare in advance": "Chuẩn bị trước",
+  "No free time before this": "Không còn giờ trống trước buổi này",
+  "Couldn't undo": "Không hoàn tác được",
   "Prepare for {title}":
     "Chuẩn bị cho {title}",
   "Nothing scheduled for this day":
@@ -468,7 +447,7 @@ export default {
   "Rescheduled {ok}, {failed} left": "Đã xếp lại {ok}, còn {failed}",
   "The rest still overlap. Move them by hand.":
     "Mấy cái còn lại vẫn trùng lịch. Dời tay giúp mình nha.",
-  "Couldn't reschedule tasks": "Chưa xếp lại được task",
+  "Couldn't reschedule plans": "Chưa xếp lại được kế hoạch",
   "Couldn't delete notifications": "Chưa xóa được thông báo",
   "Couldn't find that item": "Không tìm thấy mục này",
   "It's no longer on your calendar.": "Mục này không còn trên lịch của bạn.",
@@ -491,7 +470,7 @@ export default {
   "This session now ends past its due time.":
     "Lịch này giờ kết thúc sau deadline.",
   "Scheduled after deadline": "Xếp sau deadline",
-  "Moved {count} flexible tasks": "Đã dời {count} việc linh hoạt",
+  "Moved {count} flexible plans": "Đã dời {count} việc linh hoạt",
   "Zenflow is open to DLU students for now. Use your @dlu.edu.vn email.":
     "Hiện Zenflow chỉ dành cho sinh viên DLU. Dùng mail @dlu.edu.vn của bạn nha.",
   "Some sessions weren't moved": "Một số buổi chưa được dời",
@@ -528,13 +507,9 @@ export default {
     "Bật trong cài đặt hệ thống để được nhắc. Giờ thì thông báo vẫn đang tắt.",
   "Optional. Saved as your default reminder.":
     "Không bắt buộc. Lưu làm nhắc mặc định.",
-  "Tags keep your tasks organised. Tap the ones you like, add your own, and rename them later.":
-    "Tag giúp task gọn gàng hơn. Chạm để chọn tag gợi ý, thêm tag riêng, đổi tên sau cũng được.",
   "{count} selected, saved to your account":
     "Đã chọn {count}, lưu vào tài khoản của bạn",
   "Easy on the eyes at night": "Đỡ chói mắt ban đêm",
-  "How early should we remind you? You can change it per task.":
-    "Muốn được nhắc trước bao lâu? Mỗi task chỉnh riêng được.",
   "{provider} is taking too long. Try again in a bit.":
     "{provider} đang lag. Thử lại sau xíu nha.",
   "Couldn't reach {provider}. Try again in a bit.":
@@ -556,15 +531,12 @@ export default {
     "Lựa chọn của bạn giúp Zenflow hiểu khung giờ hợp với bạn. Các lịch khác vẫn giữ nguyên.",
   "Every notification will be removed for good. This can't be undone.":
     "Toàn bộ thông báo sẽ bay màu luôn, không lấy lại được.",
-  "Done {done}/{total}":
-    "Xong {done}/{total}",
   "Couldn't load this month": "Chưa tải được tháng này",
   "Couldn't load your day": "Chưa tải được lịch trong ngày",
   "Couldn't move that sitting": "Chưa chuyển được buổi này",
   "Couldn't move this session": "Chưa chuyển được lịch này",
   "Couldn't open this session": "Chưa mở được lịch này",
   "Couldn't record this choice": "Chưa lưu được lựa chọn này",
-  "Couldn't reschedule task": "Chưa xếp lại được task",
   "Couldn't save": "Chưa lưu được",
   "Couldn't sync": "Chưa đồng bộ được",
   "Couldn't update this session": "Chưa cập nhật được lịch này",
@@ -584,20 +556,96 @@ export default {
     "Chưa kết nối được DLU để kiểm tra tài khoản. Thử lại sau chút nha.",
   "Change it any time in Settings.":
     "Đổi lại lúc nào cũng được trong Cài đặt.",
-  "Daily plan": "Kế hoạch hằng ngày",
-  "Morning brief": "Tóm tắt buổi sáng",
-  "Classes and tasks today.": "Lớp học và việc hôm nay.",
-  "Evening check-in": "Check-in buổi tối",
-  "Mark today done or missed.": "Đánh dấu hôm nay xong hay bỏ lỡ.",
   Done: "Xong",
-  Missed: "Bỏ lỡ",
-  "Marked done": "Đã đánh dấu xong",
-  "Marked missed": "Đã đánh dấu bỏ lỡ",
   "Could not save. Try again.": "Chưa lưu được. Thử lại nha.",
   "Course colour": "Màu môn học",
   "Colour {n}": "Màu {n}",
   "Reset to automatic": "Đặt lại màu tự động",
   Calendar: "Lịch",
+  "{count} of {total} collected": "Đã thu phục {count} trên {total}",
+  "Start a study session to hatch an egg.":
+    "Bắt đầu một buổi học để ấp trứng.",
+  "Locked spirit": "Zendeck chưa mở",
+  Egg: "Trứng",
+  Hatch: "Ấp nở",
+  "Your egg is ready to hatch": "Trứng đã sẵn sàng nở",
+  "{count} of {total} starts to hatch": "Đã ấp {count} trên {total} buổi học",
+  "Could not hatch. Try again.": "Chưa ấp nở được. Thử lại nha.",
+  "New spirit": "Zendeck mới",
+  Companion: "Bạn đồng hành",
+  "Tap a spirit to see its ability.": "Chạm vào Zendeck để xem năng lực.",
+  Collection: "Bộ sưu tập",
+  Perks: "Đặc quyền",
+  "Power {power} of {max}": "Sức mạnh {power} trên {max}",
+  "Your egg is ready. Hatch it now.": "Trứng đã sẵn sàng. Ấp nở ngay nào!",
+  "Full collection. Legends are watching.": "Đã đủ bộ. Huyền thoại đang dõi theo bạn.",
+  "Start a study block to hatch your first spirit.":
+    "Bắt đầu một buổi học để ấp Zendeck đầu tiên.",
+  "{count} more starts until your next spirit": "Còn {count} buổi học nữa là có Zendeck mới",
+  "{points} power to unlock {perk}": "Còn {points} sức mạnh để mở {perk}",
+  "All perks unlocked": "Đã mở hết đặc quyền",
+  "Unlock path": "Lộ trình mở khóa",
+  "Next unlock": "Mở tiếp theo",
+  "{count} of {total} unlocked": "Đã mở {count} trên {total}",
+  "Every start counts. Your spirits grow with you.":
+    "Mỗi buổi học đều có giá trị. Zendeck lớn lên cùng bạn.",
+  "{count} of {total}": "{count} trên {total}",
+  Unlocked: "Đã mở",
+  Locked: "Chưa mở",
+  Common: "Thường",
+  Rare: "Hiếm",
+  Epic: "Sử thi",
+  Legendary: "Huyền thoại",
+  Ability: "Năng lực",
+  "Exam radar": "Radar kỳ thi",
+  "Zendeck spots each new exam and tells you when to start.": "Zendeck phát hiện kỳ thi mới và cho bạn biết khi nào nên bắt đầu.",
+  "Smart plans": "Kế hoạch thông minh",
+  "A ready-made study plan for every new exam and assignment, already placed in your week.":
+    "Kế hoạch ôn tập sẵn cho mỗi kỳ thi và bài tập mới, đã xếp vào tuần của bạn.",
+  "Focus mode": "Chế độ tập trung",
+  "Silences notifications during your study blocks.": "Tắt thông báo trong các buổi học của bạn.",
+  "Ask Zendeck": "Hỏi Zendeck",
+  "Chat to move, add or finish plans, and connect AI tools.": "Trò chuyện để dời, thêm hoặc hoàn thành kế hoạch, và kết nối công cụ AI.",
+  "Season crown": "Vương miện mùa",
+  "A season title, a profile badge and early access to the next season.": "Danh hiệu mùa, huy hiệu hồ sơ và quyền dùng sớm mùa tiếp theo.",
+  "Unlocks at {power} power": "Mở ở {power} sức mạnh",
+  "{current} of {threshold} power": "{current} trên {threshold} sức mạnh",
+  "Each perk unlocks as your power grows.": "Mỗi đặc quyền mở khi sức mạnh của bạn tăng.",
+  Zendeck: "Zendeck",
+  "Zendeck perk": "Đặc quyền Zendeck",
+  "Details for this perk are not available yet.": "Chưa có thông tin chi tiết cho đặc quyền này.",
+  "Coming soon": "Sắp có",
+  "Flame fox": "Cửu vĩ hồ",
+  "Storm wolf": "Phong lang",
+  "Tide serpent": "Thủy xà",
+  "Thorn stag": "Mộc lộc",
+  "Frost owl": "Băng cú",
+  "Volt lynx": "Lôi miêu",
+  "Umbra panther": "Ảnh báo",
+  "Sunrise phoenix": "Nhật phượng",
+  Rescue: "Cứu việc",
+  "Exam pack": "Gói ôn thi",
+  Reflow: "Dời lịch",
+  Roots: "Giờ cố định",
+  "Focus guard": "Giữ tập trung",
+  "Quick capture": "Ghi nhanh",
+  "Weekly recap": "Tổng kết tuần",
+  Rebirth: "Tái sinh",
+  "Rebuilds the plan for an overdue item before its deadline":
+    "Lập lại kế hoạch cho việc trễ hạn trước khi đến hạn",
+  "Books study before each new exam automatically":
+    "Tự động đặt buổi ôn trước mỗi kỳ thi mới",
+  "Reflows the rest of the week when a class moves or a plan is skipped":
+    "Sắp lại phần còn lại của tuần khi lịch học dời hoặc bỏ một buổi",
+  "Keeps one chosen weekly time free for study":
+    "Giữ một khung giờ cố định mỗi tuần để học",
+  "Mutes notifications during study blocks": "Tắt thông báo trong buổi học",
+  "Turns a forwarded LMS link or message into a plan":
+    "Biến liên kết hoặc tin nhắn LMS được chuyển tiếp thành kế hoạch",
+  "Sunday summary of starts and plans kept":
+    "Tóm tắt Chủ nhật: số buổi đã bắt đầu và kế hoạch giữ được",
+  "Restores a broken streak once a month":
+    "Khôi phục chuỗi ngày đã đứt, mỗi tháng một lần",
   Day: "Ngày",
   Me: "Cá nhân",
   Advanced: "Nâng cao",
@@ -609,16 +657,9 @@ export default {
   "Couldn't search right now": "Chưa thể tìm lúc này",
   "Couldn't load this week": "Không tải được tuần này",
   "{start} to {end}": "{start} đến {end}",
-  "Connect DLU": "Kết nối DLU",
-  "Import your timetable from the portal.": "Nhập thời khóa biểu từ cổng sinh viên.",
-  "Add a task": "Thêm task",
-  "Tap + to schedule your first session.": "Chạm + để xếp buổi học đầu tiên.",
-  "Finish a session": "Hoàn thành một buổi học",
-  "Mark a session done when you complete it.": "Đánh dấu buổi học xong khi bạn hoàn thành.",
-  "Open: {title}": "Mở: {title}",
   "{count} day streak": "Chuỗi {count} ngày",
-  "Session done": "Đã hoàn thành task",
-  "Session skipped": "Đã bỏ qua task",
+  "Session done": "Đã hoàn thành kế hoạch",
+  "Session skipped": "Đã bỏ qua kế hoạch",
   "Mark {title} done": "Đánh dấu {title} đã xong",
   "Mark {title} not done": "Bỏ đánh dấu {title}",
   "Mark as done": "Đánh dấu đã xong",
@@ -651,12 +692,18 @@ export default {
   "Location": "Địa điểm",
   "More options": "Thêm tùy chọn",
   "More sittings": "Thêm buổi",
-  "New tasks use your default reminder from Settings.": "Việc mới dùng nhắc nhở mặc định trong Cài đặt.",
   "No course": "Không có môn",
   "Notes": "Ghi chú",
+  "Saved": "Đã lưu",
+  "Untitled": "Chưa đặt tên",
+  "Name your plan": "Đặt tên cho kế hoạch",
+  "No deadline": "Không có hạn",
+  "No reminder": "Không nhắc",
+  "Add location": "Thêm địa điểm",
+  "Placed": "Đã xếp lịch",
+  "Open notes full screen": "Mở ghi chú toàn màn hình",
   "Once": "Một lần",
   "Other": "Khác",
-  "Other tags go under More options.": "Các tag khác nằm trong Thêm tùy chọn.",
   "Previous week": "Tuần trước",
   "Repeat": "Lặp lại",
   "Repeats every day, {ending}.": "Lặp lại mỗi ngày, {ending}.",
@@ -676,7 +723,6 @@ export default {
   "Duration set to {duration}": "Đã đặt thời lượng {duration}",
   "Due {when}": "Hạn {when}",
   "{count} sittings of {duration}": "{count} buổi, mỗi buổi {duration}",
-  "Splits the task into shorter sessions.": "Chia task thành các buổi làm việc nhỏ hơn.",
   "{count} sittings of {duration} and {rest} of {last}":
     "{count} buổi {duration} và {rest} buổi {last}",
   "Spread it out": "Chia đều mỗi ngày",
@@ -687,9 +733,6 @@ export default {
   "Apply to all": "Áp dụng cho tất cả",
   "Due {date}": "Hạn {date}",
   "Not scheduled yet": "Chưa xếp lịch",
-  "Moves freely": "Tự dời theo lịch",
-  "Time set by you": "Giờ do bạn chọn",
-  "Pinned in place": "Đã ghim cố định",
   "Placed at {time}, you usually study then": "Đã xếp lúc {time}, bạn thường học vào giờ này",
   "Placed at {time}, before the deadline": "Đã xếp lúc {time}, trước deadline",
   "Placed at {time}, the only free slot": "Đã xếp lúc {time}, là khung giờ trống duy nhất",
@@ -702,14 +745,6 @@ export default {
   "Past the deadline?": "Lố deadline rồi?",
   "Keep late": "Giữ trễ hạn",
   "Snap back": "Quay lại giờ cũ",
-  "Pin in place": "Ghim cố định",
-  Unpin: "Bỏ ghim",
-  "Couldn't pin this session": "Không ghim được buổi này",
-  "Couldn't unpin this session": "Không bỏ ghim được buổi này",
-  "The scheduler can move it to make room.": "Lịch có thể dời để nhường chỗ.",
-  "You set this time. The scheduler asks before it moves it.":
-    "Bạn đã chọn giờ này. Lịch sẽ hỏi trước khi dời.",
-  "The scheduler never moves it.": "Lịch không bao giờ dời buổi này.",
   "Make room": "Nhường chỗ",
   Before: "Trước",
   After: "Sau",
@@ -724,4 +759,44 @@ export default {
   "The plan changed. Try again.": "Lịch vừa đổi. Thử lại nha.",
   "Use your own student ID ({id}) to connect.":
     "Dùng đúng mã sinh viên của bạn ({id}) để kết nối nha.",
+  Building: "Tòa nhà",
+  "Campus gate": "Cổng trường",
+  Parking: "Bãi giữ xe",
+  Facility: "Cơ sở",
+  "Sports ground": "Khu thể thao",
+  "Show on map": "Xem trên bản đồ",
+  "Hide map": "Ẩn bản đồ",
+  "Map of {place}": "Bản đồ {place}",
+  "Map unavailable": "Chưa có bản đồ",
+  "Search room, building or address": "Tìm phòng, tòa nhà hoặc địa chỉ",
+  "Searching…": "Đang tìm…",
+  "No places found": "Không tìm thấy địa điểm",
+  "Pinned location": "Vị trí đã ghim",
+  Start: "Điểm đi",
+  Motorcycle: "Xe máy",
+  Bike: "Xe đạp",
+  "My location": "Vị trí của tôi",
+  "Use my location": "Dùng vị trí của tôi",
+  "Location is off. Enable it in settings.": "Vị trí đang tắt. Hãy bật trong cài đặt.",
+  "Couldn't get your location.": "Không lấy được vị trí của bạn.",
+  "Turn on location services.": "Hãy bật dịch vụ vị trí.",
+  "You're outside Da Lat": "Bạn đang ở ngoài Đà Lạt",
+  "Pick on map": "Chọn trên bản đồ",
+  "Campus": "Trong trường",
+  "Places": "Địa điểm",
+  "Couldn't search. Try again.": "Không tìm được. Thử lại nha.",
+  "Search places": "Tìm địa điểm",
+  "Add start": "Thêm điểm đi",
+  "Add destination": "Thêm điểm đến",
+  "To": "Đến",
+  "Finding a route…": "Đang tìm đường…",
+  "No route found": "Không tìm thấy đường đi",
+  "{minutes} min": "{minutes} phút",
+  "Finding your location…": "Đang lấy vị trí của bạn…",
+  "Couldn't load the route. Try again later.": "Không tải được đường đi. Thử lại sau.",
+  From: "Xuất phát từ",
+  "Starting point": "Điểm xuất phát",
+  Commute: "Đường đi",
+  Walk: "Đi bộ",
+  Car: "Ô tô",
 } as Record<string, string>;

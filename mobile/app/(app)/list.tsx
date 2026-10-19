@@ -1,9 +1,6 @@
 import { SessionAgenda } from "@/components/calendar/session-agenda";
 import { Text } from "@/components/ui/text";
 import { useLanguage } from "@/hooks/use-language";
-import { CreateSessionFab } from "@/components/tasks/create-task-fab";
-import { useOffline } from "@/hooks/use-offline";
-import { useUserStore } from "@/hooks/use-user-store";
 import { Search } from "@/components/Icons";
 import { StreakBadge } from "@/components/calendar/streak-badge";
 import { SessionSearchView } from "@/components/calendar/session-search-view";
@@ -18,9 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function ListScreen() {
   useLanguage();
   const insets = useSafeAreaInsets();
-  const offline = useOffline();
   const [searchOpen, setSearchOpen] = useState(false);
-  const tz = useUserStore((s) => s.user?.timezone) || "UTC";
   return (
     <View className="flex-1 bg-background">
       <View
@@ -38,7 +33,6 @@ export default function ListScreen() {
         <NotificationBell />
       </View>
       <SessionAgenda term="" />
-      <CreateSessionFab tz={tz} hidden={offline} />
       {searchOpen ? <SessionSearchView onClose={() => setSearchOpen(false)} /> : null}
     </View>
   );

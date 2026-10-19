@@ -97,6 +97,22 @@ export const schedulerArmSelected = meter.createCounter(
   "scheduler.bandit.arm_selected",
   { description: "LinUCB-selected time-of-day arm on applied proposals" },
 );
+/** Slot proposals answered in a pairwise comparison, by primary policy and choice. */
+export const schedulerSlotPicks = meter.createCounter("scheduler.slot.picks", {
+  description: "Slot picks by primary policy and the side the user chose",
+});
+/** Latest active-user counts, read by the `app.users.active` gauge. */
+export const activeUsers = { dau: 0, wau: 0 };
+meter
+  .createObservableGauge("app.users.active", {
+    description:
+      "Users with an authenticated request today (day) and in the last 7 days (week)",
+  })
+  .addCallback((result) => {
+    result.observe(activeUsers.dau, { window: "day" });
+    result.observe(activeUsers.wau, { window: "week" });
+  });
+
 export const schedulerSessionEvents = meter.createCounter(
   "scheduler.session_events",
   { description: "SessionEvent rows written, by type (CREATE/MOVE/RETAINED)" },

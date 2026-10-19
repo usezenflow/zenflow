@@ -20,7 +20,6 @@ vi.mock("@/components/calendar/month-pager", () => ({
     renderPage: (d: Date) => React.ReactNode;
   }) => <>{renderPage(monthDate)}</>,
 }));
-vi.mock("@/components/tasks/create-task-fab", () => ({ CreateSessionFab: () => null }));
 vi.mock("@/lib/tab-bar-metrics", () => ({ useTabBarOverlayHeight: () => 0 }));
 
 const monthRequests: string[] = [];

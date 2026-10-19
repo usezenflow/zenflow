@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { IngestionScheduleService } from "./ingestion-schedule.service";
 import { IngestionTickerService } from "./ingestion-ticker.service";
+import { WalkerPlanService } from "./walker-plan.service";
 import { QueueService } from "../queue/queue.service";
 import { PORTAL_FETCH_QUEUE, type FetchJobData } from "../queue/queues";
 import { LMSService } from "../lms/lms.service";
@@ -30,6 +31,7 @@ const ENV: Record<string, string | number | boolean> = {
 function makeScheduleDouble(
   due: Partial<Record<SyncKindName, ClaimedTarget[]>> = {},
   populations: Partial<Record<SyncKindName, number>> = {},
+  discoveredShare = 0,
 ) {
   const plans = [
     {
@@ -69,7 +71,11 @@ function makeScheduleDouble(
     },
   ];
 
-  const claims: { kind: SyncKindName; batchSize: number }[] = [];
+  const claims: {
+    kind: SyncKindName;
+    batchSize: number;
+    nextDueAt?: Date;
+  }[] = [];
   const order: string[] = [];
   const released: string[] = [];
   const pulledForward: { academicYear: string; semester: string }[] = [];
@@ -92,9 +98,16 @@ function makeScheduleDouble(
       pulledForward.push(term);
       return Promise.resolve(0);
     },
-    claimDue: (kind: SyncKindName, _now: Date, batchSize: number) => {
+    discoveredShare: () => Promise.resolve(discoveredShare),
+    claimDue: (
+      kind: SyncKindName,
+      _now: Date,
+      batchSize: number,
+      _gate?: unknown,
+      nextDueAt?: Date,
+    ) => {
       order.push(`claim:${kind}`);
-      claims.push({ kind, batchSize });
+      claims.push({ kind, batchSize, nextDueAt });
       return Promise.resolve((due[kind] ?? []).slice(0, batchSize));
     },
     releaseClaim: (t: ClaimedTarget) => {
@@ -198,6 +211,10 @@ async function makeTicker(
         useValue: { isEnabled: jest.fn().mockResolvedValue(true) },
       },
       IngestionTickerService,
+      {
+        provide: WalkerPlanService,
+        useValue: { preferred: jest.fn().mockResolvedValue([]) },
+      },
       {
         provide: ConfigService,
         useValue: { get: (n: string) => env[n] },
@@ -362,6 +379,73 @@ describe("IngestionTickerService - enqueueing", () => {
 
     expect(schedule.released).toEqual(["t"]);
     expect(summary).toMatchObject({ claimed: 0, released: 1 });
+  });
+});
+
+describe("IngestionTickerService - seasonal schedule", () => {
+  const MONDAY_AFTER = new Date("2026-10-25T17:00:00.000Z"); // Mon 26 Oct 00:00 ICT
+
+  it("claims no exams outside the exam window", async () => {
+    const schedule = makeScheduleDouble({ PORTAL_EXAM: [target()] });
+    const { ticker } = await makeTicker({ schedule });
+
+    await ticker.tick(new Date("2026-09-15T03:00:00.000Z")); // HK01, before 1 October
+
+    expect(schedule.claims.map((c) => c.kind)).not.toContain("PORTAL_EXAM");
+  });
+
+  it("claims exams inside the window and from a forced-open override", async () => {
+    const inside = makeScheduleDouble({ PORTAL_EXAM: [target()] });
+    await (await makeTicker({ schedule: inside })).ticker.tick(NOW);
+    expect(inside.claims.map((c) => c.kind)).toContain("PORTAL_EXAM");
+
+    const forced = makeScheduleDouble({ PORTAL_EXAM: [target()] });
+    const { ticker } = await makeTicker({
+      schedule: forced,
+      env: { INGESTION_EXAM_WINDOW: "open" },
+    });
+    await ticker.tick(new Date("2026-09-15T03:00:00.000Z"));
+    expect(forced.claims.map((c) => c.kind)).toContain("PORTAL_EXAM");
+  });
+
+  it("rolls the timetable on its period while discovery covers under 95%", async () => {
+    const schedule = makeScheduleDouble(
+      { PORTAL_TIMETABLE: [target()] },
+      {},
+      0.9,
+    );
+    const { ticker } = await makeTicker({ schedule });
+
+    await ticker.tick(NOW);
+
+    const claim = schedule.claims.find((c) => c.kind === "PORTAL_TIMETABLE");
+    expect(claim?.nextDueAt).toEqual(new Date(NOW.getTime() + DAY));
+  });
+
+  it("parks the timetable until the next week start once 95% are discovered", async () => {
+    const schedule = makeScheduleDouble(
+      { PORTAL_TIMETABLE: [target()] },
+      {},
+      0.96,
+    );
+    const { ticker } = await makeTicker({ schedule });
+
+    await ticker.tick(NOW);
+
+    const claim = schedule.claims.find((c) => c.kind === "PORTAL_TIMETABLE");
+    expect(claim?.nextDueAt).toEqual(
+      new Date(MONDAY_AFTER.getTime() + 7 * DAY),
+    );
+  });
+
+  it("leaves the other kinds on their plain period", async () => {
+    const schedule = makeScheduleDouble({ LMS_CALENDAR: [target()] });
+    const { ticker } = await makeTicker({ schedule });
+
+    await ticker.tick(NOW);
+
+    const claim = schedule.claims.find((c) => c.kind === "LMS_CALENDAR");
+    expect(claim?.nextDueAt).toBeUndefined();
   });
 });
 

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 380" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Notifications component diagram">
+  <title>Notifications component diagram</title>
+  <defs><marker id="aO" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#FF6900"/></marker><marker id="aB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3B7EA1"/></marker><marker id="aN" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2B2724" fill-opacity="0.55"/></marker></defs>
+  <rect width="1080" height="380" fill="#FCFBFA"/>
+  <text x="30" y="34" font-size="21" font-weight="700" fill="#2B2724">Notifications</text>
+  <text x="30" y="56" font-size="11" fill="#2B2724" opacity="0.7">Blue queue job, orange database write or live push, dashed read or publish</text>
+
+  <rect x="20" y="80" width="1040" height="280" rx="14" fill="none" stroke="#2B2724" stroke-width="1.8" stroke-dasharray="9 6" stroke-opacity=".6"/>
+
+  <!-- Row 1: create and deliver live -->
+  <rect x="40" y="120" width="170" height="52" rx="8" fill="#FFF8E6" stroke="#F0B100" stroke-width="2"/>
+  <text x="125" y="142" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Ingestion</text>
+  <text x="125" y="158" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Writes that notify</text>
+
+  <rect x="250" y="120" width="170" height="52" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
+  <text x="335" y="142" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Notification service</text>
+  <text x="335" y="158" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Creates and announces</text>
+
+  <rect x="460" y="120" width="150" height="52" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <text x="535" y="142" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Live feed</text>
+  <text x="535" y="158" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">At most once</text>
+
+  <rect x="650" y="120" width="150" height="52" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
+  <text x="725" y="142" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Live stream</text>
+  <text x="725" y="158" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Server-sent events</text>
+
+  <rect x="840" y="120" width="190" height="52" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <text x="935" y="142" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Web and mobile</text>
+  <text x="935" y="158" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Listens for updates</text>
+
+  <path d="M210,146 L250,146" fill="none" stroke="#FF6900" stroke-width="2" marker-end="url(#aO)"/>
+  <path d="M420,146 L460,146" fill="none" stroke="#2B2724" stroke-width="2" stroke-opacity=".5" stroke-dasharray="6 4" marker-end="url(#aN)"/>
+  <path d="M610,146 L650,146" fill="none" stroke="#2B2724" stroke-width="2" stroke-opacity=".5" stroke-dasharray="6 4" marker-end="url(#aN)"/>
+  <path d="M800,146 L840,146" fill="none" stroke="#FF6900" stroke-width="2" marker-end="url(#aO)"/>
+
+  <!-- Row 2: push -->
+  <rect x="250" y="220" width="170" height="52" rx="8" fill="#EEF5F9" stroke="#3B7EA1" stroke-width="2"/>
+  <text x="335" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Push queue</text>
+  <text x="335" y="258" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Delayed jobs</text>
+
+  <rect x="460" y="220" width="150" height="52" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
+  <text x="535" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Push processor</text>
+  <text x="535" y="258" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Respects kill switch</text>
+
+  <rect x="650" y="220" width="150" height="52" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <text x="725" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Push sender</text>
+  <text x="725" y="258" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Skips opted-out users</text>
+
+  <rect x="840" y="220" width="190" height="52" rx="8" fill="#F5F3F0" stroke="#E3DFDA" stroke-width="1.5"/>
+  <text x="935" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Device push</text>
+  <text x="935" y="258" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Android and iOS</text>
+
+  <path d="M335,172 L335,220" fill="none" stroke="#3B7EA1" stroke-width="2" marker-end="url(#aB)"/>
+  <path d="M420,246 L460,246" fill="none" stroke="#3B7EA1" stroke-width="2" marker-end="url(#aB)"/>
+  <path d="M610,246 L650,246" fill="none" stroke="#FF6900" stroke-width="2" marker-end="url(#aO)"/>
+  <path d="M800,246 L840,246" fill="none" stroke="#2B2724" stroke-width="2" stroke-opacity=".5" stroke-dasharray="6 4" marker-end="url(#aN)"/>
+
+  <!-- Row 3: reminders -->
+  <rect x="250" y="300" width="170" height="52" rx="8" fill="#FFF8E6" stroke="#F0B100" stroke-width="2"/>
+  <text x="335" y="322" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Reminder sweep</text>
+  <text x="335" y="338" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Runs every five minutes</text>
+
+  <rect x="460" y="300" width="150" height="52" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
+  <text x="535" y="322" text-anchor="middle" font-size="12" font-weight="700" fill="#2B2724">Reminder firing</text>
+  <text x="535" y="338" text-anchor="middle" font-size="10" fill="#2B2724" opacity="0.75">Writes the reminder</text>
+
+  <path d="M335,300 L335,272" fill="none" stroke="#3B7EA1" stroke-width="2" marker-end="url(#aB)"/>
+</svg>

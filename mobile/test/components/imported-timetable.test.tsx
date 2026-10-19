@@ -25,7 +25,7 @@ describe("ImportedTimetable", () => {
         HttpResponse.json({
           data: {
             sessions: [
-              session("mine", "My own task", "USER"),
+              session("mine", "My own plan", "USER"),
               session("lec", "Data structures", "PORTAL"),
             ],
           },
@@ -34,7 +34,7 @@ describe("ImportedTimetable", () => {
     );
     renderScreen(<ImportedTimetable />);
     await waitFor(() => expect(screen.getByText("Data structures")).toBeTruthy());
-    expect(screen.queryByText("My own task")).toBeNull();
+    expect(screen.queryByText("My own plan")).toBeNull();
     expect(screen.getByText("Your timetable")).toBeTruthy();
   });
 

@@ -11,10 +11,10 @@ import { TagsModule } from "../tags/tags.module";
 import { RemindersModule } from "../reminders/reminders.module";
 import { FilesModule } from "../files/files.module";
 import { SchedulerModule } from "../scheduler/scheduler.module";
+import { SpiritsModule } from "../spirits/spirits.module";
 import { StreaksModule } from "../streaks/streaks.module";
 import { SessionCheckOffService } from "./session-check-off.service";
 import { PlacementPlanService } from "./placement-plan.service";
-import { SessionAnchorService } from "./session-anchor.service";
 
 @Module({
   imports: [
@@ -24,6 +24,7 @@ import { SessionAnchorService } from "./session-anchor.service";
     RemindersModule,
     FilesModule,
     StreaksModule,
+    SpiritsModule,
   ],
   controllers: [SessionsController],
   providers: [
@@ -35,7 +36,6 @@ import { SessionAnchorService } from "./session-anchor.service";
     SessionSearchService,
     SessionCheckOffService,
     PlacementPlanService,
-    SessionAnchorService,
   ],
   exports: [SessionsService],
 })

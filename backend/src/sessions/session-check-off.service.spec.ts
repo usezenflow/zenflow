@@ -27,6 +27,12 @@ function row(overrides: Partial<SessionRow> = {}): SessionRow {
     title: "Study",
     note: null,
     location: null,
+    locationLat: null,
+    locationLng: null,
+    originLocation: null,
+    originLat: null,
+    originLng: null,
+    commuteMinutes: null,
     durationMinutes: 60,
     deadline: new Date("2026-10-20T00:00:00.000Z"),
     type: "TASK",
@@ -36,13 +42,14 @@ function row(overrides: Partial<SessionRow> = {}): SessionRow {
     scheduledStartTime: new Date("2026-10-14T08:00:00.000Z"),
     userId: user.id,
     lastMovedAt: null,
+    submittedAt: null,
+    prepForSessionId: null,
+    prepForOccurrenceStart: null,
     retainedAt: null,
     syncConfirmedAt: null,
     syncMissedAt: null,
     completedAt: null,
     skipped: false,
-    anchor: "AUTO",
-    anchoredAt: null,
     placementReason: null,
     placementReasonStartAt: null,
     seriesId: null,
@@ -82,6 +89,15 @@ function fakePrisma(found: SessionRow | null, occurrenceState: unknown = null) {
       session: { findFirst: jest.fn().mockResolvedValue(found) },
       sessionOccurrenceState: {
         findUnique: jest.fn().mockResolvedValue(occurrenceState),
+      },
+      sessionSeries: {
+        findFirst: jest.fn().mockResolvedValue({
+          skippedFrom: null,
+          sessions: [
+            { scheduledStartTime: new Date("2026-10-01T07:00:00.000Z") },
+          ],
+        }),
+        update: jest.fn().mockResolvedValue({}),
       },
       $transaction: (fn: (t: typeof tx) => unknown) => fn(tx),
     },
@@ -198,6 +214,7 @@ describe("SessionCheckOffService", () => {
       deadline: null,
       rrule: "FREQ=DAILY",
       exdates: ["2026-10-13T07:00:00.000Z"],
+      skippedFrom: null,
       userId: user.id,
     };
     const rep = row({
@@ -270,6 +287,80 @@ describe("SessionCheckOffService", () => {
       await expect(
         service.set("series-1::2026-10-13T07:00:00.000Z", "skip", true, user),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    describe("skip scope", () => {
+      const skippedFromOf = (prisma: {
+        sessionSeries: { update: jest.Mock };
+      }) => (firstArg(prisma.sessionSeries.update) as { data: object }).data;
+
+      it("following exempts the series from that occurrence", async () => {
+        const { prisma } = fakePrisma(rep);
+        const service = await build(prisma);
+
+        const res = await service.set(
+          occId,
+          "skip",
+          true,
+          user,
+          now,
+          "following",
+        );
+
+        expect(skippedFromOf(prisma)).toEqual({
+          skippedFrom: new Date("2026-10-14T07:00:00.000Z"),
+        });
+        expect(res.session.skipped).toBe(true);
+      });
+
+      it("all exempts the series from its first occurrence", async () => {
+        const { prisma } = fakePrisma(rep);
+        const service = await build(prisma);
+
+        await service.set(occId, "skip", true, user, now, "all");
+
+        expect(skippedFromOf(prisma)).toEqual({
+          skippedFrom: new Date("2026-10-01T07:00:00.000Z"),
+        });
+      });
+
+      it("keeps an earlier exemption when a later one is added", async () => {
+        const { prisma } = fakePrisma(rep);
+        prisma.sessionSeries.findFirst.mockResolvedValue({
+          skippedFrom: new Date("2026-10-05T07:00:00.000Z"),
+          sessions: [
+            { scheduledStartTime: new Date("2026-10-01T07:00:00.000Z") },
+          ],
+        });
+        const service = await build(prisma);
+
+        await service.set(occId, "skip", true, user, now, "following");
+
+        expect(skippedFromOf(prisma)).toEqual({
+          skippedFrom: new Date("2026-10-05T07:00:00.000Z"),
+        });
+      });
+
+      it("undo clears the exemption", async () => {
+        const { prisma } = fakePrisma(rep);
+        const service = await build(prisma);
+
+        await service.set(occId, "skip", false, user, now, "all");
+
+        expect(skippedFromOf(prisma)).toEqual({ skippedFrom: null });
+      });
+
+      it("rejects a scope on a plain session or on complete", async () => {
+        const { prisma } = fakePrisma(row());
+        const service = await build(prisma);
+
+        await expect(
+          service.set("s-1", "skip", true, user, now, "all"),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        await expect(
+          service.set(occId, "complete", true, user, now, "all"),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
     });
 
     it("rejects the representative row id", async () => {

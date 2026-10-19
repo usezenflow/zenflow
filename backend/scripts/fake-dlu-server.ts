@@ -112,6 +112,25 @@ function statsPayload() {
  */
 const hidden = { lms: false, exams: false, timetable: false };
 
+/**
+ * Test hook: `POST /_/exams {"publish":0.5,"pastDays":8}` stages the exam list the
+ * way a school publishes it. `publish` is the share of each student's exams served
+ * (the first ones, rounded up); `pastDays` dates every served exam that many days
+ * back, so the exams have already ended. The defaults serve the fixtures as they are.
+ */
+const examStage: { publish: number; pastDays: number | null } = {
+  publish: 1,
+  pastDays: null,
+};
+
+function stagedExamRows<T extends { NgayThi?: string | null }>(rows: T[]): T[] {
+  const served = rows.slice(0, Math.ceil(rows.length * examStage.publish));
+  if (examStage.pastDays === null) return served;
+  const d = new Date(Date.now() - examStage.pastDays * 24 * 60 * 60_000);
+  const date = `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+  return served.map((row) => ({ ...row, NgayThi: date }));
+}
+
 // ---------------------------------------------------------------------------
 // small helpers
 // ---------------------------------------------------------------------------
@@ -764,6 +783,13 @@ const server = createServer((req, res) => {
         Object.assign(hidden, body);
         return sendJson(res, 200, hidden);
       }
+      if (pathname === "/_/exams" && req.method === "POST") {
+        const body = JSON.parse((await readBody(req)) || "{}") as Partial<
+          typeof examStage
+        >;
+        Object.assign(examStage, body);
+        return sendJson(res, 200, examStage);
+      }
       if (pathname === "/_/reset" && req.method === "POST") {
         requestCounts.clear();
         requestLog.length = 0;
@@ -831,7 +857,7 @@ const server = createServer((req, res) => {
           studentId && fixtures
             ? namhoc === fixtures.referenceYear &&
               hocky === fixtures.referenceTerm
-              ? (fixtures.examRows[studentId] ?? [])
+              ? stagedExamRows(fixtures.examRows[studentId] ?? [])
               : []
             : buildExamRows(),
         );
@@ -880,7 +906,10 @@ const server = createServer((req, res) => {
       // carry the PII fields the real payload repeats on every course so the
       // backend's "normalised fields only" rule stays exercised.
       if (pathname === "/api/student/info" && req.method === "GET") {
-        countRequest("portal:info", studentIdFromAuthHeader(req));
+        const id = studentIdFromAuthHeader(req);
+        countRequest("portal:info", id);
+        const own = id ? loadDluFixtures().profile[id] : undefined;
+        if (own) return sendJson(res, 200, { sinhVien: own.info });
         return sendJson(res, 200, {
           sinhVien: {
             HoTen: "Sinh Viên Mẫu",
@@ -891,7 +920,10 @@ const server = createServer((req, res) => {
         });
       }
       if (pathname === "/api/student/getstudyprogram" && req.method === "GET") {
-        countRequest("portal:studyprogram", studentIdFromAuthHeader(req));
+        const id = studentIdFromAuthHeader(req);
+        countRequest("portal:studyprogram", id);
+        const own = id ? loadDluFixtures().profile[id] : undefined;
+        if (own) return sendJson(res, 200, own.studyPrograms);
         return sendJson(res, 200, [
           {
             StudentID: "2000000",
@@ -902,10 +934,10 @@ const server = createServer((req, res) => {
         ]);
       }
       if (pathname === "/api/student/marks" && req.method === "GET") {
-        countRequest(
-          `portal:marks:${searchParams.get("ctdt") ?? ""}`,
-          studentIdFromAuthHeader(req),
-        );
+        const id = studentIdFromAuthHeader(req);
+        countRequest(`portal:marks:${searchParams.get("ctdt") ?? ""}`, id);
+        const own = id ? loadDluFixtures().marks[id] : undefined;
+        if (own) return sendJson(res, 200, own);
         const row = (unit: string, name: string, score: string | null) => ({
           StudentID: "2000000",
           ScheduleStudyUnitID: unit,

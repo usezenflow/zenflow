@@ -2,7 +2,6 @@ import { Injectable, Logger, Optional } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { ClsService } from "nestjs-cls";
 import type {
-  ChosenMovePolicy,
   InfeasiblePolicy,
   PlacedMember,
   PlacementMember,
@@ -195,7 +194,6 @@ export class PythonPlacer {
     now: Date,
     policy?: InfeasiblePolicy,
     allowLastResort = true,
-    chosenMoves: ChosenMovePolicy = "ASK",
     undoGroupId?: string,
   ): Promise<PlacementResult> {
     const assignment = this.experiment.assignPolicy();
@@ -215,13 +213,7 @@ export class PythonPlacer {
       maxScanDays: SCAN_CAP_DAYS,
       excludeSessionIds: [task.id],
     });
-    const res = await this.gateway.placeSingleTwoPhase(
-      req,
-      user,
-      task,
-      policy,
-      chosenMoves,
-    );
+    const res = await this.gateway.placeSingleTwoPhase(req, user, task, policy);
     if (!res.ok) {
       const degraded = await this.placeSingleDegraded(
         user,

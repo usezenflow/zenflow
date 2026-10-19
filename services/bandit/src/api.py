@@ -31,18 +31,27 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from src.core.band_prior import band_prior
+from src.core.hybrid import Z_DIM, hybrid_update
+from src.core.init_state import init_state
+from src.core.prep import prep_window
 from src.core.slot import utc_offsets_ms
 from src.models.linucb import update
 from src.otel import setup_otel
 from src.place import place as run_place
 from src.schemas import (
+    ArmState,
+    InitRequest,
+    InitResponse,
     UpdateRequest,
     UpdateResponse,
 )
 from src.schemas_place import PLACEMENT_CONTRACT_VERSION, PlaceRequest, PlaceResponse
+from src.schemas_prep import PrepSizeRequest, PrepSizeResponse
 from src.serialization import (
     all_finite,
     hydrate,
+    hydrate_shared,
     require_422,
 )
 from src.telemetry import (
@@ -249,6 +258,25 @@ async def place(request: Request) -> PlaceResponse:
     return res
 
 
+@app.post("/v1/prep/size", dependencies=[Depends(require_token)])
+def size_prep(request: PrepSizeRequest) -> PrepSizeResponse:
+    """Size and window one prep plan from the student's marks (level-up Phase 1)."""
+    window = prep_window(
+        request.kind,
+        [(m.letter, m.credits) for m in request.marks],
+        request.avg_gpa4,
+        request.now_ms,
+        request.deadline_ms,
+    )
+    return PrepSizeResponse(
+        weak=window.weak,
+        duration_minutes=window.duration_minutes,
+        window_start_ms=window.window_start_ms,
+        deadline_ms=window.deadline_ms,
+        feasible=window.feasible,
+    )
+
+
 @app.post("/v1/update", dependencies=[Depends(require_token)])
 def update_arm(request: UpdateRequest) -> UpdateResponse:
     """Fold one ``(context, reward)`` observation into an arm and return the new state.
@@ -271,7 +299,51 @@ def update_arm(request: UpdateRequest) -> UpdateResponse:
     started = time.perf_counter()
     d = len(request.x)
     x: np.ndarray = np.asarray(request.x, dtype=np.float64)
-    a, b = hydrate(request.state, d, request.ridge)
-    new_a, new_b = update(a, b, x, request.reward)
+    prior = (
+        band_prior(request.focus_band, d, request.ridge)[request.arm]
+        if request.focus_band
+        else None
+    )
+    a, b = hydrate(request.state, d, request.ridge, prior)
+    if request.z is None:
+        new_a, new_b = update(a, b, x, request.reward)
+        update_duration.record(time.perf_counter() - started)
+        return UpdateResponse(A=new_a.reshape(-1).tolist(), b=new_b.tolist())
+
+    require_422(len(request.z) == Z_DIM, f"z must have {Z_DIM} features")
+    require_422(all_finite(request.z), "z must be finite")
+    shared_a, shared_b = hydrate_shared(request.shared, request.ridge, Z_DIM)
+    (sa, sb), (new_a, new_b) = hybrid_update(
+        shared_a,
+        shared_b,
+        a,
+        b,
+        x,
+        np.asarray(request.z, dtype=np.float64),
+        request.reward,
+    )
     update_duration.record(time.perf_counter() - started)
-    return UpdateResponse(A=new_a.reshape(-1).tolist(), b=new_b.tolist())
+    return UpdateResponse(
+        A=new_a.reshape(-1).tolist(),
+        b=new_b.tolist(),
+        shared=ArmState(A=sa.reshape(-1).tolist(), b=sb.tolist()),
+    )
+
+
+@app.post("/v1/init", dependencies=[Depends(require_token)])
+def init_student(request: InitRequest) -> InitResponse:
+    """Starting state for a new student: band prior per arm, marks prior on beta."""
+    require_422(
+        math.isfinite(request.ridge) and request.ridge > 0.0, "ridge must be > 0"
+    )
+    has_marks = bool(request.marks) or request.avg_gpa4 is not None
+    state = init_state(request.ridge, request.focus_band, has_marks)
+    return InitResponse(
+        arms={
+            arm: ArmState(A=p.A.reshape(-1).tolist(), b=p.b.tolist())
+            for arm, p in state.arms.items()
+        },
+        shared=ArmState(
+            A=state.shared_a.reshape(-1).tolist(), b=state.shared_b.tolist()
+        ),
+    )

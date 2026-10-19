@@ -25,11 +25,17 @@ from src.simulation.archetypes import (
     BEHAVIORS,
     CHRONOTYPES,
     all_cells,
+    interaction_style_from_mix,
     make_student,
 )
 from src.simulation.engine import HEURISTIC, SimConfig, World, run_student
 from src.simulation.learner import ARMS, LinUCBState, PreferenceMatrix
-from src.simulation.reaction import decide, draw_reaction
+from src.simulation.reaction import (
+    Completion,
+    choose_offer,
+    decide,
+    draw_reaction,
+)
 from src.simulation.rng import stream
 from src.simulation.utility import DayContext, slot_utility
 from src.simulation.world import (
@@ -218,12 +224,78 @@ def test_reaction_draws_are_shared_across_worlds_and_threshold_gates_moves() -> 
     assert decide(p, d1, int(starts[3]), 0.0, starts, flat) is None  # nothing to gain
     big = np.zeros(10)
     big[7] = 50.0
-    eager = d1.__class__(0.0, 0.0, np.zeros_like(d1.eps_slots), 0.0)
+    eager = d1.__class__(
+        eps_prop=0.0,
+        u_act=0.0,
+        eps_slots=np.zeros_like(d1.eps_slots),
+        u_done=0.0,
+        u_seen=0.0,
+        u_default=0.0,
+        u_skip=0.0,
+        u_complete=0.0,
+    )
     assert decide(p, eager, int(starts[3]), 0.0, starts, big) == int(starts[7])
-    lazy = d1.__class__(0.0, 0.999999, np.zeros_like(d1.eps_slots), 0.0)
+    lazy = d1.__class__(
+        eps_prop=0.0,
+        u_act=0.999999,
+        eps_slots=np.zeros_like(d1.eps_slots),
+        u_done=0.0,
+        u_seen=0.0,
+        u_default=0.0,
+        u_skip=0.0,
+        u_complete=0.0,
+    )
     assert (
         decide(p, lazy, int(starts[3]), 0.0, starts, big) is None
     )  # cannot be bothered
+
+
+def test_interaction_style_from_mix_respects_shares_and_skips_rng_for_dragger() -> None:
+    rng = stream(1, "interaction", 0)
+    assert interaction_style_from_mix(rng, {"dragger": 1.0}) == "dragger"
+    # no RNG consumed for dragger-only, so two calls are identical
+    rng2 = stream(1, "interaction", 0)
+    assert interaction_style_from_mix(rng2, {"dragger": 1.0}) == "dragger"
+    rng3 = stream(1, "interaction", 0)
+    counts: dict[str, int] = {}
+    mix = {"dragger": 0.0, "tapper": 0.6, "ignorer": 0.4}
+    for _ in range(1000):
+        s = interaction_style_from_mix(rng3, mix)
+        counts[s] = counts.get(s, 0) + 1
+    assert counts["tapper"] > 500 and counts["ignorer"] > 300
+    assert counts.get("dragger", 0) == 0
+
+
+def test_tapper_prefers_better_option_and_respects_bias() -> None:
+    p = make_student(1, 0, interaction_style="tapper")
+    d = draw_reaction(1, 0, 5, 0)
+    # option is much better than default
+    big_option = choose_offer(p, d, 0, 0.0, 60 * 60_000, 1.0)
+    assert big_option == "option"
+    # default is much better
+    big_default = choose_offer(p, d, 0, 1.0, 60 * 60_000, 0.0)
+    assert big_default == "default"
+
+
+def test_completion_outcome_rewards_are_signed_and_sum_to_one() -> None:
+    assert Completion(True, True, False, False).reward() > 0
+    assert Completion(False, False, False, True).reward() < 0  # wrong time
+    assert Completion(False, False, True, False).reward() == 0  # skipped
+    assert Completion(False, False, False, False).reward() < 0  # lapsed
+
+
+def test_lazy_user_run_produces_new_metrics() -> None:
+    cfg = SimConfig(
+        seed=2,
+        n_students=10,
+        n_events=20,
+        scenarios=("single",),
+        interaction_mix={"dragger": 0.0, "tapper": 0.5, "ignorer": 0.5},
+    )
+    r = run_student(cfg, 0)
+    log = r.logs["single"]["heuristic"]
+    assert "started" in log and "lapsed" in log and "chose_option" in log
+    assert log["started"].size == log["accepted"].size
 
 
 # ---- learning-rule parity ---------------------------------------------------
@@ -394,8 +466,8 @@ def test_single_placements_match_v1_place_for_both_policies(sid: int) -> None:
         out = res.json()["results"][0]
         flex = lw._flex_hours()
         lw._tie_seed = lambda t, m: "parity|t1"  # type: ignore[method-assign,assignment]
-        lin = lw._propose_all(task, flex)[0]
-        heu = hw._propose_all(task, flex)[0]
+        lin, _ = lw._propose_all(task, flex)[0]
+        heu, _ = hw._propose_all(task, flex)[0]
         assert lin is not None and heu is not None
         assert heu.start_ms == out["heuristic"]["startMs"]
         assert lin.start_ms == out["linucb"]["startMs"]
@@ -420,7 +492,7 @@ def test_series_members_use_the_series_windows_and_one_sitting_per_day() -> None
         "series6-tight",
     )
     for t in tasks:
-        props = [x for x in w._propose_all(t, {}) if x is not None]
+        props = [x[0] for x in w._propose_all(t, {}) if x[0] is not None]
         days = [day_index(x.start_ms) for x in props]
         assert len(days) == len(set(days))  # MAX_SERIES_PER_DAY
         ivs = sorted((x.start_ms, x.start_ms + t.duration * 60_000) for x in props)

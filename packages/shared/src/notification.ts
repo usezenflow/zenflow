@@ -25,6 +25,7 @@ export type NotificationEventKind =
   | "CREATED"
   | "UPDATED"
   | "REMOVED"
+  | "COMPLETED"
   | "CONFLICT"
   | "REMINDER"
   | "READY";
@@ -34,14 +35,17 @@ export type NotificationEventKind =
  * pattern-matching the free-text `title`/`content`. Every event name is
  * `"sync_conflict.<thing>"` (a conflict), `"reminder.<…>"` (a reminder
  * nudge), `"<thing>.ready"` (a first sync finished), or
- * `"<thing>.<created|updated|changed|removed>"` /
+ * `"<thing>.<created|updated|changed|removed|completed>"` /
  * `"<thing>.group_<created|updated|removed>"`.
  */
-export function notificationEventKind(eventName: string): NotificationEventKind {
+export function notificationEventKind(
+  eventName: string,
+): NotificationEventKind {
   if (eventName.startsWith("sync_conflict.")) return "CONFLICT";
   // A reminder nudge ("reminder.fired") reports no change to any session.
   if (eventName.startsWith("reminder.")) return "REMINDER";
   if (eventName.endsWith(".ready")) return "READY";
+  if (eventName.endsWith("completed")) return "COMPLETED";
   if (eventName.endsWith("created")) return "CREATED";
   if (eventName.endsWith("updated") || eventName.endsWith("changed"))
     return "UPDATED";
@@ -138,8 +142,7 @@ export interface RescheduleConflictsResponse {
   /** Tasks successfully re-placed (each recorded as a `SYSTEM_MOVE`). */
   rescheduled: DisplacedSessionRef[];
   /**
-   * Tasks that could not be re-placed conflict-free (still conflicting). A
-   * `PINNED` task that clashes is always listed here: the scheduler never moves it.
+   * Tasks that could not be re-placed conflict-free (still conflicting).
    */
   failedSessionIds: string[];
   /** Undo handle for every move this call made (`POST /sessions/undo/:groupId`). Absent when nothing moved. */

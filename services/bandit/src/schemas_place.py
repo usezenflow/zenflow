@@ -19,8 +19,11 @@ from src.core.constants import (
     PREFERENCE_MATRIX_LENGTH,
     TIME_GRANULARITY,
 )
+from src.core.hybrid import Z_DIM
+from src.core.marks import weak_score
 from src.core.reason import PlacementReason
 from src.schemas import ArmId, ArmState
+from src.schemas_prep import MarkWire
 
 PLACEMENT_CONTRACT_VERSION = 3
 MAX_MEMBERS = 64
@@ -38,8 +41,8 @@ Outcome = Literal[
 ]
 WorkloadType = Literal["LECTURE", "ASSIGNMENT", "EXAM", "TASK", "DND"]
 # ADR-0022: how firmly a flexible session holds its slot.
-Anchor = Literal["AUTO", "CHOSEN", "PINNED"]
-ChosenMoves = Literal["ASK", "ALLOW", "FORBID"]
+# level-up plan: what the flexible session is for (drives the hybrid cross features).
+PlanKind = Literal["EXAM", "ASSIGNMENT", "TASK"]
 
 
 class _Req(BaseModel):
@@ -80,6 +83,7 @@ class PlacementMember(_Req):
     prev_start_ms: int | None = None
     primary_policy: PlacementPolicy
     compute_both: bool
+    plan_kind: PlanKind = "TASK"
 
     @model_validator(mode="after")
     def _check(self) -> PlacementMember:
@@ -93,14 +97,12 @@ class FlexibleWire(_Req):
     duration_minutes: int = Field(gt=0)
     deadline_ms: int
     start_ms: int
-    anchor: Anchor = "AUTO"
     completed: bool = False
     series_id: str | None = None
 
 
 class InfeasibleContext(_Req):
     policy: Literal["ACCEPT_CONFLICTS", "ACCEPT_LATE_DEADLINE"] | None = None
-    chosen_moves: ChosenMoves = "ASK"
     flexible: list[FlexibleWire]
     fixed: list[IntervalMs]
     horizon_occupied: list[IntervalMs]
@@ -109,6 +111,19 @@ class InfeasibleContext(_Req):
 class UserWire(_Req):
     preference_matrix: list[float]
     observation_count: float = Field(ge=0)
+    focus_band: Literal["MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT"] | None = None
+    # Marks profile (level-up plan): letters over credits and the GPA on 4.
+    marks: list[MarkWire] = Field(default_factory=list, max_length=200)
+    avg_gpa4: float | None = Field(default=None, ge=0, le=4)
+
+    @property
+    def has_marks(self) -> bool:
+        return bool(self.marks) or self.avg_gpa4 is not None
+
+    @property
+    def weak(self) -> float:
+        """``weak`` in 0..1; the cohort mean when there are no marks yet."""
+        return weak_score([(m.letter, m.credits) for m in self.marks], self.avg_gpa4)
 
     @model_validator(mode="after")
     def _check(self) -> UserWire:
@@ -127,12 +142,19 @@ class BanditWire(_Req):
     alpha: float = Field(ge=0)
     ridge: float = Field(gt=0)
     state: dict[ArmId, ArmState]
+    # Shared beta of the hybrid model (level-up plan). None: disjoint LinUCB only.
+    shared: ArmState | None = None
 
     @model_validator(mode="after")
     def _check(self) -> BanditWire:
         d = FEATURE_DIM
         if not (math.isfinite(self.alpha) and math.isfinite(self.ridge)):
             raise ValueError("alpha and ridge must be finite")
+        if self.shared is not None:
+            if self.shared.A and len(self.shared.A) != Z_DIM * Z_DIM:
+                raise ValueError(f"shared.A must have length {Z_DIM * Z_DIM}")
+            if self.shared.b and len(self.shared.b) != Z_DIM:
+                raise ValueError(f"shared.b must have length {Z_DIM}")
         for arm, st in self.state.items():
             if st.A and len(st.A) != d * d:
                 raise ValueError(f"{arm}.A must have length {d * d}")
@@ -189,6 +211,9 @@ class LinucbPick(_Resp):
     score: float
     selected_arm: ArmId
     feature_vector: list[float]
+    # Hybrid cross features of the picked (day, arm); the backend stores them so a
+    # delayed reward can update the shared beta.
+    cross_features: list[float]
     weights: Weights
 
 
@@ -196,7 +221,6 @@ class Move(_Resp):
     id: str
     from_ms: int
     to_ms: int
-    anchor: Literal["AUTO", "CHOSEN"]
     cost: float
 
 

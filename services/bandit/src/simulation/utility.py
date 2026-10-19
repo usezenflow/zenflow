@@ -81,4 +81,7 @@ def slot_utility(
         u = u + 0.4 * p.cram_weight * float(np.exp(-ctx.days_left / 2.0))
     if p.plan_weight:
         u = u + p.plan_weight * min(ctx.days_left, 10.0) / 10.0
+    if p.weak_effect and p.weak:
+        # hypothesis (level-up plan): weak students start further ahead of the due date
+        u = u + p.weak_effect * p.weak * min(ctx.days_left, 10.0) / 10.0
     return np.asarray(u, dtype=np.float64)

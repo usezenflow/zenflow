@@ -38,7 +38,7 @@ import {
 import { Glass } from "@/components/ui/glass";
 import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
-import { useToast } from "@/components/ui/toast";
+import type { ToastFn } from "@/components/ui/toast";
 import { getBaseURL } from "@/lib/api-client";
 import { escapeHtml } from "@/lib/file-link";
 import { loadGeistWebviewFontDataUri } from "@/lib/geist-webview-font";
@@ -237,6 +237,7 @@ export function DescriptionFieldEditor({
   onClose,
   onUpload,
   disabled,
+  toast,
 }: {
   initialValue: string;
   onChange: (value: string) => void;
@@ -244,10 +245,11 @@ export function DescriptionFieldEditor({
   /** Ids of files just uploaded here, so the form can clean up dropped ones. */
   onUpload?: (ids: string[]) => void;
   disabled?: boolean;
+  /** The caller's `toast`: this chunk loads lazily and must not look up the provider itself. */
+  toast: ToastFn;
 }) {
   useLanguage();
   const { isDarkColorScheme } = useColorScheme();
-  const { toast } = useToast();
   // The content the editor currently owns: `initialValue` at first mount,
   // then whatever the user has typed since (kept current in `onChange`), or
   // whatever the parent later hands down as a new `initialValue`.

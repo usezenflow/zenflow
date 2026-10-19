@@ -8,6 +8,7 @@ export function localizeNotification<
     title = title
       .replace(/^New assignment: /, "Bài tập mới: ")
       .replace(/^New exam: /, "Lịch thi mới: ")
+      .replace(/^Assignment done: /, "Đã nộp bài: ")
       .replace(/^Updated: /, "Đã cập nhật: ")
       .replace(/^Lectures removed: /, "Đã xóa lịch học: ");
     if (row.eventName.includes(".group_") && !title.startsWith("You have ")) {
@@ -56,6 +57,8 @@ export function localizeNotification<
       title = `Bạn có ${title}`;
     }
     const copy: Record<string, string> = {
+      "Spark added to your egg.": "Đã thêm tia lửa vào quả trứng của bạn.",
+      "Checked off from LMS.": "Đã đánh dấu hoàn thành từ LMS.",
       "Plan it before it's due.": "Hãy lên kế hoạch trước hạn nộp.",
       "Plan them before they're due.": "Hãy lên kế hoạch trước hạn nộp.",
       "Plan your revision now.": "Hãy lên lịch ôn tập ngay.",
@@ -193,9 +196,9 @@ export function localizeNotification<
             ? "hạn nộp LMS"
             : value;
     title = title.replace(
-      /^(\d+) tasks? clash(?:es)? with (.+)$/,
+      /^(\d+) (?:tasks?|plans?) clash(?:es)? with (.+)$/,
       (_, n: string, source: string) =>
-        `${n} công việc trùng với ${label(source)}`,
+        `${n} kế hoạch trùng với ${label(source)}`,
     );
     content = content.replace(/^Reschedule them now\?$/, "Sắp xếp lại ngay?");
     title = title.replace(
@@ -203,9 +206,9 @@ export function localizeNotification<
       (_, source: string) => `Lịch bị trùng sau khi đồng bộ ${label(source)}`,
     );
     content = content.replace(
-      /^After syncing with (.+), we detected (.+) with your own tasks\. Reschedule them all\?$/,
+      /^After syncing with (.+), we detected (.+) with your own (?:tasks|plans)\. Reschedule them all\?$/,
       (_, source: string, count: string) =>
-        `Sau khi đồng bộ ${label(source)}, đã phát hiện ${count.replace(/conflicts?/g, "lịch trùng")} với các công việc của bạn. Sắp xếp lại tất cả?`,
+        `Sau khi đồng bộ ${label(source)}, đã phát hiện ${count.replace(/conflicts?/g, "lịch trùng")} với các kế hoạch của bạn. Sắp xếp lại tất cả?`,
     );
   }
   return { ...row, title, content };

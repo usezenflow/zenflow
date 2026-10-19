@@ -1,5 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { DEFAULT_USER_NAME } from "@zenflow/shared";
 import { NotificationsService } from "../notifications/notifications.service";
 import { NotificationEvent } from "../notifications/types";
 import { PortalAPIService } from "../portal/portal-api.service";
@@ -13,11 +14,14 @@ import {
 import { idempotencyKey } from "../queue/queue.types";
 import type { PortalMarksYear } from "./core/parse-student";
 import { parseMarks, parseStudentInfo } from "./core/parse-student";
+import { marksEligible, type SeasonOverrides } from "./core/seasonal-policy";
+import { resolveSemester } from "./core/semester";
+import { seasonOverrides } from "./season-config";
 import { PortalSessionService } from "./portal-session.service";
 import { errorMessage, sleep } from "./watcher-support";
 
-/** Marks are refreshed at most this often by the watcher. */
-export const MARKS_REFRESH_MS = 24 * 60 * 60_000;
+/** Marks are refreshed at most this often once due (`INGESTION_MARKS_PERIOD_MS`). */
+export const DEFAULT_MARKS_PERIOD_MS = 60 * 60_000;
 
 export interface StudentSyncResult {
   ok: boolean;
@@ -34,6 +38,9 @@ export interface StudentSyncResult {
 export class StudentSyncService {
   private readonly logger = new Logger(StudentSyncService.name);
   private readonly requestDelayMs: number;
+  private readonly marksPeriodMs: number;
+  private readonly dluTimezone: string;
+  private readonly season: SeasonOverrides;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -46,6 +53,11 @@ export class StudentSyncService {
     this.requestDelayMs = Number(
       this.config.get("INGESTION_REQUEST_DELAY_MS") ?? 750,
     );
+    this.marksPeriodMs =
+      Number(this.config.get("INGESTION_MARKS_PERIOD_MS")) ||
+      DEFAULT_MARKS_PERIOD_MS;
+    this.dluTimezone = this.config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
+    this.season = seasonOverrides(this.config);
   }
 
   /** Fetch name, class, cohort and study programs; then queue the marks job. */
@@ -53,13 +65,16 @@ export class StudentSyncService {
     data: ProfileJobData,
     now = new Date(),
   ): Promise<StudentSyncResult> {
-    const token = await this.session.token(data.userId);
-    if (!token) return { ok: false };
-
-    const info = parseStudentInfo(await this.portal.fetchStudentInfo(token));
+    const fetched = await this.session.withToken(data.userId, async (token) => {
+      const rawInfo = await this.portal.fetchStudentInfo(token);
+      await sleep(this.requestDelayMs);
+      const rawPrograms = await this.portal.fetchStudyPrograms(token);
+      return { rawInfo, rawPrograms };
+    });
+    if (!fetched.ok) return { ok: false };
+    const info = parseStudentInfo(fetched.value.rawInfo);
     if (!info) throw new Error("The portal returned no student profile");
-    await sleep(this.requestDelayMs);
-    const programs = await this.portal.fetchStudyPrograms(token);
+    const programs = fetched.value.rawPrograms;
 
     // Type 1 is the student's main program.
     const main = programs.find((p) => p.Type === 1) ?? programs[0];
@@ -75,6 +90,11 @@ export class StudentSyncService {
       where: { userId: data.userId },
       create: { userId: data.userId, ...fields },
       update: fields,
+    });
+    // The DLU name fills the placeholder only; a name the student set wins.
+    await this.prisma.user.updateMany({
+      where: { id: data.userId, name: DEFAULT_USER_NAME },
+      data: { name: info.fullName },
     });
     for (const program of programs) {
       await this.prisma.studyProgram.upsert({
@@ -115,16 +135,18 @@ export class StudentSyncService {
     });
     if (programs.length === 0) return { ok: true };
 
-    const token = await this.session.token(data.userId);
-    if (!token) return { ok: false };
-
-    const years: PortalMarksYear[] = [];
-    let first = true;
-    for (const { studyProgramId } of programs) {
-      if (!first) await sleep(this.requestDelayMs);
-      first = false;
-      years.push(...(await this.portal.fetchMarks(token, studyProgramId)));
-    }
+    const fetched = await this.session.withToken(data.userId, async (token) => {
+      const years: PortalMarksYear[] = [];
+      let first = true;
+      for (const { studyProgramId } of programs) {
+        if (!first) await sleep(this.requestDelayMs);
+        first = false;
+        years.push(...(await this.portal.fetchMarks(token, studyProgramId)));
+      }
+      return years;
+    });
+    if (!fetched.ok) return { ok: false };
+    const years = fetched.value;
     const parsed = parseMarks(years);
 
     for (const mark of parsed.marks) {
@@ -194,17 +216,83 @@ export class StudentSyncService {
     }
   }
 
-  /** Students whose profile is missing, or whose marks are older than the refresh period. */
+  /**
+   * Students whose marks are due. The first fetch follows the profile; after that
+   * marks are refetched every {@link DEFAULT_MARKS_PERIOD_MS} from one week after the
+   * student's first exam of the current term ends, and not before.
+   */
   async dueForMarks(now: Date, limit: number): Promise<MarksJobData[]> {
-    const cutoff = new Date(now.getTime() - MARKS_REFRESH_MS);
+    const cutoff = new Date(now.getTime() - this.marksPeriodMs);
+    const term = resolveSemester(now, this.dluTimezone, 0);
+    // A superset by exam start; the exact end is checked below.
+    const examStartedBy = new Date(
+      now.getTime() - this.season.marksAfterExamsMs,
+    );
     const rows = await this.prisma.studentProfile.findMany({
       where: {
-        OR: [{ marksFetchedAt: null }, { marksFetchedAt: { lt: cutoff } }],
+        OR: [
+          { marksFetchedAt: null },
+          {
+            marksFetchedAt: { lt: cutoff },
+            user: {
+              sessions: {
+                some: {
+                  type: "EXAM",
+                  source: "PORTAL",
+                  deleted: false,
+                  scheduledStartTime: {
+                    gte: term.startDate,
+                    lte: examStartedBy,
+                  },
+                },
+              },
+            },
+          },
+        ],
       },
       orderBy: [{ marksFetchedAt: { sort: "asc", nulls: "first" } }],
-      take: limit,
-      select: { userId: true, integrationId: true },
+      take: limit * 4,
+      select: {
+        userId: true,
+        integrationId: true,
+        marksFetchedAt: true,
+      },
     });
-    return rows;
+    if (rows.length === 0) return [];
+
+    const exams = await this.prisma.session.findMany({
+      where: {
+        userId: { in: rows.map((r) => r.userId) },
+        type: "EXAM",
+        source: "PORTAL",
+        deleted: false,
+        scheduledStartTime: { gte: term.startDate, lte: term.endDate },
+      },
+      orderBy: { scheduledStartTime: "asc" },
+      select: { userId: true, scheduledStartTime: true, durationMinutes: true },
+    });
+    const firstEnd = new Map<string, Date>();
+    for (const exam of exams) {
+      if (firstEnd.has(exam.userId) || !exam.scheduledStartTime) continue;
+      firstEnd.set(
+        exam.userId,
+        new Date(
+          exam.scheduledStartTime.getTime() + exam.durationMinutes * 60_000,
+        ),
+      );
+    }
+
+    return rows
+      .filter(
+        (r) =>
+          r.marksFetchedAt === null ||
+          marksEligible({
+            now,
+            firstExamEndsAt: firstEnd.get(r.userId) ?? null,
+            overrides: this.season,
+          }),
+      )
+      .slice(0, limit)
+      .map(({ userId, integrationId }) => ({ userId, integrationId }));
   }
 }

@@ -1,6 +1,5 @@
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
-import { completeStep } from "@/hooks/use-checklist";
 import {
   connectIntegration,
   disconnectIntegration,
@@ -84,7 +83,7 @@ function ProviderIcon({
         failing
           ? "bg-destructive/15"
           : connected
-            ? "bg-emerald-500/15"
+            ? "bg-brand-lime/25 dark:bg-brand-lime/40"
             : "bg-muted",
       )}
     >
@@ -94,7 +93,7 @@ function ProviderIcon({
           failing
             ? "text-destructive"
             : connected
-              ? "text-emerald-600"
+              ? "text-brand-lime"
               : "text-muted-foreground"
         }
       />
@@ -105,7 +104,7 @@ function ProviderIcon({
         </View>
       ) : (
         connected && (
-          <View className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card bg-emerald-500" />
+          <View className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-card bg-brand-lime/70 dark:bg-brand-lime" />
         )
       )}
     </View>
@@ -335,7 +334,6 @@ export function DluAccountsSection({
               { signal: controller.signal },
             );
       updateIntegration(selectedProvider, status);
-      if (mode === "connect") completeStep("connect-dlu");
       toast(
         mode === "connect" ? t("Connected") : t("Credentials updated"),
         "success",
@@ -452,7 +450,7 @@ export function DluAccountsSection({
                     numberOfLines={1}
                     className={cn(
                       "mt-0.5 text-[13px]",
-                      subtitle.tone === "ok" && "text-emerald-600",
+                      subtitle.tone === "ok" && "text-brand-lime",
                       subtitle.tone === "error" && "text-destructive",
                       subtitle.tone === "muted" && "text-muted-foreground",
                     )}

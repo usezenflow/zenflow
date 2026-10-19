@@ -41,6 +41,25 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Placeholder card while the DLU profile syncs; same footprint as {@link StudentCard}. */
+export function StudentCardSkeleton() {
+  return (
+    <View testID="settings.student-card-skeleton" className="gap-3 border-t border-border px-4 py-3.5">
+      <View className="flex-row items-center gap-3">
+        <Skeleton className="h-11 w-11 rounded-full" />
+        <View className="min-w-0 flex-1 gap-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-24" />
+        </View>
+      </View>
+      <View className="flex-row flex-wrap gap-1.5">
+        <Skeleton className="h-5 w-20 rounded-full" />
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </View>
+    </View>
+  );
+}
+
 /**
  * The DLU student profile under the account row: class, cohort, program and
  * GPA, with the marks one tap away. Hidden until the first profile fetch lands.

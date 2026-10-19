@@ -12,7 +12,6 @@ owns:
   - backend/src/reminders/**
   - backend/src/mail/**
   - backend/src/streaks/**
-  - backend/src/daily-push/**
   - backend/src/course-colours/**
   - backend/src/files/**
   - backend/src/prisma/**
@@ -22,6 +21,8 @@ owns:
   - backend/src/crypto/**
   - backend/prisma/**
   - backend/scripts/send-test-notification.ts
+  - backend/src/places/**
+  - backend/src/spirits/**
   - packages/shared/**
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---

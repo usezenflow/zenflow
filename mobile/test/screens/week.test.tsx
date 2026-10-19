@@ -13,10 +13,6 @@ import { renderScreen } from "@/test/utils/render";
 // Chrome and sheets with their own ownership / native deps. The pager,
 // header and day timeline are real.
 vi.mock("@/components/notification-bell", () => ({ NotificationBell: () => null }));
-vi.mock("@/components/checklist/getting-started", () => ({ GettingStarted: () => null }));
-vi.mock("@/components/tasks/create-task-fab", () => ({ CreateSessionFab: () => null }));
-vi.mock("@/components/calendar/block-actions-sheet", () => ({ BlockActionsSheet: () => null }));
-vi.mock("@/components/calendar/reschedule-sheet", () => ({ RescheduleSheet: () => null }));
 vi.mock("@/components/calendar/update-recurring-sheet", () => ({ UpdateRecurringSheet: () => null }));
 vi.mock("@/lib/tab-bar-metrics", () => ({ useTabBarOverlayHeight: () => 0 }));
 
@@ -87,8 +83,8 @@ describe("WeekScreen", () => {
   it("opens the session detail sheet in place when a block is tapped", async () => {
     renderScreen(<WeekScreen />);
     fireEvent.click(await block("a"));
-    expect((await screen.findByTestId("session-detail-title")).textContent).toBe("Algorithms lecture");
-    expect(screen.getByTestId("session-detail-edit")).toBeTruthy();
+    await screen.findByTestId("session.editor");
+    expect(screen.getByDisplayValue("Algorithms lecture")).toBeTruthy();
     expect(router.push).not.toHaveBeenCalled();
   });
 
@@ -97,9 +93,9 @@ describe("WeekScreen", () => {
     sessions = [makeSession({ id, title: "Weekly lab", seriesId: "series1", rrule: "FREQ=WEEKLY" })];
     renderScreen(<WeekScreen />);
     fireEvent.click(await block(id));
-    fireEvent.click(await screen.findByTestId("session-detail-edit"));
+    expect(await screen.findByTestId("session.repeat")).toBeTruthy();
     await waitFor(() =>
-      expect(router.push).toHaveBeenCalledWith(`/task/${encodeURIComponent(id)}/edit`),
+      expect(screen.getByDisplayValue("Weekly lab")).toBeTruthy(),
     );
   });
 
@@ -108,12 +104,10 @@ describe("WeekScreen", () => {
     fireEvent.click(screen.getByLabelText("Friday, October 16"));
     await screen.findAllByLabelText("Add a session to this day");
     fireEvent.click(focusedPage(screen.getAllByLabelText("Add a session to this day")));
-    expect(router.push).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pathname: "/task/new",
-        params: { start: expect.stringMatching(/^2026-10-16T/) },
-      }),
-    );
+    expect(router.navigate).toHaveBeenCalledWith({
+      pathname: "/",
+      params: { quickAdd: "1" },
+    });
   });
 
   it("switches day from the chip strip, loads it and offers 'Jump to today'", async () => {

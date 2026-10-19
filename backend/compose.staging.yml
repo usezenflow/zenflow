@@ -27,6 +27,7 @@ services:
       - bandit
       - mail
       - storage
+      - geo
       - o11y
     depends_on:
       storage:
@@ -53,6 +54,7 @@ services:
       - .env.staging
     environment:
       ROLE: api
+      NOMINATIM_URL: http://nominatim:8080
       SWAGGER_ENABLED: "true"
       INGESTION_OCCURRENCE_CACHE_ENABLED: "true"
       OTEL_SDK_DISABLED: "false"
@@ -197,6 +199,36 @@ services:
       retries: 3
       start_period: 30s
 
+
+  # Place search for the location screen. Run scripts/nominatim-extract.sh on the
+  # host first. The first start imports the Lam Dong extract (a few minutes);
+  # search is empty until /status returns OK. Capped so an import cannot starve
+  # the stack. Only the API reaches it, over the geo network.
+  nominatim:
+    container_name: zenflow-nominatim-staging
+    image: mediagis/nominatim:5.1
+    expose:
+      - "8080"
+    shm_size: 1gb
+    environment:
+      PBF_PATH: /pbf/lamdong.osm.pbf
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:-nominatim}
+      IMPORT_STYLE: full
+      THREADS: 2
+    mem_limit: 2g
+    cpus: 2
+    volumes:
+      - ./nominatim/lamdong.osm.pbf:/pbf/lamdong.osm.pbf:ro
+      - nominatim_data:/var/lib/postgresql/16/main
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 300s
+    restart: unless-stopped
+    networks:
+      - geo
 
   bandit:
     profiles: ["template"]
@@ -706,6 +738,8 @@ services:
       - ./nginx/sse.conf:/etc/nginx/zenflow/sse.conf:ro
       - ./nginx/grafana.conf:/etc/nginx/zenflow/grafana.conf:ro
       - ./nginx/minio.conf:/etc/nginx/zenflow/minio.conf:ro
+      - ./nginx/maps.conf:/etc/nginx/zenflow/maps.conf:ro
+      - ./tiles:/srv/maps:ro
     depends_on:
       grafana:
         condition: service_started
@@ -784,6 +818,9 @@ networks:
     internal: true
   o11y:
     driver: bridge
+  geo:
+    driver: bridge
+
 volumes:
   storage_data:
   postgres_data:
@@ -797,3 +834,4 @@ volumes:
   redis_queue_data:
   backup_metrics:
   redis_killswitch_data:
+  nominatim_data:

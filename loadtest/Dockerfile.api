@@ -14,11 +14,14 @@ FROM base AS builder
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY patches ./patches
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/spirits/package.json ./packages/spirits/
 COPY backend/package.json ./backend/
 RUN pnpm install --frozen-lockfile --filter backend...
 COPY packages/shared ./packages/shared
+COPY packages/spirits ./packages/spirits
 COPY backend ./backend
 RUN pnpm --filter @zenflow/shared build \
+ && pnpm --filter @zenflow/spirits build \
  && pnpm --filter backend exec prisma generate \
  && pnpm --filter backend build
 RUN pnpm deploy --filter=backend --prod --legacy /app/deploy

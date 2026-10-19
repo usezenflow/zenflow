@@ -18,6 +18,8 @@ _PURPOSES = {
     "tiebreak": 6,
     "bootstrap": 7,
     "daytime": 8,
+    "interaction": 9,
+    "plankind": 10,
 }
 
 

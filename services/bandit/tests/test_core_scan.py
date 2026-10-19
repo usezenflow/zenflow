@@ -162,3 +162,15 @@ def test_linucb_vectorized_matches_scalar() -> None:
         assert got is not None and best is not None
         assert got.start_ms == best[-1]
         assert got.stability_weight == w_s
+
+
+def test_deadline_penalty_fades_over_horizon() -> None:
+    from src.core.constants import DEADLINE_PENALTY_HORIZON_HOURS, HOUR_MS
+    from src.core.slot_score import deadline_penalty
+
+    d = 100 * HOUR_MS
+    assert deadline_penalty(d, d, 0.2) == -0.2
+    assert deadline_penalty(d - DEADLINE_PENALTY_HORIZON_HOURS * HOUR_MS, d, 0.2) == 0
+    assert deadline_penalty(d - 1000 * HOUR_MS, d, 0.2) == 0
+    mid = deadline_penalty(d - DEADLINE_PENALTY_HORIZON_HOURS * HOUR_MS // 2, d, 0.2)
+    assert -0.2 < mid < 0

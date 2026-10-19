@@ -7,6 +7,8 @@ import {
   ingestionSignInFailures,
 } from "../observability/metrics";
 import { IntegrationsService } from "../integrations/integrations.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import { LMSService, type LmsSession } from "../lms/lms.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { occurrencesFromLms } from "./core/occurrences";
@@ -103,6 +105,7 @@ export class LmsWatcherService {
     private readonly cache: OccurrenceCacheService,
     private readonly fanout: OccurrenceFanoutService,
     private readonly schedule: IngestionScheduleService,
+    private readonly sessions: UpstreamSessionCache,
   ) {
     this.endpoint = this.config.get<string>("LMS_URL") ?? "";
     this.timezone = this.config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
@@ -226,6 +229,9 @@ export class LmsWatcherService {
         });
         okItems += 1;
       } catch (error) {
+        if (error instanceof UpstreamSessionRejectedError) {
+          await this.sessions.invalidate(target.userId, "lms");
+        }
         // One bad month does not abort the run: the other month may well have
         // come back fine, and the item row records exactly what went wrong.
         allFetchesOk = false;
@@ -511,7 +517,9 @@ export class LmsWatcherService {
         target.userId,
         "LMS",
       );
-      const result = await this.lms.login(creds.username, creds.password);
+      const result = await this.sessions.getOrLogin(target.userId, "lms", () =>
+        this.lms.login(creds.username, creds.password),
+      );
       if (!result.ok) {
         await this.jobs.finishJob("LMS", jobId, "FAILED");
         ingestionSignInFailures.add(1, { provider: "LMS", reason: "rejected" });

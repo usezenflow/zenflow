@@ -54,6 +54,7 @@ export function GlassButton({
   style,
   accessibilityState,
   haptic = true,
+  destructive = false,
 }: {
   /** Required: icon-only buttons have no visible text. */
   accessibilityLabel: string;
@@ -72,9 +73,12 @@ export function GlassButton({
   accessibilityState?: { selected?: boolean; expanded?: boolean };
   /** Selection haptic on press. Turn off when the parent already fires one. */
   haptic?: boolean;
+  /** Red ink and a faint red wash, for a delete control. */
+  destructive?: boolean;
 }) {
   const { isDarkColorScheme } = useColorScheme();
   const theme = isDarkColorScheme ? NAV_THEME.dark : NAV_THEME.light;
+  const ink = destructive ? theme.notification : theme.text;
   const iconOnly = children == null;
 
   return (
@@ -130,7 +134,16 @@ export function GlassButton({
                   }
             }
           >
-            {Icon ? <Icon size={iconSize} color={theme.text} /> : null}
+            {destructive ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  StyleSheet.absoluteFill,
+                  { borderRadius: CIRCLE_RADIUS, backgroundColor: theme.notification, opacity: 0.14 },
+                ]}
+              />
+            ) : null}
+            {Icon ? <Icon size={iconSize} color={ink} /> : null}
             {iconOnly ? null : typeof children === "string" ? (
               <Text className="text-[13px] font-semibold">{children}</Text>
             ) : (

@@ -1,17 +1,27 @@
 # DLU ingestion
 
-For: developers on `src/ingestion/`, `lms/`, `portal/`, `integrations/`. Diagram: [ingestion-components.svg](../architecture/ingestion-components.svg). Env vars: [config.md](config.md#dlu-ingestion).
+For: developers on `src/ingestion/`, `lms/`, `portal/`, `integrations/`. Diagrams: [ingestion-components.svg](../architecture/ingestion-components.svg), [notifications-components.svg](../architecture/notifications-components.svg). Env vars: [config.md](config.md#dlu-ingestion).
 
 Pulls a student's Moodle assignments/quizzes, class timetable and exam schedule onto their calendar, plus a notification inbox. API-only: no scraping, no headless browser.
 
 ## Rules
 
 - **One rolling watcher.** A 5 second heartbeat is the only scheduled trigger. Each integration and kind has its own due time; every tick claims the least recently synced batch (never-synced first, at least one student) and splits it into queue jobs. The claim is the at-most-once guard.
-- LMS deadlines are checked hourly; timetable and exams daily.
+- **Cadence by kind:**
+
+  | Kind | Runs | Stops or parks when |
+  | --- | --- | --- |
+  | Discovery | hourly around a semester change | the student is discovered for the term (parked until the next term's lookahead) |
+  | Timetable | every 3 h; at the start of each ISO week once 95% of students are discovered | n/a |
+  | Exams | hourly from 1 Oct, 1 Mar and 1 Jun to the end of the term | the response covers every section the student is enrolled in (parked to the term end) |
+  | Marks | first fetch after the profile; then hourly from one week after the student's first exam of the term ends | the term ends with no new exams |
+  | LMS calendar | every 15 min | n/a |
+
+  The exam window, the weekly timetable and the marks wait can be overridden for a benchmark: `INGESTION_EXAM_WINDOW`, `INGESTION_TIMETABLE_WEEKLY_MS`, `INGESTION_MARKS_AFTER_EXAMS_MS` ([config.md](config.md#dlu-ingestion)). The rules live in `core/seasonal-policy.ts`.
 - **Connect** queues two jobs at once: the student profile fetch and enrolment discovery. Nothing waits for the watcher.
 - **DKHP discovery** reads a student's registration history once per semester, spread across students. It keeps sections whose latest event is a registration.
   - The watcher claims a timetable row only after discovery covered the current semester (LMS: after any discovery). It never narrows the confirmed set on failure.
-- **Exams** are a plain fetch of a rolling window: no cache, no fanout.
+- **Exams** are a plain fetch while the window is open: no cache, no fanout.
 - **Idempotent by external key**, student-independent by design. That makes the cross-student cache possible.
 - **Confirm/miss gate:**
   - First sighting writes the `Session` at once (visible) but raises no notification until a second consecutive run confirms it.
@@ -36,14 +46,14 @@ Pulls a student's Moodle assignments/quizzes, class timetable and exam schedule 
 - **Month job:** reads the month from the cache when every confirmed course is fresh and matches the student's own last view of that month (per-month state in `LmsCourseWindow` and `LmsCourseSeen`), else fetches that month alone. A quiz opened this month and closed next counts as seen, so it is not retired.
 - **Run:** a pass over weeks or months is a `SyncRun` with one `SyncRunUnit` per job. Units finish in any order. The job that settles the last one records the schedule outcome; if any unit failed, the claim is handed back. A run whose jobs vanished is closed as failed after 30 minutes.
 - **Timetable notice:** week jobs write sessions silently and report how many lectures they created and how many rows they changed. A run raises at most one notice. When the student had no lectures in the term yet, the first week that creates any raises "Sem 1 timetable is live" ("Still syncing, check back soon."), once per student and term, also to classmates reached by fan-out. Otherwise the run raises one notice when it settles, from the summed counts: "3 new lectures" ("A new lecture" for one), or "Your timetable changed" when only edits or removals were found. A transaction-scoped advisory try-lock lets one job write it; a concurrent job skips instead of waiting.
-- **Profile and marks:** `StudentProfile`, `StudyProgram`, `StudentMark` and `StudentTermResult` hold normalised fields only. The marks payload repeats phone and birthday on every row, so no raw body is stored. Marks refresh daily; the first time they land the student gets "Your marks are available". Read with `GET /users/me/student` and `GET /users/me/marks` ([api.md](api.md#users-users)).
+- **Profile and marks:** `StudentProfile`, `StudyProgram`, `StudentMark` and `StudentTermResult` hold normalised fields only. The marks payload repeats phone and birthday on every row, so no raw body is stored. Marks refresh as in the cadence table; the first time they land the student gets "Your marks are available". Read with `GET /users/me/student` and `GET /users/me/marks` ([api.md](api.md#users-users)).
 
 ## Queues
 
 [ADR-0007](../adr/0007-bullmq-for-notification-queue.md), roles in [ADR-0011](../adr/0011-separate-api-worker-processes.md), env in [config.md](config.md#queues-and-sse-fan-out).
 
 - Queues: `portal-fetch`, `portal-profile`, `portal-marks`, `portal-discovery`, `portal-week`, `lms-fetch`, `lms-discovery`, `lms-month`, `notify`. `worker-portal` consumes every `portal-*` queue, `worker-lms` every `lms-*` queue.
-- Discovery jobs use `disc_scheduleId_dueAt`, unit jobs `<queue>_runId_unit`, profile and marks jobs carry a day bucket. A repeat enqueue is one job.
+- Discovery jobs use `disc_scheduleId_dueAt`, unit jobs `<queue>_runId_unit`, profile jobs carry a day bucket and marks jobs a bucket of the marks period. A repeat enqueue is one job.
 - Queue calls are time-bounded (`QUEUE_ENQUEUE_TIMEOUT_MS`). On the first failure the tick hands back its remaining claims and stops.
 - **Backpressure:** before claiming a kind, the watcher reads `waiting+delayed` of that kind's queue. At `INGESTION_QUEUE_MAX_BACKLOG` it skips the kind, below it trims the batch (a timetable claim counts as about 25 jobs, a calendar claim as 2). Unclaimed rows keep their `nextDueAt`.
 - Each queue runs concurrency 1 per replica. A limiter allows one job start per `INGESTION_REQUEST_DELAY_MS` across replicas (override with `QUEUE_<Q>_RATE_MAX`).
@@ -60,10 +70,40 @@ Pulls a student's Moodle assignments/quizzes, class timetable and exam schedule 
 
 On in staging and prod (`INGESTION_OCCURRENCE_CACHE_ENABLED`); off by default elsewhere. Timetable meetings and Moodle items are cached once per section or course instead of per student.
 
-- A week or month is served from cache only if discovery is fresh, the confirmed set is non-empty, and every unit was read within `INGESTION_CACHE_TTL_MS` (7 days) for that week or month.
+- A week or month is served from cache only if discovery is fresh, the confirmed set is non-empty, and every unit was read within `INGESTION_CACHE_TTL_MS` (30 days) for that week or month.
 - Past the TTL, one student's live walk refreshes the section and populates every classmate.
+- **Walker order:** see [Walker planning](#walker-planning).
 - **Divergence guard:** a change is fanned out to classmates only once two different students observed the same transition. A student is served from cache only while their own last live view still matches.
 - Measurements: [ingestion-cache-benchmark](../benchmarks/ingestion-cache-benchmark.md) and [`scripts/fixtures/dlu/README.md`](../../backend/scripts/fixtures/dlu/README.md).
+
+## Walker planning
+
+Goal: warm every section's timetable with as few student walks as possible. A walk fetches one student's weeks, and the cache then serves their classmates. Code: `core/walker-planner.ts`, `walker-plan.service.ts`. Decision and pseudocode: [ADR-0027](../adr/0027-walker-planning.md).
+
+1. **Candidates.** Discovered students of the current term whose timetable row has no failures, least recently claimed first. That order is the rotation.
+2. **Weights.** A section's weight is the number of candidates enrolled in it (`droppedAt` null).
+3. **Stale set.** `timetableFreshness` returns the sections not cached through the term end within `INGESTION_CACHE_TTL_MS`.
+4. **Greedy order.** A candidate's score is the summed weight of the stale sections they hold. Take the top scorer, mark their sections warm, recompute, and repeat until no candidate holds a stale section. Ties keep input order.
+5. **Plan cache.** The order is kept for 15 minutes per term. It is empty when `INGESTION_OCCURRENCE_CACHE_ENABLED` is off.
+6. **Claim.** For timetable rows the ticker passes the order to `claimDue`. It reads 10 times the batch, claims planned students first in plan order, then the rest in the usual order.
+7. **Walk.** A claimed student gets one `portal-week` job per remaining ISO week. Each job fetches its week, records every section in the response, and fans out.
+8. **Fan out.** `OccurrenceFanoutService` finds everyone confirmed in the touched sections, capped by `INGESTION_FANOUT_MAX_STUDENTS`, and writes their rows through the materializer. Moved and deleted rows stay as the student left them.
+9. **Rest of the cohort.** A student whose sections are all warm is served from cache with no upstream request. A student with a stale section walks for themselves.
+
+```
+sections:  A 40 students   B 25   C 12   D 6   E 2   F 1
+
+round 1  stale A..F   score: holds A B C = 77 (top)    walk, A B C warm
+round 2  stale D E F  score: holds D E   = 8  (top)    walk, D E warm
+round 3  stale F      score: holds F     = 1            walk, F warm
+everyone else: cache, 0 requests
+```
+
+Edge cases:
+- A student with `consecutiveFailures > 0` is left out, so their sections go to the next enrolled student.
+- A new registration is stale until the next plan. Its own walk still runs when due.
+- A change is fanned out only once two students saw it (divergence guard above).
+- A section with one student gains nothing from fan-out, so it is walked last.
 
 ## Upstream circuit breaker
 

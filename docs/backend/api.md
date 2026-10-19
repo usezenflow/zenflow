@@ -28,8 +28,6 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | GET | `/users/me/streak` | Daily completion streak (`Streak`) |
 | GET | `/users/me/student` | DLU profile (`StudentResponse`); `profile` is null until the first fetch lands |
 | GET | `/users/me/marks` | Marks grouped by term, newest first; names are clean and `noCredit` flags the portal's red star (`StudentMarksResponse`) |
-| GET | `/users/me/daily-push` | Morning brief and evening check-in times (`DailyPushSettings`) |
-| PUT | `/users/me/daily-push` | Set both times (`HH:mm`, user tz) or `null` to turn one off |
 
 - `timezone` is set at signup (`x-timezone`) and editable. Changing it re-keys recurring `exdates`.
 - `defaultReminderMinutes`: 0 none, default 10.
@@ -53,24 +51,21 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 | DELETE | `/sessions/series/:seriesId/truncate?from=` | Recurring: pull `UNTIL` back ("this and following") |
 | DELETE | `/sessions/series/:seriesId/from/:sessionId` | Materialized `TASK` series: delete that sitting and later ones |
 | DELETE | `/sessions/timetable-group/:sessionId[/from]` | Portal `LECTURE`s only: soft-delete a section's meetings |
-| POST | `/sessions/:id/pin` | `TASK` only: anchor `PINNED`. The scheduler never moves it |
-| DELETE | `/sessions/:id/pin` | Anchor back to `AUTO` |
 | POST | `/sessions/placement/confirm` | `{ planId }`: apply a plan the scheduler held for confirmation. Atomic, single use. `201` with `{ session, displacedSessions, undoGroupId }`. `409 PLACEMENT_STALE` when the plan no longer holds |
 | POST | `/sessions/undo/:groupId` | Revert every move and create of one undo group. `201` with `{ undoGroupId, restored, removedSessionIds, skippedSessionIds }` |
-| POST | `/sessions/:id/slot-pick` | `{ slotProposalId, chose }`: record a pairwise A/B pick ([ab-testing](../scheduler/ab-testing.md)). An `alternative` pick sets the anchor to `CHOSEN` and returns `undoGroupId` |
+| POST | `/sessions/:id/slot-pick` | `{ slotProposalId, chose }`: record a pairwise A/B pick ([ab-testing](../scheduler/ab-testing.md)). An `alternative` pick returns `undoGroupId` |
 | POST | `/sessions/:id/complete` | Mark done. Clears skip. Idempotent |
 | DELETE | `/sessions/:id/complete` | Undo done |
 | POST | `/sessions/:id/skip` | Mark skipped (missed). Clears done. Idempotent |
 | DELETE | `/sessions/:id/skip` | Undo skip |
 
-- **Anchors (ADR-0022):** every `Session` carries `anchor` (`AUTO` | `CHOSEN` | `PINNED`) and `anchoredAt`. A drag, "move to" or time pick sets `CHOSEN` on a `TASK`. Pin sets `PINNED`; unpin sets `AUTO`.
 - **Placement reason (#254):** `placementReason` (`PREFERRED_HOUR` | `BEFORE_DEADLINE` | `ONLY_FREE_SLOT` | `NEAR_CLASS` | `MOVED_FOR_DEADLINE` | `BEST_AVAILABLE`, or `null`) says why the scheduler picked the start. It is `null` once the start has moved, or for a fallback placement. See [bandit placement](../bandit/placement.md#reason-codes).
 - **Confirmation:** a create or deadline change whose only plan moves a `CHOSEN` session is not applied.
   - `POST /sessions` answers `409` with `code: "NEEDS_CONFIRMATION"` and `data.plan` (`{ id, sessionId, start, moves[], expiresAt }`). Confirm with `POST /sessions/placement/confirm`.
   - A deadline `PATCH` answers `200` with `placementPlan` set. The session keeps its start; the deadline is saved.
 - **Occurrence move:** `PATCH /sessions/<seriesId>::<startISO>` with `scope: "occurrence"` and a `scheduledStartTime` or `durationMinutes` change excludes that occurrence from the series and returns it as a one-off `Session`. The series keeps its time. Metadata stays series-wide, and a PATCH that also sends `rrule` is a series change.
 - **Undo:** each request that moves sessions returns `undoGroupId`. `POST /sessions/undo/:groupId` reverts that group only. A create in the group is removed (soft delete).
-- **Sync conflicts:** `POST /notifications/:id/reschedule-conflicts` never moves a `PINNED` task (it stays in `failedSessionIds`) and does not displace a `CHOSEN` one. Its `undoGroupId` covers the call.
+- **Sync conflicts:** `POST /notifications/:id/reschedule-conflicts` re-places each conflicting task. Its `undoGroupId` covers the call.
 - **Infeasible deadline:** displacement repacks flexible tasks on the deadline day (EDF, `SYSTEM_MOVE` events, `displacedSessions[]`).
 - If that fails: `409 SCHEDULE_INFEASIBLE` with `options: ["ACCEPT_CONFLICTS","ACCEPT_LATE_DEADLINE"]`. The client retries with `infeasiblePolicy`.
 - Every `Session` carries `late: boolean`.

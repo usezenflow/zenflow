@@ -6,6 +6,7 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -13,7 +14,7 @@ import {
   Min,
   ValidateIf,
 } from "class-validator";
-import { TIME_GRANULARITY } from "../../common/constants";
+import { MAX_COMMUTE_MINUTES, TIME_GRANULARITY } from "../../common/constants";
 import { MAX_SCAN_DAYS } from "../../scheduler/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
 import { IsFeasibleTaskWindow } from "../../common/validators/feasible-task-window.decorator";
@@ -81,6 +82,49 @@ export class CreateSessionDto {
   @MaxLength(200, { message: "Location must be at most 200 characters." })
   location?: string | null;
 
+  /** Map point of the location, set together with `location`. `null` clears it. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  locationLat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  locationLng?: number | null;
+
+  /** Where the commute starts, with its map point and travel minutes each way. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(200, { message: "Origin must be at most 200 characters." })
+  originLocation?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  originLat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  originLng?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsInt()
+  @Min(0)
+  @Max(MAX_COMMUTE_MINUTES)
+  commuteMinutes?: number | null;
+
   /** Session duration in minutes (always a positive multiple of 15, required). */
   @IsInt()
   @Min(TIME_GRANULARITY)
@@ -90,35 +134,13 @@ export class CreateSessionDto {
   /**
    * ISO-8601 deadline — required for a `TASK`, absent for fixed types.
    * `@IsFeasibleTaskWindow` additionally rejects a deadline that leaves no
-   * time to fit `durationMinutes × sessionCount` back-to-back before it (a
+   * time to fit `durationMinutes` before it (a
    * coarse, necessary-not-sufficient check — see that decorator's doc).
    */
   @ValidateIf((o: CreateSessionDto) => o.type === "TASK")
   @IsISO8601()
   @IsFeasibleTaskWindow()
   deadline?: string;
-
-  /**
-   * Number of study sessions (`TASK` only). Omitted or `1` → one ordinary
-   * task; `> 1` → a `TASK` series of N linked sessions spread across
-   * `now … deadline` (see `services/bandit/README.md`).
-   */
-  @IsOptional()
-  @ValidateIf((o: CreateSessionDto) => o.type === "TASK")
-  @IsInt()
-  @Min(1)
-  @Max(MAX_SESSION_COUNT)
-  sessionCount?: number;
-
-  /** Minutes of each session of a series (see `CreateSessionInput.sessionDurations`). */
-  @IsOptional()
-  @ValidateIf((o: CreateSessionDto) => o.type === "TASK")
-  @IsArray()
-  @ArrayMaxSize(MAX_SESSION_COUNT)
-  @IsInt({ each: true })
-  @Min(TIME_GRANULARITY, { each: true })
-  @IsDivisibleBy(TIME_GRANULARITY, { each: true })
-  sessionDurations?: number[];
 
   /** ISO-8601 start — required for the fixed types (`ASSIGNMENT`/`EXAM`/`LECTURE`/`DND`). */
   @ValidateIf((o: CreateSessionDto) => o.type !== "TASK")
@@ -139,6 +161,15 @@ export class CreateSessionDto {
    * Minutes before start to remind the user (max 2, not for DND). Omit on
    * create for the default (60 min, non-DND); `[]` for none.
    */
+  /**
+   * The lecture, exam or assignment this `TASK` prepares for. A recurring
+   * lecture occurrence id (`<seriesId>::<startISO>`) pins that occurrence.
+   */
+  @ValidateIf((o: CreateSessionDto) => o.type === "TASK")
+  @IsOptional()
+  @IsString()
+  prepForSessionId?: string;
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(MAX_REMINDERS_PER_SESSION)

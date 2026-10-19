@@ -1,7 +1,6 @@
-"""Flexible-task displacement: cost-based cascade over anchored sessions.
+"""Flexible-task displacement: cost-based cascade over flexible sessions.
 
-Issue #62 B (EDF eviction with spillover) plus issue #250 (anchors, move cost,
-confirmation for Chosen moves). See ADR-0022.
+Issue #62 B (EDF eviction with spillover) plus issue #250 (move cost).
 """
 
 from __future__ import annotations
@@ -9,14 +8,13 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from .constants import (
     DISPLACE_COST_AUTO,
-    DISPLACE_COST_CHOSEN,
     DISPLACE_COST_CROSS_DAY,
     FROZEN_WINDOW_HOURS,
     HOUR_MS,
@@ -37,8 +35,6 @@ from .slot_score import free_start_mask, slot_preference_scores
 
 _TIE_DECIMALS = 9
 
-Anchor = Literal["AUTO", "CHOSEN", "PINNED"]
-ChosenMoves = Literal["ASK", "ALLOW", "FORBID"]
 FROZEN_WINDOW_MS = FROZEN_WINDOW_HOURS * HOUR_MS
 
 
@@ -48,7 +44,6 @@ class FlexibleTask:
     duration_minutes: int
     deadline_ms: int
     start_ms: int
-    anchor: Anchor = "AUTO"
     completed: bool = False
     series_id: str | None = None
 
@@ -62,7 +57,6 @@ class DisplacementMove:
     id: str
     from_ms: int
     to_ms: int
-    anchor: Anchor = "AUTO"
     cost: float = 0.0
 
 
@@ -75,10 +69,6 @@ class DisplacementPlan:
     @property
     def cost(self) -> float:
         return sum(m.cost for m in self.moves)
-
-    @property
-    def moves_chosen(self) -> bool:
-        return any(m.anchor == "CHOSEN" for m in self.moves)
 
 
 def is_frozen(f: FlexibleTask, now_ms: int, frozen_ms: int = FROZEN_WINDOW_MS) -> bool:
@@ -93,17 +83,10 @@ def is_frozen(f: FlexibleTask, now_ms: int, frozen_ms: int = FROZEN_WINDOW_MS) -
 def is_movable(
     f: FlexibleTask,
     now_ms: int,
-    chosen_moves: ChosenMoves = "ASK",
     frozen_ms: int = FROZEN_WINDOW_MS,
 ) -> bool:
-    """Pinned and frozen never move; Chosen moves unless ``FORBID``."""
-    if f.anchor == "PINNED" or is_frozen(f, now_ms, frozen_ms):
-        return False
-    return not (f.anchor == "CHOSEN" and chosen_moves == "FORBID")
-
-
-def base_cost(anchor: Anchor) -> int:
-    return DISPLACE_COST_CHOSEN if anchor == "CHOSEN" else DISPLACE_COST_AUTO
+    """Frozen tasks never move."""
+    return not is_frozen(f, now_ms, frozen_ms)
 
 
 def _local_day_bounds(ms: int, timezone: str) -> tuple[int, int]:
@@ -113,11 +96,11 @@ def _local_day_bounds(ms: int, timezone: str) -> tuple[int, int]:
     )
 
 
-def move_cost(anchor: Anchor, from_ms: int, to_ms: int, timezone: str) -> float:
-    """Base for the anchor, plus hours moved, plus the cross-day penalty."""
+def move_cost(from_ms: int, to_ms: int, timezone: str) -> float:
+    """Base, plus hours moved, plus the cross-day penalty."""
     ds, de = _local_day_bounds(from_ms, timezone)
     cross = 0 if ds <= to_ms < de else DISPLACE_COST_CROSS_DAY
-    return base_cost(anchor) + abs(to_ms - from_ms) / HOUR_MS + cross
+    return DISPLACE_COST_AUTO + abs(to_ms - from_ms) / HOUR_MS + cross
 
 
 def nearest_free_start(
@@ -165,7 +148,7 @@ def cheapest_free_start(
         return None
     ds, de = _local_day_bounds(task.start_ms, timezone)
     cost = (
-        base_cost(task.anchor)
+        DISPLACE_COST_AUTO
         + np.abs(starts - task.start_ms) / HOUR_MS
         + DISPLACE_COST_CROSS_DAY * ((starts < ds) | (starts >= de))
     )
@@ -208,7 +191,6 @@ def _cascade(
     horizon_end_ms: int,
     max_moves: int,
     timezone: str,
-    protect_chosen: bool,
 ) -> list[DisplacementMove] | None:
     """Settle ``participants`` around ``candidate`` in EDF order.
 
@@ -217,16 +199,8 @@ def _cascade(
     horizon_end)]``, never on a local day holding a sibling sitting. It may
     land on an unsettled participant with a strictly later deadline, which then
     gets its own turn; equal-deadline peers don't ripple-shift.
-
-    ``protect_chosen`` settles Chosen participants first and lets them land
-    only on free time, so a Chosen one moves only when the candidate itself
-    needs its slot. Off, Chosen ones are plain EDF participants, so a cascade
-    chain may run through them.
     """
-    ordered = sorted(
-        participants,
-        key=lambda t: (protect_chosen and t.anchor != "CHOSEN", t.deadline_ms, t.id),
-    )
+    ordered = sorted(participants, key=lambda t: (t.deadline_ms, t.id))
     settled: Intervals = [*obstacles, candidate]
     pos = {f.id: f.start_ms for f in series}
     moves: list[DisplacementMove] = []
@@ -234,11 +208,10 @@ def _cascade(
         if not overlaps_any(settled, p.start_ms, p.end_ms):
             settled.append((p.start_ms, p.end_ms))
             continue
-        bumps_none = protect_chosen and p.anchor == "CHOSEN"
         peers = [
             (q.start_ms, q.end_ms)
             for q in ordered[i + 1 :]
-            if bumps_none or q.deadline_ms <= p.deadline_ms
+            if q.deadline_ms <= p.deadline_ms
         ]
         blocked = (
             _sibling_days(p, series, pos, timezone) if p.series_id is not None else []
@@ -254,7 +227,7 @@ def _cascade(
         if hit is None:
             return None
         slot, cost = hit
-        moves.append(DisplacementMove(p.id, p.start_ms, slot, p.anchor, cost))
+        moves.append(DisplacementMove(p.id, p.start_ms, slot, cost))
         if len(moves) > max_moves:
             return None
         settled.append((slot, slot + p.duration_minutes * MS_PER_MINUTE))
@@ -274,25 +247,21 @@ def plan_displacement(
     max_moves: int | None = None,
     *,
     timezone: str = "UTC",
-    chosen_moves: ChosenMoves = "ASK",
     frozen_ms: int = FROZEN_WINDOW_MS,
 ) -> DisplacementPlan:
     """Cheapest cascade for a task with no free slot before its deadline.
 
     Per window: movable flexible tasks (:func:`is_movable`) overlapping it are
-    *participants*; fixed, Pinned, frozen and out-of-window tasks are
-    obstacles. Every obstacle-free start before the deadline is tried with
-    :func:`_cascade`, Chosen-protected and, when a Chosen participant exists,
-    plain EDF too. The lowest total move cost wins (ties -> earlier window,
-    earlier start, then the Chosen-protected cascade). Moved participants may
-    spill to any day up to their own deadline (bounded by ``horizon_end_ms``),
-    avoiding ``horizon_occupied``. The caller decides whether a plan moving a
-    Chosen session needs confirmation (:attr:`DisplacementPlan.moves_chosen`).
+    *participants*; fixed, frozen and out-of-window tasks are obstacles. Every
+    obstacle-free start before the deadline is tried with :func:`_cascade`. The
+    lowest total move cost wins (ties -> earlier window, earlier start). Moved
+    participants may spill to any day up to their own deadline (bounded by
+    ``horizon_end_ms``), avoiding ``horizon_occupied``.
     """
     max_moves = MAX_DISPLACED_TASKS if max_moves is None else max_moves
     duration_ms = task_duration_minutes * MS_PER_MINUTE
     lower_ms = ceil_to_slot(now_ms)
-    movable = [f for f in flexible if is_movable(f, now_ms, chosen_moves, frozen_ms)]
+    movable = [f for f in flexible if is_movable(f, now_ms, frozen_ms)]
     series = [f for f in flexible if f.series_id is not None]
 
     best = DisplacementPlan("infeasible")
@@ -300,7 +269,6 @@ def plan_displacement(
     for win in windows:
         participants = [f for f in movable if f.end_ms > win[0] and f.start_ms < win[1]]
         p_ids = {p.id for p in participants}
-        has_chosen = any(p.anchor == "CHOSEN" for p in participants)
         obstacles: Intervals = [
             *fixed,
             *((f.start_ms, f.end_ms) for f in flexible if f.id not in p_ids),
@@ -320,30 +288,28 @@ def plan_displacement(
         for s in (first + free * SLOT_MS).tolist():
             # Lower bound: every participant under the candidate must move.
             floor = sum(
-                base_cost(p.anchor)
+                DISPLACE_COST_AUTO
                 for p in participants
                 if p.start_ms < s + duration_ms and p.end_ms > s
             )
             if floor >= best_cost:
                 continue
-            for protect in (True, False) if has_chosen else (True,):
-                moves = _cascade(
-                    (s, s + duration_ms),
-                    global_obstacles,
-                    participants,
-                    series,
-                    lower_ms,
-                    horizon_end_ms,
-                    max_moves,
-                    timezone,
-                    protect,
-                )
-                if moves is None:
-                    continue
-                cost = sum(m.cost for m in moves)
-                if cost < best_cost:
-                    best = DisplacementPlan("placed", s, tuple(moves))
-                    best_cost = cost
+            moves = _cascade(
+                (s, s + duration_ms),
+                global_obstacles,
+                participants,
+                series,
+                lower_ms,
+                horizon_end_ms,
+                max_moves,
+                timezone,
+            )
+            if moves is None:
+                continue
+            cost = sum(m.cost for m in moves)
+            if cost < best_cost:
+                best = DisplacementPlan("placed", s, tuple(moves))
+                best_cost = cost
     return best
 
 
@@ -426,7 +392,6 @@ def flexible_from_dicts(raw: Sequence[dict[str, Any]]) -> list[FlexibleTask]:
             f["durationMinutes"],
             f["deadlineMs"],
             f["startMs"],
-            f.get("anchor", "AUTO"),
             f.get("completed", False),
             f.get("seriesId"),
         )

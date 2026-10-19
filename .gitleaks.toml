@@ -15,6 +15,7 @@ paths = [
   '''backend/certs/.*\.pem''',          # public CA certificate
   '''backend/src/devices/apns\.sender\.spec\.ts''',  # one synthetic private-key fixture
   '''packages/shared/contract/.*''',
+  '''loadtest/compose\.ingestion\.yml''',  # throwaway keys for the synthetic load-test stack
 ]
 # Placeholder, not a credential: an earlier commit in the vault PR documented it; the docs no longer do.
 regexTarget = "line"

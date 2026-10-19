@@ -1,6 +1,6 @@
-import { GettingStarted } from "@/components/checklist/getting-started";
+import { Plus } from "@/components/Icons";
+import { GlassButton } from "@/components/ui/glass-button";
 import { StreakBadge } from "./streak-badge";
-import { SpotlightAnchor } from "@/components/checklist/spotlight-anchor";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { format, formatTitle } from "@/lib/i18n";
@@ -179,6 +179,8 @@ interface WeekHeaderProps {
   displayDate?: Date;
   tz: string;
   onSelectDay: (day: Date) => void;
+  /** Opens a new, empty plan. The `+` sits beside the streak. */
+  onCreate?: () => void;
   /** Pager strip offset, owned by `WeekScreen`. The header's week swipe writes
    * it 1:1 with the finger so the pager slides one page in lockstep. */
   progressSV: SharedValue<number>;
@@ -233,6 +235,7 @@ function WeekHeaderImpl(
     displayDate,
     tz,
     onSelectDay,
+    onCreate,
     progressSV,
     headerStripSV,
     onWeekDragBegin,
@@ -436,18 +439,23 @@ function WeekHeaderImpl(
           </View>
           <View className="flex-row items-center gap-2">
             <StreakBadge />
-            <GettingStarted />
+            {onCreate && (
+              <GlassButton
+                icon={Plus}
+                accessibilityLabel={t("New plan")}
+                onPress={onCreate}
+                testID="week-header.new"
+              />
+            )}
           </View>
         </View>
 
         <Animated.View
           style={[{ flexDirection: "row", width: width * 3 }, stripStyle]}
         >
-          {blocks.map((weekDates, i) => (
+          {blocks.map((weekDates) => (
             <View key={dateKey(weekDates[0])} style={{ width }}>
               <View className="flex-row gap-1.5 px-4 pt-1 pb-0.5">
-                {/* The middle block is the week on screen. */}
-                {i === 1 ? <SpotlightAnchor step="switch-day" /> : null}
                 <ChipPill
                   index={weekDates.findIndex((d) => dateKey(d) === focusedKey)}
                   chipWidth={chipWidth}

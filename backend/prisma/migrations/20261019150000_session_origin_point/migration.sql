@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Session" ADD COLUMN "originLat" DOUBLE PRECISION,
+ADD COLUMN "originLng" DOUBLE PRECISION;

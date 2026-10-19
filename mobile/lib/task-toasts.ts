@@ -122,7 +122,7 @@ export function placementToastMessage(
     // fired on *every* creation. Mirrors
     // `frontend/src/components/tasks/create-task-dialog.tsx`.
     return {
-      message: `${t("Task created")}\n${t("No time found before its deadline.")}`,
+      message: `${t("Plan created")}\n${t("No time found before its deadline.")}`,
       variant: "success",
     };
   }
@@ -220,7 +220,7 @@ export function showDisplacedToast(
   if (!displaced?.length) return;
   const n = displaced.length;
   toast({
-    title: t("Moved {count} flexible tasks", { count: n }),
+    title: t("Moved {count} flexible plans", { count: n }),
     description: t("To make room for the new session."),
     icon: "calendar-clock",
     duration: 4000,

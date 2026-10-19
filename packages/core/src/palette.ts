@@ -14,8 +14,10 @@ export const BRAND = {
   orangeDark: "#FF7A24",
   /** Highlights and assignments. */
   yellow: "#F0B101",
-  /** Light accent, success and done. Fill only. */
+  /** Light accent, success and done, dark scheme. Fill only. */
   lime: "#D8F998",
+  /** Lime deepened for the light scheme, where the pale lime has no contrast (4.7:1 on paper). */
+  limeLight: "#527F0C",
   /** Light background. */
   paper: "#FEFCFA",
   /** Dark background and ink. */

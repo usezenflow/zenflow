@@ -268,30 +268,28 @@ export class TimetableWeekService {
     now: Date,
   ): Promise<WeekOutcome> {
     const jobId = await this.jobs.startJob("PORTAL", data.integrationId);
-    let token: string | null;
-    try {
-      token = await this.session.token(data.userId);
-    } catch (error) {
-      if (error instanceof UpstreamUnavailableError) {
-        await this.jobs.discardJob("PORTAL", jobId);
-      }
-      throw error;
-    }
-    if (!token) {
-      await this.jobs.finishJob("PORTAL", jobId, "FAILED");
-      return { ok: false, fetched: false, changes: { created: 0, other: 0 } };
-    }
-
     const week = isoWeek(new Date(weekStart.getTime() + 3 * DAY_MS), this.tz);
     const url = `${this.portalBase()}/api/student/DrawingStudentSchedules?namhoc=${term.academicYear}&hocky=${term.semester}&tuan=${week}`;
     const itemId = await this.jobs.beginItem("PORTAL", jobId, url);
     try {
-      const rows = await this.portal.fetchTimetable(
-        token,
-        term.academicYear,
-        term.semester,
-        week,
+      const signedIn = await this.session.withToken(data.userId, (token) =>
+        this.portal.fetchTimetable(
+          token,
+          term.academicYear,
+          term.semester,
+          week,
+        ),
       );
+      if (!signedIn.ok) {
+        await this.jobs.completeItem("PORTAL", itemId, {
+          status: "FAILED",
+          statusCode: 401,
+          responseBody: jobItemBody({ error: "Portal refused sign-in" }),
+        });
+        await this.jobs.finishJob("PORTAL", jobId, "FAILED");
+        return { ok: false, fetched: false, changes: { created: 0, other: 0 } };
+      }
+      const rows = signedIn.value;
       const parsed = parseTimetable(rows, this.tz);
       for (const section of parsed.sections) {
         const { scheduleStudyUnitId, ...fields } = section;

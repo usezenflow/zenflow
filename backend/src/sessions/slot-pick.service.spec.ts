@@ -43,10 +43,11 @@ function row(overrides: Record<string, unknown> = {}) {
 async function makeService(
   existing: ReturnType<typeof row>,
   siblings: { scheduledStartTime: Date; durationMinutes: number }[] = [],
+  primaryPolicy: SchedulingModel = SchedulingModel.HEURISTIC,
 ) {
   const proposal = {
     id: "prop-1",
-    primaryPolicy: SchedulingModel.HEURISTIC,
+    primaryPolicy,
     heuristicProposal: {},
     modelProposal: { scheduledStartTime: ALT_START.toISOString() },
     pairwiseShown: true,
@@ -75,6 +76,7 @@ async function makeService(
   const schedulingFeedback = {
     onFirstMove: jest.fn().mockResolvedValue(undefined),
     reinforcePreferenceMove: jest.fn().mockResolvedValue(undefined),
+    onPairwiseWin: jest.fn().mockResolvedValue(undefined),
   };
   const module: TestingModule = await Test.createTestingModule({
     providers: [
@@ -124,6 +126,62 @@ describe("SlotPickService — matrix reinforcement", () => {
     );
 
     expect(schedulingFeedback.reinforcePreferenceMove).not.toHaveBeenCalled();
+  });
+});
+
+describe("SlotPickService — pairwise reward for LinUCB", () => {
+  it("rewards LinUCB when the user picks its option as the alternative", async () => {
+    const { service, schedulingFeedback } = await makeService(row());
+    await service.recordPick(
+      "task-1",
+      { slotProposalId: "prop-1", chose: "alternative" },
+      user,
+    );
+    expect(schedulingFeedback.onPairwiseWin).toHaveBeenCalledWith(
+      user.id,
+      "prop-1",
+    );
+  });
+
+  it("rewards LinUCB when the user keeps LinUCB's primary pick", async () => {
+    const { service, schedulingFeedback } = await makeService(
+      row(),
+      [],
+      SchedulingModel.LINUCB,
+    );
+    await service.recordPick(
+      "task-1",
+      { slotProposalId: "prop-1", chose: "primary" },
+      user,
+    );
+    expect(schedulingFeedback.onPairwiseWin).toHaveBeenCalledWith(
+      user.id,
+      "prop-1",
+    );
+  });
+
+  it("does not reward LinUCB when the user keeps the heuristic's primary pick", async () => {
+    const { service, schedulingFeedback } = await makeService(row());
+    await service.recordPick(
+      "task-1",
+      { slotProposalId: "prop-1", chose: "primary" },
+      user,
+    );
+    expect(schedulingFeedback.onPairwiseWin).not.toHaveBeenCalled();
+  });
+
+  it("does not reward LinUCB when the user switches away from it", async () => {
+    const { service, schedulingFeedback } = await makeService(
+      row(),
+      [],
+      SchedulingModel.LINUCB,
+    );
+    await service.recordPick(
+      "task-1",
+      { slotProposalId: "prop-1", chose: "alternative" },
+      user,
+    );
+    expect(schedulingFeedback.onPairwiseWin).not.toHaveBeenCalled();
   });
 });
 

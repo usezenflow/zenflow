@@ -52,11 +52,28 @@ from src.simulation.rng import stream
 from src.simulation.run import _run_one
 from src.simulation.world import SCENARIO_BY_NAME
 
-_SCHEMA = 1  # bump when the per-seed record layout changes
+_SCHEMA = 2  # bump when the per-seed record layout changes
 DEFAULT_OUT_DIR = Path("sim_out") / "multi"
-METRICS = ("regret", "accept", "drag", "ttt")
-# LinUCB is better when the difference is negative (regret, drag, ttt) or positive
-_BETTER_SIGN = {"regret": -1.0, "accept": 1.0, "drag": -1.0, "ttt": -1.0}
+METRICS = (
+    "regret",
+    "accept",
+    "drag",
+    "started",
+    "done",
+    "lapsed",
+    "skipped",
+    "wrong_time",
+    "chose_option",
+    "ttt",
+)
+_NON_TTT_METRICS = tuple(m for m in METRICS if m != "ttt")
+# LinUCB is better when the difference is negative (regret, drag, lapse, skip,
+# wrong_time, ttt)
+# or positive (accept, started, done, chose_option).
+_BETTER_SIGN: dict[str, float] = {
+    **{m: -1.0 for m in ("regret", "drag", "lapsed", "skipped", "wrong_time", "ttt")},
+    **{m: 1.0 for m in ("accept", "started", "done", "chose_option")},
+}
 _CHUNK_ELEMS = 4_000_000  # bootstrap gathers at most this many indices at a time
 
 Floats = NDArray[np.float64]
@@ -79,13 +96,14 @@ class SeedRecord:
 def summarize_student(
     r: StudentResult, scenarios: tuple[str, ...], label: str
 ) -> tuple[Floats, Floats]:
-    """One student's ``(S, B, 4)`` difference sums and ``(S,)`` ttt differences."""
+    """One student's ``(S, B, 1+M)`` difference sums and ``(S,)`` ttt differences."""
     n_s, n_b = len(scenarios), len(BUCKET_LABELS)
     (rows,) = paired_rows([r], scenarios, label)
     flat = rows.scenario * n_b + rows.bucket
-    grid = np.zeros((n_s * n_b, 4))
+    n_metric = len(_NON_TTT_METRICS)
+    grid = np.zeros((n_s * n_b, 1 + n_metric))
     grid[:, 0] = np.bincount(flat, minlength=n_s * n_b)
-    for j, m in enumerate(("regret", "accept", "drag"), start=1):
+    for j, m in enumerate(_NON_TTT_METRICS, start=1):
         grid[:, j] = np.bincount(
             flat, weights=rows.ln[m] - rows.h[m], minlength=n_s * n_b
         )
@@ -97,7 +115,7 @@ def summarize_student(
         ],
         dtype=np.float64,
     )
-    return grid.reshape(n_s, n_b, 4), ttt
+    return grid.reshape(n_s, n_b, 1 + n_metric), ttt
 
 
 def run_seed(
@@ -384,6 +402,15 @@ def parse_seeds(spec: str) -> list[int]:
     return sorted(set(out))
 
 
+def _parse_interaction_mix(s: str) -> dict[str, float]:
+    """Parse ``dragger=0.2,tapper=0.5,ignorer=0.3``."""
+    out: dict[str, float] = {}
+    for part in s.split(","):
+        k, _, v = part.partition("=")
+        out[k.strip()] = float(v.strip())
+    return out
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m scripts.run_seeds")
     ap.add_argument("--seeds", default="1-30")
@@ -391,6 +418,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--events", type=int, default=SimConfig.n_events)
     ap.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1))
     ap.add_argument("--scenarios", nargs="+", choices=sorted(SCENARIO_BY_NAME))
+    ap.add_argument(
+        "--interaction-mix",
+        type=_parse_interaction_mix,
+        help="comma-separated shares: dragger=0.2,tapper=0.5,ignorer=0.3",
+    )
+    ap.add_argument("--reward", choices=("completion", "retained"))
     ap.add_argument("--n-boot", type=int, default=N_BOOT)
     ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
@@ -398,8 +431,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     seeds = parse_seeds(a.seeds)
     base = SimConfig(n_students=a.students, n_events=a.events)
+    kwargs: dict[str, object] = {}
     if a.scenarios:
-        base = replace(base, scenarios=tuple(a.scenarios))
+        kwargs["scenarios"] = tuple(a.scenarios)
+    if a.interaction_mix:
+        kwargs["interaction_mix"] = a.interaction_mix
+    if a.reward:
+        kwargs["reward"] = a.reward
+    if kwargs:
+        base = replace(base, **kwargs)
 
     records: list[SeedRecord] = []
     pool_ex = ProcessPoolExecutor(max_workers=a.workers) if a.workers > 1 else None

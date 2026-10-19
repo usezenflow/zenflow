@@ -42,29 +42,6 @@ describe("IsFeasibleTaskWindow", () => {
     expect(errors[0].constraints?.IsFeasibleTaskWindow).toContain("\n");
   });
 
-  it("accounts for sessionCount — 3 × 60min fits inside a 4h window", async () => {
-    const errors = await deadlineErrors({
-      type: "TASK",
-      title: "Exam prep",
-      durationMinutes: 60,
-      sessionCount: 3,
-      deadline: isoIn(4 * 60 * MIN),
-    });
-    expect(errors).toHaveLength(0);
-  });
-
-  it("rejects a series whose sessionCount can't fit even back-to-back before the deadline", async () => {
-    const errors = await deadlineErrors({
-      type: "TASK",
-      title: "Exam prep",
-      durationMinutes: 60,
-      sessionCount: 3,
-      deadline: isoIn(2 * 60 * MIN), // needs 3h, only has 2h
-    });
-    expect(errors).toHaveLength(1);
-    expect(errors[0].constraints?.IsFeasibleTaskWindow).toContain("3 sessions");
-  });
-
   it("does not run for a fixed type (no deadline at all)", async () => {
     const errors = await deadlineErrors({
       type: "ASSIGNMENT",

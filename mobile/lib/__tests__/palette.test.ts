@@ -62,9 +62,13 @@ describe("palette tokens", () => {
         channels(UI[scheme][key as keyof UiTokens]),
       );
     }
-    expect(vars["brand-orange"]).toBe(channels(UI[scheme].primary));
+    expect(vars["brand-orange"]).toBe(
+      channels(scheme === "light" ? BRAND.orange : BRAND.orangeDark),
+    );
     expect(vars["brand-yellow"]).toBe(channels(BRAND.yellow));
-    expect(vars["brand-lime"]).toBe(channels(BRAND.lime));
+    expect(vars["brand-lime"]).toBe(
+      channels(scheme === "light" ? BRAND.limeLight : BRAND.lime),
+    );
     expect(vars.background).toBe(channels(SURFACES[scheme].background));
     expect(vars.card).toBe(channels(SURFACES[scheme].card));
     for (const tone of tones) {

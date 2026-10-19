@@ -12,6 +12,7 @@ from collections.abc import Iterable, Mapping
 import numpy as np
 from fastapi import HTTPException
 
+from src.core.band_prior import FocusBand, band_prior
 from src.models.schemas import ArmParams
 from src.schemas import ARM_IDS, ArmId, ArmState
 
@@ -32,11 +33,17 @@ def require_422(ok: bool, message: str) -> None:
         raise HTTPException(status_code=422, detail=message)
 
 
-def hydrate(st: ArmState, d: int, ridge: float) -> tuple[np.ndarray, np.ndarray]:
+def hydrate(
+    st: ArmState,
+    d: int,
+    ridge: float,
+    prior: ArmParams | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """Materialize an arm's ``(A, b)`` numpy arrays, falling back to the ridge prior.
 
     A fully empty state (no ``A`` and no ``b``) is the cold arm
-    (``A = ridge * I, b = 0``). A partially empty state (only one of the two
+    (``A = ridge * I, b = 0``), or ``prior`` when one is given (the focus-band
+    prior, level-up plan). A partially empty state (only one of the two
     missing) is anomalous and fills just that half at the ridge prior.
 
     Parameters
@@ -53,7 +60,7 @@ def hydrate(st: ArmState, d: int, ridge: float) -> tuple[np.ndarray, np.ndarray]
         ``(A, b)``.
     """
     if not st.A and not st.b:
-        cold = ArmParams.cold(d, ridge)
+        cold = prior if prior is not None else ArmParams.cold(d, ridge)
         return cold.A, cold.b
     a: np.ndarray = (
         np.asarray(st.A, dtype=np.float64).reshape(d, d)
@@ -70,7 +77,10 @@ def is_cold(st: ArmState | None) -> bool:
 
 
 def hydrate_arms(
-    state: Mapping[ArmId, ArmState], d: int, ridge: float
+    state: Mapping[ArmId, ArmState],
+    d: int,
+    ridge: float,
+    focus_band: FocusBand | None = None,
 ) -> dict[ArmId, ArmParams]:
     """Hydrate every one of the 5 canonical arms into :class:`ArmParams`.
 
@@ -94,12 +104,27 @@ def hydrate_arms(
     dict[ArmId, ArmParams]
     """
     out: dict[ArmId, ArmParams] = {}
+    priors = band_prior(focus_band, d, ridge) if focus_band else {}
     for arm in ARM_IDS:
         st = state.get(arm)
         if is_cold(st):
-            out[arm] = ArmParams.cold(d, ridge)
+            out[arm] = priors.get(arm) or ArmParams.cold(d, ridge)
             continue
         assert st is not None
         a, b = hydrate(st, d, ridge)
         out[arm] = ArmParams(a, b)
     return out
+
+
+def hydrate_shared(
+    st: ArmState | None, ridge: float, z_dim: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """``(A, b)`` of the shared ``beta`` block, the ridge prior when there is none.
+
+    Same rule as :func:`hydrate` for an arm: a missing or empty block is cold.
+    """
+    if st is None or (not st.A and not st.b):
+        return ridge * np.identity(z_dim), np.zeros(z_dim)
+    a = np.asarray(st.A, dtype=np.float64).reshape(z_dim, z_dim)
+    b = np.asarray(st.b, dtype=np.float64) if st.b else np.zeros(z_dim)
+    return a, b

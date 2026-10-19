@@ -2,6 +2,7 @@ import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { CalendarDays } from "@/components/Icons";
 import { GlassButton } from "@/components/ui/glass-button";
+import { useScreenSheetOpen } from "@/lib/screen-sheets";
 import { useTabBarOverlayHeight } from "@/lib/tab-bar-metrics";
 import { useEffect } from "react";
 import Animated, {
@@ -26,6 +27,8 @@ export function TodayButton({
 }) {
   useLanguage();
   const tabBarOverlay = useTabBarOverlayHeight();
+  const sheetOpen = useScreenSheetOpen();
+  visible = visible && !sheetOpen;
   const shown = useSharedValue(visible ? 1 : 0);
   useEffect(() => {
     shown.value = withTiming(visible ? 1 : 0, { duration: visible ? 160 : 120 });

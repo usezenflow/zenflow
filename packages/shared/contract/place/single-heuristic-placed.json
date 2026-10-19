@@ -242,7 +242,7 @@
         "appliedPolicy": "HEURISTIC",
         "heuristic": {
           "startMs": 1790001000000,
-          "score": 0.5
+          "score": 0.37083333333333335
         },
         "linucb": null,
         "startMs": 1790001000000,

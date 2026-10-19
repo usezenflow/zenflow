@@ -4,6 +4,8 @@ import { useLanguage } from "@/hooks/use-language";
 import { getSessionDetails, updateSession } from "@/api/tasks";
 import { findCachedSession, notifySessionsMutated } from "@/lib/session-cache";
 import { showMovedToast } from "@/lib/move-toast";
+import { offerPrepReschedule } from "@/lib/prep-toast";
+import { isSyncedSession } from "@/lib/synced-session";
 import { undoMove } from "@/lib/move-undo";
 import { isPastDeadlineDrop } from "@/lib/overdue";
 import { showErrorToast, showSkippedToast } from "@/lib/task-toasts";
@@ -13,10 +15,6 @@ import {
 } from "@/components/calendar/session-detail-sheet";
 import type { TimelineState } from "@/components/calendar/day-timeline";
 import {
-  RescheduleSheet,
-  type RescheduleSheetHandle,
-} from "@/components/calendar/reschedule-sheet";
-import {
   type PendingSessionUpdate,
   moveUndoable,
   resolveMoveScope,
@@ -25,10 +23,6 @@ import {
   UpdateRecurringSheet,
   type UpdateRecurringSheetHandle,
 } from "@/components/calendar/update-recurring-sheet";
-import {
-  BlockActionsSheet,
-  type BlockActionsSheetHandle,
-} from "@/components/calendar/block-actions-sheet";
 import { CalendarHeader } from "@/components/calendar/calendar-header";
 import { CalendarViewSkeleton } from "@/components/calendar/view-skeleton";
 import { MonthView } from "@/components/calendar/month-view";
@@ -45,12 +39,10 @@ import {
   WeekPager,
   type WeekPagerHandle,
 } from "@/components/calendar/week-pager";
-import { WeekGrid } from "@/components/calendar/week-grid";
 import { useOffline } from "@/hooks/use-offline";
-import { CreateSessionFab } from "@/components/tasks/create-task-fab";
 import { useUserStore } from "@/hooks/use-user-store";
 import { useWeekDayTypes } from "@/hooks/use-week-day-types";
-import { dateKey, weekStart } from "@/lib/week-date-math";
+import { dateKey } from "@/lib/week-date-math";
 import { monthLabel } from "@/lib/month-date-math";
 import {
   getSeriesKind,
@@ -72,7 +64,7 @@ import { View, useWindowDimensions } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { useToast } from "@/components/ui/toast";
 
-const VIEWS: readonly CalendarView[] = ["day", "week", "month"];
+const VIEWS: readonly CalendarView[] = ["day", "month"];
 
 function isCalendarView(value: string | undefined): value is CalendarView {
   return value !== undefined && (VIEWS as readonly string[]).includes(value);
@@ -100,10 +92,19 @@ export default function CalendarScreen() {
     date: dateParam,
     flash: flashParam,
     view: viewParam,
+    open: openParam,
+    quickAdd: quickAddParam,
+    deadline: deadlineParam,
   } = useLocalSearchParams<{
     date?: string;
     flash?: string;
     view?: string;
+    /** A session id to open in its detail sheet (widget, push, inbox). */
+    open?: string;
+    /** Set (any value) to open the quick add sheet. */
+    quickAdd?: string;
+    /** UTC instant the quick-added plan is due by. */
+    deadline?: string;
   }>();
 
   const [view, setView] = useState<CalendarView>(() =>
@@ -217,9 +218,7 @@ export default function CalendarScreen() {
   const headerStripSV = useSharedValue(-width);
   const pagerRef = useRef<WeekPagerHandle>(null);
   const headerRef = useRef<WeekHeaderHandle>(null);
-  const rescheduleSheetRef = useRef<RescheduleSheetHandle>(null);
   const updateScopeSheetRef = useRef<UpdateRecurringSheetHandle>(null);
-  const blockActionsSheetRef = useRef<BlockActionsSheetHandle>(null);
   const sessionDetailSheetRef = useRef<SessionDetailSheetHandle>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
@@ -300,67 +299,21 @@ export default function CalendarScreen() {
     [toast],
   );
 
-  // Long-press a block → open the "Move to…" sheet for that session.
-  const handleRequestReschedule = useCallback((session: Session) => {
-    rescheduleSheetRef.current?.open(session);
-  }, []);
+  // A session deep link (`open` param: a widget row, a push, an inbox item)
+  // opens its detail sheet. The param is cleared, so the next link fires again.
+  useEffect(() => {
+    if (!openParam) return;
+    handleSessionPress(openParam);
+    router.setParams({ open: undefined });
+  }, [openParam, handleSessionPress, router]);
 
-  // Long-press a block → open its action menu (Move to… / Add study session
-  // before this).
-  const handleRequestBlockMenu = useCallback((session: Session) => {
-    blockActionsSheetRef.current?.open(session);
-  }, []);
-
-  // "Add study session before this" → a new TASK whose deadline is the block's
-  // start, pre-filled with roughly half the whole days until then as its
-  // session count (min 1).
-  const handleSessionBefore = useCallback(
-    (session: Session) => {
-      const start = session.scheduledStartTime;
-      if (!start) {
-        rescheduleSheetRef.current?.open(session);
-        return;
-      }
-      const daysUntil = Math.max(
-        1,
-        differenceInCalendarDays(zonedDate(start, tz), zonedNow(tz)),
-      );
-      const sessions = Math.max(1, Math.floor(daysUntil / 2));
-      navigateOnce(() =>
-        router.push({
-          pathname: "/task/new",
-          params: {
-            deadline: start,
-            sessions: String(sessions),
-            title: t("Prepare for {title}", { title: session.title }),
-          },
-        } as Href),
-      );
-    },
-    [tz, router],
-  );
-
-  // The sheet's confirm — a single `PATCH /sessions/:id` (move + resize).
-  // `scope`/`skipConflicting` are only set when the session belongs to a
-  // series and `handleRequestScopedUpdate` below resolved a choice.
-  const handleRescheduleConfirm = useCallback(
-    async (
-      id: string,
-      startISO: string,
-      durationMinutes: number,
-      scope?: UpdateScope,
-      skipConflicting?: boolean,
-    ) => {
-      const res = await updateSession(id, {
-        scheduledStartTime: startISO,
-        durationMinutes,
-        scope,
-        skipConflicting,
-      });
-      showSkippedToast(toast, res.skippedSessionIds);
-    },
-    [toast],
-  );
+  // A new-plan link (`quickAdd` param: the navbar's `+`, the widget) opens a
+  // draft in the session sheet, due by `deadline` when set.
+  useEffect(() => {
+    if (!quickAddParam) return;
+    sessionDetailSheetRef.current?.openDraft({ deadline: deadlineParam });
+    router.setParams({ quickAdd: undefined, deadline: undefined });
+  }, [quickAddParam, deadlineParam, router]);
 
   // A drag/reschedule of a series member: a recurring session asks nothing
   // (this occurrence, with apply to all), a multi-sitting task asks which
@@ -399,6 +352,15 @@ export default function CalendarScreen() {
   const handleMonthMove = useCallback(
     (session: Session, day: Date) => {
       if (!session.scheduledStartTime) return;
+      if (isSyncedSession(session)) {
+        toast({
+          title: t("Synced sessions can't be moved"),
+          description: t("Skip it instead."),
+          variant: "warning",
+          icon: "calendar-x",
+        });
+        return;
+      }
       const wall = zonedDate(session.scheduledStartTime, tz);
       if (dateKey(wall) === dateKey(day)) return;
       wall.setFullYear(day.getFullYear(), day.getMonth(), day.getDate());
@@ -424,6 +386,12 @@ export default function CalendarScreen() {
                     )
               : undefined,
           });
+          void offerPrepReschedule(
+            toast,
+            updated,
+            updated.scheduledStartTime ?? startISO,
+            tz,
+          );
         } catch (error) {
           showErrorToast(toast, error, t("Couldn't move this session"), "calendar-x");
         } finally {
@@ -455,9 +423,7 @@ export default function CalendarScreen() {
   const isAtToday =
     view === "month"
       ? monthAtToday
-      : view === "week"
-        ? dateKey(weekStart(focusedDate)) === dateKey(weekStart(now))
-        : dateKey(visibleDate) === dateKey(now);
+      : dateKey(visibleDate) === dateKey(now);
 
   // Every view keeps a fixed slot under the screen root and, once opened, stays
   // mounted (hidden with display none). Mounting or unmounting a whole view in
@@ -476,7 +442,6 @@ export default function CalendarScreen() {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     // Idle time after the first paint, so the day view's own load is not slowed.
-    timers.push(setTimeout(() => markMounted("week"), 1200));
     timers.push(setTimeout(() => markMounted("month"), 2200));
     return () => timers.forEach(clearTimeout);
   }, [markMounted]);
@@ -501,6 +466,7 @@ export default function CalendarScreen() {
             displayDate={visibleDate}
             tz={tz}
             onSelectDay={handleUserSwitchDay}
+            onCreate={() => sessionDetailSheetRef.current?.openDraft()}
             progressSV={progressSV}
             headerStripSV={headerStripSV}
             onWeekDragBegin={handleWeekDragBegin}
@@ -522,31 +488,11 @@ export default function CalendarScreen() {
               onWeekSlideStart={handleWeekSlideStart}
               onWeekSlideEnd={handleWeekSlideEnd}
               onActiveStateChange={setTimelineState}
-              onRequestReschedule={handleRequestReschedule}
-              onRequestBlockMenu={handleRequestBlockMenu}
               onRequestScopedUpdate={handleRequestScopedUpdate}
               flashSessionId={flashId}
             />
           </View>
         </>
-        ) : null}
-      </View>
-
-      <View className="flex-1" style={slotStyle("week")}>
-        {mounted.has("week") ? (
-        <WeekGrid
-          anchor={focusedDate}
-          tz={tz}
-          focusTick={focusTick}
-          onWeekChange={commitFocusedDate}
-          onDayPress={openDayView}
-          onSessionPress={handleSessionPress}
-          onRequestReschedule={handleRequestReschedule}
-          onRequestBlockMenu={handleRequestBlockMenu}
-          onRequestScopedUpdate={handleRequestScopedUpdate}
-        />
-        ) : view === "week" ? (
-          <CalendarViewSkeleton variant="week" />
         ) : null}
       </View>
 
@@ -562,7 +508,7 @@ export default function CalendarScreen() {
           onMoveSession={handleMonthMove}
         />
         ) : view === "month" ? (
-          <CalendarViewSkeleton variant="month" />
+          <CalendarViewSkeleton />
         ) : null}
       </View>
 
@@ -571,24 +517,7 @@ export default function CalendarScreen() {
         onPress={() => commitFocusedDate(zonedNow(tz))}
       />
 
-      <CreateSessionFab
-        tz={tz}
-        hidden={offline || (view === "day" && timelineState !== "ready")}
-      />
-
-      <SessionDetailSheet ref={sessionDetailSheetRef} tz={tz} />
-      <BlockActionsSheet
-        ref={blockActionsSheetRef}
-        onReschedule={handleRequestReschedule}
-        onSessionBefore={handleSessionBefore}
-      />
-      <RescheduleSheet
-        ref={rescheduleSheetRef}
-        tz={tz}
-        onConfirm={handleRescheduleConfirm}
-        onMoved={handleMoved}
-        onRequestScopedUpdate={handleRequestScopedUpdate}
-      />
+      <SessionDetailSheet ref={sessionDetailSheetRef} tz={tz} onMoved={handleMoved} />
       <UpdateRecurringSheet ref={updateScopeSheetRef} />
       {searchOpen ? <SessionSearchView onClose={closeSearch} /> : null}
     </View>

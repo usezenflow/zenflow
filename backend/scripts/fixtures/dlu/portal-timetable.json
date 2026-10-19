@@ -1,8 +1,8 @@
 {
-  "_comment": "One concrete week (tuan 44 -> Mon 26/10/2026) expanded from portal-sections.json into PortalTimetableRow shape, per student. WeekScheduleID is the per-meeting id parse-portal.ts keys move/delete detection on.",
+  "_comment": "One concrete week (tuan 42 -> Mon 12/10/2026) expanded from portal-sections.json into PortalTimetableRow shape, per student. WeekScheduleID is the per-meeting id parse-portal.ts keys move/delete detection on.",
   "namhoc": "2026-2027",
   "hocky": "HK01",
-  "tuan": 44,
+  "tuan": 42,
   "rows": {
     "TEST00001": [
       {

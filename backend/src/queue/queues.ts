@@ -1,4 +1,4 @@
-import { defineQueue } from "./queue.types";
+import { defineQueue, idempotencyKey } from "./queue.types";
 
 /**
  * Payload of a `portal-fetch` / `lms-fetch` job: one provider sync for one
@@ -64,16 +64,7 @@ export type NotifyJobData =
   /** Native push for one provider of a notification row. */
   | { type: "push"; notificationId: string; provider: PushProvider }
   /** Fire one session reminder; `startsAt` (ISO) is the occurrence it was armed for. */
-  | { type: "reminder"; reminderId: string; startsAt: string }
-  /** Morning brief or evening check-in for one user and local day, one provider. */
-  | {
-      type: "daily";
-      userId: string;
-      kind: "morning" | "evening";
-      /** `YYYY-MM-DD` in the user's timezone. */
-      localDate: string;
-      provider: PushProvider;
-    };
+  | { type: "reminder"; reminderId: string; startsAt: string };
 
 export type PushProvider = "fcm" | "apns";
 
@@ -135,6 +126,26 @@ export const NOTIFY_QUEUE = defineQueue<NotifyJobData>({
   limiter: { max: 50, duration: 1_000 },
 });
 
+/**
+ * Automatic prep plan for a new exam or assignment (level-up plan, Phase 1).
+ * `parentSessionId` is the ingested `Session` the plan prepares for.
+ */
+export interface PrepJobData {
+  userId: string;
+  parentSessionId: string;
+}
+
+/** Prep plans: sized and placed by the scheduler worker. */
+export const PREP_QUEUE = defineQueue<PrepJobData>({
+  name: "prep-plan",
+  concurrency: 2,
+});
+
+/** BullMQ-safe idempotency key for a prep-plan job. */
+export function prepJobId(parentSessionId: string): string {
+  return idempotencyKey("prep", parentSessionId);
+}
+
 export const ALL_QUEUES = [
   PORTAL_FETCH_QUEUE,
   LMS_FETCH_QUEUE,
@@ -145,4 +156,5 @@ export const ALL_QUEUES = [
   LMS_DISCOVERY_QUEUE,
   LMS_MONTH_QUEUE,
   NOTIFY_QUEUE,
+  PREP_QUEUE,
 ] as const;

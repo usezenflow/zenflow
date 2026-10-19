@@ -7,6 +7,8 @@ import {
   ingestionSignInFailures,
 } from "../observability/metrics";
 import { IntegrationsService } from "../integrations/integrations.service";
+import { UpstreamSessionCache } from "../integrations/upstream-session-cache.service";
+import { UpstreamSessionRejectedError } from "../common/upstream-session-rejected.exception";
 import { PortalAPIService } from "../portal/portal-api.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { occurrencesFromTimetable } from "./core/occurrences";
@@ -92,6 +94,7 @@ export class TimetableWatcherService {
     private readonly cache: OccurrenceCacheService,
     private readonly fanout: OccurrenceFanoutService,
     private readonly schedule: IngestionScheduleService,
+    private readonly sessions: UpstreamSessionCache,
   ) {
     this.endpoint = this.config.get<string>("PORTAL_API_URL") ?? "";
     this.dluTimezone = this.config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
@@ -232,6 +235,9 @@ export class TimetableWatcherService {
         });
         okItems += 1;
       } catch (error) {
+        if (error instanceof UpstreamSessionRejectedError) {
+          await this.sessions.invalidate(target.userId, "portal");
+        }
         allFetchesOk = false;
         if (error instanceof UpstreamUnavailableError) {
           if (okItems === 0) {
@@ -586,9 +592,10 @@ export class TimetableWatcherService {
         target.userId,
         "PORTAL",
       );
-      const result = await this.portal.authenticate(
-        creds.username,
-        creds.password,
+      const result = await this.sessions.getOrLogin(
+        target.userId,
+        "portal",
+        () => this.portal.authenticate(creds.username, creds.password),
       );
       if (!result.ok) {
         await this.jobs.finishJob("PORTAL", jobId, "FAILED");

@@ -29,12 +29,13 @@ import {
   toUpdateSessionResponse,
 } from "./session-mapper";
 import { moveEventData, recordUserMove } from "./session-events";
+import { assertSyncedEditable } from "./synced-lock";
 import { mapSessionPrismaError } from "./prisma-error";
 import { SeriesService } from "./series.service";
 
 /** 400 for `PATCH { scheduledStartTime: null }` on a `TASK`. */
 export const TASK_START_REQUIRED_MESSAGE =
-  "Tasks can't be unscheduled\nMove it to another time instead.";
+  "Plans can't be unscheduled\nMove it to another time instead.";
 
 /** The parsed shape of a recurring-occurrence ref ("<seriesId>::<startISO>"). */
 type OccurrenceRef = NonNullable<ReturnType<typeof parseOccurrenceId>>;
@@ -100,6 +101,7 @@ export class SessionUpdateService {
     try {
       const now = new Date();
       const occ = parseOccurrenceId(id);
+      await this.guardSynced(id, occ, dto, user);
 
       const followingSplit = await this.handleFollowingRecurringSplit(
         id,
@@ -113,6 +115,8 @@ export class SessionUpdateService {
       if (detached) return detached;
 
       id = await this.resolveOccurrenceTarget(id, occ, dto, user);
+      const shiftedRepStart =
+        occ && dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : null;
 
       const siblingScope = occ
         ? null
@@ -123,6 +127,9 @@ export class SessionUpdateService {
 
       const { updated, firstMove, newDeadline, undoGroupId } =
         await this.runFieldDiffTransaction(id, dto, user, now);
+
+      if (shiftedRepStart)
+        await this.series.shiftPrepOccurrences(id, shiftedRepStart, user);
 
       if (firstMove) {
         await this.schedulingFeedback.onFirstMove(
@@ -139,14 +146,6 @@ export class SessionUpdateService {
           firstMove.dragDistanceMinutes,
         );
       }
-
-      const resize = await this.handleSessionCountResize(
-        dto,
-        updated,
-        user,
-        now,
-      );
-      if (resize) return resize;
 
       const redistribution = await this.handleDeadlineRedistribution(
         newDeadline,
@@ -173,6 +172,22 @@ export class SessionUpdateService {
     } catch (error) {
       mapSessionPrismaError(error, id, "update");
     }
+  }
+
+  /** A synced timetable, exam or assignment keeps the sync's values (403). */
+  private async guardSynced(
+    id: string,
+    occ: OccurrenceRef | null,
+    dto: UpdateSessionDto,
+    user: User,
+  ): Promise<void> {
+    const row = await this.prisma.session.findFirst({
+      where: occ
+        ? { seriesId: occ.seriesId, userId: user.id, deleted: false }
+        : { id, userId: user.id, deleted: false },
+      select: { source: true, type: true },
+    });
+    if (row) assertSyncedEditable(row, dto);
   }
 
   /**
@@ -417,9 +432,23 @@ export class SessionUpdateService {
       if (dto.title !== undefined) data.title = dto.title;
       if (dto.note !== undefined) data.note = dto.note;
       if (dto.location !== undefined) data.location = dto.location;
+      if (dto.locationLat !== undefined) data.locationLat = dto.locationLat;
+      if (dto.locationLng !== undefined) data.locationLng = dto.locationLng;
+      if (dto.originLocation !== undefined)
+        data.originLocation = dto.originLocation;
+      if (dto.originLat !== undefined) data.originLat = dto.originLat;
+      if (dto.originLng !== undefined) data.originLng = dto.originLng;
+      if (dto.commuteMinutes !== undefined)
+        data.commuteMinutes = dto.commuteMinutes;
 
       if (dto.durationMinutes !== undefined)
         data.durationMinutes = dto.durationMinutes;
+
+      if (dto.prepForOccurrenceStart !== undefined) {
+        if (!existing.prepForSessionId)
+          throw new BadRequestException("Only a prep plan has a target");
+        data.prepForOccurrenceStart = new Date(dto.prepForOccurrenceStart);
+      }
 
       if (dto.deadline !== undefined) {
         const candidate = new Date(dto.deadline);
@@ -474,12 +503,6 @@ export class SessionUpdateService {
         // instead of silently reverting a hand-moved EXAM/LECTURE/ASSIGNMENT
         // back to its upstream (LMS/portal) position on their next sync.
         data.lastMovedAt = now;
-      }
-      if (startChanged && existing.type === "TASK") {
-        // A drag, "move to" or time pick fixes the slot: the scheduler may
-        // only move it again after the user confirms (ADR-0022).
-        data.anchor = "CHOSEN";
-        data.anchoredAt = now;
       }
 
       const move = this.buildMoveEventData(existing, nextStart, startChanged);
@@ -610,45 +633,6 @@ export class SessionUpdateService {
   }
 
   /**
-   * Edit-mode "session count" resize/promote (the create-mode session-count
-   * slider's edit-mode counterpart). Symmetric with create: raising a plain
-   * TASK's count above 1 promotes it into a series; changing an existing
-   * series' count grows or shrinks it. Takes priority over deadline
-   * redistribution when both are present in the same PATCH — the grow path
-   * already re-places the new sittings using the row's own (possibly
-   * just-updated) deadline. `null` when this PATCH isn't a resize.
-   */
-  private async handleSessionCountResize(
-    dto: UpdateSessionDto,
-    updated: SessionRow,
-    user: User,
-    now: Date,
-  ): Promise<UpdateSessionResponse | null> {
-    if (dto.sessionCount === undefined || updated.type !== "TASK") return null;
-
-    const seriesId =
-      updated.seriesId ??
-      (dto.sessionCount > 1
-        ? await this.series.promoteToSeries(
-            updated.id,
-            updated.deadline as Date,
-            user,
-          )
-        : null);
-    if (!seriesId) return null;
-
-    const seriesSessions = await this.series.resizeSessionCount(
-      seriesId,
-      dto.sessionCount,
-      user,
-      now,
-    );
-    const rep =
-      seriesSessions.find((s) => s.id === updated.id) ?? seriesSessions[0];
-    return { ...rep, ...NO_SLOT_PROPOSAL, sessions: seriesSessions };
-  }
-
-  /**
    * A deadline change re-places just the affected TASK — a standalone task
    * into its new best empty slot, or a whole series redistributed across the
    * new window. No other session is ever moved. `null` when this PATCH isn't
@@ -662,24 +646,6 @@ export class SessionUpdateService {
     infeasiblePolicy?: InfeasiblePolicy,
   ): Promise<UpdateSessionResponse | null> {
     if (!newDeadline || updated.type !== "TASK") return null;
-
-    if (updated.seriesId && updated.series?.type === "TASK") {
-      const { sessions: seriesSessions, degraded } =
-        await this.series.redistribute(
-          updated.seriesId,
-          user,
-          newDeadline,
-          now,
-        );
-      const rep =
-        seriesSessions.find((s) => s.id === updated.id) ?? seriesSessions[0];
-      return {
-        ...rep,
-        ...NO_SLOT_PROPOSAL,
-        sessions: seriesSessions,
-        ...(degraded ? { schedulingDegraded: true } : {}),
-      };
-    }
 
     const placement = await this.taskPlacement.placeOnDeadlineChange({
       user,

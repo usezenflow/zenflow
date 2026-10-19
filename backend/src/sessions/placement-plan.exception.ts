@@ -8,7 +8,7 @@ import {
 } from "@zenflow/shared";
 
 export const PLACEMENT_NEEDS_CONFIRMATION_MESSAGE =
-  "This move needs your confirmation\nIt moves a task you set a time for.";
+  "This move needs your confirmation\nIt moves a plan you set a time for.";
 
 export const PLACEMENT_STALE_MESSAGE =
   "This plan is out of date\nCheck the calendar and try again.";

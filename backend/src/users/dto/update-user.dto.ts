@@ -8,12 +8,12 @@ import {
   Length,
 } from "class-validator";
 import {
+  COMMUTE_TRANSPORTS,
   DEFAULT_REMINDER_CHOICES,
   FOCUS_BANDS,
   LANGS,
-  TIP_IDS,
+  type CommuteTransport,
   type FocusBand,
-  type TipId,
   type DefaultReminderChoice,
   type Lang,
   type UpdateUserInput,
@@ -41,6 +41,10 @@ export class UpdateUserDto implements UpdateUserInput {
   @IsOptional()
   defaultReminderMinutes?: DefaultReminderChoice;
 
+  @IsIn(COMMUTE_TRANSPORTS)
+  @IsOptional()
+  defaultTransport?: CommuteTransport;
+
   /** `true` completes onboarding (idempotent). */
   @Equals(true)
   @IsOptional()
@@ -53,11 +57,6 @@ export class UpdateUserDto implements UpdateUserInput {
   @IsBoolean()
   @IsOptional()
   allowNotifications?: boolean;
-
-  /** Marks one getting-started checklist step done, or the checklist hidden (idempotent). */
-  @IsIn(TIP_IDS)
-  @IsOptional()
-  seenTip?: TipId;
 
   /** Onboarding answer; seeds the preference matrix while it is still the default. */
   @IsIn(FOCUS_BANDS)

@@ -264,26 +264,6 @@ export default function RootLayout() {
               </Stack.Protected>
               <Stack.Protected guard={loading || isOnboarded}>
                 <Stack.Screen name="(app)" options={{ animation: "none" }} />
-                {/* Session create/edit — full screens, not bottom sheets (see
-                    mobile/README.md); presented modally so they still read
-                    as "on top of" the tabs instead of replacing them. */}
-                <Stack.Screen
-                  name="task/new"
-                  options={{
-                    presentation: "transparentModal",
-                    animation: "slide_from_bottom",
-                  }}
-                />
-                {/* `getId`: opening the same session twice (double tap) focuses
-                    the existing modal instead of stacking a second one. */}
-                <Stack.Screen
-                  name="task/[id]/edit"
-                  getId={({ params }) => String(params?.id ?? "")}
-                  options={{
-                    presentation: "transparentModal",
-                    animation: "slide_from_bottom",
-                  }}
-                />
                 {/* The ingestion inbox — LMS / portal notifications. */}
                 <Stack.Screen
                   name="notifications"

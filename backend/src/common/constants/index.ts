@@ -26,3 +26,6 @@ export const OUTCOME_BATCH_SIZE = 100;
 export const IV_RANDOM_BYTES_SIZE = 12;
 export const KEY_RANDOM_BYTES_SIZE = 32;
 export const ENCRYPTION_ALGORITHM = "aes-256-gcm";
+
+/** Longest travel time kept clear around a session, each way. */
+export const MAX_COMMUTE_MINUTES = 180;

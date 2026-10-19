@@ -39,19 +39,15 @@ model User {
   /// Reminder lead time (minutes) applied to new sessions that omit `reminders`; 0 = none.
   defaultReminderMinutes Int @default(10)
 
+  /// Transport used for commute estimates. Null = not set yet.
+  defaultTransport CommuteTransport?
+
   /// When the user finished (or skipped through) first-run onboarding; null = not yet. Set once, server-side.
   onboardedAt DateTime?
 
   /// User intent for native push (Settings toggle / OS-permission denial, set by mobile). Gates push fan-out only; in-app/SSE unaffected.
   allowNotifications Boolean @default(true)
 
-  /// Morning brief push time (`HH:mm`, user tz); null = off.
-  morningBriefTime   String? @db.VarChar(5)
-  /// Evening check-in push time (`HH:mm`, user tz); null = off.
-  eveningCheckinTime String? @db.VarChar(5)
-
-  /// Getting-started checklist steps done, plus `checklist-hidden` (`TIP_IDS` in @zenflow/shared); append-only.
-  seenTips String[] @default([])
 
   preferenceMatrix          Float[]   @default([])
   preferenceMatrixDecayedAt DateTime?
@@ -80,6 +76,9 @@ model User {
   occurrenceStates SessionOccurrenceState[]
   streak           UserStreak?
   courseColours    CourseColour[]
+  eggs             Egg[]
+  spirits          Spirit[]
+  sparkLedger      SparkLedger[]
 
   // Issue #56: which portal sections / Moodle courses this student is
   // confirmed in, so an ingestion pass can be served from the shared
@@ -206,6 +205,15 @@ enum SessionSource {
   USER
   LMS
   PORTAL
+  // Placed by the system without a user request, e.g. prep for an exam or assignment.
+  AUTO
+}
+
+enum CommuteTransport {
+  WALK
+  BIKE
+  MOTORCYCLE
+  CAR
 }
 
 model Session {
@@ -217,6 +225,18 @@ model Session {
   // watchers write the upstream room here (portal `PhongThi` / `RoomID`,
   // Moodle event `location`). Optional and never used by the scheduler.
   location        String?
+  // Map point for `location` when it was picked on the map; null for text only.
+  locationLat     Float?
+  locationLng     Float?
+  // Where the commute starts (a campus place or free text). Null when unset.
+  originLocation  String?
+  // Map point of `originLocation` when it was a position or searched place; null for text only.
+  originLat       Float?
+  originLng       Float?
+  // Minutes to travel between `originLocation` and `location`, each way, from the
+  // route the app showed. The scheduler keeps this much clear on both sides of
+  // the session (ADR-0029). Null when unknown.
+  commuteMinutes  Int?
   durationMinutes Int // positive multiple of 15
   deadline        DateTime? // required for TASK; null for fixed types (ASSIGNMENT/EXAM/LECTURE/DND)
   type            SessionType   @default(TASK)
@@ -240,6 +260,9 @@ model Session {
   // Stamped on every user move/resize of a scheduled TASK; the RETAINED sweep
   // treats `lastMovedAt == null` as "never moved".
   lastMovedAt DateTime?
+  // Set on insert; the daily cap on automatic prep plans counts rows by it.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   // Settlement stamp of the outcome sweep (ADR-0023): set once an unmoved TASK's
   // outcome (completed, skipped or missed) is recorded, so a re-run is a no-op.
   // The name predates ADR-0023; it is not a retained flag.
@@ -266,12 +289,9 @@ model Session {
   // Unused on a recurring representative: occurrences use SessionOccurrenceState.
   completedAt DateTime?
   skipped     Boolean   @default(false)
-
-  // How firmly the scheduler may move this session (ADR-0022). AUTO moves
-  // freely, CHOSEN only with the user's confirmation, PINNED never. Set by a
-  // user drag or time pick (CHOSEN), the pin routes (PINNED) and unpin (AUTO).
-  anchor     SessionAnchor @default(AUTO)
-  anchoredAt DateTime?
+  // First time an LMS calendar showed the assignment without its "add submission"
+  // action (ingestion/core/parse-lms.ts). Set once; never cleared.
+  submittedAt DateTime?
 
   // Why the scheduler picked the start (issue #254). The reason describes
   // `placementReasonStartAt`; once the start moves by any other write, the two
@@ -283,6 +303,13 @@ model Session {
   tags Tag[]
 
   events SessionEvent[]
+
+  // The exam, assignment or lecture this prep session exists for. Null otherwise.
+  // `prepForOccurrenceStart` pins one occurrence when the target is a recurring lecture.
+  prepForSessionId       String?
+  prepForOccurrenceStart DateTime?
+  prepForSession   Session?  @relation("PrepFor", fields: [prepForSessionId], references: [id], onDelete: SetNull)
+  prepSessions     Session[] @relation("PrepFor")
 
   seriesId String? // for series with rrule, only create a representative session and filter sessions belonging to a series whose rrule covers a particular day range
   series   SessionSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
@@ -348,9 +375,6 @@ model Session {
   notifications Notification[]
   slotProposals SlotProposal[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
   @@unique([userId, externalKey])
   @@index([userId, deadline])
   @@index([userId, scheduledStartTime])
@@ -358,6 +382,7 @@ model Session {
   @@index([seriesId, createdAt])
   @@index([userId, scheduleStudyUnitId])
   @@index([userId, lmsCourseId])
+  @@index([prepForSessionId])
   // GET /sessions/search uses the `Session_{title,note,location}_unaccent_idx` expression indexes, which live in migrations only.
   @@index([userId, completedAt])
 }
@@ -369,6 +394,7 @@ model SessionSeries {
   deadline  DateTime? // null for a recurring series; the shared deadline for a TASK series
   rrule     String? // the recurrence rule — set for a recurring series, null for a TASK series
   exdates   String[]    @default([]) // ISO instants of individually-deleted occurrences (rrule series only)
+  skippedFrom DateTime? // occurrences starting at or after this are skipped ("skip this and following" / "all"); rrule series only
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -411,6 +437,66 @@ model UserStreak {
   /// Last day (YYYY-MM-DD, user tz) with a completed session.
   lastActiveDay    String?  @db.VarChar(10)
   updatedAt        DateTime @updatedAt
+}
+
+enum EggStatus {
+  INCUBATING
+  READY
+  HATCHED
+}
+
+enum SpiritRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+/// An egg a student incubates. Each START session settled inside its window adds a spark (`SparkLedger`); at the threshold it is READY and hatches on `POST /eggs/:id/hatch`.
+model Egg {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    EggStatus @default(INCUBATING)
+  sparks    Int       @default(0)
+  createdAt DateTime  @default(now())
+  hatchedAt DateTime?
+  spirit    Spirit?
+  sparkLedger SparkLedger[]
+
+  @@index([userId, status])
+}
+
+/// A hatched spirit. `spiritId` is a season one species key from `@zenflow/spirits`; the same species can be hatched again.
+model Spirit {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eggId     String       @unique
+  egg       Egg          @relation(fields: [eggId], references: [id], onDelete: Cascade)
+  spiritId  String       @db.VarChar(20)
+  rarity    SpiritRarity
+  hatchedAt DateTime     @default(now())
+
+  @@index([userId, hatchedAt])
+}
+
+/// One spark per START session event. `sessionEventId` is unique, so a settled start grants at most one spark. `day` (YYYY-MM-DD, user tz) enforces the daily cap.
+model SparkLedger {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eggId          String
+  egg            Egg      @relation(fields: [eggId], references: [id], onDelete: Cascade)
+  sessionEventId BigInt   @unique
+  // Set for a prep completion, so re-checking the same plan cannot spark twice. Null for a START.
+  sessionId      String?
+  day            String   @db.VarChar(10)
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, sessionId])
+  @@index([userId, day])
+  @@index([eggId])
 }
 
 /// A user's own colour pick for one course (issue #238). `courseKey` is
@@ -529,12 +615,6 @@ model SlotProposal {
   @@index([experimentId])
 }
 
-enum SessionAnchor {
-  AUTO
-  CHOSEN
-  PINNED
-}
-
 // Why the scheduler picked a start (services/bandit/src/core/reason.py).
 enum PlacementReason {
   PREFERRED_HOUR
@@ -552,7 +632,10 @@ enum SessionEventType {
   SYSTEM_MOVE // scheduler-initiated move (displacement / conflict reschedule): reward 0, no preference update
   COMPLETE // user checked the session off; removed on undo. rewardScore +1 once settled in its slot
   SKIP // user marked the session skipped; removed on undo. rewardScore -1 once settled
-  MISSED // unmoved session with no check-off by the cutoff (rewardScore -1), ADR-0023
+  MISSED // legacy: unmoved session with no check-off by the cutoff (rewardScore -1), ADR-0023; replaced by LAPSED
+  START // unmoved session started inside its slot (rewardScore +1), level-up plan
+  WRONG_TIME // unmoved session checked off before its start (rewardScore 0)
+  LAPSED // unmoved session with no start or check-off by the cutoff (rewardScore -0.25)
 }
 
 /// Range-partitioned by month on `occurredAt` (hand-written migration, ADR-0016); children are `SessionEvent_YYYY_MM`.

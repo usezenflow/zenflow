@@ -41,7 +41,9 @@ from src.core.displacement import (
     pick_min_conflict_slot,
     plan_displacement,
 )
+from src.core.hybrid import days_left_on, shared_tensor
 from src.core.preference import preference_score_at
+from src.core.quiet_hours import quiet_intervals, quiet_window
 from src.core.reason import (
     PlacementReason,
     count_free_starts,
@@ -149,6 +151,7 @@ class _ScoreBatch:
     valid: NDArray[np.bool_]  # (M, N) -- False on padding
     vectors: NDArray[np.float64]  # (M, N, D)
     arm_scores: dict[ArmId, NDArray[np.float64]]  # each (M, N)
+    crosses: NDArray[np.float64] | None = None  # hybrid z: (M, N, arms, Z_DIM)
     ok: bool = True  # False if LinUCB's A matrices were singular for this request
 
 
@@ -162,10 +165,16 @@ class _Placer:
         self.today = local_date_str(req.now_ms, req.timezone)
         self.day_by_str: dict[str, PlacementDay] = {d.day_str: d for d in req.days}
         self.occ: dict[str, Intervals] = {
-            d.day_str: _ivals(d.occupied) for d in req.days
+            d.day_str: [
+                *_ivals(d.occupied),
+                *quiet_intervals(
+                    d.day_str, req.timezone, *quiet_window(req.user.focus_band)
+                ),
+            ]
+            for d in req.days
         }
         self.heuristic_policy = HeuristicPolicy(self.matrix, self.tz)
-        self.linucb_policy = LinucbPolicy(req.bandit, self.tz)
+        self.linucb_policy = LinucbPolicy(req.bandit, self.tz, req.user.focus_band)
         self.day_cap = consts.MAX_SERIES_PER_DAY
 
     # ---- helpers ---------------------------------------------------------
@@ -225,6 +234,7 @@ class _Placer:
                 day_index[i][d.day_str] = j
 
         x = np.zeros((m_count, n_cols, d_dim), dtype=np.float64)
+        z: NDArray[np.float64] | None = None
         if self.linucb_policy.enabled and n_cols:
             t0 = time.perf_counter()
             for i, (m, days) in enumerate(zip(members, per_member_days, strict=True)):
@@ -242,12 +252,13 @@ class _Placer:
                         ),
                         workload_by_type=wl,
                     )
+            z = self._shared_batch(members, per_member_days, n_cols)
             self.t.context += time.perf_counter() - t0
 
             t1 = time.perf_counter()
             ok = True
             try:
-                arm_scores = self.linucb_policy.arm_scores_batch(x)
+                arm_scores = self.linucb_policy.arm_scores_batch(x, z)
             except np.linalg.LinAlgError:
                 singular_matrix.add(1, {"op": "place"})
                 ok = False
@@ -266,7 +277,30 @@ class _Placer:
             valid=valid,
             vectors=x,
             arm_scores=arm_scores,
+            crosses=z,
             ok=ok,
+        )
+
+    def _shared_batch(
+        self,
+        members: list[PlacementMember],
+        per_member_days: list[list[PlacementDay]],
+        n_cols: int,
+    ) -> NDArray[np.float64]:
+        """Hybrid cross features ``z`` per (member, day, arm), padding included."""
+        m_count = len(members)
+        days_left = np.zeros((m_count, n_cols))
+        lectures = np.zeros((m_count, n_cols))
+        for i, days in enumerate(per_member_days):
+            for j, d in enumerate(days):
+                days_left[i, j] = days_left_on(self.req.deadline_ms, d.day_start_ms)
+                lecture = d.workload_by_type.get("LECTURE")
+                lectures[i, j] = lecture.hours if lecture is not None else 0.0
+        return shared_tensor(
+            self.req.user.weak,
+            [m.plan_kind for m in members],
+            days_left,
+            lectures,
         )
 
     # ---- policies --------------------------------------------------------
@@ -298,6 +332,11 @@ class _Placer:
             }
             for d in days
         }
+        crosses = (
+            {d.day_str: batch.crosses[i, idx[d.day_str]] for d in days}
+            if batch.crosses is not None
+            else None
+        )
         t0 = time.perf_counter()
         pick = self.linucb_policy.best_slot(
             m,
@@ -309,7 +348,7 @@ class _Placer:
             self.next15,
             self.req.deadline_ms,
             seeded_tie_break_order(f"{self.req.request_id}|{m.id}"),
-            self.matrix,
+            crosses,
         )
         self.t.scan += time.perf_counter() - t0
         return pick
@@ -465,7 +504,6 @@ class _Placer:
                     f.duration_minutes,
                     f.deadline_ms,
                     f.start_ms,
-                    f.anchor,
                     f.completed,
                     f.series_id,
                 )
@@ -477,14 +515,11 @@ class _Placer:
             _ivals(ctx.horizon_occupied),
             req.deadline_ms + consts.INFEASIBLE_HORIZON_DAYS * consts.DAY_MS,
             timezone=self.tz,
-            chosen_moves=ctx.chosen_moves,
         )
         if plan.kind == "placed" and plan.start_ms is not None:
-            # A Chosen session never moves without the user's go-ahead.
-            ask = ctx.chosen_moves == "ASK" and plan.moves_chosen
             return base.model_copy(
                 update={
-                    "outcome": "NEEDS_CONFIRMATION" if ask else "DISPLACED",
+                    "outcome": "DISPLACED",
                     "applied_policy": "HEURISTIC",
                     "start_ms": plan.start_ms,
                     "moves": [
@@ -492,7 +527,6 @@ class _Placer:
                             id=v.id,
                             from_ms=v.from_ms,
                             to_ms=v.to_ms,
-                            anchor="CHOSEN" if v.anchor == "CHOSEN" else "AUTO",
                             cost=v.cost,
                         )
                         for v in plan.moves

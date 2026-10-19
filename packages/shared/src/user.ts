@@ -9,6 +9,10 @@ export const DEFAULT_USER_NAME = "New User";
 export const LANGS = ["vi", "en"] as const;
 export type Lang = (typeof LANGS)[number];
 
+/** How the user gets to campus. Mirrors the DB `CommuteTransport` enum. */
+export const COMMUTE_TRANSPORTS = ["MOTORCYCLE", "CAR", "BIKE", "WALK"] as const;
+export type CommuteTransport = (typeof COMMUTE_TRANSPORTS)[number];
+
 /** Allowed values of `defaultReminderMinutes` (0 = none). */
 export const DEFAULT_REMINDER_CHOICES = [0, 5, 10, 15, 30, 60] as const;
 export type DefaultReminderChoice = (typeof DEFAULT_REMINDER_CHOICES)[number];
@@ -47,43 +51,6 @@ export interface UserPreferences {
   defaultReminderMinutes: DefaultReminderChoice;
 }
 
-/**
- * The mobile "Getting started" checklist, in display order. Each step is ticked
- * off when the user does the thing (see `mobile/lib/checklist.ts`).
- */
-export const CHECKLIST_STEPS = [
-  "connect-dlu",
-  "add-task",
-  "finish-session",
-] as const;
-export type ChecklistStep = (typeof CHECKLIST_STEPS)[number];
-
-/**
- * Retired checklist steps (the 7-step checklist before #245). Still valid
- * `seenTips` values so progress stored on the server keeps validating.
- */
-export const LEGACY_TIP_IDS = [
-  "switch-day",
-  "create-task",
-  "move-task",
-  "block-actions",
-  "open-month",
-  "open-day",
-  "move-day",
-] as const;
-
-/**
- * Everything stored in `User.seenTips`: the checklist steps the user has done,
- * plus `checklist-hidden` once they dismiss the checklist. Append-only, so it
- * follows the user across devices.
- */
-export const TIP_IDS = [
-  ...CHECKLIST_STEPS,
-  ...LEGACY_TIP_IDS,
-  "checklist-hidden",
-] as const;
-export type TipId = (typeof TIP_IDS)[number];
-
 export interface User extends UserPreferences {
   id: string;
   name: string;
@@ -94,10 +61,10 @@ export interface User extends UserPreferences {
   onboardedAt: string | null;
   /** User intent for native push notifications; in-app notifications are unaffected. */
   allowNotifications: boolean;
-  /** Getting-started checklist steps done (and `checklist-hidden`); on any device. */
-  seenTips: TipId[];
   /** Onboarding answer: when the user focuses best; null = not asked yet. */
   focusBand: FocusBand | null;
+  /** Vehicle for commute routes; `null` reads as MOTORCYCLE. */
+  defaultTransport: CommuteTransport | null;
 }
 
 /** Partial update to a user's name and preferences. */
@@ -107,6 +74,7 @@ export interface UpdateUserInput {
   timezone?: string;
   lang?: Lang;
   defaultReminderMinutes?: DefaultReminderChoice;
+  defaultTransport?: CommuteTransport;
   /**
    * `true` marks onboarding complete (sets `onboardedAt` to now if still
    * null; idempotent — never moves an existing timestamp). Can't be unset.
@@ -114,8 +82,6 @@ export interface UpdateUserInput {
   onboarded?: true;
   /** Native push preference: false when the user turns it off or denies the OS prompt. */
   allowNotifications?: boolean;
-  /** Marks one checklist step done / the checklist hidden (appended once; idempotent, can't be unset). */
-  seenTip?: TipId;
   /**
    * Onboarding answer. Seeds the preference matrix when it is still the default;
    * a learned matrix is left as it is.

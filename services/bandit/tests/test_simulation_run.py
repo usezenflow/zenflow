@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from src.simulation import cache
+from src.simulation.archetypes import LAZY_INTERACTION_MIX
 from src.simulation.engine import SimConfig
 from src.simulation.render import render_markdown
 from src.simulation.run import main, run, write_report
@@ -72,3 +76,18 @@ def test_cli_writes_a_report_with_cis_buckets_and_cells(tmp_path: Path) -> None:
     for needle in ("95% CI", "Cold-start buckets", "0-5", "40+", "Time to threshold"):
         assert needle in text
     assert text.count("early_bird/") + text.count("night_owl/") >= 5  # per-cell rows
+
+
+def test_cli_lazy_profile_sets_the_mix_and_conflicts_with_an_explicit_mix(
+    tmp_path: Path,
+) -> None:
+    args = [
+        "--seed", "4", "--students", "4", "--events", "4",
+        "--scenarios", "single", "--workers", "1", "--no-cache",
+        "--out-dir", str(tmp_path),
+    ]  # fmt: skip
+    assert main([*args, "--profile", "lazy", "--linucb", "v1"]) == 0
+    config = json.loads((tmp_path / "seed-4" / "report.json").read_text())["config"]
+    assert config["interaction_mix"] == LAZY_INTERACTION_MIX
+    with pytest.raises(SystemExit):
+        main([*args, "--profile", "lazy", "--interaction-mix", "dragger=1"])

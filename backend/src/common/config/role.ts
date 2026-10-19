@@ -68,7 +68,8 @@ export type ConsumedQueue =
   | "lms-fetch"
   | "lms-discovery"
   | "lms-month"
-  | "notify";
+  | "notify"
+  | "prep-plan";
 
 /** Serves the API (controllers, sessions, CORS, Swagger). */
 export const runsHttp = (role: Role): boolean =>

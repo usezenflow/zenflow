@@ -8,7 +8,6 @@ import { PushService } from "../devices/push.service";
 import { QueueWorkers } from "../queue/queue-workers.service";
 import { NOTIFY_QUEUE, type NotifyJobData } from "../queue/queues";
 import { ReminderSchedulerService } from "../reminders/reminder-scheduler.service";
-import { DailyPushService } from "../daily-push/daily-push.service";
 import { NotifyProcessor } from "./notify.processor";
 
 async function setup() {
@@ -16,7 +15,6 @@ async function setup() {
   const push = { deliver: jest.fn().mockResolvedValue(undefined) };
   const killSwitch = { isEnabled: jest.fn().mockResolvedValue(true) };
   const reminders = { fire: jest.fn().mockResolvedValue(undefined) };
-  const dailyPush = { deliver: jest.fn().mockResolvedValue(undefined) };
   const moduleRef = await Test.createTestingModule({
     providers: [
       {
@@ -32,7 +30,6 @@ async function setup() {
       { provide: QueueWorkers, useValue: workers },
       { provide: PushService, useValue: push },
       { provide: ReminderSchedulerService, useValue: reminders },
-      { provide: DailyPushService, useValue: dailyPush },
     ],
   }).compile();
   const processor = moduleRef.get(NotifyProcessor);
@@ -51,7 +48,6 @@ async function setup() {
     workers,
     push,
     reminders,
-    dailyPush,
     breakers,
     killSwitch,
     job,
@@ -135,25 +131,6 @@ describe("NotifyProcessor", () => {
       ),
     ).rejects.toBeInstanceOf(UnrecoverableError);
     expect(push.deliver).not.toHaveBeenCalled();
-  });
-
-  it("daily: delivers the brief or check-in for the job's provider and day", async () => {
-    const { processor, dailyPush, job } = await setup();
-    await processor.process(
-      job({
-        type: "daily",
-        userId: "u1",
-        kind: "evening",
-        localDate: "2026-10-14",
-        provider: "apns",
-      }),
-    );
-    expect(dailyPush.deliver).toHaveBeenCalledWith(
-      "u1",
-      "evening",
-      "2026-10-14",
-      expect.objectContaining({ provider: "apns" }),
-    );
   });
 
   it("reminder: fires with the armed start as epoch ms", async () => {

@@ -137,16 +137,15 @@ def _hit(log: list[tuple[str, str, float]]) -> list[bool]:
     return [reward == 1.0 for *_, reward in log]
 
 
-# Placements allowed before the preferred band is first hit. Cold arms tie, so the
-# default matrix (preference term, LINUCB_PREF_WEIGHT) puts the first picks in
-# MORNING/AFTERNOON; a band it scores 0 (MIDDAY above all, only 2 h wide) has to
-# out-vote it, and the matrix has to learn the new hour before the pick settles.
+# Placements allowed before the preferred band is first hit. Cold arms tie, so
+# gap quality (LINUCB_GAP_WEIGHT) and the seeded tie-break order decide the first
+# picks; the preference matrix no longer influences LinUCB slot selection.
 FIRST_HIT_BUDGET = {
     "MORNING": 0,
-    "AFTERNOON": 2,
-    "MIDDAY": 8,
-    "EVENING": 4,
-    "NIGHT": 6,
+    "MIDDAY": 1,
+    "AFTERNOON": 4,
+    "EVENING": 2,
+    "NIGHT": 3,
 }
 # Placements after the first hit during which the pick may still flip back while
 # the matrix catches up; afterwards a kept band must keep winning.
@@ -175,15 +174,13 @@ def test_a_mild_move_still_pushes_exploration_elsewhere() -> None:
     """Regression for the cold-arm lock-in: a user who nudges every placement
     by an hour (MOVE, reward -0.25) must see other bands tried. With cold arms
     pinned at 0.0 the first moved arm kept winning on its own exploration bonus
-    (score +0.075 > 0) and no other band ever got data. The cold-arm prior and
-    the preference term both favour the default study hours, so exploration now
-    stays within them (MORNING, AFTERNOON, EVENING); MIDDAY and NIGHT, which the
-    default matrix scores 0 and where students rarely study, are reached only
-    through a learned preference (see ``test_learns_a_fixed_preferred_band_fast``)."""
+    (score +0.075 > 0) and no other band ever got data. Gap quality now orders
+    slots inside a band, and with all negative rewards LinUCB keeps exploring
+    the full set of bands instead of locking."""
     log = simulate(lambda _wd: "EVENING", episodes=20, fixed_reward=-0.25)
     tried = {arm for _, arm, _ in log}
     assert tried >= {"AFTERNOON", "EVENING", "MORNING"}
-    assert "EARLY_MORNING" not in tried
+    assert len(tried) >= 5, f"expected wide exploration, got {tried}"
 
 
 def test_learns_a_weekday_vs_weekend_split() -> None:

@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import type { SessionCheckOffResponse } from "@zenflow/shared";
 import { Prisma, SessionEventType, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
+import { SpiritsService } from "../spirits/spirits.service";
 import { StreaksService } from "../streaks/streaks.service";
 import { expandRrule, parseOccurrenceId } from "../scheduler/core/recurrence";
 import { WITH_TAGS_AND_SERIES, type SessionRow } from "./types/session-row";
@@ -14,6 +16,12 @@ import { recordSessionEvent } from "./session-events";
 
 /** Which check-off a request sets or undoes. */
 export type CheckOffKind = "complete" | "skip";
+
+/**
+ * How far a skip reaches on a recurring lecture: the one occurrence, it and
+ * every later one, or the whole series (exempt).
+ */
+export type SkipScope = "occurrence" | "following" | "all";
 
 interface CheckOffState {
   completedAt: Date | null;
@@ -50,6 +58,7 @@ export class SessionCheckOffService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly streaks: StreaksService,
+    @Optional() private readonly spirits?: SpiritsService,
   ) {}
 
   async set(
@@ -58,12 +67,20 @@ export class SessionCheckOffService {
     on: boolean,
     user: User,
     now: Date = new Date(),
+    scope: SkipScope = "occurrence",
   ): Promise<SessionCheckOffResponse> {
     const occ = parseOccurrenceId(id);
+    if (scope !== "occurrence" && !(occ && kind === "skip"))
+      throw new BadRequestException(
+        "Skip scope needs a recurring occurrence id",
+      );
     const session = occ
       ? await this.setOccurrence(id, occ, kind, on, user, now)
       : await this.setRow(id, kind, on, user, now);
+    if (occ && scope !== "occurrence")
+      await this.setSeriesSkip(occ, scope, on, user);
     const streak = await this.streaks.refresh(user, now);
+    if (kind === "complete" && on) await this.spirits?.credit(user.id, now);
     return { session, streak };
   }
 
@@ -176,6 +193,43 @@ export class SessionCheckOffService {
       completedAt: next.completedAt?.toISOString() ?? null,
       skipped: next.skipped,
     };
+  }
+
+  /**
+   * Exempt a recurring series from an occurrence on (`following`) or from its
+   * first one (`all`). An open-ended series has no rows to write, so the
+   * boundary lives on the series; undoing clears it.
+   */
+  private async setSeriesSkip(
+    occ: { seriesId: string; startISO: string },
+    scope: Exclude<SkipScope, "occurrence">,
+    on: boolean,
+    user: User,
+  ): Promise<void> {
+    const series = await this.prisma.sessionSeries.findFirst({
+      where: { id: occ.seriesId, userId: user.id },
+      select: {
+        skippedFrom: true,
+        sessions: {
+          where: { deleted: false },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: { scheduledStartTime: true },
+        },
+      },
+    });
+    if (!series) throw new NotFoundException("Cannot find recurring series");
+    const first = series.sessions[0]?.scheduledStartTime;
+    const from = scope === "all" && first ? first : new Date(occ.startISO);
+    const next = on
+      ? series.skippedFrom && series.skippedFrom <= from
+        ? series.skippedFrom
+        : from
+      : null;
+    await this.prisma.sessionSeries.update({
+      where: { id: occ.seriesId },
+      data: { skippedFrom: next },
+    });
   }
 
   /** Write the event for a state turned on, delete the one for a state turned off. */

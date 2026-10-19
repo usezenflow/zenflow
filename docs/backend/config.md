@@ -82,17 +82,24 @@ Behaviour: [ingestion.md](ingestion.md).
 | `DLU_TZ` | `Asia/Ho_Chi_Minh` | Zone of upstream times, not the user's. |
 | `INGESTION_ENABLED` | `true` | Kill switch; `false` in tests. |
 | `INGESTION_REQUEST_DELAY_MS` | 750 | Pause between one watcher's requests (0 in tests). |
-| `INGESTION_PORTAL_DISCOVERY_PERIOD_MS` | 120 d | Safety-net DKHP discovery. A clean pass parks the row until 2 weeks before the next term. |
+| `INGESTION_PORTAL_DISCOVERY_PERIOD_MS` | 3600000 | Paces DKHP discovery at a term change. A clean pass parks the row until 2 weeks before the next term. |
 | `INGESTION_LMS_DISCOVERY_PERIOD_MS` | 86400000 | |
-| `INGESTION_TIMETABLE_PERIOD_MS` | 86400000 | |
-| `INGESTION_EXAM_PERIOD_MS` | 86400000 | |
-| `INGESTION_LMS_CALENDAR_PERIOD_MS` | 3600000 | |
+| `INGESTION_TIMETABLE_PERIOD_MS` | 10800000 | Rolling period until 95% of students are discovered; then each row waits for the next ISO week start. |
+| `INGESTION_EXAM_PERIOD_MS` | 3600000 | Inside the exam window only (1 Oct, 1 Mar, 1 Jun to term end). |
+| `INGESTION_LMS_CALENDAR_PERIOD_MS` | 900000 | |
+| `INGESTION_MARKS_PERIOD_MS` | 3600000 | Marks refetch period once due. |
+| `INGESTION_STUDENT_JOBS_PER_TICK` | 5 | Profile and marks jobs one tick starts. |
+| `INGESTION_EXAM_WINDOW` | `auto` | `open` or `closed` forces the exam window; `auto` follows the calendar. Benchmarks only. |
+| `INGESTION_TIMETABLE_WEEKLY_MS` | unset | Replaces "start of the next ISO week". Benchmarks only. |
+| `INGESTION_MARKS_AFTER_EXAMS_MS` | 604800000 (7 d) | Wait between a student's first exam ending and marks becoming due. |
+| `UPSTREAM_SESSION_TTL_PORTAL_S` | 6000 (100 min) | Cached portal and DKHP bearer token, under their 2 h lifetime. `0` turns the cache off. |
+| `UPSTREAM_SESSION_TTL_LMS_S` | 3000 (50 min) | Cached LMS cookie and sesskey, under their 1 h lifetime. `0` turns the cache off. |
 | `INGESTION_TICK_MAX_BATCH` | 5 in schema; 20 in `ingestion-ticker.service.ts` | Max students one 5 s tick claims per kind. |
 | `INGESTION_TICK_BUDGET_MS` | 4000 | Stop starting further kinds once a tick has run this long. |
 | `INGESTION_QUEUE_MAX_BACKLOG` | 500 | Watcher stops claiming for a queue at this `waiting+delayed`. |
 | `INGESTION_BREAKER_FAILURES` / `_OPEN_MS` / `_MAX_OPEN_MS` | 5 / 60000 / 600000 | Breakers for all upstreams. |
 | `INGESTION_OCCURRENCE_CACHE_ENABLED` | `false` | Enables cache-served walks and fan-out. Discovery is always on. |
-| `INGESTION_CACHE_TTL_MS` | 604800000 (7 d) | Past it, a live walk refreshes the cache. |
+| `INGESTION_CACHE_TTL_MS` | 2592000000 (30 d) | Past it, a live walk refreshes the cache. |
 | `INGESTION_DISCOVERY_MAX_AGE_MS` | 172800000 (48 h) | Older Moodle set is ignored, walk live. |
 | `INGESTION_FULL_WALK_EVERY` | 7 | Force a live walk every N cache-served passes. |
 | `INGESTION_FANOUT_MAX_STUDENTS` | 200 | Max classmates one change fans out to per pass. |

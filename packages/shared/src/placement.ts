@@ -10,6 +10,7 @@
  * for a minor-compatible extension the service must recognise.
  */
 import type { SchedulingArm } from "./bandit";
+import type { FocusBand } from "./user";
 
 export const PLACEMENT_CONTRACT_VERSION = 3;
 
@@ -76,27 +77,11 @@ export interface PlacementMember {
   computeBoth: boolean;
 }
 
-/**
- * How firmly a flexible session holds its slot (ADR-0022). `AUTO` moves for
- * 1 plus hours moved, `CHOSEN` for 10 plus hours moved and only with the
- * user's go-ahead, `PINNED` never. Fixed sessions go in `fixed`.
- */
-export type PlacementAnchor = "AUTO" | "CHOSEN" | "PINNED";
-
-/**
- * What to do with a plan that moves a `CHOSEN` session: `ASK` answers
- * `NEEDS_CONFIRMATION`, `ALLOW` applies it (`DISPLACED`), `FORBID` treats
- * Chosen sessions as pinned.
- */
-export type ChosenMovePolicy = "ASK" | "ALLOW" | "FORBID";
-
 export interface PlacementFlexible {
   id: string;
   durationMinutes: number;
   deadlineMs: number;
   startMs: number;
-  /** Default `AUTO`. */
-  anchor?: PlacementAnchor;
   /** Completed sessions never move. Started ones and those starting within
    *  2 h of `nowMs` never move either; Python derives that from `startMs`. */
   completed?: boolean;
@@ -107,8 +92,6 @@ export interface PlacementFlexible {
 /** Only sent on the second call of the two-phase infeasible path. */
 export interface InfeasibleContext {
   policy?: "ACCEPT_CONFLICTS" | "ACCEPT_LATE_DEADLINE";
-  /** Default `ASK`. */
-  chosenMoves?: ChosenMovePolicy;
   flexible: PlacementFlexible[];
   /** Deadline day +/- 1. */
   fixed: IntervalMs[];
@@ -135,7 +118,12 @@ export interface PlaceRequest {
   /** Loaded once for the whole scan range. */
   days: PlacementDay[];
   /** `preferenceMatrix` = 168 floats (7 ISO weekdays x 24 hours, row-major). */
-  user: { preferenceMatrix: number[]; observationCount: number };
+  user: {
+    preferenceMatrix: number[];
+    observationCount: number;
+    /** Sets the user's quiet hours; omitted when onboarding has not asked. */
+    focusBand?: FocusBand;
+  };
   /** Required iff any member can run LINUCB. `[]` = cold prior. */
   bandit?: {
     alpha: number;
@@ -185,8 +173,7 @@ export interface PlacementMove {
   id: string;
   fromMs: number;
   toMs: number;
-  anchor: "AUTO" | "CHOSEN";
-  /** Base for the anchor, plus hours moved, plus 10 when the local day changes. */
+  /** 1 plus hours moved, plus 10 when the local day changes. */
   cost: number;
 }
 

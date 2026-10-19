@@ -12,7 +12,6 @@ const plan: PlacementPlan = {
       id: "chosen",
       from: "2026-10-15T03:00:00.000Z",
       to: "2026-10-15T05:00:00.000Z",
-      anchor: "CHOSEN",
       cost: 10,
     },
   ],
@@ -25,7 +24,6 @@ const sessions: Session[] = [
     title: "Lab report",
     durationMinutes: 45,
     scheduledStartTime: "2026-10-15T03:00:00.000Z",
-    anchor: "CHOSEN",
   }),
 ];
 

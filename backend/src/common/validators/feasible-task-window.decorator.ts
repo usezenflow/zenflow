@@ -9,20 +9,17 @@ import {
 interface FeasibleTaskWindowHost {
   type?: string;
   durationMinutes?: number;
-  sessionCount?: number;
-  sessionDurations?: number[];
 }
 
 /**
  * Coarse feasibility guard on a `TASK` create (issue #33): rejects when
- * `now + durationMinutes × sessionCount > deadline` — there isn't even enough
- * raw time between now and the deadline to fit every sitting back-to-back,
- * before the request ever reaches the scheduler.
+ * `now + durationMinutes > deadline` — there isn't even enough raw time between
+ * now and the deadline to fit the task, before the request reaches the scheduler.
  *
  * This is a NECESSARY, not sufficient, check (no working hours, no existing
  * occupancy, no per-day cap) — it exists to reject the obviously-impossible
  * case cheaply, at the DTO boundary. The placer's own pre-flight
- * ({@link TaskPlacementService.canPlaceTask} / `canPlaceSeries`, in
+ * ({@link TaskPlacementService.canPlaceTask}, in
  * `SessionCrudService.create`) still runs afterwards and catches the "the
  * arithmetic fits but every day between now and the deadline is already
  * full" case this one can't see.
@@ -40,12 +37,7 @@ export class IsFeasibleTaskWindowConstraint implements ValidatorConstraintInterf
     )
       return true; // its own @IsInt/@Min decorators report this
 
-    const sessionCount = Math.max(1, Math.trunc(o.sessionCount ?? 1));
-    const totalMinutes =
-      Array.isArray(o.sessionDurations) && o.sessionDurations.length > 0
-        ? o.sessionDurations.reduce((a, b) => a + (Number(b) || 0), 0)
-        : o.durationMinutes * sessionCount;
-    const neededMs = totalMinutes * 60_000;
+    const neededMs = o.durationMinutes * 60_000;
     return Date.now() + neededMs <= Date.parse(deadline);
   }
 
@@ -54,12 +46,8 @@ export class IsFeasibleTaskWindowConstraint implements ValidatorConstraintInterf
    * `splitToastMessage` renders the two as separate toast lines instead of
    * one long wrapped, bold one.
    */
-  defaultMessage(args: ValidationArguments) {
-    const o = args.object as FeasibleTaskWindowHost;
-    const sessionCount = Math.max(1, Math.trunc(o.sessionCount ?? 1));
-    return sessionCount > 1
-      ? `Can't fit ${sessionCount} sessions before the deadline\nLoosen the deadline or reduce the number of sessions.`
-      : `Won't fit before the deadline\nPick a later deadline.`;
+  defaultMessage() {
+    return `Won't fit before the deadline\nPick a later deadline.`;
   }
 }
 

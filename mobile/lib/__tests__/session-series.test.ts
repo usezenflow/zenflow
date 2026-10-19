@@ -21,7 +21,7 @@ describe("getSeriesKind", () => {
     );
   });
 
-  it("returns 'task' when seriesId is set but rrule isn't (materialized TASK series)", () => {
+  it("returns 'plan' when seriesId is set but rrule isn't (materialized TASK series)", () => {
     expect(getSeriesKind(task({ seriesId: "s1", rrule: null }))).toBe("task");
   });
 
@@ -31,7 +31,7 @@ describe("getSeriesKind", () => {
     ).toBe("timetable");
   });
 
-  it("prefers 'recurring'/'task' over 'timetable' when both seriesId and timetableGroupId are set", () => {
+  it("prefers 'recurring'/'plan' over 'timetable' when both seriesId and timetableGroupId are set", () => {
     expect(
       getSeriesKind(
         task({ seriesId: "s1", rrule: null, timetableGroupId: "section-1" }),

@@ -1,5 +1,3 @@
-import { zonedDate } from "@zenflow/core";
-import { format } from "date-fns";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -45,19 +43,10 @@ const DEFAULT_TAGS = ["Study", "Exam", "Assignment", "Project"];
 
 let patches: Record<string, unknown>[];
 let bulkBodies: { names: string[] }[];
-type SessionBody = {
-  type: string;
-  title: string;
-  durationMinutes: number;
-  scheduledStartTime: string;
-  rrule: string;
-};
-let sessionBodies: SessionBody[];
 
 beforeEach(() => {
   patches = [];
   bulkBodies = [];
-  sessionBodies = [];
   notif.active = false;
   notif.permissionGranted = false;
   notif.update.mockResolvedValue(true);
@@ -76,12 +65,6 @@ beforeEach(() => {
       bulkBodies.push(body);
       return HttpResponse.json({ data: { tags: body.names.map((name) => ({ id: name, name })) } });
     }),
-    http.get(`${API}/sessions/search`, () => HttpResponse.json({ data: { sessions: [], nextCursor: null } })),
-    http.post(`${API}/sessions`, async ({ request }) => {
-      const body = (await request.json()) as SessionBody;
-      sessionBodies.push(body);
-      return HttpResponse.json({ data: { session: { id: body.title, ...body } } });
-    }),
   );
 });
 
@@ -90,8 +73,8 @@ const secondary = () => screen.getByTestId("onboarding.secondary");
 const next = async (title: string) =>
   waitFor(() => expect(screen.getByText(title)).toBeTruthy());
 
+// The first step is focus; the name step was removed (the DLU name fills it on first sync).
 const TITLES = [
-  "What should we call you?",
   "When do you focus best?",
   "Connect your LMS or portal",
   "Stay ahead of deadlines",
@@ -107,50 +90,18 @@ async function skipTo(title: string) {
 }
 
 describe("OnboardingScreen", () => {
-  it("starts on the name step with the name prefilled and no back button", () => {
+  it("starts on the focus step with no back button", () => {
     renderScreen(<OnboardingScreen />);
-    expect(screen.getByText("What should we call you?")).toBeTruthy();
-    expect((screen.getByDisplayValue("Test User") as HTMLInputElement).value).toBe("Test User");
+    expect(screen.getByText("When do you focus best?")).toBeTruthy();
     expect(screen.queryByLabelText("Back")).toBeNull();
-  });
-
-  it("disables Continue while the name is blank", () => {
-    renderScreen(<OnboardingScreen />);
-    fireEvent.change(screen.getByDisplayValue("Test User"), { target: { value: "   " } });
-    expect(primary().hasAttribute("disabled") || primary().getAttribute("aria-disabled") === "true").toBe(true);
-  });
-
-  it("saves an edited name and moves to the LMS step", async () => {
-    renderScreen(<OnboardingScreen />);
-    fireEvent.change(screen.getByDisplayValue("Test User"), { target: { value: "  Minh  " } });
-    fireEvent.click(primary());
-    await next("When do you focus best?");
-    expect(patches).toEqual([{ name: "Minh" }]);
-    expect(useUserStore.getState().user?.name).toBe("Minh");
-  });
-
-  it("does not PATCH when the name is unchanged", async () => {
-    renderScreen(<OnboardingScreen />);
-    fireEvent.click(primary());
-    await next("When do you focus best?");
-    expect(patches).toEqual([]);
-  });
-
-  it("keeps the user on the name step and toasts when the save fails", async () => {
-    server.use(http.patch(BASIC_INFO, () => HttpResponse.json({ message: "no" }, { status: 500 })));
-    renderScreen(<OnboardingScreen />);
-    fireEvent.change(screen.getByDisplayValue("Test User"), { target: { value: "Minh" } });
-    fireEvent.click(primary());
-    await waitFor(() => expect(screen.getByText("Couldn't save")).toBeTruthy());
-    expect(screen.getByText("What should we call you?")).toBeTruthy();
   });
 
   it("goes back a step and hides Back again on the first step", async () => {
     renderScreen(<OnboardingScreen />);
     fireEvent.click(primary());
-    await next("When do you focus best?");
+    await next("Connect your LMS or portal");
     fireEvent.click(screen.getByLabelText("Back"));
-    await next("What should we call you?");
+    await next("When do you focus best?");
     expect(screen.queryByLabelText("Back")).toBeNull();
   });
 
@@ -277,7 +228,12 @@ describe("OnboardingScreen", () => {
   describe("finish", () => {
     async function openSummary() {
       renderScreen(<OnboardingScreen />);
-      await skipTo("You’re all set");
+      fireEvent.click(primary());
+      await next("Connect your LMS or portal");
+      fireEvent.click(secondary());
+      await next("Stay ahead of deadlines");
+      fireEvent.click(secondary());
+      await next("You’re all set");
     }
 
     it("has no timezone, reminder or tags steps", async () => {
@@ -321,47 +277,6 @@ describe("OnboardingScreen", () => {
       await openSummary();
       fireEvent.click(screen.getByText("Open my calendar"));
       await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
-    });
-
-    it("creates the Sleep, Lunch break and Dinner DND series in the user's timezone", async () => {
-      await openSummary();
-      fireEvent.click(screen.getByText("Open my calendar"));
-      await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
-      expect(sessionBodies.map((b) => b.title)).toEqual(["Sleep", "Lunch break", "Dinner"]);
-      const [sleep, lunch, dinner] = sessionBodies;
-      expect(sessionBodies.every((b) => b.type === "DND" && b.rrule === "FREQ=DAILY")).toBe(true);
-      expect([sleep.durationMinutes, lunch.durationMinutes, dinner.durationMinutes]).toEqual([420, 60, 60]);
-      const wall = (iso: string) => format(zonedDate(iso, "Asia/Ho_Chi_Minh"), "HH:mm");
-      expect([sleep, lunch, dinner].map((b) => wall(b.scheduledStartTime))).toEqual(["23:00", "11:30", "18:00"]);
-    });
-
-    it("skips a routine that already exists as a DND series", async () => {
-      server.use(
-        http.get(`${API}/sessions/search`, () =>
-          HttpResponse.json({
-            data: { sessions: [{ type: "DND", title: "Dinner", rrule: "FREQ=DAILY" }], nextCursor: null },
-          }),
-        ),
-      );
-      await openSummary();
-      fireEvent.click(screen.getByText("Open my calendar"));
-      await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
-      expect(sessionBodies.map((b) => b.title)).toEqual(["Sleep", "Lunch break"]);
-    });
-
-    it("still completes when a routine fails to save", async () => {
-      server.use(http.post(`${API}/sessions`, () => HttpResponse.json({ message: "no" }, { status: 500 })));
-      await openSummary();
-      fireEvent.click(screen.getByText("Open my calendar"));
-      await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
-    });
-
-    it("creates no routines when the lookup fails, so a retry cannot duplicate them", async () => {
-      server.use(http.get(`${API}/sessions/search`, () => HttpResponse.json({ message: "no" }, { status: 500 })));
-      await openSummary();
-      fireEvent.click(screen.getByText("Open my calendar"));
-      await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
-      expect(sessionBodies).toEqual([]);
     });
 
     it("toasts and stays on the summary when completing fails", async () => {

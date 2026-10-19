@@ -22,6 +22,7 @@ TZ = "UTC"
 EPOCH_MS = 1_767_571_200_000  # Mon 2026-01-05T00:00Z
 HOUR_MS = 60 * MS_PER_MINUTE
 LOOKAHEAD_DAYS = 70  # calendar days built past the last arrival
+EXAM_SHARE = 0.3  # share of arrivals that are exams (the rest are assignments)
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class Task:
     deadline_ms: int
     duration: int
     n_members: int
+    kind: str = "ASSIGNMENT"  # EXAM | ASSIGNMENT, drives the hybrid cross features
 
 
 Interval = tuple[int, int]
@@ -147,8 +149,10 @@ def build_tasks(
 ) -> list[Task]:
     """One arrival event per day: a lone task or a multi-sitting series."""
     rng = stream(seed, "tasks", student_id)
+    kind_rng = stream(seed, "plankind", student_id)
     tasks: list[Task] = []
     for i in range(n_events):
+        kind = "EXAM" if kind_rng.random() < EXAM_SHARE else "ASSIGNMENT"
         arrival_min = int(rng.integers(7 * 4, 21 * 4)) * 15
         duration = int(rng.choice([30, 60, 90, 120], p=[0.2, 0.4, 0.25, 0.15]))
         dl_hour = int(rng.integers(12, 23))
@@ -162,6 +166,7 @@ def build_tasks(
                 deadline_ms=day_start_ms(i + span) + dl_hour * HOUR_MS,
                 duration=duration,
                 n_members=n,
+                kind=kind,
             )
         )
     return tasks

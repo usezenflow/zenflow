@@ -118,13 +118,6 @@ interface WeekPagerProps {
   onActiveStateChange?: (state: TimelineState) => void;
   /** Today's "next up" session from the focused page only. */
   onStatusChange?: (status: DayStatus) => void;
-  /** Fired when a still-finger long-press on a block asks to move it — the
-   * screen opens the "Move to…" sheet with this session. Forwarded straight
-   * through from the active `DayTimeline`. */
-  onRequestReschedule?: (session: Session) => void;
-  /** Long-press on a block → the screen's block action menu. Forwarded
-   * straight through to the active `DayTimeline`. */
-  onRequestBlockMenu?: (session: Session) => void;
   /** Same-shaped scope-confirmation deferral as `DayTimeline`'s own prop —
    * plain passthrough to the active `DayTimeline`. */
   onRequestScopedUpdate?: (
@@ -180,8 +173,7 @@ export type WeekPagerHandle = {
  * that escapes a week edge (Monday swiped backward, Sunday swiped forward)
  * slides the whole window one week (`slideWeek`). Task blocks can be dragged
  * vertically to reschedule within their day; moving one to another day is done
- * through the "Move to…" sheet (long-press a block → `onRequestReschedule`),
- * not by dragging it off a screen edge.
+ * from the session sheet, not by dragging it off a screen edge.
  */
 function WeekPagerImpl(
   {
@@ -196,8 +188,6 @@ function WeekPagerImpl(
     onWeekSlideEnd,
     onActiveStateChange,
     onStatusChange,
-    onRequestReschedule,
-    onRequestBlockMenu,
     onRequestScopedUpdate,
     flashSessionId = null,
   }: WeekPagerProps,
@@ -1093,8 +1083,6 @@ function WeekPagerImpl(
                   syncScroll
                   onSessionPress={onSessionPress}
                   onDragChange={handleDragChange}
-                  onRequestReschedule={onRequestReschedule}
-                  onRequestBlockMenu={onRequestBlockMenu}
                   onRequestScopedUpdate={onRequestScopedUpdate}
                   onStateChange={active ? onActiveStateChange : undefined}
                   onStatusChange={active ? onStatusChange : undefined}

@@ -6,6 +6,8 @@ import { MonthGrid } from "@/components/calendar/month-grid";
 import { EmptyMark } from "@/components/brand/state-marks";
 import { useSessionCheck } from "@/components/calendar/session-check";
 import { LocationChip } from "@/components/calendar/location-chip";
+import { stripeColor } from "@/lib/stripe-color";
+import { useColorScheme } from "@/lib/useColorScheme";
 import { cn } from "@/lib/utils";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
@@ -120,8 +122,9 @@ function SessionRow({
   onHover: (key: string | null) => void;
   onDrop: (session: Session, key: string | null) => void;
 }) {
-  const { done, check } = useSessionCheck(session);
+  const { done } = useSessionCheck(session);
   const tone = done ? "done" : sessionTone(deriveState(session), session.late);
+  const { isDarkColorScheme } = useColorScheme();
   const lastKey = useSharedValue<string | null>(null);
   const canDrag = !continuation && !!session.scheduledStartTime;
 
@@ -181,7 +184,7 @@ function SessionRow({
         className={cn("min-w-0 flex-1 rounded-r-xl", done && "opacity-60")}
         style={{
           borderLeftWidth: 3,
-          borderLeftColor: SESSION_TONES[tone].base,
+          borderLeftColor: stripeColor(tone, isDarkColorScheme),
         }}
       >
         <View className="gap-0.5 py-2 pl-3">
@@ -200,7 +203,6 @@ function SessionRow({
         </View>
       </Animated.View>
     </GestureDetector>
-    {continuation ? null : check}
     </View>
   );
 }

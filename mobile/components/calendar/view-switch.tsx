@@ -4,11 +4,10 @@ import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { Pressable, View } from "react-native";
 
-export type CalendarView = "day" | "week" | "month";
+export type CalendarView = "day" | "month";
 
 const VIEWS: readonly { id: CalendarView; label: () => string }[] = [
   { id: "day", label: () => t("Day") },
-  { id: "week", label: () => t("Week") },
   { id: "month", label: () => t("Month") },
 ];
 
@@ -17,7 +16,7 @@ interface ViewSwitchProps {
   onChange: (view: CalendarView) => void;
 }
 
-/** Segmented Day | Week | Month control in the calendar header. */
+/** Segmented Day | Month control in the calendar header. */
 export function ViewSwitch({ value, onChange }: ViewSwitchProps) {
   useLanguage();
   return (

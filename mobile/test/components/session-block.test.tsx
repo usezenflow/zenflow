@@ -30,6 +30,7 @@ function segment(overrides: Partial<DaySegment> & { minutes: number }): DaySegme
     tags: [],
     state: "fluid",
     location: null,
+    originLocation: null,
     ...rest,
   } as DaySegment;
 }

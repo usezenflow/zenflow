@@ -1,16 +1,9 @@
 name: Mobile
 
-# Native builds + Maestro e2e for mobile/ (issue #79). ci.yml calls this on every
-# PR that touches mobile/ or packages/, after lint, typecheck and unit tests
-# pass: it builds the Android e2e APK and runs the Maestro suite. iOS (build and
-# e2e on a simulator) runs nightly, on release/** pushes and on demand, never in
-# a PR. release-beta.yml calls it to build the shipped APK and unsigned .ipa.
+# Native builds for mobile/ (issue #79). release-beta.yml calls it to build the
+# shipped APK and unsigned .ipa. Not run in PRs; no e2e runs here.
 
 on:
-  push:
-    branches: ["release/**"]
-  schedule:
-    - cron: "0 19 * * *" # 02:00 Asia/Ho_Chi_Minh
   workflow_call:
     inputs:
       variant:
@@ -20,16 +13,12 @@ on:
         description: "API base URL baked into the build (blank = https://api.usezenflow.com/api/v1)"
         type: string
         default: ""
-      skip_e2e:
-        description: "Build only (used by the release workflow)"
-        type: boolean
-        default: true
       skip_tests:
         description: "Skip the unit-test gate (the caller already ran it)"
         type: boolean
         default: false
       skip_ios:
-        description: "Skip the iOS build and e2e"
+        description: "Skip the iOS build"
         type: boolean
         default: false
   workflow_dispatch:
@@ -43,10 +32,6 @@ on:
         description: "API base URL baked into the build (variant=release only; blank = https://api.usezenflow.com/api/v1)"
         type: string
         default: ""
-      run_ios_e2e:
-        description: "Also build for the simulator and run the Maestro suite on iOS"
-        type: boolean
-        default: false
 
 concurrency:
   group: mobile-${{ github.ref }}
@@ -56,10 +41,8 @@ permissions:
   contents: read
 
 env:
-  # Pin: Maestro's installer otherwise floats to latest.
-  MAESTRO_VERSION: "2.11.0"
-  # 10.0.2.2 is the Android emulator's alias for the runner host. The iOS build
-  # has no e2e, so a non-release one just points at localhost.
+  # Fallback API URLs for a non-release build. 10.0.2.2 is the Android emulator's
+  # alias for the runner host.
   ANDROID_E2E_API_URL: http://10.0.2.2:8000/api/v1
   IOS_E2E_API_URL: http://localhost:8000/api/v1
 
@@ -99,6 +82,17 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # CMake picks the launcher up from these env vars, so React Native's C++
+      # (Hermes glue, Fabric, codegen) is compiled once per source change.
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: android-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: android-
+          max-size: 1G
+      - name: Use ccache for CMake
+        run: |
+          echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
       - uses: gradle/actions/setup-gradle@v4
         with:
           # Only main writes the Gradle cache; PR builds read it, so they do
@@ -164,7 +158,7 @@ jobs:
     needs: test
     if: >-
       ${{ !cancelled() && needs.test.result != 'failure' && !inputs.skip_ios &&
-      (github.event_name != 'workflow_dispatch' || inputs.variant == 'release' || inputs.run_ios_e2e) }}
+      inputs.variant == 'release' }}
     runs-on: macos-latest
     timeout-minutes: 75
     env:
@@ -188,6 +182,15 @@ jobs:
         with:
           path: mobile/ios/Pods
           key: pods-${{ runner.os }}-${{ hashFiles('mobile/ios/Podfile.lock') }}
+      # Pods compile into derived data; restoring it lets xcodebuild skip
+      # unchanged targets. Falls back to the newest cache when the lock moves.
+      - uses: actions/cache@v4
+        with:
+          path: mobile/ios/build-device
+          key: ios-derived-${{ runner.os }}-${{ hashFiles('mobile/ios/Podfile.lock') }}-${{ github.sha }}
+          restore-keys: |
+            ios-derived-${{ runner.os }}-${{ hashFiles('mobile/ios/Podfile.lock') }}-
+            ios-derived-${{ runner.os }}-
       # prebuild exits 0 even when its own pod install fails, so install here
       # where a failure is visible, and retry runner I/O blips.
       - name: Install pods
@@ -199,31 +202,6 @@ jobs:
             sleep 15
           done
           exit 1
-      - name: Build for the simulator (unsigned)
-        if: ${{ inputs.variant != 'release' && !inputs.skip_e2e }}
-        working-directory: mobile/ios
-        run: |
-          xcodebuild \
-            -workspace Zenflow.xcworkspace -scheme Zenflow \
-            -configuration Release -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO build
-      # Simulator app for the iOS e2e (nightly and release/**, never in a PR).
-      # A release build ships the unsigned device .ipa below instead.
-      - name: Zip the .app
-        if: ${{ inputs.variant != 'release' && !inputs.skip_e2e }}
-        run: |
-          mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent \
-            mobile/ios/build/Build/Products/Release-iphonesimulator/Zenflow.app \
-            dist/zenflow-ios-simulator.zip
-      - if: ${{ inputs.variant != 'release' && !inputs.skip_e2e }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: zenflow-ios-simulator-app
-          path: dist/zenflow-ios-simulator.zip
-          if-no-files-found: error
       # Unsigned device build for sideloading: SideStore/AltStore re-sign it on
       # the phone with a free Apple ID, so CI needs no certificate or profile.
       # Push and other paid entitlements do not survive free signing. A
@@ -252,156 +230,3 @@ jobs:
           name: zenflow-ios-unsigned-ipa
           path: dist/zenflow-ios-unsigned.ipa
           if-no-files-found: error
-
-  e2e-android:
-    name: Maestro e2e (Android emulator)
-    if: ${{ !cancelled() && needs.build-android.result == 'success' && inputs.variant != 'release' && !inputs.skip_e2e }}
-    needs: build-android
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    services:
-      redis:
-        image: redis:8.8.0-alpine
-        ports: ["6379:6379"]
-      redis-ratelimit:
-        image: redis:8.8.0-alpine
-        ports: ["6380:6379"]
-      mailpit:
-        image: axllent/mailpit:v1.31.4
-        ports: ["1025:1025", "8025:8025"]
-    steps:
-      # The pixel_6 AVD wants a ~7.2 GB userdata partition and the emulator
-      # died with "Not enough space" (5.2 GB free). No docker prune here: the
-      # service containers are already running.
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost
-          df -h /
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: actions/download-artifact@v5
-        with:
-          name: zenflow-android-apk
-          path: dist
-      - name: Generate throwaway .env.test
-        run: .github/scripts/write-test-env.sh backend/.env.test
-      - name: Start Postgres + object storage
-        working-directory: backend
-        run: docker compose -f compose.test.yml up -d
-      # Same boot sequence as ci.yml's frontend-e2e. The emulator reaches this
-      # process at 10.0.2.2:8000, so it must listen on all interfaces.
-      - name: Migrate and start the API
-        working-directory: backend
-        run: |
-          for i in $(seq 1 30); do docker exec zenflow-test-db pg_isready -U ci -d zenflow-test && break; sleep 2; done
-          pnpm exec dotenv -e .env.test -- node scripts/with-database-url.cjs prisma migrate deploy
-          pnpm build
-          (pnpm exec dotenv -e .env.test -- env PORT=8000 node dist/main > ../api.log 2>&1 &)
-          for i in $(seq 1 60); do curl -fs http://localhost:8000/api >/dev/null && exit 0; sleep 2; done
-          cat ../api.log; exit 1
-      - name: Install Maestro
-        run: |
-          curl -Ls "https://get.maestro.mobile.dev" | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Run flows on the emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          target: google_apis
-          profile: pixel_6
-          disk-size: 4096M
-          cores: 4
-          ram-size: 4096M
-          heap-size: 512M
-          disable-animations: true
-          script: bash mobile/e2e/ci-android.sh
-      - name: Upload screenshots and reports
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-android-results
-          path: |
-            mobile/e2e/results
-            api.log
-          if-no-files-found: ignore
-
-  e2e-ios:
-    name: Maestro e2e (iOS simulator)
-    if: >-
-      !cancelled() && needs.build-ios.result == 'success' &&
-      !inputs.skip_e2e && inputs.variant != 'release' &&
-      (github.event_name != 'workflow_dispatch' || inputs.run_ios_e2e)
-    needs: build-ios
-    runs-on: macos-latest
-    timeout-minutes: 75
-    continue-on-error: true # advisory until the Android suite has proven stable
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: actions/download-artifact@v5
-        with:
-          name: zenflow-ios-simulator-app
-          path: dist
-      - name: Install Docker (colima) for the test stack
-        run: |
-          brew install colima docker docker-compose redis
-          colima start
-          brew services start redis
-          docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.4
-      - name: Generate throwaway .env.test
-        run: .github/scripts/write-test-env.sh backend/.env.test
-      - name: Start Postgres + object storage, then the API
-        working-directory: backend
-        run: |
-          docker compose -f compose.test.yml up -d
-          for i in $(seq 1 30); do docker exec zenflow-test-db pg_isready -U ci -d zenflow-test && break; sleep 2; done
-          pnpm exec dotenv -e .env.test -- node scripts/with-database-url.cjs prisma migrate deploy
-          pnpm build
-          (pnpm exec dotenv -e .env.test -- env PORT=8000 node dist/main > ../api.log 2>&1 &)
-          for i in $(seq 1 60); do curl -fs http://localhost:8000/api >/dev/null && exit 0; sleep 2; done
-          cat ../api.log; exit 1
-      - name: Install Maestro
-        run: |
-          curl -Ls "https://get.maestro.mobile.dev" | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
-      - name: Boot simulator and install the app
-        run: |
-          unzip -q dist/zenflow-ios-simulator.zip -d dist/app
-          udid=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
-          xcrun simctl boot "$udid"
-          xcrun simctl bootstatus "$udid" -b
-          xcrun simctl install "$udid" dist/app/Zenflow.app
-          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
-      - name: Run flows
-        working-directory: mobile
-        run: |
-          xcrun simctl io "$SIM_UDID" recordVideo --codec=h264 e2e-video.mp4 &
-          rec=$!
-          status=0
-          pnpm e2e || status=$?
-          kill -INT $rec || true
-          mkdir -p e2e/results && mv e2e-video.mp4 e2e/results/ 2>/dev/null || true
-          exit $status
-      - name: Upload screenshots and reports
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: maestro-ios-results
-          path: |
-            mobile/e2e/results
-            api.log
-          if-no-files-found: ignore

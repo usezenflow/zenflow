@@ -20,6 +20,10 @@ owns:
   - docs/ops/**
   - docs/benchmarks/**
   - scripts/**
+  - backend/scripts/build-map-style.cjs
+  - backend/scripts/fetch-map-assets.sh
+  - backend/scripts/nominatim-*.sh
+  - backend/scripts/osrm-prepare.sh
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
