@@ -53,7 +53,7 @@ import { SESSION_DETAIL_SNAP_POINTS } from "@/lib/session-detail";
 import { BookOpen, Check, ChevronRight, Clock, Plus, SkipForward, Trash2, Undo2 } from "@/components/Icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { GlassButton } from "@/components/ui/glass-button";
+import { GLASS_HIT_SIZE, GLASS_SIZE, GlassButton } from "@/components/ui/glass-button";
 import { useOffline } from "@/hooks/use-offline";
 import { forwardRef, startTransition, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -72,6 +72,9 @@ interface SessionDetailSheetProps {
 
 const DRAFT_DURATION = 60;
 /** Length of the study session "Prepare in advance" books. */
+/** The brand orange, as the glow around the new plan button. */
+const PLACE_GLOW = "#FF8E3E";
+
 const SKIPPABLE = new Set<Session["type"]>(["LECTURE", "EXAM", "ASSIGNMENT"]);
 const PREP_TARGETS = new Set<Session["type"]>(["LECTURE", "EXAM", "ASSIGNMENT"]);
 const PREPARE_DURATION = 60;
@@ -511,12 +514,30 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                       accessibilityState={{ disabled: offline || placing, busy: placing }}
                       disabled={offline || placing}
                       onPress={() => placeRef.current?.()}
-                      className={cn(
-                        "h-10 w-10 items-center justify-center rounded-full bg-primary active:opacity-80",
-                        (offline || placing) && "opacity-40",
-                      )}
+                      style={({ pressed }) => ({
+                        minWidth: GLASS_HIT_SIZE,
+                        minHeight: GLASS_HIT_SIZE,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: offline || placing ? 0.4 : pressed ? 0.8 : 1,
+                        transform: [{ scale: pressed ? 0.96 : 1 }],
+                      })}
                     >
-                      {placing ? <Spinner size={18} tone="onPrimary" /> : <Plus size={20} className="text-primary-foreground" />}
+                      <View
+                        className="items-center justify-center bg-primary"
+                        style={{
+                          width: GLASS_SIZE,
+                          height: GLASS_SIZE,
+                          borderRadius: GLASS_SIZE / 2,
+                          shadowColor: PLACE_GLOW,
+                          shadowOpacity: 0.7,
+                          shadowRadius: 12,
+                          shadowOffset: { width: 0, height: 0 },
+                          elevation: 8,
+                        }}
+                      >
+                        {placing ? <Spinner size={18} tone="onPrimary" /> : <Plus size={20} className="text-primary-foreground" />}
+                      </View>
                     </Pressable>
                   )}
                   {session && !offline && SKIPPABLE.has(session.type) && (
