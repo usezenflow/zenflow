@@ -3,9 +3,13 @@ import {
   Equals,
   IsBoolean,
   IsIn,
+  IsNumber,
   IsOptional,
   IsString,
   Length,
+  Max,
+  Min,
+  ValidateIf,
 } from "class-validator";
 import {
   COMMUTE_TRANSPORTS,
@@ -44,6 +48,27 @@ export class UpdateUserDto implements UpdateUserInput {
   @IsIn(COMMUTE_TRANSPORTS)
   @IsOptional()
   defaultTransport?: CommuteTransport;
+
+  /** Where trips start. Send the three together; `null` clears them. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @Length(1, 200)
+  homeLocation?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  homeLat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  homeLng?: number | null;
 
   /** `true` completes onboarding (idempotent). */
   @Equals(true)

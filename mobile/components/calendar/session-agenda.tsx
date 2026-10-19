@@ -27,8 +27,7 @@ import { subscribeToSessionMutations } from "@/lib/session-cache";
 import { useTabBarOverlayHeight } from "@/lib/tab-bar-metrics";
 import { deriveState, SESSION_TONES, sessionTone, splitZoned } from "@zenflow/core";
 import type { Session, SessionSearchDirection } from "@zenflow/shared";
-import { CompanionMark } from "@/components/spirits/companion-mark";
-import { NoResultsMark } from "@/components/brand/state-marks";
+import { EmptyMark, NoResultsMark } from "@/components/brand/state-marks";
 import { type Href, useRouter } from "expo-router";
 import { sessionEditHref } from "@/lib/session-detail";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -298,7 +297,7 @@ export function SessionAgenda({
         {hasQuery ? (
           <NoResultsMark size={72} />
         ) : (
-          <CompanionMark />
+          <EmptyMark />
         )}
         <Text className="text-center text-[15px] text-muted-foreground">
           {hasQuery ? t("No sessions match") : t("No sessions yet")}

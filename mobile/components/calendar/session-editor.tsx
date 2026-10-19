@@ -21,7 +21,6 @@ import { DescriptionField } from "@/components/tasks/note/description-field";
 import { SessionNote } from "@/components/tasks/note/session-note";
 import { LocationScreen, type LocationValue } from "@/components/calendar/location-screen";
 import { BottomSheetTextInput } from "@/components/ui/bottom-sheet";
-import { Button } from "@/components/ui/button";
 import { TimelineTimePicker } from "@/components/ui/timeline-time-picker";
 import { WeekStripDatePicker } from "@/components/ui/week-strip-date-picker";
 import { durationLabel } from "@/components/ui/duration-slider";
@@ -47,7 +46,7 @@ import {
 } from "@zenflow/core";
 import { DEFAULT_REMINDER_MINUTES, type Session, type UpdateSessionInput } from "@zenflow/shared";
 import * as Haptics from "expo-haptics";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 
@@ -170,6 +169,10 @@ export interface SessionEditorProps {
   onSaved: (updated: Session) => void;
   /** Places a draft with its values. */
   onPlace?: (values: SessionFormValues) => Promise<void>;
+  /** Filled with the draft's place action, so the sheet header can hold the button. */
+  placeRef?: MutableRefObject<(() => void) | null>;
+  /** Told while a draft is being placed. */
+  onPlacingChange?: (placing: boolean) => void;
 }
 
 /**
@@ -178,7 +181,16 @@ export interface SessionEditorProps {
  * reminder opens its picker under its own line. A draft keeps its values until
  * its schedule button places it.
  */
-export function SessionEditor({ session, draft, tz, onSaved, onSavedChange, onPlace }: SessionEditorProps) {
+export function SessionEditor({
+  session,
+  draft,
+  tz,
+  onSaved,
+  onSavedChange,
+  onPlace,
+  placeRef,
+  onPlacingChange,
+}: SessionEditorProps) {
   useLanguage();
   const { toast, confirm } = useToast();
   const offline = useOffline();
@@ -338,6 +350,7 @@ export function SessionEditor({ session, draft, tz, onSaved, onSavedChange, onPl
   async function place() {
     if (!onPlace) return;
     setPlacing(true);
+    onPlacingChange?.(true);
     try {
       await onPlace({
         ...valuesRef.current,
@@ -348,8 +361,10 @@ export function SessionEditor({ session, draft, tz, onSaved, onSavedChange, onPl
       });
     } finally {
       setPlacing(false);
+      onPlacingChange?.(false);
     }
   }
+  if (placeRef) placeRef.current = !session && onPlace ? () => void place() : null;
 
   const note = session?.note ?? "";
   const repeat = session ? repeatLabel(session.rrule) : null;
@@ -615,20 +630,6 @@ export function SessionEditor({ session, draft, tz, onSaved, onSavedChange, onPl
             );
           }}
         />
-      )}
-
-      {!session && onPlace && (
-        <View className="px-5">
-          <Button
-            testID="session.place"
-            className="h-12 w-full rounded-full"
-            loading={placing}
-            disabled={disabled}
-            onPress={() => void place()}
-          >
-            <Text className="text-[15px] font-semibold text-primary-foreground">{t("Schedule it")}</Text>
-          </Button>
-        </View>
       )}
     </View>
   );

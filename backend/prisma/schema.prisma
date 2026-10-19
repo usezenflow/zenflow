@@ -42,6 +42,11 @@ model User {
   /// Transport used for commute estimates. Null = not set yet.
   defaultTransport CommuteTransport?
 
+  /// Where the student's trips to campus start. Filled into sessions that have no start of their own.
+  homeLocation String? @db.VarChar(200)
+  homeLat      Float?
+  homeLng      Float?
+
   /// When the user finished (or skipped through) first-run onboarding; null = not yet. Set once, server-side.
   onboardedAt DateTime?
 
@@ -74,11 +79,7 @@ model User {
   banditArmStates BanditArmState[]
 
   occurrenceStates SessionOccurrenceState[]
-  streak           UserStreak?
   courseColours    CourseColour[]
-  eggs             Egg[]
-  spirits          Spirit[]
-  sparkLedger      SparkLedger[]
 
   // Issue #56: which portal sections / Moodle courses this student is
   // confirmed in, so an ingestion pass can be served from the shared
@@ -237,6 +238,8 @@ model Session {
   // route the app showed. The scheduler keeps this much clear on both sides of
   // the session (ADR-0029). Null when unknown.
   commuteMinutes  Int?
+  // True while the start and minutes came from the student's home and vehicle, so a change there can redo them. Any manual edit of the commute clears it.
+  commuteAuto     Boolean       @default(false)
   durationMinutes Int // positive multiple of 15
   deadline        DateTime? // required for TASK; null for fixed types (ASSIGNMENT/EXAM/LECTURE/DND)
   type            SessionType   @default(TASK)
@@ -423,80 +426,6 @@ model SessionOccurrenceState {
 
   @@unique([seriesId, occurrenceStart])
   @@index([userId, completedAt])
-}
-
-/// Daily completion streak, recomputed from completion days on every check-off and read (issue #247).
-model UserStreak {
-  userId           String   @id
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  current          Int      @default(0)
-  longest          Int      @default(0)
-  freezesAvailable Int      @default(0)
-  /// Days (YYYY-MM-DD, user tz) inside the current streak covered by a freeze.
-  frozenDays       String[] @default([])
-  /// Last day (YYYY-MM-DD, user tz) with a completed session.
-  lastActiveDay    String?  @db.VarChar(10)
-  updatedAt        DateTime @updatedAt
-}
-
-enum EggStatus {
-  INCUBATING
-  READY
-  HATCHED
-}
-
-enum SpiritRarity {
-  COMMON
-  RARE
-  EPIC
-  LEGENDARY
-}
-
-/// An egg a student incubates. Each START session settled inside its window adds a spark (`SparkLedger`); at the threshold it is READY and hatches on `POST /eggs/:id/hatch`.
-model Egg {
-  id        String    @id @default(uuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status    EggStatus @default(INCUBATING)
-  sparks    Int       @default(0)
-  createdAt DateTime  @default(now())
-  hatchedAt DateTime?
-  spirit    Spirit?
-  sparkLedger SparkLedger[]
-
-  @@index([userId, status])
-}
-
-/// A hatched spirit. `spiritId` is a season one species key from `@zenflow/spirits`; the same species can be hatched again.
-model Spirit {
-  id        String       @id @default(uuid())
-  userId    String
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  eggId     String       @unique
-  egg       Egg          @relation(fields: [eggId], references: [id], onDelete: Cascade)
-  spiritId  String       @db.VarChar(20)
-  rarity    SpiritRarity
-  hatchedAt DateTime     @default(now())
-
-  @@index([userId, hatchedAt])
-}
-
-/// One spark per START session event. `sessionEventId` is unique, so a settled start grants at most one spark. `day` (YYYY-MM-DD, user tz) enforces the daily cap.
-model SparkLedger {
-  id             String   @id @default(uuid())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  eggId          String
-  egg            Egg      @relation(fields: [eggId], references: [id], onDelete: Cascade)
-  sessionEventId BigInt   @unique
-  // Set for a prep completion, so re-checking the same plan cannot spark twice. Null for a START.
-  sessionId      String?
-  day            String   @db.VarChar(10)
-  createdAt      DateTime @default(now())
-
-  @@unique([userId, sessionId])
-  @@index([userId, day])
-  @@index([eggId])
 }
 
 /// A user's own colour pick for one course (issue #238). `courseKey` is

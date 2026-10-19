@@ -11,6 +11,7 @@ import { CreateUserDto } from "./dto/create-user.dto";
 import { nameFromEmail } from "./name-from-email";
 import { langToDb } from "./user-response";
 import { UpdateUserDto } from "./dto/update-user.dto";
+import { CommuteDefaultsService } from "../commute/commute-defaults.service";
 import { remapExdatesForTimezone } from "../scheduler/core/recurrence";
 import { seedFocusBandMatrix } from "../scheduler/core/focus-band";
 import { withLockedPreferenceMatrix } from "../scheduler/io/preference-matrix-lock";
@@ -25,9 +26,22 @@ import {
 const PREFERENCE_MATRIX_DAYS =
   PREFERENCE_MATRIX_LENGTH / PREFERENCE_SLOTS_PER_DAY;
 
+/** A new home or vehicle redoes the commutes filled from the old one. */
+function changesCommute(dto: UpdateUserDto): boolean {
+  return (
+    dto.defaultTransport !== undefined ||
+    dto.homeLocation !== undefined ||
+    dto.homeLat !== undefined ||
+    dto.homeLng !== undefined
+  );
+}
+
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly commuteDefaults: CommuteDefaultsService,
+  ) {}
 
   async create(createUserDto: CreateUserDto) {
     try {
@@ -66,12 +80,15 @@ export class UsersService {
         },
       });
       const seriesUpdates = await this.exdateRemaps(id, updateUserDto.timezone);
-      if (seriesUpdates.length === 0) return await userUpdate;
-      const results = await this.prisma.$transaction([
-        ...seriesUpdates,
-        userUpdate,
-      ]);
-      return results[results.length - 1] as Awaited<typeof userUpdate>;
+      const updated =
+        seriesUpdates.length === 0
+          ? await userUpdate
+          : ((
+              await this.prisma.$transaction([...seriesUpdates, userUpdate])
+            ).at(-1) as Awaited<typeof userUpdate>);
+      if (changesCommute(updateUserDto))
+        void this.commuteDefaults.applyQuietly(id);
+      return updated;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&

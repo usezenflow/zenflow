@@ -230,6 +230,32 @@ services:
     networks:
       - geo
 
+  # Walking and driving routes for the campus map, served at /osrm/foot/ and
+  # /osrm/car/ by nginx. Push the graphs with scripts/push-osrm.sh.
+  osrm-foot:
+    container_name: zenflow-osrm-foot-staging
+    image: osrm/osrm-backend
+    command: osrm-routed --algorithm mld --max-table-size 1000 /data/map.osrm
+    expose:
+      - "5000"
+    volumes:
+      - ./osrm/data/foot:/data:ro
+    restart: unless-stopped
+    networks:
+      - geo
+
+  osrm-car:
+    container_name: zenflow-osrm-car-staging
+    image: osrm/osrm-backend
+    command: osrm-routed --algorithm mld --max-table-size 1000 /data/map.osrm
+    expose:
+      - "5000"
+    volumes:
+      - ./osrm/data/car:/data:ro
+    restart: unless-stopped
+    networks:
+      - geo
+
   bandit:
     profiles: ["template"]
     container_name: zenflow-bandit-staging
@@ -751,6 +777,7 @@ services:
       - edge
       - o11y
       - storage
+      - geo
 
   # Local `compose up` bootstrap: seeds the nginx upstream (state/ is git-ignored, written by
   # deploy.sh) with the blue colour when it is missing. Never overwrites; deploy.sh skips it.

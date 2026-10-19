@@ -14,7 +14,7 @@
   <text x="436" y="104" font-size="11" fill="#2B2724">Portal</text>
   <rect x="550" y="92" width="10" height="16" rx="2" fill="#3B8E8E"/>
   <text x="566" y="104" font-size="11" fill="#2B2724">Moodle</text>
-  <rect x="24" y="150" width="280" height="206" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="24" y="150" width="280" height="224" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
   <rect x="24" y="150" width="5" height="34" fill="#3B7EA1"/>
   <text x="38" y="172" font-size="12.5" font-weight="700" fill="#2B2724">User</text>
   <text x="38" y="197" font-size="10.5" fill="#2B2724">id</text>
@@ -33,140 +33,127 @@
   <text x="174" y="287" font-size="10" fill="#2B2724" opacity="0.6">int</text>
   <text x="38" y="305" font-size="10.5" fill="#2B2724">defaultTransport</text>
   <text x="174" y="305" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="38" y="323" font-size="10.5" fill="#2B2724">focusBand</text>
-  <text x="174" y="323" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="38" y="341" font-size="10.5" fill="#2B2724">onboardedAt</text>
-  <text x="174" y="341" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="24" y="370" width="280" height="170" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="24" y="370" width="5" height="34" fill="#3B7EA1"/>
-  <text x="38" y="392" font-size="12.5" font-weight="700" fill="#2B2724">StudentTermResult</text>
-  <text x="38" y="417" font-size="10.5" fill="#2B2724">id</text>
-  <text x="174" y="417" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="292" y="417" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="435" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="174" y="435" font-size="10" fill="#2B2724" opacity="0.6">User</text>
-  <text x="292" y="435" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="38" y="453" font-size="10.5" fill="#2B2724">yearStudy</text>
-  <text x="174" y="453" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="38" y="471" font-size="10.5" fill="#2B2724">termId</text>
+  <text x="38" y="323" font-size="10.5" fill="#2B2724">homeLocation</text>
+  <text x="174" y="323" font-size="10" fill="#2B2724" opacity="0.6">text, lat, lng</text>
+  <text x="38" y="341" font-size="10.5" fill="#2B2724">focusBand</text>
+  <text x="174" y="341" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
+  <text x="38" y="359" font-size="10.5" fill="#2B2724">onboardedAt</text>
+  <text x="174" y="359" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="24" y="388" width="280" height="170" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="24" y="388" width="5" height="34" fill="#3B7EA1"/>
+  <text x="38" y="410" font-size="12.5" font-weight="700" fill="#2B2724">StudentTermResult</text>
+  <text x="38" y="435" font-size="10.5" fill="#2B2724">id</text>
+  <text x="174" y="435" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="292" y="435" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="453" font-size="10.5" fill="#2B2724">userId</text>
+  <text x="174" y="453" font-size="10" fill="#2B2724" opacity="0.6">User</text>
+  <text x="292" y="453" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="38" y="471" font-size="10.5" fill="#2B2724">yearStudy</text>
   <text x="174" y="471" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="38" y="489" font-size="10.5" fill="#2B2724">gpa4</text>
-  <text x="174" y="489" font-size="10" fill="#2B2724" opacity="0.6">float</text>
-  <text x="38" y="507" font-size="10.5" fill="#2B2724">cumulativeGpa4</text>
+  <text x="38" y="489" font-size="10.5" fill="#2B2724">termId</text>
+  <text x="174" y="489" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="38" y="507" font-size="10.5" fill="#2B2724">gpa4</text>
   <text x="174" y="507" font-size="10" fill="#2B2724" opacity="0.6">float</text>
-  <text x="38" y="525" font-size="10.5" fill="#2B2724">creditsEarned</text>
-  <text x="174" y="525" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <rect x="24" y="554" width="280" height="116" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="24" y="554" width="5" height="34" fill="#5E8C6A"/>
-  <text x="38" y="576" font-size="12.5" font-weight="700" fill="#2B2724">SessionReminder</text>
-  <text x="38" y="601" font-size="10.5" fill="#2B2724">id</text>
-  <text x="174" y="601" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="292" y="601" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="619" font-size="10.5" fill="#2B2724">sessionId</text>
-  <text x="174" y="619" font-size="10" fill="#2B2724" opacity="0.6">Session</text>
-  <text x="292" y="619" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="38" y="637" font-size="10.5" fill="#2B2724">remindBeforeMinutes</text>
-  <text x="174" y="637" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="38" y="655" font-size="10.5" fill="#2B2724">firedForStart</text>
-  <text x="174" y="655" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="24" y="684" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="24" y="684" width="5" height="34" fill="#5E8C6A"/>
-  <text x="38" y="706" font-size="12.5" font-weight="700" fill="#2B2724">Notification</text>
-  <text x="38" y="731" font-size="10.5" fill="#2B2724">id</text>
-  <text x="174" y="731" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="292" y="731" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="749" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="174" y="749" font-size="10" fill="#2B2724" opacity="0.6">User</text>
-  <text x="292" y="749" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="38" y="767" font-size="10.5" fill="#2B2724">sessionId</text>
-  <text x="174" y="767" font-size="10" fill="#2B2724" opacity="0.6">Session</text>
+  <text x="38" y="525" font-size="10.5" fill="#2B2724">cumulativeGpa4</text>
+  <text x="174" y="525" font-size="10" fill="#2B2724" opacity="0.6">float</text>
+  <text x="38" y="543" font-size="10.5" fill="#2B2724">creditsEarned</text>
+  <text x="174" y="543" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <rect x="24" y="572" width="280" height="116" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="24" y="572" width="5" height="34" fill="#5E8C6A"/>
+  <text x="38" y="594" font-size="12.5" font-weight="700" fill="#2B2724">SessionReminder</text>
+  <text x="38" y="619" font-size="10.5" fill="#2B2724">id</text>
+  <text x="174" y="619" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="292" y="619" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="637" font-size="10.5" fill="#2B2724">sessionId</text>
+  <text x="174" y="637" font-size="10" fill="#2B2724" opacity="0.6">Session</text>
+  <text x="292" y="637" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="38" y="655" font-size="10.5" fill="#2B2724">remindBeforeMinutes</text>
+  <text x="174" y="655" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="38" y="673" font-size="10.5" fill="#2B2724">firedForStart</text>
+  <text x="174" y="673" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="24" y="702" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="24" y="702" width="5" height="34" fill="#5E8C6A"/>
+  <text x="38" y="724" font-size="12.5" font-weight="700" fill="#2B2724">Notification</text>
+  <text x="38" y="749" font-size="10.5" fill="#2B2724">id</text>
+  <text x="174" y="749" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="292" y="749" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="767" font-size="10.5" fill="#2B2724">userId</text>
+  <text x="174" y="767" font-size="10" fill="#2B2724" opacity="0.6">User</text>
   <text x="292" y="767" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="38" y="785" font-size="10.5" fill="#2B2724">eventName</text>
-  <text x="174" y="785" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="38" y="803" font-size="10.5" fill="#2B2724">title</text>
+  <text x="38" y="785" font-size="10.5" fill="#2B2724">sessionId</text>
+  <text x="174" y="785" font-size="10" fill="#2B2724" opacity="0.6">Session</text>
+  <text x="292" y="785" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="38" y="803" font-size="10.5" fill="#2B2724">eventName</text>
   <text x="174" y="803" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="38" y="821" font-size="10.5" fill="#2B2724">sentAt</text>
-  <text x="174" y="821" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="38" y="839" font-size="10.5" fill="#2B2724">readAt</text>
+  <text x="38" y="821" font-size="10.5" fill="#2B2724">title</text>
+  <text x="174" y="821" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="38" y="839" font-size="10.5" fill="#2B2724">sentAt</text>
   <text x="174" y="839" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="38" y="857" font-size="10.5" fill="#2B2724">actionTakenAt</text>
+  <text x="38" y="857" font-size="10.5" fill="#2B2724">readAt</text>
   <text x="174" y="857" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="24" y="886" width="280" height="134" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="24" y="886" width="5" height="34" fill="#8A6FB0"/>
-  <text x="38" y="908" font-size="12.5" font-weight="700" fill="#2B2724">Egg</text>
-  <text x="38" y="933" font-size="10.5" fill="#2B2724">id</text>
-  <text x="174" y="933" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="292" y="933" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="951" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="174" y="951" font-size="10" fill="#2B2724" opacity="0.6">User</text>
-  <text x="292" y="951" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="38" y="969" font-size="10.5" fill="#2B2724">status</text>
-  <text x="174" y="969" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="38" y="987" font-size="10.5" fill="#2B2724">sparks</text>
-  <text x="174" y="987" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="38" y="1005" font-size="10.5" fill="#2B2724">hatchedAt</text>
-  <text x="174" y="1005" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="24" y="1034" width="280" height="152" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="24" y="1034" width="5" height="34" fill="#B07A3B"/>
-  <text x="38" y="1056" font-size="12.5" font-weight="700" fill="#2B2724">SyncRunUnit</text>
-  <text x="38" y="1081" font-size="10.5" fill="#2B2724">runId</text>
-  <text x="174" y="1081" font-size="10" fill="#2B2724" opacity="0.6">SyncRun</text>
-  <text x="292" y="1081" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="1099" font-size="10.5" fill="#2B2724">unit</text>
-  <text x="174" y="1099" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="292" y="1099" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="1117" font-size="10.5" fill="#2B2724">status</text>
-  <text x="174" y="1117" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="38" y="1135" font-size="10.5" fill="#2B2724">fetched</text>
-  <text x="174" y="1135" font-size="10" fill="#2B2724" opacity="0.6">bool</text>
-  <text x="38" y="1153" font-size="10.5" fill="#2B2724">created</text>
-  <text x="174" y="1153" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="38" y="1171" font-size="10.5" fill="#2B2724">changed</text>
-  <text x="174" y="1171" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <rect x="24" y="1200" width="280" height="98" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="24" y="1200" width="5" height="34" fill="#B07A3B"/>
-  <text x="38" y="1222" font-size="12.5" font-weight="700" fill="#2B2724">PortalWeekCoverage</text>
-  <text x="38" y="1247" font-size="10.5" fill="#2B2724">scheduleStudyUnitId</text>
-  <text x="174" y="1247" font-size="10" fill="#2B2724" opacity="0.6">PortalSection</text>
-  <text x="292" y="1247" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="1265" font-size="10.5" fill="#2B2724">weekStart</text>
-  <text x="174" y="1265" font-size="10" fill="#2B2724" opacity="0.6">date</text>
-  <text x="292" y="1265" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="1283" font-size="10.5" fill="#2B2724">refreshedAt</text>
-  <text x="174" y="1283" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="24" y="1312" width="280" height="170" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="24" y="1312" width="5" height="34" fill="#3B8E8E"/>
-  <text x="38" y="1334" font-size="12.5" font-weight="700" fill="#2B2724">LmsSyncJobItem</text>
-  <text x="38" y="1359" font-size="10.5" fill="#2B2724">id</text>
-  <text x="174" y="1359" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="292" y="1359" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="1377" font-size="10.5" fill="#2B2724">lmsSyncJobId</text>
-  <text x="174" y="1377" font-size="10" fill="#2B2724" opacity="0.6">LmsSyncJob</text>
-  <text x="292" y="1377" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="38" y="1395" font-size="10.5" fill="#2B2724">url</text>
-  <text x="174" y="1395" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="38" y="1413" font-size="10.5" fill="#2B2724">status</text>
-  <text x="174" y="1413" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="38" y="1431" font-size="10.5" fill="#2B2724">attempt</text>
-  <text x="174" y="1431" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="38" y="1449" font-size="10.5" fill="#2B2724">statusCode</text>
-  <text x="174" y="1449" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="38" y="1467" font-size="10.5" fill="#2B2724">responseBody</text>
+  <text x="38" y="875" font-size="10.5" fill="#2B2724">actionTakenAt</text>
+  <text x="174" y="875" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="24" y="904" width="280" height="152" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="24" y="904" width="5" height="34" fill="#B07A3B"/>
+  <text x="38" y="926" font-size="12.5" font-weight="700" fill="#2B2724">SyncRunUnit</text>
+  <text x="38" y="951" font-size="10.5" fill="#2B2724">runId</text>
+  <text x="174" y="951" font-size="10" fill="#2B2724" opacity="0.6">SyncRun</text>
+  <text x="292" y="951" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="969" font-size="10.5" fill="#2B2724">unit</text>
+  <text x="174" y="969" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="292" y="969" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="987" font-size="10.5" fill="#2B2724">status</text>
+  <text x="174" y="987" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
+  <text x="38" y="1005" font-size="10.5" fill="#2B2724">fetched</text>
+  <text x="174" y="1005" font-size="10" fill="#2B2724" opacity="0.6">bool</text>
+  <text x="38" y="1023" font-size="10.5" fill="#2B2724">created</text>
+  <text x="174" y="1023" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="38" y="1041" font-size="10.5" fill="#2B2724">changed</text>
+  <text x="174" y="1041" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <rect x="24" y="1070" width="280" height="98" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="24" y="1070" width="5" height="34" fill="#B07A3B"/>
+  <text x="38" y="1092" font-size="12.5" font-weight="700" fill="#2B2724">PortalWeekCoverage</text>
+  <text x="38" y="1117" font-size="10.5" fill="#2B2724">scheduleStudyUnitId</text>
+  <text x="174" y="1117" font-size="10" fill="#2B2724" opacity="0.6">PortalSection</text>
+  <text x="292" y="1117" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="1135" font-size="10.5" fill="#2B2724">weekStart</text>
+  <text x="174" y="1135" font-size="10" fill="#2B2724" opacity="0.6">date</text>
+  <text x="292" y="1135" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="1153" font-size="10.5" fill="#2B2724">refreshedAt</text>
+  <text x="174" y="1153" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="24" y="1182" width="280" height="170" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="24" y="1182" width="5" height="34" fill="#3B8E8E"/>
+  <text x="38" y="1204" font-size="12.5" font-weight="700" fill="#2B2724">LmsSyncJobItem</text>
+  <text x="38" y="1229" font-size="10.5" fill="#2B2724">id</text>
+  <text x="174" y="1229" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="292" y="1229" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="1247" font-size="10.5" fill="#2B2724">lmsSyncJobId</text>
+  <text x="174" y="1247" font-size="10" fill="#2B2724" opacity="0.6">LmsSyncJob</text>
+  <text x="292" y="1247" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="38" y="1265" font-size="10.5" fill="#2B2724">url</text>
+  <text x="174" y="1265" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="38" y="1283" font-size="10.5" fill="#2B2724">status</text>
+  <text x="174" y="1283" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
+  <text x="38" y="1301" font-size="10.5" fill="#2B2724">attempt</text>
+  <text x="174" y="1301" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="38" y="1319" font-size="10.5" fill="#2B2724">statusCode</text>
+  <text x="174" y="1319" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="38" y="1337" font-size="10.5" fill="#2B2724">responseBody</text>
+  <text x="174" y="1337" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <rect x="24" y="1366" width="280" height="116" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="24" y="1366" width="5" height="34" fill="#3B8E8E"/>
+  <text x="38" y="1388" font-size="12.5" font-weight="700" fill="#2B2724">LmsCourseSeen</text>
+  <text x="38" y="1413" font-size="10.5" fill="#2B2724">userId</text>
+  <text x="174" y="1413" font-size="10" fill="#2B2724" opacity="0.6">User</text>
+  <text x="292" y="1413" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="1431" font-size="10.5" fill="#2B2724">lmsCourseId</text>
+  <text x="174" y="1431" font-size="10" fill="#2B2724" opacity="0.6">LmsCourse</text>
+  <text x="292" y="1431" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="1449" font-size="10.5" fill="#2B2724">scope</text>
+  <text x="174" y="1449" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="292" y="1449" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="38" y="1467" font-size="10.5" fill="#2B2724">fingerprint</text>
   <text x="174" y="1467" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <rect x="24" y="1496" width="280" height="116" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="24" y="1496" width="5" height="34" fill="#3B8E8E"/>
-  <text x="38" y="1518" font-size="12.5" font-weight="700" fill="#2B2724">LmsCourseSeen</text>
-  <text x="38" y="1543" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="174" y="1543" font-size="10" fill="#2B2724" opacity="0.6">User</text>
-  <text x="292" y="1543" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="1561" font-size="10.5" fill="#2B2724">lmsCourseId</text>
-  <text x="174" y="1561" font-size="10" fill="#2B2724" opacity="0.6">LmsCourse</text>
-  <text x="292" y="1561" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="1579" font-size="10.5" fill="#2B2724">scope</text>
-  <text x="174" y="1579" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="292" y="1579" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="38" y="1597" font-size="10.5" fill="#2B2724">fingerprint</text>
-  <text x="174" y="1597" font-size="10" fill="#2B2724" opacity="0.6">text</text>
   <rect x="320" y="150" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
   <rect x="320" y="150" width="5" height="34" fill="#3B7EA1"/>
   <text x="334" y="172" font-size="12.5" font-weight="700" fill="#2B2724">UserEncryptionKey</text>
@@ -235,83 +222,69 @@
   <text x="470" y="767" font-size="10" fill="#2B2724" opacity="0.6">json</text>
   <text x="334" y="785" font-size="10.5" fill="#2B2724">expiresAt</text>
   <text x="470" y="785" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="320" y="814" width="280" height="134" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="320" y="814" width="5" height="34" fill="#8A6FB0"/>
-  <text x="334" y="836" font-size="12.5" font-weight="700" fill="#2B2724">UserStreak</text>
-  <text x="334" y="861" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="470" y="861" font-size="10" fill="#2B2724" opacity="0.6">User</text>
+  <rect x="320" y="814" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="320" y="814" width="5" height="34" fill="#B07A3B"/>
+  <text x="334" y="836" font-size="12.5" font-weight="700" fill="#2B2724">SyncRun</text>
+  <text x="334" y="861" font-size="10.5" fill="#2B2724">id</text>
+  <text x="470" y="861" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
   <text x="588" y="861" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="334" y="879" font-size="10.5" fill="#2B2724">current</text>
-  <text x="470" y="879" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="334" y="897" font-size="10.5" fill="#2B2724">longest</text>
-  <text x="470" y="897" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="334" y="915" font-size="10.5" fill="#2B2724">freezesAvailable</text>
-  <text x="470" y="915" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="334" y="933" font-size="10.5" fill="#2B2724">lastActiveDay</text>
-  <text x="470" y="933" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <rect x="320" y="962" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="320" y="962" width="5" height="34" fill="#B07A3B"/>
-  <text x="334" y="984" font-size="12.5" font-weight="700" fill="#2B2724">SyncRun</text>
-  <text x="334" y="1009" font-size="10.5" fill="#2B2724">id</text>
-  <text x="470" y="1009" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="588" y="1009" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="334" y="1027" font-size="10.5" fill="#2B2724">integrationId</text>
-  <text x="470" y="1027" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
-  <text x="588" y="1027" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="334" y="1045" font-size="10.5" fill="#2B2724">kind</text>
-  <text x="470" y="1045" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="334" y="1063" font-size="10.5" fill="#2B2724">scope</text>
-  <text x="470" y="1063" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="334" y="1081" font-size="10.5" fill="#2B2724">totalUnits</text>
-  <text x="470" y="1081" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="334" y="1099" font-size="10.5" fill="#2B2724">servedFromCache</text>
-  <text x="470" y="1099" font-size="10" fill="#2B2724" opacity="0.6">bool</text>
-  <text x="334" y="1117" font-size="10.5" fill="#2B2724">finishedAt</text>
-  <text x="470" y="1117" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="334" y="1135" font-size="10.5" fill="#2B2724">notifiedAt</text>
+  <text x="334" y="879" font-size="10.5" fill="#2B2724">integrationId</text>
+  <text x="470" y="879" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
+  <text x="588" y="879" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="334" y="897" font-size="10.5" fill="#2B2724">kind</text>
+  <text x="470" y="897" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
+  <text x="334" y="915" font-size="10.5" fill="#2B2724">scope</text>
+  <text x="470" y="915" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="334" y="933" font-size="10.5" fill="#2B2724">totalUnits</text>
+  <text x="470" y="933" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="334" y="951" font-size="10.5" fill="#2B2724">servedFromCache</text>
+  <text x="470" y="951" font-size="10" fill="#2B2724" opacity="0.6">bool</text>
+  <text x="334" y="969" font-size="10.5" fill="#2B2724">finishedAt</text>
+  <text x="470" y="969" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <text x="334" y="987" font-size="10.5" fill="#2B2724">notifiedAt</text>
+  <text x="470" y="987" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="320" y="1016" width="280" height="152" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="320" y="1016" width="5" height="34" fill="#B07A3B"/>
+  <text x="334" y="1038" font-size="12.5" font-weight="700" fill="#2B2724">PortalSectionEnrollment</text>
+  <text x="334" y="1063" font-size="10.5" fill="#2B2724">id</text>
+  <text x="470" y="1063" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="588" y="1063" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="334" y="1081" font-size="10.5" fill="#2B2724">userId</text>
+  <text x="470" y="1081" font-size="10" fill="#2B2724" opacity="0.6">User</text>
+  <text x="588" y="1081" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="334" y="1099" font-size="10.5" fill="#2B2724">integrationId</text>
+  <text x="470" y="1099" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
+  <text x="588" y="1099" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="334" y="1117" font-size="10.5" fill="#2B2724">scheduleStudyUnitId</text>
+  <text x="470" y="1117" font-size="10" fill="#2B2724" opacity="0.6">PortalSection</text>
+  <text x="588" y="1117" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="334" y="1135" font-size="10.5" fill="#2B2724">discoveredAt</text>
   <text x="470" y="1135" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="320" y="1164" width="280" height="152" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="320" y="1164" width="5" height="34" fill="#B07A3B"/>
-  <text x="334" y="1186" font-size="12.5" font-weight="700" fill="#2B2724">PortalSectionEnrollment</text>
-  <text x="334" y="1211" font-size="10.5" fill="#2B2724">id</text>
-  <text x="470" y="1211" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="588" y="1211" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="334" y="1229" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="470" y="1229" font-size="10" fill="#2B2724" opacity="0.6">User</text>
-  <text x="588" y="1229" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="334" y="1247" font-size="10.5" fill="#2B2724">integrationId</text>
-  <text x="470" y="1247" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
+  <text x="334" y="1153" font-size="10.5" fill="#2B2724">droppedAt</text>
+  <text x="470" y="1153" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="320" y="1182" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="320" y="1182" width="5" height="34" fill="#3B8E8E"/>
+  <text x="334" y="1204" font-size="12.5" font-weight="700" fill="#2B2724">LmsCourseEnrollment</text>
+  <text x="334" y="1229" font-size="10.5" fill="#2B2724">id</text>
+  <text x="470" y="1229" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="588" y="1229" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="334" y="1247" font-size="10.5" fill="#2B2724">userId</text>
+  <text x="470" y="1247" font-size="10" fill="#2B2724" opacity="0.6">User</text>
   <text x="588" y="1247" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="334" y="1265" font-size="10.5" fill="#2B2724">scheduleStudyUnitId</text>
-  <text x="470" y="1265" font-size="10" fill="#2B2724" opacity="0.6">PortalSection</text>
+  <text x="334" y="1265" font-size="10.5" fill="#2B2724">integrationId</text>
+  <text x="470" y="1265" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
   <text x="588" y="1265" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="334" y="1283" font-size="10.5" fill="#2B2724">discoveredAt</text>
-  <text x="470" y="1283" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="334" y="1301" font-size="10.5" fill="#2B2724">droppedAt</text>
-  <text x="470" y="1301" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="320" y="1330" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="320" y="1330" width="5" height="34" fill="#3B8E8E"/>
-  <text x="334" y="1352" font-size="12.5" font-weight="700" fill="#2B2724">LmsCourseEnrollment</text>
-  <text x="334" y="1377" font-size="10.5" fill="#2B2724">id</text>
-  <text x="470" y="1377" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="588" y="1377" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="334" y="1395" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="470" y="1395" font-size="10" fill="#2B2724" opacity="0.6">User</text>
-  <text x="588" y="1395" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="334" y="1413" font-size="10.5" fill="#2B2724">integrationId</text>
-  <text x="470" y="1413" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
-  <text x="588" y="1413" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="334" y="1431" font-size="10.5" fill="#2B2724">lmsCourseId</text>
-  <text x="470" y="1431" font-size="10" fill="#2B2724" opacity="0.6">LmsCourse</text>
-  <text x="588" y="1431" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="334" y="1449" font-size="10.5" fill="#2B2724">currentTerm</text>
-  <text x="470" y="1449" font-size="10" fill="#2B2724" opacity="0.6">bool</text>
-  <text x="334" y="1467" font-size="10.5" fill="#2B2724">discoveredAt</text>
-  <text x="470" y="1467" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="334" y="1485" font-size="10.5" fill="#2B2724">droppedAt</text>
-  <text x="470" y="1485" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="334" y="1503" font-size="10.5" fill="#C2410C">seenFingerprint</text>
-  <text x="470" y="1503" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="334" y="1283" font-size="10.5" fill="#2B2724">lmsCourseId</text>
+  <text x="470" y="1283" font-size="10" fill="#2B2724" opacity="0.6">LmsCourse</text>
+  <text x="588" y="1283" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="334" y="1301" font-size="10.5" fill="#2B2724">currentTerm</text>
+  <text x="470" y="1301" font-size="10" fill="#2B2724" opacity="0.6">bool</text>
+  <text x="334" y="1319" font-size="10.5" fill="#2B2724">discoveredAt</text>
+  <text x="470" y="1319" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <text x="334" y="1337" font-size="10.5" fill="#2B2724">droppedAt</text>
+  <text x="470" y="1337" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <text x="334" y="1355" font-size="10.5" fill="#C2410C">seenFingerprint</text>
+  <text x="470" y="1355" font-size="10" fill="#2B2724" opacity="0.6">text</text>
   <rect x="616" y="150" width="280" height="134" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
   <rect x="616" y="150" width="5" height="34" fill="#3B7EA1"/>
   <text x="630" y="172" font-size="12.5" font-weight="700" fill="#2B2724">UserDevice</text>
@@ -394,78 +367,60 @@
   <text x="766" y="857" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
   <text x="630" y="875" font-size="10.5" fill="#2B2724">timestamp</text>
   <text x="766" y="875" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="616" y="904" width="280" height="152" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="616" y="904" width="5" height="34" fill="#8A6FB0"/>
-  <text x="630" y="926" font-size="12.5" font-weight="700" fill="#2B2724">Spirit</text>
+  <rect x="616" y="904" width="280" height="170" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="616" y="904" width="5" height="34" fill="#B07A3B"/>
+  <text x="630" y="926" font-size="12.5" font-weight="700" fill="#2B2724">PortalAPIJobItem</text>
   <text x="630" y="951" font-size="10.5" fill="#2B2724">id</text>
   <text x="766" y="951" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
   <text x="884" y="951" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="630" y="969" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="766" y="969" font-size="10" fill="#2B2724" opacity="0.6">User</text>
+  <text x="630" y="969" font-size="10.5" fill="#2B2724">portalApiJobId</text>
+  <text x="766" y="969" font-size="10" fill="#2B2724" opacity="0.6">PortalAPIJob</text>
   <text x="884" y="969" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="630" y="987" font-size="10.5" fill="#2B2724">eggId</text>
-  <text x="766" y="987" font-size="10" fill="#2B2724" opacity="0.6">Egg</text>
-  <text x="884" y="987" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
-  <text x="630" y="1005" font-size="10.5" fill="#2B2724">spiritId</text>
-  <text x="766" y="1005" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="630" y="1023" font-size="10.5" fill="#2B2724">rarity</text>
-  <text x="766" y="1023" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="630" y="1041" font-size="10.5" fill="#2B2724">hatchedAt</text>
-  <text x="766" y="1041" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="616" y="1070" width="280" height="170" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="616" y="1070" width="5" height="34" fill="#B07A3B"/>
-  <text x="630" y="1092" font-size="12.5" font-weight="700" fill="#2B2724">PortalAPIJobItem</text>
-  <text x="630" y="1117" font-size="10.5" fill="#2B2724">id</text>
-  <text x="766" y="1117" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="884" y="1117" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="630" y="1135" font-size="10.5" fill="#2B2724">portalApiJobId</text>
-  <text x="766" y="1135" font-size="10" fill="#2B2724" opacity="0.6">PortalAPIJob</text>
-  <text x="884" y="1135" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="630" y="1153" font-size="10.5" fill="#2B2724">url</text>
-  <text x="766" y="1153" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="630" y="987" font-size="10.5" fill="#2B2724">url</text>
+  <text x="766" y="987" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="630" y="1005" font-size="10.5" fill="#2B2724">status</text>
+  <text x="766" y="1005" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
+  <text x="630" y="1023" font-size="10.5" fill="#2B2724">attempt</text>
+  <text x="766" y="1023" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="630" y="1041" font-size="10.5" fill="#2B2724">statusCode</text>
+  <text x="766" y="1041" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="630" y="1059" font-size="10.5" fill="#2B2724">responseBody</text>
+  <text x="766" y="1059" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <rect x="616" y="1088" width="280" height="116" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="616" y="1088" width="5" height="34" fill="#3B8E8E"/>
+  <text x="630" y="1110" font-size="12.5" font-weight="700" fill="#2B2724">LmsSyncJob</text>
+  <text x="630" y="1135" font-size="10.5" fill="#2B2724">id</text>
+  <text x="766" y="1135" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="884" y="1135" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="630" y="1153" font-size="10.5" fill="#2B2724">integrationId</text>
+  <text x="766" y="1153" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
+  <text x="884" y="1153" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
   <text x="630" y="1171" font-size="10.5" fill="#2B2724">status</text>
   <text x="766" y="1171" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="630" y="1189" font-size="10.5" fill="#2B2724">attempt</text>
-  <text x="766" y="1189" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="630" y="1207" font-size="10.5" fill="#2B2724">statusCode</text>
-  <text x="766" y="1207" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="630" y="1225" font-size="10.5" fill="#2B2724">responseBody</text>
-  <text x="766" y="1225" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <rect x="616" y="1254" width="280" height="116" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="616" y="1254" width="5" height="34" fill="#3B8E8E"/>
-  <text x="630" y="1276" font-size="12.5" font-weight="700" fill="#2B2724">LmsSyncJob</text>
-  <text x="630" y="1301" font-size="10.5" fill="#2B2724">id</text>
-  <text x="766" y="1301" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="884" y="1301" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="630" y="1319" font-size="10.5" fill="#2B2724">integrationId</text>
-  <text x="766" y="1319" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
-  <text x="884" y="1319" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="630" y="1337" font-size="10.5" fill="#2B2724">status</text>
-  <text x="766" y="1337" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="630" y="1355" font-size="10.5" fill="#2B2724">createdAt</text>
-  <text x="766" y="1355" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="616" y="1384" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="616" y="1384" width="5" height="34" fill="#3B8E8E"/>
-  <text x="630" y="1406" font-size="12.5" font-weight="700" fill="#2B2724">LmsCourseOccurrence</text>
-  <text x="630" y="1431" font-size="10.5" fill="#2B2724">id</text>
-  <text x="766" y="1431" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="884" y="1431" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="630" y="1449" font-size="10.5" fill="#2B2724">lmsCourseId</text>
-  <text x="766" y="1449" font-size="10" fill="#2B2724" opacity="0.6">LmsCourse</text>
-  <text x="884" y="1449" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="630" y="1467" font-size="10.5" fill="#2B2724">externalKey</text>
-  <text x="766" y="1467" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="884" y="1467" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
-  <text x="630" y="1485" font-size="10.5" fill="#2B2724">type</text>
-  <text x="766" y="1485" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="630" y="1503" font-size="10.5" fill="#2B2724">startsAt</text>
-  <text x="766" y="1503" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="630" y="1521" font-size="10.5" fill="#2B2724">durationMinutes</text>
-  <text x="766" y="1521" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="630" y="1539" font-size="10.5" fill="#2B2724">title</text>
-  <text x="766" y="1539" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="630" y="1557" font-size="10.5" fill="#2B2724">canceledAt</text>
-  <text x="766" y="1557" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <text x="630" y="1189" font-size="10.5" fill="#2B2724">createdAt</text>
+  <text x="766" y="1189" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="616" y="1218" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="616" y="1218" width="5" height="34" fill="#3B8E8E"/>
+  <text x="630" y="1240" font-size="12.5" font-weight="700" fill="#2B2724">LmsCourseOccurrence</text>
+  <text x="630" y="1265" font-size="10.5" fill="#2B2724">id</text>
+  <text x="766" y="1265" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="884" y="1265" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="630" y="1283" font-size="10.5" fill="#2B2724">lmsCourseId</text>
+  <text x="766" y="1283" font-size="10" fill="#2B2724" opacity="0.6">LmsCourse</text>
+  <text x="884" y="1283" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="630" y="1301" font-size="10.5" fill="#2B2724">externalKey</text>
+  <text x="766" y="1301" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="884" y="1301" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
+  <text x="630" y="1319" font-size="10.5" fill="#2B2724">type</text>
+  <text x="766" y="1319" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
+  <text x="630" y="1337" font-size="10.5" fill="#2B2724">startsAt</text>
+  <text x="766" y="1337" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <text x="630" y="1355" font-size="10.5" fill="#2B2724">durationMinutes</text>
+  <text x="766" y="1355" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="630" y="1373" font-size="10.5" fill="#2B2724">title</text>
+  <text x="766" y="1373" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="630" y="1391" font-size="10.5" fill="#2B2724">canceledAt</text>
+  <text x="766" y="1391" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
   <rect x="912" y="150" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
   <rect x="912" y="150" width="5" height="34" fill="#3B7EA1"/>
   <text x="926" y="172" font-size="12.5" font-weight="700" fill="#2B2724">Integration</text>
@@ -695,74 +650,57 @@
   <text x="1358" y="857" font-size="10" fill="#2B2724" opacity="0.6">float list</text>
   <text x="1222" y="875" font-size="10.5" fill="#2B2724">version</text>
   <text x="1358" y="875" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <rect x="1208" y="904" width="280" height="134" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="1208" y="904" width="5" height="34" fill="#8A6FB0"/>
-  <text x="1222" y="926" font-size="12.5" font-weight="700" fill="#2B2724">SparkLedger</text>
+  <rect x="1208" y="904" width="280" height="116" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="1208" y="904" width="5" height="34" fill="#B07A3B"/>
+  <text x="1222" y="926" font-size="12.5" font-weight="700" fill="#2B2724">PortalAPIJob</text>
   <text x="1222" y="951" font-size="10.5" fill="#2B2724">id</text>
   <text x="1358" y="951" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
   <text x="1476" y="951" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="1222" y="969" font-size="10.5" fill="#2B2724">userId</text>
-  <text x="1358" y="969" font-size="10" fill="#2B2724" opacity="0.6">User</text>
+  <text x="1222" y="969" font-size="10.5" fill="#2B2724">integrationId</text>
+  <text x="1358" y="969" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
   <text x="1476" y="969" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="1222" y="987" font-size="10.5" fill="#2B2724">eggId</text>
-  <text x="1358" y="987" font-size="10" fill="#2B2724" opacity="0.6">Egg</text>
-  <text x="1476" y="987" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="1222" y="1005" font-size="10.5" fill="#2B2724">sessionEventId</text>
-  <text x="1358" y="1005" font-size="10" fill="#2B2724" opacity="0.6">bigint</text>
-  <text x="1476" y="1005" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
-  <text x="1222" y="1023" font-size="10.5" fill="#2B2724">day</text>
-  <text x="1358" y="1023" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <rect x="1208" y="1052" width="280" height="116" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="1208" y="1052" width="5" height="34" fill="#B07A3B"/>
-  <text x="1222" y="1074" font-size="12.5" font-weight="700" fill="#2B2724">PortalAPIJob</text>
-  <text x="1222" y="1099" font-size="10.5" fill="#2B2724">id</text>
-  <text x="1358" y="1099" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="1476" y="1099" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="1222" y="1117" font-size="10.5" fill="#2B2724">integrationId</text>
-  <text x="1358" y="1117" font-size="10" fill="#2B2724" opacity="0.6">Integration</text>
-  <text x="1476" y="1117" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="1222" y="1135" font-size="10.5" fill="#2B2724">status</text>
-  <text x="1358" y="1135" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="1222" y="1153" font-size="10.5" fill="#2B2724">createdAt</text>
+  <text x="1222" y="987" font-size="10.5" fill="#2B2724">status</text>
+  <text x="1358" y="987" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
+  <text x="1222" y="1005" font-size="10.5" fill="#2B2724">createdAt</text>
+  <text x="1358" y="1005" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="1208" y="1034" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="1208" y="1034" width="5" height="34" fill="#B07A3B"/>
+  <text x="1222" y="1056" font-size="12.5" font-weight="700" fill="#2B2724">PortalSectionOccurrence</text>
+  <text x="1222" y="1081" font-size="10.5" fill="#2B2724">id</text>
+  <text x="1358" y="1081" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
+  <text x="1476" y="1081" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="1222" y="1099" font-size="10.5" fill="#2B2724">scheduleStudyUnitId</text>
+  <text x="1358" y="1099" font-size="10" fill="#2B2724" opacity="0.6">PortalSection</text>
+  <text x="1476" y="1099" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
+  <text x="1222" y="1117" font-size="10.5" fill="#2B2724">meetingDate</text>
+  <text x="1358" y="1117" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="1476" y="1117" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
+  <text x="1222" y="1135" font-size="10.5" fill="#2B2724">periodId</text>
+  <text x="1358" y="1135" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="1476" y="1135" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
+  <text x="1222" y="1153" font-size="10.5" fill="#2B2724">startsAt</text>
   <text x="1358" y="1153" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="1208" y="1182" width="280" height="188" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="1208" y="1182" width="5" height="34" fill="#B07A3B"/>
-  <text x="1222" y="1204" font-size="12.5" font-weight="700" fill="#2B2724">PortalSectionOccurrence</text>
-  <text x="1222" y="1229" font-size="10.5" fill="#2B2724">id</text>
-  <text x="1358" y="1229" font-size="10" fill="#2B2724" opacity="0.6">uuid</text>
-  <text x="1476" y="1229" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="1222" y="1247" font-size="10.5" fill="#2B2724">scheduleStudyUnitId</text>
-  <text x="1358" y="1247" font-size="10" fill="#2B2724" opacity="0.6">PortalSection</text>
-  <text x="1476" y="1247" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">FK</text>
-  <text x="1222" y="1265" font-size="10.5" fill="#2B2724">meetingDate</text>
-  <text x="1358" y="1265" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="1476" y="1265" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
-  <text x="1222" y="1283" font-size="10.5" fill="#2B2724">periodId</text>
-  <text x="1358" y="1283" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="1476" y="1283" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
-  <text x="1222" y="1301" font-size="10.5" fill="#2B2724">startsAt</text>
-  <text x="1358" y="1301" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="1222" y="1319" font-size="10.5" fill="#2B2724">durationMinutes</text>
-  <text x="1358" y="1319" font-size="10" fill="#2B2724" opacity="0.6">int</text>
-  <text x="1222" y="1337" font-size="10.5" fill="#2B2724">title</text>
-  <text x="1358" y="1337" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="1222" y="1355" font-size="10.5" fill="#2B2724">canceledAt</text>
-  <text x="1358" y="1355" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <rect x="1208" y="1384" width="280" height="152" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <rect x="1208" y="1384" width="5" height="34" fill="#3B8E8E"/>
-  <text x="1222" y="1406" font-size="12.5" font-weight="700" fill="#2B2724">LmsCourseWindow</text>
-  <text x="1222" y="1431" font-size="10.5" fill="#2B2724">lmsCourseId</text>
-  <text x="1358" y="1431" font-size="10" fill="#2B2724" opacity="0.6">LmsCourse</text>
-  <text x="1476" y="1431" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="1222" y="1449" font-size="10.5" fill="#2B2724">scope</text>
-  <text x="1358" y="1449" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="1476" y="1449" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
-  <text x="1222" y="1467" font-size="10.5" fill="#2B2724">refreshedAt</text>
-  <text x="1358" y="1467" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="1222" y="1485" font-size="10.5" fill="#2B2724">throughDate</text>
-  <text x="1358" y="1485" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
-  <text x="1222" y="1503" font-size="10.5" fill="#2B2724">fingerprint</text>
-  <text x="1358" y="1503" font-size="10" fill="#2B2724" opacity="0.6">text</text>
-  <text x="1222" y="1521" font-size="10.5" fill="#2B2724">priorFingerprint</text>
-  <text x="1358" y="1521" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="1222" y="1171" font-size="10.5" fill="#2B2724">durationMinutes</text>
+  <text x="1358" y="1171" font-size="10" fill="#2B2724" opacity="0.6">int</text>
+  <text x="1222" y="1189" font-size="10.5" fill="#2B2724">title</text>
+  <text x="1358" y="1189" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="1222" y="1207" font-size="10.5" fill="#2B2724">canceledAt</text>
+  <text x="1358" y="1207" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <rect x="1208" y="1236" width="280" height="152" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
+  <rect x="1208" y="1236" width="5" height="34" fill="#3B8E8E"/>
+  <text x="1222" y="1258" font-size="12.5" font-weight="700" fill="#2B2724">LmsCourseWindow</text>
+  <text x="1222" y="1283" font-size="10.5" fill="#2B2724">lmsCourseId</text>
+  <text x="1358" y="1283" font-size="10" fill="#2B2724" opacity="0.6">LmsCourse</text>
+  <text x="1476" y="1283" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="1222" y="1301" font-size="10.5" fill="#2B2724">scope</text>
+  <text x="1358" y="1301" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="1476" y="1301" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">PK</text>
+  <text x="1222" y="1319" font-size="10.5" fill="#2B2724">refreshedAt</text>
+  <text x="1358" y="1319" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <text x="1222" y="1337" font-size="10.5" fill="#2B2724">throughDate</text>
+  <text x="1358" y="1337" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
+  <text x="1222" y="1355" font-size="10.5" fill="#2B2724">fingerprint</text>
+  <text x="1358" y="1355" font-size="10" fill="#2B2724" opacity="0.6">text</text>
+  <text x="1222" y="1373" font-size="10.5" fill="#2B2724">priorFingerprint</text>
+  <text x="1358" y="1373" font-size="10" fill="#2B2724" opacity="0.6">text</text>
 </svg>

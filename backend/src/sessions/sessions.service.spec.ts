@@ -55,6 +55,7 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     originLat: null,
     originLng: null,
     commuteMinutes: null,
+    commuteAuto: false,
     durationMinutes: 60,
     deadline: new Date("2026-01-05T12:00:00.000Z"),
     tags: [],

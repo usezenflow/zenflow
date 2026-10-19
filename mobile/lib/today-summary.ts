@@ -22,7 +22,7 @@ export interface TodaySummary {
 }
 
 /**
- * Counts for the Today card. Only tasks count (they are what the streak counts);
+ * Counts for the Today card. Only tasks count;
  * skipped ones drop out of both totals.
  */
 export function summarizeToday(sessions: Session[], now: Date): TodaySummary {

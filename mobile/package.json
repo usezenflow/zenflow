@@ -51,7 +51,6 @@
     "@shopify/flash-list": "2.0.2",
     "@zenflow/core": "workspace:*",
     "@zenflow/shared": "workspace:*",
-    "@zenflow/spirits": "workspace:*",
     "axios": "^1.7.9",
     "babel-plugin-inline-import": "^3.0.0",
     "class-variance-authority": "^0.7.1",

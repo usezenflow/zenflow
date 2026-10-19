@@ -1,6 +1,16 @@
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import {
+  CAMPUS_ENTRIES,
+  onCampus,
+  routeMinutes,
+  routeSeconds,
+  vehicleFor,
+  type CommuteRoute,
+  type CommuteTransport,
+  type RouteLeg,
+} from "@zenflow/shared";
 import type { Cache } from "cache-manager";
 
 export interface PlaceResult {
@@ -77,6 +87,32 @@ const FETCH_LIMIT = 15;
 /** Da Lat city, `west,north,east,south`: searched first so the nearest matches win. */
 const DALAT_VIEWBOX = "108.3,12.05,108.6,11.85";
 
+/** A stop this close to the destination needs no walk. */
+const ARRIVED_METERS = 40;
+
+function metersBetween(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const dLat = (a.lat - b.lat) * 111_320;
+  const dLng = (a.lng - b.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+}
+
+/** The route timed for the vehicle that covers it. */
+function toLeg(
+  route: RouteResult,
+  vehicle: ReturnType<typeof vehicleFor>,
+): RouteLeg {
+  const durationSeconds = routeSeconds(route, vehicle);
+  return {
+    distanceMeters: route.distanceMeters,
+    durationSeconds,
+    minutes: routeMinutes(durationSeconds),
+    coordinates: route.coordinates,
+  };
+}
+
 @Injectable()
 export class PlacesService {
   private readonly logger = new Logger(PlacesService.name);
@@ -137,6 +173,75 @@ export class PlacesService {
     const result = await this.enqueue(() => this.fetchRoute(profile, from, to));
     if (result) await this.cache.set(key, result, ROUTE_CACHE_TTL_MS);
     return result;
+  }
+
+  /**
+   * The trip from `from` to `to` for one vehicle. A ridden trip to the campus
+   * ends at the gate or parking with the shorter ride plus walk, since students
+   * may not ride inside. `null` when no route exists.
+   */
+  async commute(
+    transport: CommuteTransport,
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+  ): Promise<CommuteRoute | null> {
+    const vehicle = vehicleFor(transport);
+    const foot = vehicleFor("WALK");
+    const walkAll = vehicle.id === "WALK" || onCampus(from);
+    if (walkAll || !onCampus(to)) {
+      const route = await this.route(
+        walkAll ? foot.profile : vehicle.profile,
+        from,
+        to,
+      );
+      if (!route) return null;
+      const leg = toLeg(route, walkAll ? foot : vehicle);
+      return {
+        minutes: leg.minutes,
+        distanceMeters: leg.distanceMeters,
+        ride: walkAll ? null : leg,
+        walk: walkAll ? leg : null,
+        entry: null,
+      };
+    }
+
+    let best: CommuteRoute | null = null;
+    let bestSeconds = Infinity;
+    for (const entry of CAMPUS_ENTRIES) {
+      const rideRoute = await this.route(vehicle.profile, from, entry);
+      if (!rideRoute) continue;
+      const ride = toLeg(rideRoute, vehicle);
+      // Stopping at the destination itself needs no walk.
+      const arrived = metersBetween(entry, to) < ARRIVED_METERS;
+      const walkRoute = arrived
+        ? null
+        : await this.route(foot.profile, entry, to);
+      if (!arrived && !walkRoute) continue;
+      const walk = walkRoute ? toLeg(walkRoute, foot) : null;
+      const seconds = ride.durationSeconds + (walk?.durationSeconds ?? 0);
+      if (seconds >= bestSeconds) continue;
+      bestSeconds = seconds;
+      best = {
+        minutes: routeMinutes(seconds),
+        distanceMeters: ride.distanceMeters + (walk?.distanceMeters ?? 0),
+        ride,
+        walk,
+        entry: { name: entry.name, lat: entry.lat, lng: entry.lng },
+      };
+    }
+    if (best) return best;
+
+    // No gate is reachable on foot: ride all the way.
+    const direct = await this.route(vehicle.profile, from, to);
+    if (!direct) return null;
+    const ride = toLeg(direct, vehicle);
+    return {
+      minutes: ride.minutes,
+      distanceMeters: ride.distanceMeters,
+      ride,
+      walk: null,
+      entry: null,
+    };
   }
 
   private async fetchRoute(

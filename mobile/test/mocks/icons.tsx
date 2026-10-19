@@ -126,7 +126,6 @@ export const User = Icon;
 export const UserPlus = Icon;
 export const Users = Icon;
 export const Crown = Icon;
-export const Egg = Icon;
 export const Gem = Icon;
 export const Sprout = Icon;
 export const Target = Icon;

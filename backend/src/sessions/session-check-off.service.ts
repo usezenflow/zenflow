@@ -2,13 +2,10 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  Optional,
 } from "@nestjs/common";
 import type { SessionCheckOffResponse } from "@zenflow/shared";
 import { Prisma, SessionEventType, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
-import { SpiritsService } from "../spirits/spirits.service";
-import { StreaksService } from "../streaks/streaks.service";
 import { expandRrule, parseOccurrenceId } from "../scheduler/core/recurrence";
 import { WITH_TAGS_AND_SERIES, type SessionRow } from "./types/session-row";
 import { toSessionDto, toSessionSnapshot } from "./session-mapper";
@@ -55,11 +52,7 @@ export function nextCheckOffState(
  */
 @Injectable()
 export class SessionCheckOffService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly streaks: StreaksService,
-    @Optional() private readonly spirits?: SpiritsService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async set(
     id: string,
@@ -79,9 +72,7 @@ export class SessionCheckOffService {
       : await this.setRow(id, kind, on, user, now);
     if (occ && scope !== "occurrence")
       await this.setSeriesSkip(occ, scope, on, user);
-    const streak = await this.streaks.refresh(user, now);
-    if (kind === "complete" && on) await this.spirits?.credit(user.id, now);
-    return { session, streak };
+    return { session };
   }
 
   private async setRow(

@@ -1,6 +1,6 @@
 import { type PlaceResult, searchPlaces } from "@/api/places";
 import { ErrorMark, NoResultsMark } from "@/components/brand/state-marks";
-import { LocateFixed, MapPin, Search, X, type LucideIcon } from "@/components/Icons";
+import { Home, LocateFixed, MapPin, Search, X, type LucideIcon } from "@/components/Icons";
 import { BottomSheetTextInput } from "@/components/ui/bottom-sheet";
 import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -91,6 +91,7 @@ export function PlacePalette({
   onClose,
   onPickOnMap,
   onMyLocation,
+  home,
   locating,
   locationNote,
   settingsNeeded,
@@ -102,6 +103,8 @@ export function PlacePalette({
   onPickOnMap: () => void;
   /** Present only for the start, which can be the user's position. */
   onMyLocation?: () => void;
+  /** The start offered first, when the student saved one in settings. */
+  home?: Stop | null;
   locating: boolean;
   locationNote: string | null;
   /** The system will not ask again; offer settings. */
@@ -202,6 +205,15 @@ export function PlacePalette({
       >
         {!typed && (
           <>
+            {home && (
+              <Row
+                testID="session.location.home"
+                icon={Home}
+                label={t("Home")}
+                detail={home.text}
+                onPress={() => onChoose(home)}
+              />
+            )}
             {onMyLocation && (
               <Row
                 testID="session.location.mine"

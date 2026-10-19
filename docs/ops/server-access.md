@@ -88,6 +88,33 @@ sudo dpkg-reconfigure -plow unattended-upgrades
 
 With `PermitRootLogin no`, root is console-only. Optionally `sudo passwd -l root`. Day to day: `ssh admin@host`, then `cd $DEPLOY_PATH/backend`.
 
+## 7. Laptop setup
+
+Generate one key per user and install the public halves from step 1:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/admin_key -C you@laptop
+ssh-keygen -t ed25519 -f ~/.ssh/zenflow-deploy -C zenflow-deploy
+```
+
+Add one `Host` block per user to `~/.ssh/config`. Reusing a `Host` name makes ssh merge both blocks and offer both keys.
+
+```
+Host zenflow
+  HostName <host-ip>
+  User admin
+  IdentityFile ~/.ssh/admin_key
+  IdentitiesOnly yes
+
+Host zenflow-deploy
+  HostName <host-ip>
+  User deploy
+  IdentityFile ~/.ssh/zenflow-deploy
+  IdentitiesOnly yes
+```
+
+Check it with `ssh zenflow 'sudo -v && docker ps'` and `ssh zenflow-deploy docker ps`. The map push scripts use `admin@zenflow` ([maps.md](maps.md)).
+
 ## Record it
 
 Add the users and key holders to the "Deploy host SSH" row in [secrets.md](secrets.md#access-fill-in). To rotate a key: add the new public key, test it, remove the old one.

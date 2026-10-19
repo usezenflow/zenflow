@@ -1,5 +1,6 @@
 import { KillSwitchModule } from "../common/killswitch/killswitch.module";
 import { KillSwitchService } from "../common/killswitch/killswitch.service";
+import { CacheModule } from "@nestjs/cache-manager";
 import { ConfigModule } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
 import { Test } from "@nestjs/testing";
@@ -44,6 +45,7 @@ describe("IngestionModule ↔ IntegrationsModule", () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+        CacheModule.register({ isGlobal: true }),
         ScheduleModule.forRoot(),
         KillSwitchModule,
         IngestionModule,
@@ -96,6 +98,7 @@ describe("IngestionModule ↔ IntegrationsModule", () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+        CacheModule.register({ isGlobal: true }),
         ScheduleModule.forRoot(),
         KillSwitchModule,
         IngestionModule,

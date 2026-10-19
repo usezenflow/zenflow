@@ -1,6 +1,6 @@
 # ADR-0026: Spirit eggs hatch from starts
 
-**Status:** accepted
+**Status:** superseded by ADR-0032
 **Date:** 2026-10-18
 
 ## Context

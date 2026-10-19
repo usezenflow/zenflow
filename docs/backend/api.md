@@ -25,7 +25,6 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | GET | `/users/me` | Profile |
 | PATCH | `/users/update/basic-info` | Name, timezone, lang, `defaultReminderMinutes`, `focusBand` (`MORNING`, `AFTERNOON`, `EVENING`, `LATE_NIGHT`; seeds the preference matrix while it is still the default) |
 | GET | `/users/me/preference-matrix` | 168-float matrix for the Insights heatmap |
-| GET | `/users/me/streak` | Daily completion streak (`Streak`) |
 | GET | `/users/me/student` | DLU profile (`StudentResponse`); `profile` is null until the first fetch lands |
 | GET | `/users/me/marks` | Marks grouped by term, newest first; names are clean and `noCredit` flags the portal's red star (`StudentMarksResponse`) |
 
@@ -72,8 +71,7 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 - **Series split:** `sessionDurations` (one 15-minute multiple per session, length `sessionCount`) sets each session's length; `durationMinutes` is then the first one. A day holds at most 3 sittings of a series, 15 minutes apart.
 - **Search:** every word of `q` must match, ignoring case and accents (including đ); empty `q` lists all. `direction` is `forward` (start at or after) or `backward` (before); each page is ascending.
 - Search returns `{ sessions, nextCursor }`; pass `nextCursor` with the same `direction`. Recurring series add occurrences up to a year past the cursor once stored rows run out. Unscheduled rows are skipped.
-- **Done and skipped:** every `Session` carries `completedAt` and `skipped`. Check-off routes return `SessionCheckOffResponse` (`{ session, streak }`) and accept an occurrence id. The representative row id of a recurring series is a 400.
-- **Streak:** a day (user tz) counts with at least one completed task. Classes, exams and do-not-disturb never count. Every 7th streak day banks a freeze (max 2); a missed past day spends one, else the streak resets. Today never breaks it.
+- **Done and skipped:** every `Session` carries `completedAt` and `skipped`. Check-off routes return `SessionCheckOffResponse` (`{ session }`) and accept an occurrence id. The representative row id of a recurring series is a 400.
 - **Reminders:** `POST` and `PATCH` accept `reminders?: number[]` (minutes before start, max 2, not for `DND`). Responses carry `reminders: number[]`.
 - Omitted on create: one at `defaultReminderMinutes` (none if 0). Omitted on `PATCH`: unchanged.
 - Reminders past or under 60 s away are skipped and listed in `skippedReminders`.

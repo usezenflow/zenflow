@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "homeLocation" VARCHAR(200),
+ADD COLUMN "homeLat" DOUBLE PRECISION,
+ADD COLUMN "homeLng" DOUBLE PRECISION;
+
+-- AlterTable
+ALTER TABLE "Session" ADD COLUMN "commuteAuto" BOOLEAN NOT NULL DEFAULT false;

@@ -2,7 +2,6 @@ import { SessionAgenda } from "@/components/calendar/session-agenda";
 import { Text } from "@/components/ui/text";
 import { useLanguage } from "@/hooks/use-language";
 import { Search } from "@/components/Icons";
-import { StreakBadge } from "@/components/calendar/streak-badge";
 import { SessionSearchView } from "@/components/calendar/session-search-view";
 import { NotificationBell } from "@/components/notification-bell";
 import { GlassButton } from "@/components/ui/glass-button";
@@ -23,7 +22,6 @@ export default function ListScreen() {
         style={{ paddingTop: insets.top + 8 }}
       >
         <Text className="flex-1 text-[28px] font-bold">{t("List")}</Text>
-        <StreakBadge />
         <GlassButton
           icon={Search}
           accessibilityLabel={t("Search sessions")}

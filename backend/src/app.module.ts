@@ -12,8 +12,6 @@ import { MailService } from "./mail/mail.service";
 import { MailModule } from "./mail/mail.module";
 import { UsersModule } from "./users/users.module";
 import { SessionsModule } from "./sessions/sessions.module";
-import { StreaksModule } from "./streaks/streaks.module";
-import { SpiritsModule } from "./spirits/spirits.module";
 import { CourseColoursModule } from "./course-colours/course-colours.module";
 import { TagsModule } from "./tags/tags.module";
 import { PlacesModule } from "./places/places.module";
@@ -568,8 +566,6 @@ const jobModules = [
     AuthModule,
     MailModule,
     SessionsModule,
-    StreaksModule,
-    SpiritsModule,
     CourseColoursModule,
     CryptoModule,
     LMSModule,

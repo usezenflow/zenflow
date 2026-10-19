@@ -17,6 +17,7 @@ import {
   type DeleteRecurringSheetHandle,
 } from "@/components/tasks/delete-recurring-sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import type { SkipScope } from "@/api/check-off";
 import { useCheckOff } from "@/hooks/use-check-off";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
@@ -52,7 +53,7 @@ import { SESSION_DETAIL_SNAP_POINTS } from "@/lib/session-detail";
 import { BookOpen, Check, ChevronRight, Clock, Plus, SkipForward, Trash2, Undo2 } from "@/components/Icons";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { GlassButton } from "@/components/ui/glass-button";
+import { GLASS_HIT_SIZE, GLASS_SIZE, GlassButton } from "@/components/ui/glass-button";
 import { useOffline } from "@/hooks/use-offline";
 import { forwardRef, startTransition, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -119,6 +120,8 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
   const [preparing, setPreparing] = useState(false);
   const [preps, setPreps] = useState<Session[]>([]);
   const [justSaved, setJustSaved] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const placeRef = useRef<(() => void) | null>(null);
   // For a prep plan: the lecture, exam or assignment it prepares for.
   const [target, setTarget] = useState<Session | null>(null);
   const setCheckOff = useCheckOff();
@@ -500,6 +503,35 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                       <Text className="text-[12px] font-semibold text-card">{t("Saved")}</Text>
                     </Animated.View>
                   )}
+                  {!session && (
+                    <Pressable
+                      testID="session.place"
+                      accessibilityRole="button"
+                      accessibilityLabel={t("Schedule it")}
+                      accessibilityState={{ disabled: offline || placing, busy: placing }}
+                      disabled={offline || placing}
+                      onPress={() => placeRef.current?.()}
+                      style={({ pressed }) => ({
+                        minWidth: GLASS_HIT_SIZE,
+                        minHeight: GLASS_HIT_SIZE,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: offline || placing ? 0.4 : pressed ? 0.8 : 1,
+                        transform: [{ scale: pressed ? 0.96 : 1 }],
+                      })}
+                    >
+                      <View
+                        className="items-center justify-center bg-primary"
+                        style={{
+                          width: GLASS_SIZE,
+                          height: GLASS_SIZE,
+                          borderRadius: GLASS_SIZE / 2,
+                        }}
+                      >
+                        {placing ? <Spinner size={18} tone="onPrimary" /> : <Plus size={20} className="text-primary-foreground" />}
+                      </View>
+                    </Pressable>
+                  )}
                   {session && !offline && SKIPPABLE.has(session.type) && (
                     <GlassButton
                       testID="session-detail-skip"
@@ -639,6 +671,8 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                     onSaved={onSaved}
                     onSavedChange={setJustSaved}
                     onPlace={placeDraft}
+                    placeRef={placeRef}
+                    onPlacingChange={setPlacing}
                   />
                 </BottomSheetScrollView>
               )}

@@ -57,7 +57,6 @@ export function localizeNotification<
       title = `Bạn có ${title}`;
     }
     const copy: Record<string, string> = {
-      "Spark added to your egg.": "Đã thêm tia lửa vào quả trứng của bạn.",
       "Checked off from LMS.": "Đã đánh dấu hoàn thành từ LMS.",
       "Plan it before it's due.": "Hãy lên kế hoạch trước hạn nộp.",
       "Plan them before they're due.": "Hãy lên kế hoạch trước hạn nộp.",

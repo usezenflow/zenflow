@@ -15,7 +15,6 @@ import { insertFixedSession } from "../sessions/fixed-session-writer";
 import { toSessionSnapshot } from "../sessions/session-mapper";
 import { recordSessionEvent } from "../sessions/session-events";
 import { WITH_TAGS_AND_SERIES } from "../sessions/types/session-row";
-import { SpiritsService } from "../spirits/spirits.service";
 import { TagsService } from "../tags/tags.service";
 import { monthsFrom, resolveSemester } from "./core/semester";
 import { digestNotifications, SyncDigest } from "./core/sync-digest";
@@ -32,6 +31,7 @@ import {
   ingestionReconcileDeleted,
 } from "../observability/metrics";
 import { NotificationEvent } from "../notifications/types";
+import { CommuteDefaultsService } from "../commute/commute-defaults.service";
 import { SyncConflictsService } from "./sync-conflicts.service";
 
 /** Which DLU system a batch of blocks came from. */
@@ -179,7 +179,7 @@ export class MaterializerService {
     private readonly queues: QueueService,
     config: ConfigService,
     @Optional() private readonly syncConflicts?: SyncConflictsService,
-    @Optional() private readonly spirits?: SpiritsService,
+    @Optional() private readonly commuteDefaults?: CommuteDefaultsService,
   ) {
     this.dluTz = config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
   }
@@ -231,7 +231,7 @@ export class MaterializerService {
           runDigest.add(digestItemOf(block, "created", createdId), source);
           await this.enqueuePrepIfDue(userId, block, createdId, now);
           if (block.type === "ASSIGNMENT" && submittedAtOf(block, now))
-            await this.announceCompleted(userId, createdId, block, now);
+            await this.announceCompleted(userId, createdId, block);
         }
         continue;
       }
@@ -247,8 +247,7 @@ export class MaterializerService {
           });
           return this.completeSubmitted(tx, userId, existing.id, now);
         });
-        if (completed)
-          await this.announceCompleted(userId, existing.id, block, now);
+        if (completed) await this.announceCompleted(userId, existing.id, block);
       }
 
       if (!differsFromUpstream(existing, block)) {
@@ -267,6 +266,10 @@ export class MaterializerService {
     }
 
     if (!digest) await this.flushDigest(userId, runDigest, now);
+
+    // New or moved rows may name a campus place: give them the home commute.
+    if (outcome.created + outcome.updated > 0)
+      void this.commuteDefaults?.applyQuietly(userId);
 
     // `unchanged` / total ≈ how much of the run was redundant re-work (the
     // thing a cache on this path would save). `source` is portal|lms.
@@ -499,8 +502,8 @@ export class MaterializerService {
 
   /**
    * A submitted LMS assignment is done: check it off the way the user would,
-   * so its `COMPLETE` event feeds sparks (ADR-0026). Runs once, when the
-   * submission is first seen, so a later manual un-check sticks. A skipped or
+   * so it has a `COMPLETE` event. Runs once, when the submission is first
+   * seen, so a later manual un-check sticks. A skipped or
    * already completed row is left alone.
    */
   private async completeSubmitted(
@@ -573,23 +576,19 @@ export class MaterializerService {
   }
 
   /**
-   * After the completion commits: settle the spark it earns, then raise the
-   * "done" notification (live stream and push). Best-effort, so a failure never
+   * After the completion commits: raise the "done" notification (live stream and push). Best-effort, so a failure never
    * fails the sync.
    */
   private async announceCompleted(
     userId: string,
     sessionId: string,
     block: ParsedBlock,
-    now: Date,
   ): Promise<void> {
     try {
-      const sparks = (await this.spirits?.credit(userId, now)) ?? 0;
       await this.raise(userId, {
         sessionId,
         title: `Assignment done: ${block.title}`,
-        content:
-          sparks > 0 ? "Spark added to your egg." : "Checked off from LMS.",
+        content: "Checked off from LMS.",
         eventEndsAt: new Date(
           block.scheduledStartTime.getTime() + block.durationMinutes * 60_000,
         ),

@@ -12,6 +12,7 @@ import {
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import {
+  type ComponentType,
   type ForwardedRef,
   type ReactElement,
   forwardRef,
@@ -35,6 +36,8 @@ interface Option<T> {
   value: T;
   label: string;
   flag?: string;
+  /** Icon shown before the label. */
+  icon?: ComponentType<{ size?: number; className?: string }>;
   /** Muted text right-aligned before the check (e.g. a GMT offset). */
   detail?: string;
 }
@@ -153,6 +156,12 @@ function OptionSheetInner<T extends string | number>(
                 className="flex-row items-center justify-between py-3.5"
               >
                 <View className="flex-1 flex-row items-center gap-3">
+                  {option.icon ? (
+                    <option.icon
+                      size={22}
+                      className={selected ? "text-primary" : "text-muted-foreground"}
+                    />
+                  ) : null}
                   {option.flag ? (
                     <Text className="text-[22px] leading-[28px]">
                       {option.flag}
