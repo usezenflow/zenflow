@@ -72,9 +72,6 @@ interface SessionDetailSheetProps {
 
 const DRAFT_DURATION = 60;
 /** Length of the study session "Prepare in advance" books. */
-/** The brand orange, as the glow around the new plan button. */
-const PLACE_GLOW = "#FF8E3E";
-
 const SKIPPABLE = new Set<Session["type"]>(["LECTURE", "EXAM", "ASSIGNMENT"]);
 const PREP_TARGETS = new Set<Session["type"]>(["LECTURE", "EXAM", "ASSIGNMENT"]);
 const PREPARE_DURATION = 60;
@@ -529,11 +526,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                           width: GLASS_SIZE,
                           height: GLASS_SIZE,
                           borderRadius: GLASS_SIZE / 2,
-                          shadowColor: PLACE_GLOW,
-                          shadowOpacity: 0.7,
-                          shadowRadius: 12,
-                          shadowOffset: { width: 0, height: 0 },
-                          elevation: 8,
                         }}
                       >
                         {placing ? <Spinner size={18} tone="onPrimary" /> : <Plus size={20} className="text-primary-foreground" />}
