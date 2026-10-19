@@ -5,6 +5,7 @@ import { LMSModule } from "../lms/lms.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { PortalAPIModule } from "../portal/portal-api.module";
 import { PrismaModule } from "../prisma/prisma.module";
+import { SpiritsModule } from "../spirits/spirits.module";
 import { TagsModule } from "../tags/tags.module";
 import { EnrollmentDiscoveryService } from "./enrollment-discovery.service";
 import { ExamWatcherService } from "./exam-watcher.service";
@@ -20,6 +21,7 @@ import { OccurrenceCacheService } from "./occurrence-cache.service";
 import { OccurrenceFanoutService } from "./occurrence-fanout.service";
 import { PortalSessionService } from "./portal-session.service";
 import { SplitJobsService } from "./split-jobs.service";
+import { WalkerPlanService } from "./walker-plan.service";
 import { StudentSyncService } from "./student-sync.service";
 import { SyncConflictsService } from "./sync-conflicts.service";
 import { SyncRunService } from "./sync-run.service";
@@ -57,6 +59,7 @@ import { TimetableWatcherService } from "./timetable-watcher.service";
     TagsModule,
     NotificationsModule,
     QueueModule,
+    SpiritsModule,
     forwardRef(() => IntegrationsModule),
   ],
   providers: [
@@ -79,6 +82,7 @@ import { TimetableWatcherService } from "./timetable-watcher.service";
     StudentSyncService,
     IngestionDispatchService,
     SplitJobsService,
+    WalkerPlanService,
   ],
   // The watchers and discovery are exported for IngestionWorkerModule's ticker.
   exports: [
@@ -93,6 +97,7 @@ import { TimetableWatcherService } from "./timetable-watcher.service";
     SyncRunService,
     StudentSyncService,
     SplitJobsService,
+    WalkerPlanService,
   ],
 })
 export class IngestionModule {}

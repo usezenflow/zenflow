@@ -14,6 +14,7 @@ import { SessionsService } from "./sessions.service";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { UpdateSessionDto } from "./dto/update-session.dto";
 import { SlotPickDto } from "./dto/slot-pick.dto";
+import { SkipScopeDto } from "./dto/skip-scope.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { DeadlineOptionsDto } from "./dto/deadline-options.dto";
@@ -26,7 +27,6 @@ import { type User } from "../../generated/prisma";
 import { deadlineOptions } from "./utils/deadline-options";
 import { ConfirmPlacementDto } from "./dto/confirm-placement.dto";
 import { PlacementPlanService } from "./placement-plan.service";
-import { SessionAnchorService } from "./session-anchor.service";
 
 @Controller("sessions")
 @UseGuards(CookieAuthGuard)
@@ -36,7 +36,6 @@ export class SessionsController {
     private readonly sessionsService: SessionsService,
     private readonly searchService: SessionSearchService,
     private readonly placementPlans: PlacementPlanService,
-    private readonly anchors: SessionAnchorService,
   ) {}
 
   // NOTE: must precede @Post(":id/...") routes so "placement" isn't matched as an :id.
@@ -128,20 +127,6 @@ export class SessionsController {
     return { success: true, message: "Session updated", data };
   }
 
-  /** Pin a task: the scheduler never moves it (ADR-0022). */
-  @Post(":id/pin")
-  async pin(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.anchors.pin(id, user);
-    return { success: true, message: "Session pinned", data };
-  }
-
-  /** Unpin a task: back to `AUTO`. */
-  @Delete(":id/pin")
-  async unpin(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.anchors.unpin(id, user);
-    return { success: true, message: "Session unpinned", data };
-  }
-
   @Post(":id/slot-pick")
   async slotPick(
     @Param("id") id: string,
@@ -175,18 +160,33 @@ export class SessionsController {
   }
 
   @Post(":id/skip")
-  async skip(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.sessionsService.setCheckOff(id, "skip", true, user);
+  async skip(
+    @Param("id") id: string,
+    @Query() query: SkipScopeDto,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.setCheckOff(
+      id,
+      "skip",
+      true,
+      user,
+      query.scope,
+    );
     return { success: true, message: "Session skipped", data };
   }
 
   @Delete(":id/skip")
-  async unskip(@Param("id") id: string, @CurrentUser() user: User) {
+  async unskip(
+    @Param("id") id: string,
+    @Query() query: SkipScopeDto,
+    @CurrentUser() user: User,
+  ) {
     const data = await this.sessionsService.setCheckOff(
       id,
       "skip",
       false,
       user,
+      query.scope,
     );
     return { success: true, message: "Skip undone", data };
   }

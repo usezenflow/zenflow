@@ -6,6 +6,7 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -13,7 +14,7 @@ import {
   Min,
   ValidateIf,
 } from "class-validator";
-import { TIME_GRANULARITY } from "../../common/constants";
+import { MAX_COMMUTE_MINUTES, TIME_GRANULARITY } from "../../common/constants";
 import { MAX_SCAN_DAYS } from "../../scheduler/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
 import { IsFeasibleTaskWindow } from "../../common/validators/feasible-task-window.decorator";
@@ -81,6 +82,49 @@ export class CreateSessionDto {
   @MaxLength(200, { message: "Location must be at most 200 characters." })
   location?: string | null;
 
+  /** Map point of the location, set together with `location`. `null` clears it. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  locationLat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  locationLng?: number | null;
+
+  /** Where the commute starts, with its map point and travel minutes each way. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsString()
+  @MaxLength(200, { message: "Origin must be at most 200 characters." })
+  originLocation?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  originLat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  originLng?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsInt()
+  @Min(0)
+  @Max(MAX_COMMUTE_MINUTES)
+  commuteMinutes?: number | null;
+
   /** Session duration in minutes (always a positive multiple of 15, required). */
   @IsInt()
   @Min(TIME_GRANULARITY)
@@ -117,6 +161,15 @@ export class CreateSessionDto {
    * Minutes before start to remind the user (max 2, not for DND). Omit on
    * create for the default (60 min, non-DND); `[]` for none.
    */
+  /**
+   * The lecture, exam or assignment this `TASK` prepares for. A recurring
+   * lecture occurrence id (`<seriesId>::<startISO>`) pins that occurrence.
+   */
+  @ValidateIf((o: CreateSessionDto) => o.type === "TASK")
+  @IsOptional()
+  @IsString()
+  prepForSessionId?: string;
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(MAX_REMINDERS_PER_SESSION)

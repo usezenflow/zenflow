@@ -38,16 +38,7 @@ async function main(): Promise<void> {
       },
       orderBy: { createdAt: "asc" },
     });
-    const bySeries = new Map<string, typeof rows>();
-    const singles: typeof rows = [];
-    for (const r of rows) {
-      if (!r.seriesId) singles.push(r);
-      else bySeries.set(r.seriesId, [...(bySeries.get(r.seriesId) ?? []), r]);
-    }
-    console.log(
-      `${rows.length} unplaced TASK row(s): ${singles.length} standalone, ` +
-        `${rows.length - singles.length} in ${bySeries.size} series`,
-    );
+    console.log(`${rows.length} unplaced TASK row(s)`);
     if (dryRun || rows.length === 0) return;
 
     const users = new Map(
@@ -61,7 +52,7 @@ async function main(): Promise<void> {
     let placed = 0;
     let failed = 0;
 
-    for (const r of singles) {
+    for (const r of rows) {
       try {
         const res = await placement.placeOnDeadlineChange({
           user: users.get(r.userId)!,
@@ -81,32 +72,6 @@ async function main(): Promise<void> {
       } catch (err) {
         console.error(`task ${r.id} failed:`, err);
         failed++;
-      }
-    }
-
-    for (const [seriesId, members] of bySeries) {
-      try {
-        const res = await placement.placeSeriesOnCreate({
-          user: users.get(members[0].userId)!,
-          seriesId,
-          members: members.map((m) => ({
-            id: m.id,
-            durationMinutes: m.durationMinutes,
-          })),
-          deadline: members[0].deadline ?? now,
-          now,
-        });
-        for (const p of res) {
-          console.log(
-            `series ${seriesId} sitting ${p.id} -> ${p.scheduledStartTime?.toISOString()}${
-              p.lastResort ? " (last resort)" : ""
-            }`,
-          );
-        }
-        placed += members.length;
-      } catch (err) {
-        console.error(`series ${seriesId} failed:`, err);
-        failed += members.length;
       }
     }
 

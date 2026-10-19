@@ -316,13 +316,13 @@ describe("IngestionScheduleService — plans", () => {
     );
   });
 
-  it("defaults the LMS calendar to hourly, portal discovery to a semester and the rest to daily", async () => {
+  it("defaults the LMS calendar to 15 minutes, the timetable to 3 h, exams and portal discovery to hourly", async () => {
     const { service } = await makeService();
-    expect(service.planFor("LMS_CALENDAR").targetPeriodMs).toBe(HOUR);
-    expect(service.planFor("PORTAL_TIMETABLE").targetPeriodMs).toBe(DAY);
-    expect(service.planFor("PORTAL_EXAM").targetPeriodMs).toBe(DAY);
+    expect(service.planFor("LMS_CALENDAR").targetPeriodMs).toBe(15 * MINUTE);
+    expect(service.planFor("PORTAL_TIMETABLE").targetPeriodMs).toBe(3 * HOUR);
+    expect(service.planFor("PORTAL_EXAM").targetPeriodMs).toBe(HOUR);
     expect(service.planFor("LMS_DISCOVERY").targetPeriodMs).toBe(DAY);
-    expect(service.planFor("PORTAL_DISCOVERY").targetPeriodMs).toBe(120 * DAY);
+    expect(service.planFor("PORTAL_DISCOVERY").targetPeriodMs).toBe(HOUR);
   });
 
   it("takes target periods from config, tolerating a string from a .env file", async () => {
@@ -339,8 +339,8 @@ describe("IngestionScheduleService — plans", () => {
       INGESTION_TIMETABLE_PERIOD_MS: "not-a-number",
       INGESTION_EXAM_PERIOD_MS: "0",
     });
-    expect(service.planFor("PORTAL_TIMETABLE").targetPeriodMs).toBe(DAY);
-    expect(service.planFor("PORTAL_EXAM").targetPeriodMs).toBe(DAY);
+    expect(service.planFor("PORTAL_TIMETABLE").targetPeriodMs).toBe(3 * HOUR);
+    expect(service.planFor("PORTAL_EXAM").targetPeriodMs).toBe(HOUR);
   });
 });
 
@@ -468,8 +468,21 @@ describe("IngestionScheduleService — claimDue", () => {
 
     await service.claimDue(kind, NOW, 10);
 
-    expect(db.schedules[0].nextDueAt).toEqual(new Date(NOW.getTime() + DAY));
+    expect(db.schedules[0].nextDueAt).toEqual(
+      new Date(NOW.getTime() + 3 * HOUR),
+    );
     expect(db.schedules[0].lastClaimedAt).toEqual(NOW);
+  });
+
+  it("stamps an explicit next due time when the caller supplies one", async () => {
+    const { db, service } = await makeService(PORTAL_INTEGRATIONS, [
+      schedule({ id: "a", nextDueAt: new Date(NOW.getTime() - HOUR) }),
+    ]);
+    const next = new Date(NOW.getTime() + 5 * DAY);
+
+    await service.claimDue(kind, NOW, 10, {}, next);
+
+    expect(db.schedules[0].nextDueAt).toEqual(next);
   });
 
   it("carries the userId and cache streak the pass needs", async () => {
@@ -513,6 +526,36 @@ describe("IngestionScheduleService — claimDue", () => {
     // march the schedule forward.
     expect(db.schedules[0].nextDueAt).toEqual(NOW);
     expect(db.schedules[0].lastClaimedAt).toBeNull();
+  });
+
+  it("claims preferred users first, in their order, then the rest", async () => {
+    const { service } = await makeService(
+      [
+        { id: "int1", userId: "u1", provider: "PORTAL" },
+        { id: "int2", userId: "u2", provider: "PORTAL" },
+        { id: "int3", userId: "u3", provider: "PORTAL" },
+      ],
+      [
+        schedule({ id: "a", nextDueAt: new Date(NOW.getTime() - HOUR) }),
+        schedule({
+          id: "b",
+          integrationId: "int2",
+          nextDueAt: new Date(NOW.getTime() - HOUR),
+        }),
+        schedule({
+          id: "c",
+          integrationId: "int3",
+          nextDueAt: new Date(NOW.getTime() - HOUR),
+        }),
+      ],
+    );
+
+    const claimed = await service.claimDue(kind, NOW, 2, {}, undefined, [
+      "u3",
+      "u1",
+    ]);
+
+    expect(claimed.map((c) => c.scheduleId)).toEqual(["c", "a"]);
   });
 
   it("never hands one target to two overlapping ticks", async () => {
@@ -677,7 +720,9 @@ describe("IngestionScheduleService — deferAfterManualSync", () => {
 
     await service.deferAfterManualSync("int1", ["PORTAL_TIMETABLE"], NOW);
 
-    expect(db.schedules[0].nextDueAt).toEqual(new Date(NOW.getTime() + DAY));
+    expect(db.schedules[0].nextDueAt).toEqual(
+      new Date(NOW.getTime() + 3 * HOUR),
+    );
     // A kind that was not reported clean stays due for the ticker.
     expect(db.schedules[1].nextDueAt).toEqual(NOW);
     // A different integration's row is untouched.

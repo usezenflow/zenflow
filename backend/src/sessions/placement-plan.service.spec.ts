@@ -29,7 +29,6 @@ const MOVE: PlacementMove = {
   id: "chosen",
   fromMs: START,
   toMs: START + 2 * HOUR,
-  anchor: "CHOSEN",
   cost: 12,
 };
 

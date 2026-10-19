@@ -4,10 +4,12 @@ import { Prisma } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { SyncDigest } from "./core/sync-digest";
 import { MaterializerService } from "./materializer.service";
+import { SpiritsService } from "../spirits/spirits.service";
 import { SyncConflictsService } from "./sync-conflicts.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { NotificationPubSub } from "../notifications/notification-pubsub.service";
 import { QueueService } from "../queue/queue.service";
+import { prepJobId } from "../queue/queues";
 import { TagsService } from "../tags/tags.service";
 import type {
   ParsedBlock,
@@ -33,6 +35,8 @@ interface SessionRow {
   scheduledStartTime: Date | null;
   lastMovedAt: Date | null;
   submittedAt: Date | null;
+  completedAt: Date | null;
+  skipped: boolean;
   prepForSessionId: string | null;
   deleted: boolean;
   scheduleStudyUnitId: string | null;
@@ -158,6 +162,8 @@ function makePrismaDouble() {
           scheduledStartTime: (data.scheduledStartTime as Date) ?? null,
           lastMovedAt: null,
           submittedAt: (data.submittedAt as Date | null) ?? null,
+          completedAt: null,
+          skipped: false,
           prepForSessionId: null,
           deleted: false,
           scheduleStudyUnitId:
@@ -174,6 +180,50 @@ function makePrismaDouble() {
         };
         sessions.push(row);
         return Promise.resolve(row);
+      },
+      findUniqueOrThrow: (args: { where: { id: string } }) => {
+        const row = sessions.find((s) => s.id === args.where.id);
+        if (!row) throw new Error(`no session ${args.where.id}`);
+        return Promise.resolve(row);
+      },
+      updateMany: (args: {
+        where: {
+          id?: string;
+          type?: string;
+          skipped?: boolean;
+          completedAt?: null;
+          userId: string;
+          source: string;
+          deleted: boolean;
+          lastMovedAt: null;
+          prepForSessionId: { in: string[] };
+        };
+        data: { deleted: boolean; completedAt?: Date };
+      }) => {
+        if (args.where.id !== undefined) {
+          // `completeSubmitted`: check off one open, unskipped assignment.
+          const hit = sessions.filter(
+            (s) =>
+              s.id === args.where.id &&
+              s.userId === args.where.userId &&
+              s.type === args.where.type &&
+              s.skipped === args.where.skipped &&
+              s.completedAt === args.where.completedAt,
+          );
+          hit.forEach((s) => (s.completedAt = args.data.completedAt ?? null));
+          return Promise.resolve({ count: hit.length });
+        }
+        const hit = sessions.filter(
+          (s) =>
+            s.userId === args.where.userId &&
+            s.source === args.where.source &&
+            s.deleted === args.where.deleted &&
+            s.lastMovedAt === null &&
+            s.prepForSessionId !== null &&
+            args.where.prepForSessionId.in.includes(s.prepForSessionId),
+        );
+        hit.forEach((s) => (s.deleted = args.data.deleted));
+        return Promise.resolve({ count: hit.length });
       },
       update: (args: {
         where: { id: string };
@@ -288,6 +338,7 @@ async function makeService(
 ) {
   const db = makePrismaDouble();
   const prisma = db.client as unknown as PrismaService;
+  const spirits = { credit: jest.fn().mockResolvedValue(1) };
   const config = {
     get: (name: string) => (name === "DLU_TZ" ? "Asia/Ho_Chi_Minh" : undefined),
   } as unknown as ConfigService;
@@ -307,10 +358,12 @@ async function makeService(
       ...(syncConflicts
         ? [{ provide: SyncConflictsService, useValue: syncConflicts }]
         : []),
+      { provide: SpiritsService, useValue: spirits },
     ],
   }).compile();
   const service = module.get<MaterializerService>(MaterializerService);
-  return { db, service };
+  const queues = module.get<{ enqueueBestEffort: jest.Mock }>(QueueService);
+  return { db, service, queues, spirits };
 }
 
 /** A lecture block for a DLU term (`now` in the tests sits in HK01 2026). */
@@ -522,6 +575,8 @@ describe("MaterializerService", () => {
         scheduledStartTime: new Date("2026-09-10T03:00:00.000Z"),
         lastMovedAt: null,
         submittedAt: null,
+        completedAt: null,
+        skipped: false,
         prepForSessionId: null,
         deleted: false,
         scheduleStudyUnitId: null,
@@ -576,6 +631,66 @@ describe("MaterializerService", () => {
       await service.materialize(USER, [submitted()], "LMS", LATER);
 
       expect(db.sessions[0].submittedAt).toEqual(LATER);
+    });
+
+    it("checks a newly seen submitted assignment off with a COMPLETE event", async () => {
+      const { db, service } = await makeService();
+
+      await service.materialize(USER, [submitted()], "LMS", FIRST);
+
+      expect(db.sessions[0].completedAt).toEqual(FIRST);
+      expect(db.events.filter((e) => e.eventType === "COMPLETE")).toHaveLength(
+        1,
+      );
+    });
+
+    it("checks an existing assignment off once, so a manual un-check sticks", async () => {
+      const { db, service } = await makeService();
+      await service.materialize(USER, [block()], "LMS", FIRST);
+
+      await service.materialize(USER, [submitted()], "LMS", LATER);
+      db.sessions[0].completedAt = null;
+      await service.materialize(USER, [submitted()], "LMS", LATER);
+
+      expect(db.sessions[0].completedAt).toBeNull();
+      expect(db.events.filter((e) => e.eventType === "COMPLETE")).toHaveLength(
+        1,
+      );
+    });
+
+    it("settles the spark and raises a done notification on completion", async () => {
+      const { db, service, spirits } = await makeService();
+
+      await service.materialize(USER, [submitted()], "LMS", FIRST);
+
+      expect(spirits.credit).toHaveBeenCalledWith(USER, FIRST);
+      const done = db.notifications.filter(
+        (n) => n.eventName === "assignment.completed",
+      );
+      expect(done).toHaveLength(1);
+      expect(done[0].content).toBe("Spark added to your egg.");
+    });
+
+    it("raises no done notification for an open assignment", async () => {
+      const { db, service, spirits } = await makeService();
+
+      await service.materialize(USER, [block()], "LMS", FIRST);
+
+      expect(spirits.credit).not.toHaveBeenCalled();
+      expect(
+        db.notifications.some((n) => n.eventName === "assignment.completed"),
+      ).toBe(false);
+    });
+
+    it("leaves a skipped assignment unchecked", async () => {
+      const { db, service } = await makeService();
+      await service.materialize(USER, [block()], "LMS", FIRST);
+      db.sessions[0].skipped = true;
+
+      await service.materialize(USER, [submitted()], "LMS", LATER);
+
+      expect(db.sessions[0].completedAt).toBeNull();
+      expect(db.events.some((e) => e.eventType === "COMPLETE")).toBe(false);
     });
   });
 
@@ -1302,5 +1417,102 @@ describe("MaterializerService", () => {
       expect(outcome.created).toBe(1);
       expect(db.sessions).toHaveLength(2);
     });
+  });
+});
+
+describe("automatic prep plans (level-up plan, Phase 1)", () => {
+  const prepCalls = (queues: { enqueueBestEffort: jest.Mock }) =>
+    (queues.enqueueBestEffort.mock.calls as unknown[][]).filter(
+      ([def]) => (def as { name: string }).name === "prep-plan",
+    );
+  // Blocks start in September 2026; the clock sits before them.
+  const BEFORE = new Date("2026-09-01T00:00:00.000Z");
+
+  it("queues one prep job for a new assignment, keyed by its row", async () => {
+    const { db, service, queues } = await makeService();
+
+    await service.materialize(USER, [block()], "LMS", BEFORE);
+
+    expect(prepCalls(queues)).toEqual([
+      [
+        expect.objectContaining({ name: "prep-plan" }),
+        { userId: USER, parentSessionId: db.sessions[0].id },
+        { jobId: prepJobId(db.sessions[0].id) },
+      ],
+    ]);
+  });
+
+  it("queues nothing for a lecture", async () => {
+    const { service, queues } = await makeService();
+
+    await service.materialize(USER, [lecture()], "PORTAL", BEFORE);
+
+    expect(prepCalls(queues)).toEqual([]);
+  });
+
+  it("queues nothing for an assignment already submitted", async () => {
+    const { service, queues } = await makeService();
+
+    await service.materialize(
+      USER,
+      [{ ...block(), submitted: true } as ParsedBlock],
+      "LMS",
+      BEFORE,
+    );
+
+    expect(prepCalls(queues)).toEqual([]);
+  });
+
+  it("removes an untouched prep plan when its parent goes upstream", async () => {
+    const { db, service } = await makeService();
+    await service.materialize(USER, [block()], "LMS", BEFORE);
+    const parentId = db.sessions[0].id;
+    db.sessions.push({
+      ...db.sessions[0],
+      id: "prep-1",
+      externalKey: null,
+      type: "TASK",
+      source: "AUTO",
+      prepForSessionId: parentId,
+      deleted: false,
+      lastMovedAt: null,
+    });
+
+    await service.reconcileDeleted(
+      USER,
+      "LMS",
+      ["ASSIGNMENT"],
+      new Set(),
+      BEFORE,
+    );
+
+    expect(db.sessions.find((s) => s.id === parentId)?.deleted).toBe(true);
+    expect(db.sessions.find((s) => s.id === "prep-1")?.deleted).toBe(true);
+  });
+
+  it("keeps a prep plan the student moved", async () => {
+    const { db, service } = await makeService();
+    await service.materialize(USER, [block()], "LMS", BEFORE);
+    const parentId = db.sessions[0].id;
+    db.sessions.push({
+      ...db.sessions[0],
+      id: "prep-2",
+      externalKey: null,
+      type: "TASK",
+      source: "AUTO",
+      prepForSessionId: parentId,
+      deleted: false,
+      lastMovedAt: new Date("2026-09-02T00:00:00.000Z"),
+    });
+
+    await service.reconcileDeleted(
+      USER,
+      "LMS",
+      ["ASSIGNMENT"],
+      new Set(),
+      BEFORE,
+    );
+
+    expect(db.sessions.find((s) => s.id === "prep-2")?.deleted).toBe(false);
   });
 });

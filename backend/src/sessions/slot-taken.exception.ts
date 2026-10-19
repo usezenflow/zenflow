@@ -2,7 +2,7 @@ import { ConflictException } from "@nestjs/common";
 import { SLOT_TAKEN_CODE, type SlotTakenError } from "@zenflow/shared";
 
 export const SLOT_TAKEN_MESSAGE =
-  "That alternative time now overlaps another sitting of this task.";
+  "That alternative time now overlaps another sitting of this plan.";
 
 /**
  * 409 raised by `POST /sessions/:id/slot-pick` (`chose: "alternative"`) when a

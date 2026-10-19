@@ -90,6 +90,9 @@ export class SlotPickService {
       const applied = await this.tryApplyAlternative(sessionId, proposal, user);
       if (applied) {
         await this.recordChosenPolicy(proposal.id, this.otherPolicy(proposal));
+        if (this.otherPolicy(proposal) === SchedulingModel.LINUCB) {
+          await this.schedulingFeedback.onPairwiseWin(user.id, proposal.id);
+        }
         schedulerSlotPicks.add(1, {
           policy: proposal.primaryPolicy,
           chose: "alternative",
@@ -103,6 +106,13 @@ export class SlotPickService {
     }
 
     await this.recordKeptPrimary(proposal);
+    if (
+      dto.chose === "primary" &&
+      proposal.pairwiseShown &&
+      proposal.primaryPolicy === SchedulingModel.LINUCB
+    ) {
+      await this.schedulingFeedback.onPairwiseWin(user.id, proposal.id);
+    }
     schedulerSlotPicks.add(1, {
       policy: proposal.primaryPolicy,
       chose: "primary",
@@ -245,10 +255,6 @@ export class SlotPickService {
         data: {
           scheduledStartTime: newStart,
           lastMovedAt: new Date(),
-          // A picked time is the user's choice: fix it (ADR-0022).
-          ...(existing.type === "TASK"
-            ? { anchor: "CHOSEN", anchoredAt: new Date() }
-            : {}),
         },
         include: WITH_TAGS_AND_SERIES,
       });

@@ -20,6 +20,12 @@ import type { QueueDefinition } from "../queue/queue.types";
 import { idempotencyKey } from "../queue/queue.types";
 import { resolveSemester } from "./core/semester";
 import {
+  examWindowOpen,
+  timetableNextDue,
+  type SeasonOverrides,
+} from "./core/seasonal-policy";
+import { seasonOverrides } from "./season-config";
+import {
   batchSizeFor,
   orderedPlans,
   termKey,
@@ -32,8 +38,12 @@ import {
   type ClaimedTarget,
 } from "./ingestion-schedule.service";
 import { IngestionDispatchService } from "./ingestion-dispatch.service";
-import { StudentSyncService } from "./student-sync.service";
+import {
+  DEFAULT_MARKS_PERIOD_MS,
+  StudentSyncService,
+} from "./student-sync.service";
 import { SyncRunService } from "./sync-run.service";
+import { WalkerPlanService } from "./walker-plan.service";
 import { errorMessage, isIngestionEnabled } from "./watcher-support";
 
 /** What one tick did, per kind — returned for tests and logged when non-empty. */
@@ -62,10 +72,8 @@ const EMPTY_TICK: TickSummary = {
 
 const DEFAULT_MAX_BACKLOG = 500;
 
-const DAY_MS = 24 * 60 * 60_000;
-
 /** Profile and marks jobs queued per tick; the day-bucketed ids cap repeats. */
-const STUDENT_JOBS_PER_TICK = 5;
+const DEFAULT_STUDENT_JOBS_PER_TICK = 5;
 
 /** About an hour of 5 second ticks. */
 const PRUNE_EVERY_TICKS = 720;
@@ -125,6 +133,9 @@ export class IngestionTickerService implements OnModuleInit {
   private readonly budgetMs: number;
   private readonly maxBacklog: number;
   private readonly dluTimezone: string;
+  private readonly season: SeasonOverrides;
+  private readonly marksPeriodMs: number;
+  private readonly studentJobsPerTick: number;
   /** Kinds already warned about for an undersized batch cap (once per boot). */
   private readonly warnedUndersized = new Set<string>();
   /** In-process guard: a tick must not start while the previous one runs. */
@@ -142,8 +153,17 @@ export class IngestionTickerService implements OnModuleInit {
     private readonly lmsClient: LMSService,
     private readonly portalClient: PortalAPIService,
     private readonly killSwitch: KillSwitchService,
+    private readonly walkers: WalkerPlanService,
   ) {
     this.dluTimezone = this.config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
+    this.season = seasonOverrides(this.config);
+    this.marksPeriodMs =
+      Number(this.config.get("INGESTION_MARKS_PERIOD_MS")) ||
+      DEFAULT_MARKS_PERIOD_MS;
+    this.studentJobsPerTick = this.positiveConfig(
+      "INGESTION_STUDENT_JOBS_PER_TICK",
+      DEFAULT_STUDENT_JOBS_PER_TICK,
+    );
     this.maxBatch = this.positiveConfig("INGESTION_TICK_MAX_BATCH", 20);
     this.maxBacklog = this.positiveConfig(
       "INGESTION_QUEUE_MAX_BACKLOG",
@@ -252,6 +272,18 @@ export class IngestionTickerService implements OnModuleInit {
           break;
         }
         if (this.upstreamOpen(plan.provider, paused)) continue;
+        // Exams are only fetched inside the exam window of the current term.
+        if (
+          plan.kind === "PORTAL_EXAM" &&
+          !examWindowOpen(
+            now,
+            resolveSemester(now, this.dluTimezone, 0),
+            this.dluTimezone,
+            this.season,
+          )
+        ) {
+          continue;
+        }
         // A new term makes every student's discovery due, whatever its period.
         if (plan.kind === "PORTAL_DISCOVERY") {
           await this.schedule.pullForwardStaleDiscovery(
@@ -325,6 +357,10 @@ export class IngestionTickerService implements OnModuleInit {
           now,
           Math.min(batchSize, roomClaims),
           this.gateFor(plan.kind, now),
+          await this.nextDueFor(plan, now),
+          plan.kind === "PORTAL_TIMETABLE"
+            ? await this.walkers.preferred(now)
+            : [],
         );
         if (targets.length === 0) continue;
         summary.byKind[plan.kind] = targets.length;
@@ -368,6 +404,28 @@ export class IngestionTickerService implements OnModuleInit {
 
     summary.pausedProviders = [...paused];
     return summary;
+  }
+
+  /**
+   * When a claimed row of `plan` is due again, where that is not simply one period
+   * out: the timetable rolls until discovery covers most students, then waits for
+   * the next week start.
+   */
+  private async nextDueFor(
+    plan: SyncKindPlan,
+    now: Date,
+  ): Promise<Date | undefined> {
+    if (plan.kind !== "PORTAL_TIMETABLE") return undefined;
+    const share = await this.schedule.discoveredShare(
+      termKey(resolveSemester(now, this.dluTimezone)),
+    );
+    return timetableNextDue({
+      now,
+      tz: this.dluTimezone,
+      rollingMs: plan.targetPeriodMs,
+      discoveredShare: share,
+      overrides: this.season,
+    });
   }
 
   /** True (and remembered in `paused`) when `provider`'s breaker is open. */
@@ -498,19 +556,21 @@ export class IngestionTickerService implements OnModuleInit {
 
   /**
    * Profile for students without one, and marks for those whose marks are
-   * missing or older than a day. Job ids carry a day bucket, so a failing
-   * account is retried daily rather than every tick.
+   * missing or due. Job ids carry a bucket, so a failing
+   * account is retried once per marks period rather than every tick.
    */
   private async enqueueStudentJobs(
     now: Date,
     summary: TickSummary,
   ): Promise<void> {
-    const day = Math.floor(now.getTime() / DAY_MS);
+    // Marks come round every `INGESTION_MARKS_PERIOD_MS` once due, so their job id is
+    // bucketed by that period, not by the day.
+    const marksBucket = Math.floor(now.getTime() / this.marksPeriodMs);
     try {
       const missing = await this.prisma.integration.findMany({
         where: { provider: "PORTAL", user: { studentProfile: null } },
         select: { id: true, userId: true },
-        take: STUDENT_JOBS_PER_TICK,
+        take: this.studentJobsPerTick,
       });
       for (const row of missing) {
         await this.dispatch.enqueueProfile(row.userId, row.id, now);
@@ -519,10 +579,10 @@ export class IngestionTickerService implements OnModuleInit {
       }
       for (const due of await this.student.dueForMarks(
         now,
-        STUDENT_JOBS_PER_TICK,
+        this.studentJobsPerTick,
       )) {
         await this.queue.enqueue(PORTAL_MARKS_QUEUE, due, {
-          jobId: idempotencyKey("marks", due.integrationId, day),
+          jobId: idempotencyKey("marks", due.integrationId, marksBucket),
         });
       }
     } catch (error) {

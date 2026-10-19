@@ -13,8 +13,10 @@ import { MailModule } from "./mail/mail.module";
 import { UsersModule } from "./users/users.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { StreaksModule } from "./streaks/streaks.module";
+import { SpiritsModule } from "./spirits/spirits.module";
 import { CourseColoursModule } from "./course-colours/course-colours.module";
 import { TagsModule } from "./tags/tags.module";
+import { PlacesModule } from "./places/places.module";
 import { FilesModule } from "./files/files.module";
 import { SchedulerModule } from "./scheduler/scheduler.module";
 import { ScheduleModule } from "@nestjs/schedule";
@@ -39,6 +41,7 @@ import {
 } from "./common/config/role";
 import { QueueModule } from "./queue/queue.module";
 import { NotifyWorkerModule } from "./notifications/notify-worker.module";
+import { PrepPlanWorkerModule } from "./scheduler/prep-plan-worker.module";
 import { IngestionWorkerModule } from "./ingestion/ingestion-worker.module";
 import {
   LmsFetchWorkerModule,
@@ -75,6 +78,7 @@ const jobModules = [
       ]
     : []),
   ...(consumesQueue(role, "notify") ? [NotifyWorkerModule] : []),
+  ...(consumesQueue(role, "prep-plan") ? [PrepPlanWorkerModule] : []),
   ...(consumesQueue(role, "portal-fetch") ? [PortalFetchWorkerModule] : []),
   ...(consumesQueue(role, "lms-fetch") ? [LmsFetchWorkerModule] : []),
 ];
@@ -258,15 +262,16 @@ const jobModules = [
         // is a fixed literal and deliberately not configurable (see the note on
         // `IngestionTickerService`).
         //
-        // How often each student should be refreshed, per kind. The LMS calendar
-        // is the only frequent one: a deadline can move at any hour, while a
-        // timetable or exam schedule changes a handful of times a term.
-        // DKHP is asked once per term (a clean pass parks the row until the next
-        // term's window opens); this period is only the safety net.
+        // How often each student should be refreshed, per kind. Discovery is hourly
+        // around a term change (a clean pass parks the row until the next term's
+        // window opens); the timetable rolls every 3 h until discovery covers 95%
+        // of students and then runs at each week start; the exam fetch is hourly
+        // inside the exam window until it covers the student's enrolment; the LMS
+        // calendar runs every 15 minutes.
         INGESTION_PORTAL_DISCOVERY_PERIOD_MS: Joi.number()
           .integer()
           .positive()
-          .default(120 * 24 * 60 * 60_000),
+          .default(60 * 60_000),
         INGESTION_LMS_DISCOVERY_PERIOD_MS: Joi.number()
           .integer()
           .positive()
@@ -274,15 +279,38 @@ const jobModules = [
         INGESTION_TIMETABLE_PERIOD_MS: Joi.number()
           .integer()
           .positive()
-          .default(24 * 60 * 60_000),
+          .default(3 * 60 * 60_000),
         INGESTION_EXAM_PERIOD_MS: Joi.number()
           .integer()
           .positive()
-          .default(24 * 60 * 60_000),
+          .default(60 * 60_000),
         INGESTION_LMS_CALENDAR_PERIOD_MS: Joi.number()
           .integer()
           .positive()
+          .default(15 * 60_000),
+        // Profile and marks jobs the ticker starts per 5 s tick.
+        INGESTION_STUDENT_JOBS_PER_TICK: Joi.number()
+          .integer()
+          .positive()
+          .default(5),
+        // Marks are refetched this often once due (see `StudentSyncService`).
+        INGESTION_MARKS_PERIOD_MS: Joi.number()
+          .integer()
+          .positive()
           .default(60 * 60_000),
+        // Seasonal overrides. Unset in production, where the academic calendar decides;
+        // a benchmark sets them to compress weeks into seconds.
+        // `open` / `closed` force the exam window; `auto` follows the calendar.
+        INGESTION_EXAM_WINDOW: Joi.string()
+          .valid("auto", "open", "closed")
+          .default("auto"),
+        // Replaces "start of the next ISO week" as the steady timetable cadence.
+        INGESTION_TIMETABLE_WEEKLY_MS: Joi.number().integer().positive(),
+        // Replaces the one-week wait between a student's first exam ending and marks.
+        INGESTION_MARKS_AFTER_EXAMS_MS: Joi.number()
+          .integer()
+          .min(0)
+          .default(7 * 24 * 60 * 60_000),
         // Hard ceiling on how many students one tick may claim for one kind.
         // The safety rail that makes "the load is spread" a property of the code
         // rather than of whoever last edited this file. A measurement run lifts
@@ -332,7 +360,7 @@ const jobModules = [
         INGESTION_CACHE_TTL_MS: Joi.number()
           .integer()
           .positive()
-          .default(7 * 24 * 60 * 60_000),
+          .default(30 * 24 * 60 * 60_000),
         // Hard staleness ceiling on a student's confirmed set. Past this a walk
         // pass stops trusting discovery and does the full live walk. Two
         // discovery periods, so one missed pass is tolerated.
@@ -541,11 +569,13 @@ const jobModules = [
     MailModule,
     SessionsModule,
     StreaksModule,
+    SpiritsModule,
     CourseColoursModule,
     CryptoModule,
     LMSModule,
     PortalAPIModule,
     TagsModule,
+    PlacesModule,
     FilesModule,
     // Background cron providers (MatrixDecayService, SessionOutcomeService)
     // plus HeuristicScheduleService / BanditScheduleService, the single-session

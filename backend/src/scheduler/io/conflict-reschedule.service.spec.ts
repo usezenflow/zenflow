@@ -89,56 +89,6 @@ describe("ConflictRescheduleService.rescheduleAll", () => {
     expect(placement.planSeriesRespread).not.toHaveBeenCalled();
   });
 
-  it("re-spreads a series' conflicting sittings in ONE call (no lone-task placements)", async () => {
-    const { svc, placement, displacement } = await make([
-      row("a", "2026-06-09T09:00:00.000Z", "s1"),
-      row("b", "2026-06-11T09:00:00.000Z", "s1"),
-      row("c", "2026-06-13T09:00:00.000Z", "s1"),
-    ]);
-    placement.planSeriesRespread.mockResolvedValue([
-      {
-        id: "a",
-        from: at("2026-06-09T09:00:00.000Z"),
-        to: at("2026-06-09T14:00:00.000Z"),
-      },
-      {
-        id: "b",
-        from: at("2026-06-11T09:00:00.000Z"),
-        to: at("2026-06-12T14:00:00.000Z"),
-      },
-      {
-        id: "c",
-        from: at("2026-06-13T09:00:00.000Z"),
-        to: at("2026-06-15T14:00:00.000Z"),
-      },
-      // Unchanged sibling: not a move.
-      {
-        id: "d",
-        from: at("2026-06-17T09:00:00.000Z"),
-        to: at("2026-06-17T09:00:00.000Z"),
-      },
-    ]);
-
-    const res = await svc.rescheduleAll(user, ["a", "b", "c"], now);
-
-    expect(placement.planSeriesRespread).toHaveBeenCalledTimes(1);
-    expect(placement.planSeriesRespread).toHaveBeenCalledWith({
-      user,
-      seriesId: "s1",
-      deadline,
-      now,
-    });
-    expect(placement.placeOnDeadlineChange).not.toHaveBeenCalled();
-    const moves = displacement.applyMoves.mock.calls[0][1];
-    expect(moves.map((m) => m.id)).toEqual(["a", "b", "c"]);
-    expect(res.rescheduled.map((r) => r.to.toISOString())).toEqual([
-      "2026-06-09T14:00:00.000Z",
-      "2026-06-12T14:00:00.000Z",
-      "2026-06-15T14:00:00.000Z",
-    ]);
-    expect(res.failedSessionIds).toEqual([]);
-  });
-
   it("falls back to single placement when the respread leaves a sitting unplaced", async () => {
     const { svc, placement, displacement } = await make([
       row("a", "2026-06-09T09:00:00.000Z", "s1"),

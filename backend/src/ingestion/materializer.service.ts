@@ -8,11 +8,18 @@ import {
   type SessionSource,
 } from "../../generated/prisma";
 import { PostgresErrorCode } from "../prisma/error-codes";
+import { PREP_QUEUE, prepJobId } from "../queue/queues";
+import { QueueService } from "../queue/queue.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { insertFixedSession } from "../sessions/fixed-session-writer";
+import { toSessionSnapshot } from "../sessions/session-mapper";
+import { recordSessionEvent } from "../sessions/session-events";
+import { WITH_TAGS_AND_SERIES } from "../sessions/types/session-row";
+import { SpiritsService } from "../spirits/spirits.service";
 import { TagsService } from "../tags/tags.service";
 import { monthsFrom, resolveSemester } from "./core/semester";
 import { digestNotifications, SyncDigest } from "./core/sync-digest";
+import { prepTargetOf } from "./core/prep-target";
 import type {
   IngestedSessionType,
   ParsedBlock,
@@ -169,8 +176,10 @@ export class MaterializerService {
     private readonly prisma: PrismaService,
     private readonly tagsService: TagsService,
     private readonly notifications: NotificationsService,
+    private readonly queues: QueueService,
     config: ConfigService,
     @Optional() private readonly syncConflicts?: SyncConflictsService,
+    @Optional() private readonly spirits?: SpiritsService,
   ) {
     this.dluTz = config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
   }
@@ -220,6 +229,9 @@ export class MaterializerService {
         outcome[createdId ? "created" : "unchanged"] += 1;
         if (createdId) {
           runDigest.add(digestItemOf(block, "created", createdId), source);
+          await this.enqueuePrepIfDue(userId, block, createdId, now);
+          if (block.type === "ASSIGNMENT" && submittedAtOf(block, now))
+            await this.announceCompleted(userId, createdId, block, now);
         }
         continue;
       }
@@ -228,10 +240,15 @@ export class MaterializerService {
         (block as Partial<ParsedLmsItem>).submitted &&
         !existing.submittedAt
       ) {
-        await this.prisma.session.update({
-          where: { id: existing.id },
-          data: { submittedAt: now },
+        const completed = await this.prisma.$transaction(async (tx) => {
+          await tx.session.update({
+            where: { id: existing.id },
+            data: { submittedAt: now },
+          });
+          return this.completeSubmitted(tx, userId, existing.id, now);
         });
+        if (completed)
+          await this.announceCompleted(userId, existing.id, block, now);
       }
 
       if (!differsFromUpstream(existing, block)) {
@@ -310,6 +327,10 @@ export class MaterializerService {
         data: { deleted: true },
       });
     }
+    await this.retirePrepPlans(
+      userId,
+      removable.map((s) => s.id),
+    );
 
     const runDigest = digest ?? new SyncDigest(new Date());
     for (const s of removable) {
@@ -386,6 +407,10 @@ export class MaterializerService {
         data: { deleted: true },
       });
     }
+    await this.retirePrepPlans(
+      userId,
+      rows.map((r) => r.id),
+    );
 
     const runDigest = digest ?? new SyncDigest(new Date());
     for (const row of rows) {
@@ -432,6 +457,152 @@ export class MaterializerService {
    * Insert the session. Returns its id, or `null` when a concurrent run
    * already wrote the same `externalKey`.
    */
+  /**
+   * Queue the automatic prep plan for a new exam or assignment (level-up plan,
+   * Phase 1). One job per parent: `jobId` makes a repeat run a no-op.
+   */
+  private async enqueuePrepIfDue(
+    userId: string,
+    block: ParsedBlock,
+    parentSessionId: string,
+    now: Date,
+  ): Promise<void> {
+    const submitted = (block as Partial<ParsedLmsItem>).submitted === true;
+    if (!prepTargetOf(block, now, submitted)) return;
+    await this.queues.enqueueBestEffort(
+      PREP_QUEUE,
+      { userId, parentSessionId },
+      { jobId: prepJobId(parentSessionId) },
+    );
+  }
+
+  /**
+   * Remove the prep plans of upstream items that just went away. A plan the
+   * student moved is kept: it is theirs now (`lastMovedAt`).
+   */
+  private async retirePrepPlans(
+    userId: string,
+    parentIds: string[],
+  ): Promise<void> {
+    if (parentIds.length === 0) return;
+    await this.prisma.session.updateMany({
+      where: {
+        userId,
+        source: "AUTO",
+        deleted: false,
+        lastMovedAt: null,
+        prepForSessionId: { in: parentIds },
+      },
+      data: { deleted: true },
+    });
+  }
+
+  /**
+   * A submitted LMS assignment is done: check it off the way the user would,
+   * so its `COMPLETE` event feeds sparks (ADR-0026). Runs once, when the
+   * submission is first seen, so a later manual un-check sticks. A skipped or
+   * already completed row is left alone.
+   */
+  private async completeSubmitted(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    sessionId: string,
+    now: Date,
+  ): Promise<boolean> {
+    const { count } = await tx.session.updateMany({
+      where: {
+        id: sessionId,
+        userId,
+        type: "ASSIGNMENT",
+        skipped: false,
+        completedAt: null,
+      },
+      data: { completedAt: now },
+    });
+    if (!count) return false;
+    const row = await tx.session.findUniqueOrThrow({
+      where: { id: sessionId },
+      include: WITH_TAGS_AND_SERIES,
+    });
+    await tx.sessionEvent.create({
+      data: {
+        sessionId,
+        userId,
+        eventType: "COMPLETE",
+        newSnapshot: toSessionSnapshot(row),
+      },
+    });
+    recordSessionEvent("COMPLETE");
+    await this.completePreps(tx, userId, sessionId, now);
+    return true;
+  }
+
+  /** The prep plans for a submitted assignment are moot: check them off too. */
+  private async completePreps(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    targetId: string,
+    now: Date,
+  ): Promise<void> {
+    const preps = await tx.session.findMany({
+      where: {
+        userId,
+        prepForSessionId: targetId,
+        deleted: false,
+        skipped: false,
+        completedAt: null,
+      },
+      select: { id: true },
+    });
+    for (const { id } of preps) {
+      await tx.session.update({ where: { id }, data: { completedAt: now } });
+      const row = await tx.session.findUniqueOrThrow({
+        where: { id },
+        include: WITH_TAGS_AND_SERIES,
+      });
+      await tx.sessionEvent.create({
+        data: {
+          sessionId: id,
+          userId,
+          eventType: "COMPLETE",
+          newSnapshot: toSessionSnapshot(row),
+        },
+      });
+      recordSessionEvent("COMPLETE");
+    }
+  }
+
+  /**
+   * After the completion commits: settle the spark it earns, then raise the
+   * "done" notification (live stream and push). Best-effort, so a failure never
+   * fails the sync.
+   */
+  private async announceCompleted(
+    userId: string,
+    sessionId: string,
+    block: ParsedBlock,
+    now: Date,
+  ): Promise<void> {
+    try {
+      const sparks = (await this.spirits?.credit(userId, now)) ?? 0;
+      await this.raise(userId, {
+        sessionId,
+        title: `Assignment done: ${block.title}`,
+        content:
+          sparks > 0 ? "Spark added to your egg." : "Checked off from LMS.",
+        eventEndsAt: new Date(
+          block.scheduledStartTime.getTime() + block.durationMinutes * 60_000,
+        ),
+        materializeSession: false,
+        eventName: "assignment.completed",
+      });
+    } catch (err) {
+      this.logger.warn(
+        `completion notification failed: ${(err as Error).message}`,
+      );
+    }
+  }
+
   private async create(
     userId: string,
     block: ParsedBlock,
@@ -464,6 +635,9 @@ export class MaterializerService {
           submittedAt: submittedAtOf(block, now),
         });
         newId = row.id;
+        if (row.submittedAt) {
+          await this.completeSubmitted(tx, userId, row.id, now);
+        }
 
         // Same default reminder as an in-app task (0 = none).
         const owner = await tx.user.findUnique({

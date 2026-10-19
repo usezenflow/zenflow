@@ -132,7 +132,7 @@ export class OccurrenceCacheService {
     // One TTL for timetable and Moodle alike: past it, one student's live walk
     // refreshes the section/course and populates every classmate.
     const ttl = Number(config.get<number | string>("INGESTION_CACHE_TTL_MS"));
-    this.ttlMs = Number.isFinite(ttl) && ttl > 0 ? ttl : 7 * 24 * 60 * 60_000;
+    this.ttlMs = Number.isFinite(ttl) && ttl > 0 ? ttl : 30 * 24 * 60 * 60_000;
   }
 
   // ── recording what a walk found ──────────────────────────────────────────

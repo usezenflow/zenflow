@@ -401,11 +401,22 @@ describe("SessionOutcomeService.sweep", () => {
     expect(written[9]).toBeCloseTo(0.05);
   });
 
-  it("does not reinforce the preference matrix for a missed placement", async () => {
-    const { service, userUpdates } = await makeService([[row({ id: "s1" })]]);
+  it("lowers the preference matrix on the kept hour for a lapse", async () => {
+    const { service, userUpdates } = await makeService([
+      [
+        row({
+          id: "s1",
+          scheduledStartTime: new Date("2026-06-15T09:00:00.000Z"), // Monday 09:00 UTC
+        }),
+      ],
+    ]);
 
-    await service.sweep(MISS_NOW);
+    // Ends 10:00 on the 15th; the miss cutoff is 24 h after the end.
+    await service.sweep(new Date("2026-06-16T11:00:00.000Z"));
 
-    expect(userUpdates).toHaveLength(0);
+    expect(userUpdates).toHaveLength(1);
+    const written = userUpdates[0].data.preferenceMatrix as number[];
+    // Monday 09:00 → index 9; PREFERENCE_LEARNING_RATE · 0.25 · LAPSED (-0.25).
+    expect(written[9]).toBeCloseTo(-0.0125);
   });
 });

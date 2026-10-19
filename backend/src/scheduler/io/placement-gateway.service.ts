@@ -4,7 +4,6 @@ import { ClsService } from "nestjs-cls";
 import {
   PLACEMENT_CONTRACT_VERSION,
   SCHEDULING_ARMS,
-  type ChosenMovePolicy,
   type InfeasiblePolicy,
   type InfeasibleContext,
   type IntervalMs,
@@ -252,7 +251,6 @@ export class PlacementGateway {
     user: User,
     task: PlaceableTask,
     policy: InfeasiblePolicy | undefined,
-    chosenMoves: ChosenMovePolicy = "ASK",
   ): Promise<PlaceResult> {
     const { result: first, phases } = await this.placeTimed(req);
     if (
@@ -266,7 +264,6 @@ export class PlacementGateway {
       task,
       new Date(req.nowMs),
       policy,
-      chosenMoves,
     );
     const second = await this.placeTimed(
       { ...req, requestId: `${req.requestId}-2`, infeasible },
@@ -280,7 +277,6 @@ export class PlacementGateway {
     task: PlaceableTask,
     now: Date,
     policy?: InfeasiblePolicy,
-    chosenMoves: ChosenMovePolicy = "ASK",
   ): Promise<InfeasibleContext> {
     const tz = user.timezone;
     const deadlineMs = task.deadline.getTime();
@@ -307,13 +303,11 @@ export class PlacementGateway {
     ]);
     return {
       ...(policy ? { policy } : {}),
-      chosenMoves,
       flexible: windowItems.filter(isFlexible).map((it) => ({
         id: it.id as string,
         durationMinutes: it.durationMinutes,
         deadlineMs: it.deadlineMs as number,
         startMs: it.start,
-        anchor: it.anchor ?? "AUTO",
         completed: it.completed ?? false,
       })),
       fixed: windowItems

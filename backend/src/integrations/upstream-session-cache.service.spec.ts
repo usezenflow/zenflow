@@ -5,6 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import {
   UpstreamSessionCache,
   upstreamKey,
+  upstreamTtlSeconds,
 } from "./upstream-session-cache.service";
 
 const USER = "u1";
@@ -80,7 +81,7 @@ describe("UpstreamSessionCache", () => {
       upstreamKey(USER, "portal"),
       expect.any(String),
       "EX",
-      3 * 60 * 60,
+      100 * 60,
     );
   });
 
@@ -241,5 +242,59 @@ describe("UpstreamSessionCache", () => {
       ok: true,
       token: "t",
     });
+  });
+});
+
+describe("upstreamTtlSeconds", () => {
+  it("keeps the defaults when no override is set", () => {
+    expect(upstreamTtlSeconds("portal", {})).toBe(100 * 60);
+    expect(upstreamTtlSeconds("dkhp", {})).toBe(100 * 60);
+    expect(upstreamTtlSeconds("lms", {})).toBe(50 * 60);
+  });
+
+  it("reads the override per kind, with dkhp sharing the portal variable", () => {
+    const env = {
+      UPSTREAM_SESSION_TTL_PORTAL_S: "900",
+      UPSTREAM_SESSION_TTL_LMS_S: "300",
+    };
+    expect(upstreamTtlSeconds("portal", env)).toBe(900);
+    expect(upstreamTtlSeconds("dkhp", env)).toBe(900);
+    expect(upstreamTtlSeconds("lms", env)).toBe(300);
+  });
+
+  it("treats 0 as off and an invalid value as the default", () => {
+    expect(upstreamTtlSeconds("lms", { UPSTREAM_SESSION_TTL_LMS_S: "0" })).toBe(
+      0,
+    );
+    expect(
+      upstreamTtlSeconds("lms", { UPSTREAM_SESSION_TTL_LMS_S: "soon" }),
+    ).toBe(50 * 60);
+    expect(
+      upstreamTtlSeconds("lms", { UPSTREAM_SESSION_TTL_LMS_S: "-5" }),
+    ).toBe(50 * 60);
+  });
+});
+
+describe("UpstreamSessionCache with the cache off", () => {
+  const original = process.env.UPSTREAM_SESSION_TTL_PORTAL_S;
+  beforeEach(() => {
+    process.env.UPSTREAM_SESSION_TTL_PORTAL_S = "0";
+  });
+  afterEach(() => {
+    if (original === undefined)
+      delete process.env.UPSTREAM_SESSION_TTL_PORTAL_S;
+    else process.env.UPSTREAM_SESSION_TTL_PORTAL_S = original;
+  });
+
+  it("logs in on every call and stores nothing", async () => {
+    const { cache, redis } = build();
+    const login = jest.fn().mockResolvedValue({ ok: true, token: "t1" });
+
+    await cache.getOrLogin(USER, "portal", login);
+    await cache.getOrLogin(USER, "portal", login);
+
+    expect(login).toHaveBeenCalledTimes(2);
+    expect(redis.get).not.toHaveBeenCalled();
+    expect(redis.set).not.toHaveBeenCalled();
   });
 });

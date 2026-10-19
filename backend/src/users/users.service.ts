@@ -48,20 +48,13 @@ export class UsersService {
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
-    const { onboarded, seenTip, focusBand, ...rest } = updateUserDto;
+    const { onboarded, focusBand, ...rest } = updateUserDto;
     try {
       if (onboarded) {
         // Idempotent: only the first completion stamps the time.
         await this.prisma.user.updateMany({
           where: { id, onboardedAt: null },
           data: { onboardedAt: new Date() },
-        });
-      }
-      if (seenTip) {
-        // Atomic and idempotent: only appends when the id isn't already there.
-        await this.prisma.user.updateMany({
-          where: { id, NOT: { seenTips: { has: seenTip } } },
-          data: { seenTips: { push: seenTip } },
         });
       }
       if (focusBand) await this.setFocusBand(id, focusBand);

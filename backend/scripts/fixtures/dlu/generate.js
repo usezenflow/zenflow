@@ -620,8 +620,16 @@ const portalSectionsOut = [...sections.values()].map((sec) => ({
   students: sec.students,
 }));
 
-// Reference week: tuan 44, 2026-2027 HK01 -> Monday 26/10/2026.
+// Reference week: the ISO week of WEEK_DATES[0] (Monday). `tuan` is derived from it so the
+// fake server's week shift (requested week - tuan) starts from the dates the rows carry.
 const WEEK_DATES = ["12/10/2026", "13/10/2026", "14/10/2026", "15/10/2026", "16/10/2026", "17/10/2026", "18/10/2026"];
+const REF_TUAN = (() => {
+  const [d, m, y] = WEEK_DATES[0].split("/").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const jan1 = Date.UTC(t.getUTCFullYear(), 0, 1);
+  return Math.ceil(((t.getTime() - jan1) / 86400000 + 1) / 7);
+})();
 const timetableRows = {};
 let weekScheduleSeq = 900000000;
 for (const sec of sections.values()) {
@@ -707,8 +715,8 @@ write(
 );
 write(
   "portal-timetable.json",
-  { namhoc: "2026-2027", hocky: "HK01", tuan: 44, rows: timetableRows },
-  "One concrete week (tuan 44 -> Mon 26/10/2026) expanded from portal-sections.json into PortalTimetableRow shape, per student. WeekScheduleID is the per-meeting id parse-portal.ts keys move/delete detection on.",
+  { namhoc: "2026-2027", hocky: "HK01", tuan: REF_TUAN, rows: timetableRows },
+  `One concrete week (tuan ${REF_TUAN} -> Mon ${WEEK_DATES[0]}) expanded from portal-sections.json into PortalTimetableRow shape, per student. WeekScheduleID is the per-meeting id parse-portal.ts keys move/delete detection on.`,
 );
 write(
   "portal-exams.json",
@@ -721,5 +729,36 @@ write(
   "studentId -> POST /api/student/getAllRegistHistory events (the whole log; the fake server filters by the asked year/term). An event log: Status 1 = registered, 0 = cancelled, so the current sections are the latest event per CurriculumID with Status 1. Includes register/cancel/register, register-then-cancel and previous-term cases.",
 );
 write("portal-year-term.json", yearTermOut);
+write(
+  "portal-marks.json",
+  marksOut,
+  "studentId -> PortalMarksYear[] (GET /api/student/marks): every term with per-course scores, letters and credits. The fake server returns the student's own years, so each student has a different GPA and fail rate.",
+);
+// Profile per student (GET /api/student/info and getstudyprogram), built from the
+// same records the students file uses.
+const profileOut = {};
+for (const student of students) {
+  profileOut[student.id] = {
+    info: {
+      HoTen: student.name,
+      GioiTinh: student.gender,
+      KhoaHoc: "Khóa 47",
+      LopSinhVien: student.cls,
+    },
+    studyPrograms: [
+      {
+        StudentID: student.id,
+        StudyProgramID: student.dept.program,
+        StudyProgramName: student.dept.program,
+        Type: 1,
+      },
+    ],
+  };
+}
+write(
+  "portal-profile.json",
+  profileOut,
+  "studentId -> { info, studyPrograms }: the profile (GET /api/student/info) and study programs (getstudyprogram) the portal returns for that student.",
+);
 
 console.log(`\n${students.length} students, ${sections.size} current-term sections, ${[...sections.values()].reduce((n, s) => n + s.students.length, 0)} section-enrollments.`);

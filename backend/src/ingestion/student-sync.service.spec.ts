@@ -88,3 +88,91 @@ describe("StudentSyncService.syncProfile", () => {
     });
   });
 });
+
+describe("StudentSyncService.dueForMarks", () => {
+  const NOW = new Date("2026-11-20T03:00:00.000Z"); // HK01 2026-2027
+  const HOUR = 60 * 60_000;
+  const DAY = 24 * HOUR;
+
+  async function marksService(
+    profiles: { userId: string; marksFetchedAt: Date | null }[],
+    exams: { userId: string; start: Date }[],
+    env: Record<string, unknown> = {},
+  ) {
+    const prisma = {
+      studentProfile: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue(
+            profiles.map((p) => ({ ...p, integrationId: `i-${p.userId}` })),
+          ),
+      },
+      session: {
+        findMany: jest.fn().mockResolvedValue(
+          exams.map((e) => ({
+            userId: e.userId,
+            scheduledStartTime: e.start,
+            durationMinutes: 90,
+          })),
+        ),
+      },
+    };
+    const module = await Test.createTestingModule({
+      providers: [
+        StudentSyncService,
+        { provide: PrismaService, useValue: prisma },
+        {
+          provide: ConfigService,
+          useValue: { get: (key: string) => env[key] },
+        },
+        { provide: PortalAPIService, useValue: {} },
+        { provide: PortalSessionService, useValue: {} },
+        { provide: QueueService, useValue: {} },
+        { provide: NotificationsService, useValue: {} },
+      ],
+    }).compile();
+    return module.get(StudentSyncService);
+  }
+
+  it("always includes a student whose marks were never fetched", async () => {
+    const service = await marksService(
+      [{ userId: "u1", marksFetchedAt: null }],
+      [],
+    );
+    expect(await service.dueForMarks(NOW, 5)).toEqual([
+      { userId: "u1", integrationId: "i-u1" },
+    ]);
+  });
+
+  it("waits a week after the first exam ends before refetching", async () => {
+    const stale = new Date(NOW.getTime() - 2 * HOUR);
+    const early = await marksService(
+      [{ userId: "u1", marksFetchedAt: stale }],
+      [{ userId: "u1", start: new Date(NOW.getTime() - 3 * DAY) }],
+    );
+    expect(await early.dueForMarks(NOW, 5)).toEqual([]);
+
+    const later = await marksService(
+      [{ userId: "u1", marksFetchedAt: stale }],
+      [{ userId: "u1", start: new Date(NOW.getTime() - 8 * DAY) }],
+    );
+    expect(await later.dueForMarks(NOW, 5)).toHaveLength(1);
+  });
+
+  it("ignores a student with no exam, however stale the marks", async () => {
+    const service = await marksService(
+      [{ userId: "u1", marksFetchedAt: new Date(NOW.getTime() - 5 * DAY) }],
+      [],
+    );
+    expect(await service.dueForMarks(NOW, 5)).toEqual([]);
+  });
+
+  it("honours the wait override", async () => {
+    const service = await marksService(
+      [{ userId: "u1", marksFetchedAt: new Date(NOW.getTime() - 2 * HOUR) }],
+      [{ userId: "u1", start: new Date(NOW.getTime() - 3 * HOUR) }],
+      { INGESTION_MARKS_AFTER_EXAMS_MS: 0 },
+    );
+    expect(await service.dueForMarks(NOW, 5)).toHaveLength(1);
+  });
+});

@@ -88,7 +88,7 @@ describe("SyncConflictsService.detectAndNotify", () => {
       conflictSessionIds: string[];
     };
     expect(dto.eventName).toBe("sync_conflict.lecture");
-    expect(dto.title).toBe("1 task clashes with your timetable");
+    expect(dto.title).toBe("1 plan clashes with your timetable");
     expect(dto.content).toBe("Reschedule them now?");
     expect(dto.conflictSessionIds).toEqual(["t1"]);
     expect(notifications.notify).toHaveBeenCalledTimes(1);

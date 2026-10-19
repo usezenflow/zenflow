@@ -166,12 +166,12 @@ describe("Vietnamese notification delivery", () => {
           eventName: "sync_conflict.lecture",
           title: "Schedule conflicts after syncing your timetable",
           content:
-            "After syncing with your timetable, we detected 2 conflicts with your own tasks. Reschedule them all?",
+            "After syncing with your timetable, we detected 2 conflicts with your own plans. Reschedule them all?",
         },
         "VI_VN",
       ).content,
     ).toBe(
-      "Sau khi đồng bộ thời khóa biểu, đã phát hiện 2 lịch trùng với các công việc của bạn. Sắp xếp lại tất cả?",
+      "Sau khi đồng bộ thời khóa biểu, đã phát hiện 2 lịch trùng với các kế hoạch của bạn. Sắp xếp lại tất cả?",
     );
   });
 
@@ -247,13 +247,13 @@ describe("Vietnamese notification delivery", () => {
       localizeNotification(
         {
           eventName: "sync_conflict.exam",
-          title: "3 tasks clash with your exams",
+          title: "3 plans clash with your exams",
           content: "Reschedule them now?",
         },
         "VI_VN",
       ),
     ).toMatchObject({
-      title: "3 công việc trùng với lịch thi",
+      title: "3 kế hoạch trùng với lịch thi",
       content: "Sắp xếp lại ngay?",
     });
   });

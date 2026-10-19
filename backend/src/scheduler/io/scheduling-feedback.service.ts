@@ -8,7 +8,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { BanditArmStateRepository } from "../../bandit/bandit-arm-state.repository";
 import { BanditService } from "../../bandit/bandit.service";
 import { dragDistanceReward } from "../core/reward";
-import { isCurrentModelVersion } from "../constants";
+import { isCurrentModelVersion, PAIRWISE_WIN_REWARD } from "../constants";
 import {
   reinforcePreferenceCell,
   reinforcePreferenceMove,
@@ -64,6 +64,49 @@ export class SchedulingFeedbackService {
       dragDistanceReward(dragDistanceMinutes),
       SessionEventType.MOVE,
     );
+  }
+
+  /**
+   * The user picked LinUCB's option in a shown pairwise comparison, whichever
+   * policy was primary: fold a positive reward into the arm LinUCB proposed.
+   * Picking the heuristic's option while LinUCB was primary is already graded
+   * as the `MOVE` the pick applies. Never throws.
+   */
+  async onPairwiseWin(userId: string, slotProposalId: string): Promise<void> {
+    const count = (result: string): void =>
+      schedulerRewardUpdates.add(1, { source: "pairwise", result });
+    try {
+      const proposal = await this.prisma.slotProposal.findFirst({
+        where: { id: slotProposalId, userId, selectedArm: { not: null } },
+        select: {
+          id: true,
+          selectedArm: true,
+          featureVector: true,
+          modelVersion: true,
+        },
+      });
+      if (!proposal?.selectedArm) return count("no_proposal");
+      if (
+        proposal.featureVector.length !== FEATURE_DIM ||
+        !isCurrentModelVersion(proposal.modelVersion)
+      ) {
+        return count("stale_layout");
+      }
+      const applied = await this.pushBanditUpdate(
+        userId,
+        proposal.selectedArm,
+        proposal.featureVector,
+        PAIRWISE_WIN_REWARD,
+      );
+      count(applied ? "applied" : "bandit_unavailable");
+    } catch (err) {
+      count("error");
+      this.logger.warn(
+        `pairwise reward failed for proposal ${slotProposalId}: ${
+          (err as Error).message
+        }`,
+      );
+    }
   }
 
   /**

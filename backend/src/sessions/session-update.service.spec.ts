@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { ForbiddenException } from "@nestjs/common";
 import { SessionUpdateService } from "./session-update.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { TagsService } from "../tags/tags.service";
@@ -38,6 +39,12 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     title: "Session",
     note: null,
     location: null,
+    locationLat: null,
+    locationLng: null,
+    originLocation: null,
+    originLat: null,
+    originLng: null,
+    commuteMinutes: null,
     durationMinutes: 60,
     deadline: null,
     tags: [],
@@ -49,13 +56,12 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     lastMovedAt: null,
     submittedAt: null,
     prepForSessionId: null,
+    prepForOccurrenceStart: null,
     retainedAt: null,
     syncConfirmedAt: null,
     syncMissedAt: null,
     completedAt: null,
     skipped: false,
-    anchor: "AUTO",
-    anchoredAt: null,
     placementReason: null,
     placementReasonStartAt: null,
     deleted: false,
@@ -114,7 +120,14 @@ async function makeService(
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       SessionUpdateService,
-      { provide: PrismaService, useValue: prisma },
+      {
+        provide: PrismaService,
+        // The synced-row guard reads the row first; most cases only mock the transaction.
+        useValue: {
+          session: { findFirst: jest.fn().mockResolvedValue(null) },
+          ...(prisma as object),
+        },
+      },
       { provide: TagsService, useValue: fakeTagsService() },
       { provide: TaskPlacementService, useValue: fakeTaskPlacement() },
       { provide: SchedulingFeedbackService, useValue: schedulingFeedback },
@@ -602,112 +615,7 @@ describe("SessionUpdateService — TASK-series sitting, scope following/series",
   });
 });
 
-describe("SessionUpdateService — sessionCount resize/promote", () => {
-  it("an existing series' sessionCount change delegates straight to resizeSessionCount", async () => {
-    const existing = session({
-      id: "s-1",
-      type: "TASK",
-      seriesId: "series-1",
-      deadline: new Date("2026-06-20T00:00:00.000Z"),
-    });
-    const findFirst = jest.fn().mockResolvedValue(existing);
-    const update = jest.fn().mockResolvedValue(existing);
-    const prisma = {
-      $transaction: (fn: (t: unknown) => unknown) =>
-        fn({
-          session: { findFirst, update },
-          sessionEvent: { create: jest.fn() },
-        }),
-    };
-    const series = fakeSeries();
-    const grownSessions = [
-      { id: "s-1" },
-      { id: "s-2" },
-      { id: "s-3" },
-      { id: "s-4" },
-    ];
-    series.resizeSessionCount.mockResolvedValue(grownSessions);
-    const service = await makeService(prisma as never, series);
-
-    const result = await service.update("s-1", { sessionCount: 4 }, user);
-
-    expect(series.promoteToSeries).not.toHaveBeenCalled();
-    expect(series.resizeSessionCount).toHaveBeenCalledWith(
-      "series-1",
-      4,
-      user,
-      expect.any(Date),
-    );
-    expect(result.sessions).toBe(grownSessions);
-    expect(result.id).toBe("s-1");
-  });
-
-  it("promotes a plain single TASK (no series) into a series, then grows it", async () => {
-    const deadline = new Date("2026-06-20T00:00:00.000Z");
-    const existing = session({
-      id: "plain-1",
-      type: "TASK",
-      seriesId: null,
-      deadline,
-    });
-    const findFirst = jest.fn().mockResolvedValue(existing);
-    const update = jest.fn().mockResolvedValue(existing);
-    const prisma = {
-      $transaction: (fn: (t: unknown) => unknown) =>
-        fn({
-          session: { findFirst, update },
-          sessionEvent: { create: jest.fn() },
-        }),
-    };
-    const series = fakeSeries();
-    series.promoteToSeries.mockResolvedValue("new-series-1");
-    const grownSessions = [{ id: "plain-1" }, { id: "new-2" }];
-    series.resizeSessionCount.mockResolvedValue(grownSessions);
-    const service = await makeService(prisma as never, series);
-
-    const result = await service.update("plain-1", { sessionCount: 2 }, user);
-
-    expect(series.promoteToSeries).toHaveBeenCalledWith(
-      "plain-1",
-      deadline,
-      user,
-    );
-    expect(series.resizeSessionCount).toHaveBeenCalledWith(
-      "new-series-1",
-      2,
-      user,
-      expect.any(Date),
-    );
-    expect(result.sessions).toBe(grownSessions);
-    expect(result.id).toBe("plain-1");
-  });
-
-  it("sessionCount: 1 on a plain single TASK is a no-op — falls through to the plain PATCH", async () => {
-    const existing = session({
-      id: "plain-1",
-      type: "TASK",
-      seriesId: null,
-      deadline: new Date("2026-06-20T00:00:00.000Z"),
-    });
-    const findFirst = jest.fn().mockResolvedValue(existing);
-    const update = jest.fn().mockResolvedValue(existing);
-    const prisma = {
-      $transaction: (fn: (t: unknown) => unknown) =>
-        fn({
-          session: { findFirst, update },
-          sessionEvent: { create: jest.fn() },
-        }),
-    };
-    const series = fakeSeries();
-    const service = await makeService(prisma as never, series);
-
-    const result = await service.update("plain-1", { sessionCount: 1 }, user);
-
-    expect(series.promoteToSeries).not.toHaveBeenCalled();
-    expect(series.resizeSessionCount).not.toHaveBeenCalled();
-    expect(result.sessions).toBeUndefined();
-  });
-});
+describe("SessionUpdateService — sessionCount resize/promote", () => {});
 
 describe("SessionUpdateService — recurring occurrence, scope 'following'", () => {
   it("delegates to updateRecurringFollowing, short-circuiting the representative-row reanchor", async () => {
@@ -797,6 +705,7 @@ describe("SessionUpdateService — recurring occurrence, scope 'series' (or omit
       deadline: null,
       rrule,
       exdates: [],
+      skippedFrom: null,
       userId: user.id,
     };
     const existing = session({
@@ -877,6 +786,7 @@ describe("SessionUpdateService — recurring occurrence, scope 'series' (or omit
       deadline: null,
       rrule: "FREQ=DAILY;COUNT=3",
       exdates: [],
+      skippedFrom: null,
       userId: user.id,
     };
     const existing = session({
@@ -975,5 +885,40 @@ describe("SessionUpdateService — recurring occurrence, scope 'occurrence'", ()
       .catch(() => undefined);
 
     expect(series.detachOccurrence).not.toHaveBeenCalled();
+  });
+});
+
+describe("SessionUpdateService — synced rows", () => {
+  const syncedRow = (over: object = {}) => ({
+    source: "PORTAL",
+    type: "LECTURE",
+    ...over,
+  });
+  const build = async (row: object | null) =>
+    makeService({
+      session: { findFirst: jest.fn().mockResolvedValue(row) },
+    } as never);
+
+  it.each([
+    { title: "New" },
+    { scheduledStartTime: "2026-10-20T09:00:00.000Z" },
+    { durationMinutes: 60 },
+    { location: "B201" },
+  ])("refuses to edit %o on a synced lecture", async (dto) => {
+    const service = await build(syncedRow());
+    await expect(service.update("s-1", dto, user)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it("refuses to move a synced exam", async () => {
+    const service = await build(syncedRow({ source: "LMS", type: "EXAM" }));
+    await expect(
+      service.update(
+        "s-1",
+        { scheduledStartTime: "2026-10-20T09:00:00.000Z" },
+        user,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

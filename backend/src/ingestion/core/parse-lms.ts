@@ -65,16 +65,14 @@ export interface MoodleEventAction {
 
 /**
  * The action Moodle offers on an assignment that still wants a submission.
- * Its absence (or `actionable: false`) means the student has submitted.
+ * Its absence means the student has submitted. Moodle also sends it with
+ * `actionable: false` before the submission opens, so that flag is ignored.
  */
 export const EDIT_SUBMISSION_ACTION_NAME = "Thêm bài nộp";
 
 /** True while the event still offers "Thêm bài nộp" (the `editsubmission` link). */
 export function offersSubmission(event: MoodleCalendarEvent): boolean {
-  return (
-    event.action?.name === EDIT_SUBMISSION_ACTION_NAME &&
-    event.action.actionable === true
-  );
+  return event.action?.name === EDIT_SUBMISSION_ACTION_NAME;
 }
 
 /** The `data` object of a `core_calendar_get_calendar_monthly_view` response. */

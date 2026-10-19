@@ -15,12 +15,39 @@ import { PrismaService } from "../prisma/prisma.service";
 /** Which upstream session a value belongs to. `portal` and `dkhp` share the portal login. */
 export type UpstreamKind = "portal" | "dkhp" | "lms";
 
-/** Lifetime of each cached session. The LMS cookie and sesskey rotate as a pair, so they expire sooner. */
-const TTL_SECONDS: Record<UpstreamKind, number> = {
-  portal: 3 * 60 * 60,
-  dkhp: 3 * 60 * 60,
-  lms: 60 * 60,
+/**
+ * Default lifetime of each cached session, in seconds. Upstream lifetimes are about
+ * 2 h for the portal and DKHP bearer tokens and 1 h for the LMS cookie, which rotates
+ * with its sesskey; each default stays under that so a cached value is never already expired.
+ */
+const DEFAULT_TTL_SECONDS: Record<UpstreamKind, number> = {
+  portal: 100 * 60,
+  dkhp: 100 * 60,
+  lms: 50 * 60,
 };
+
+/** Env override per kind. `dkhp` shares the portal login, so it shares its variable. */
+const TTL_ENV: Record<UpstreamKind, string> = {
+  portal: "UPSTREAM_SESSION_TTL_PORTAL_S",
+  dkhp: "UPSTREAM_SESSION_TTL_PORTAL_S",
+  lms: "UPSTREAM_SESSION_TTL_LMS_S",
+};
+
+/**
+ * Lifetime of a cached session for `kind`, in seconds. An unset or invalid
+ * variable keeps the default; `0` turns the cache off for that kind.
+ */
+export function upstreamTtlSeconds(
+  kind: UpstreamKind,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const raw = env[TTL_ENV[kind]];
+  if (raw === undefined || raw.trim() === "") return DEFAULT_TTL_SECONDS[kind];
+  const seconds = Number(raw);
+  return Number.isInteger(seconds) && seconds >= 0
+    ? seconds
+    : DEFAULT_TTL_SECONDS[kind];
+}
 
 const PROVIDER_OF: Record<UpstreamKind, IntegrationProvider> = {
   portal: "PORTAL",
@@ -79,7 +106,8 @@ export class UpstreamSessionCache {
     kind: UpstreamKind,
     login: () => Promise<T>,
   ): Promise<T> {
-    const cached = await this.read<T>(userId, kind);
+    const cached =
+      upstreamTtlSeconds(kind) > 0 ? await this.read<T>(userId, kind) : null;
     if (cached) return cached;
 
     const flightKey = upstreamKey(userId, kind);
@@ -184,6 +212,8 @@ export class UpstreamSessionCache {
     kind: UpstreamKind,
     result: SignInResult,
   ): Promise<void> {
+    const ttl = upstreamTtlSeconds(kind);
+    if (ttl <= 0) return;
     const dek = await this.dataKey(userId, PROVIDER_OF[kind]);
     if (!dek) return;
     const iv = randomBytes(IV_RANDOM_BYTES_SIZE);
@@ -199,7 +229,7 @@ export class UpstreamSessionCache {
         upstreamKey(userId, kind),
         JSON.stringify(sealed),
         "EX",
-        TTL_SECONDS[kind],
+        ttl,
       );
     } catch (error) {
       this.logger.warn(

@@ -228,13 +228,13 @@ describe("parseMonthlyView — assignments", () => {
     expect(item.submitted).toBe(true);
   });
 
-  it("treats a non-actionable 'Thêm bài nộp' as submitted", () => {
+  it("marks a non-actionable 'Thêm bài nộp' as not submitted", () => {
     const event: MoodleCalendarEvent = {
       ...ASSIGN_DUE_0739,
       action: { name: "Thêm bài nộp", actionable: false },
     };
     const [item] = parseMonthlyView(view([event]), BEFORE_ALL).items;
-    expect(item.submitted).toBe(true);
+    expect(item.submitted).toBe(false);
   });
 
   it("treats any other action as submitted", () => {

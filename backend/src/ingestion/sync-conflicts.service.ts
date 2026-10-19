@@ -112,7 +112,7 @@ export class SyncConflictsService {
     try {
       const row = await this.notifications.raiseConflict(userId, {
         eventName,
-        title: `${ids.length} ${ids.length === 1 ? "task clashes" : "tasks clash"} with ${kind.label}`,
+        title: `${ids.length} ${ids.length === 1 ? "plan clashes" : "plans clash"} with ${kind.label}`,
         content: "Reschedule them now?",
         conflictSessionIds: ids,
       });

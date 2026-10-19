@@ -23,6 +23,7 @@ import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
 import {
   type CheckOffKind,
+  type SkipScope,
   SessionCheckOffService,
 } from "./session-check-off.service";
 import { NoteFilesService } from "../files/note-files.service";
@@ -113,9 +114,6 @@ export class SessionsService {
         if (target.sessionIds.includes(s.id)) s.reminders = applied;
       });
       if (skipped.length > 0) res.skippedReminders = skipped;
-    } else if (dto.sessionCount !== undefined && res.seriesId) {
-      // New sittings of a grown series inherit the series' reminders.
-      await this.reminders.propagateSeries(res.seriesId);
     }
     return res;
   }
@@ -142,8 +140,9 @@ export class SessionsService {
     kind: CheckOffKind,
     on: boolean,
     user: User,
+    scope?: SkipScope,
   ): Promise<SessionCheckOffResponse> {
-    return this.checkOff.set(id, kind, on, user);
+    return this.checkOff.set(id, kind, on, user, new Date(), scope);
   }
 
   async truncateSeriesFrom(

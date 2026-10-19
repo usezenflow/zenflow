@@ -24,7 +24,7 @@ interface ItemRow {
   responseBody: string | null;
 }
 
-function makePrismaDouble() {
+function makePrismaDouble(enrolledSections: string[] = []) {
   const jobs: JobRow[] = [];
   const items: ItemRow[] = [];
   const jobStatusLog: string[] = [];
@@ -42,6 +42,14 @@ function makePrismaDouble() {
                   user: { timezone: "Asia/Saigon" },
                 },
               ],
+        ),
+    },
+    portalSectionEnrollment: {
+      findMany: () =>
+        Promise.resolve(
+          enrolledSections.map((scheduleStudyUnitId) => ({
+            scheduleStudyUnitId,
+          })),
         ),
     },
     portalAPIJob: {
@@ -126,9 +134,11 @@ async function makeWatcher(
     env?: Record<string, unknown>;
     authenticate?: jest.Mock;
     fetchExams?: jest.Mock;
+    /** Sections the student is enrolled in this term, per enrolment discovery. */
+    enrolled?: string[];
   } = {},
 ) {
-  const db = makePrismaDouble();
+  const db = makePrismaDouble(opts.enrolled);
   const env = { ...ENV, ...(opts.env ?? {}) };
   const authenticate =
     opts.authenticate ??
@@ -266,6 +276,45 @@ describe("ExamWatcherService", () => {
 
     await expect(w.service.run(NOW, "u2")).resolves.toBe(0);
     expect(w.db.jobs).toHaveLength(0);
+  });
+});
+
+describe("ExamWatcherService — stopping once enrolment is covered", () => {
+  it("parks the row until the term ends when every enrolled section has an exam", async () => {
+    const w = await makeWatcher({ enrolled: ["99910AB100101"] });
+
+    const outcome = await w.service.syncOne(
+      { integrationId: "int-1", userId: "u1" },
+      NOW,
+    );
+
+    expect(outcome.ok).toBe(true);
+    // HK01 2026-2027 ends the instant HK02 opens (last week of December).
+    expect(outcome.deferUntil).toEqual(new Date("2026-12-27T17:00:00.000Z"));
+  });
+
+  it("keeps fetching while an enrolled section has no exam yet", async () => {
+    const w = await makeWatcher({
+      enrolled: ["99910AB100101", "99910AB200101"],
+    });
+
+    const outcome = await w.service.syncOne(
+      { integrationId: "int-1", userId: "u1" },
+      NOW,
+    );
+
+    expect(outcome.deferUntil).toBeUndefined();
+  });
+
+  it("keeps fetching for a student with no discovered enrolment", async () => {
+    const w = await makeWatcher({ enrolled: [] });
+
+    const outcome = await w.service.syncOne(
+      { integrationId: "int-1", userId: "u1" },
+      NOW,
+    );
+
+    expect(outcome.deferUntil).toBeUndefined();
   });
 });
 

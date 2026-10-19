@@ -14,11 +14,14 @@ import {
 import { idempotencyKey } from "../queue/queue.types";
 import type { PortalMarksYear } from "./core/parse-student";
 import { parseMarks, parseStudentInfo } from "./core/parse-student";
+import { marksEligible, type SeasonOverrides } from "./core/seasonal-policy";
+import { resolveSemester } from "./core/semester";
+import { seasonOverrides } from "./season-config";
 import { PortalSessionService } from "./portal-session.service";
 import { errorMessage, sleep } from "./watcher-support";
 
-/** Marks are refreshed at most this often by the watcher. */
-export const MARKS_REFRESH_MS = 24 * 60 * 60_000;
+/** Marks are refreshed at most this often once due (`INGESTION_MARKS_PERIOD_MS`). */
+export const DEFAULT_MARKS_PERIOD_MS = 60 * 60_000;
 
 export interface StudentSyncResult {
   ok: boolean;
@@ -35,6 +38,9 @@ export interface StudentSyncResult {
 export class StudentSyncService {
   private readonly logger = new Logger(StudentSyncService.name);
   private readonly requestDelayMs: number;
+  private readonly marksPeriodMs: number;
+  private readonly dluTimezone: string;
+  private readonly season: SeasonOverrides;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -47,6 +53,11 @@ export class StudentSyncService {
     this.requestDelayMs = Number(
       this.config.get("INGESTION_REQUEST_DELAY_MS") ?? 750,
     );
+    this.marksPeriodMs =
+      Number(this.config.get("INGESTION_MARKS_PERIOD_MS")) ||
+      DEFAULT_MARKS_PERIOD_MS;
+    this.dluTimezone = this.config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
+    this.season = seasonOverrides(this.config);
   }
 
   /** Fetch name, class, cohort and study programs; then queue the marks job. */
@@ -205,17 +216,83 @@ export class StudentSyncService {
     }
   }
 
-  /** Students whose profile is missing, or whose marks are older than the refresh period. */
+  /**
+   * Students whose marks are due. The first fetch follows the profile; after that
+   * marks are refetched every {@link DEFAULT_MARKS_PERIOD_MS} from one week after the
+   * student's first exam of the current term ends, and not before.
+   */
   async dueForMarks(now: Date, limit: number): Promise<MarksJobData[]> {
-    const cutoff = new Date(now.getTime() - MARKS_REFRESH_MS);
+    const cutoff = new Date(now.getTime() - this.marksPeriodMs);
+    const term = resolveSemester(now, this.dluTimezone, 0);
+    // A superset by exam start; the exact end is checked below.
+    const examStartedBy = new Date(
+      now.getTime() - this.season.marksAfterExamsMs,
+    );
     const rows = await this.prisma.studentProfile.findMany({
       where: {
-        OR: [{ marksFetchedAt: null }, { marksFetchedAt: { lt: cutoff } }],
+        OR: [
+          { marksFetchedAt: null },
+          {
+            marksFetchedAt: { lt: cutoff },
+            user: {
+              sessions: {
+                some: {
+                  type: "EXAM",
+                  source: "PORTAL",
+                  deleted: false,
+                  scheduledStartTime: {
+                    gte: term.startDate,
+                    lte: examStartedBy,
+                  },
+                },
+              },
+            },
+          },
+        ],
       },
       orderBy: [{ marksFetchedAt: { sort: "asc", nulls: "first" } }],
-      take: limit,
-      select: { userId: true, integrationId: true },
+      take: limit * 4,
+      select: {
+        userId: true,
+        integrationId: true,
+        marksFetchedAt: true,
+      },
     });
-    return rows;
+    if (rows.length === 0) return [];
+
+    const exams = await this.prisma.session.findMany({
+      where: {
+        userId: { in: rows.map((r) => r.userId) },
+        type: "EXAM",
+        source: "PORTAL",
+        deleted: false,
+        scheduledStartTime: { gte: term.startDate, lte: term.endDate },
+      },
+      orderBy: { scheduledStartTime: "asc" },
+      select: { userId: true, scheduledStartTime: true, durationMinutes: true },
+    });
+    const firstEnd = new Map<string, Date>();
+    for (const exam of exams) {
+      if (firstEnd.has(exam.userId) || !exam.scheduledStartTime) continue;
+      firstEnd.set(
+        exam.userId,
+        new Date(
+          exam.scheduledStartTime.getTime() + exam.durationMinutes * 60_000,
+        ),
+      );
+    }
+
+    return rows
+      .filter(
+        (r) =>
+          r.marksFetchedAt === null ||
+          marksEligible({
+            now,
+            firstExamEndsAt: firstEnd.get(r.userId) ?? null,
+            overrides: this.season,
+          }),
+      )
+      .slice(0, limit)
+      .map(({ userId, integrationId }) => ({ userId, integrationId }));
   }
 }

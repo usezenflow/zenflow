@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import {
   Prisma,
@@ -17,6 +17,7 @@ import {
   SESSION_WRONG_TIME_REWARD,
 } from "../constants";
 import { completionOutcome, type CompletionOutcome } from "../core/reward";
+import { SpiritsService } from "../../spirits/spirits.service";
 import { SchedulingFeedbackService } from "./scheduling-feedback.service";
 import { runCronJob } from "../../observability/cron";
 import { schedulerSessionEvents } from "../../observability/metrics";
@@ -61,8 +62,9 @@ type Settled = {
  * - no start or check-off by `end + cutoff`: `LAPSED`, `-0.25`.
  *
  * The settled reward is delivered to the LinUCB arm behind the placement via
- * {@link SchedulingFeedbackService.applyDelayedReward}. A completion also
- * reinforces the user's preference matrix at the kept hour.
+ * {@link SchedulingFeedbackService.applyDelayedReward}. The same reward also
+ * reinforces the user's preference matrix at the kept hour, scaled by
+ * `PREFERENCE_RETAINED_WEIGHT`.
  */
 /** Reward written on the settled event, per outcome. */
 const OUTCOME_REWARD: Record<CompletionOutcome, number> = {
@@ -95,6 +97,7 @@ export class SessionOutcomeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly schedulingFeedback: SchedulingFeedbackService,
+    @Optional() private readonly spirits?: SpiritsService,
   ) {}
 
   /** Every 30 minutes. `now` is injectable for tests. */
@@ -122,12 +125,22 @@ export class SessionOutcomeService {
         const settled = await this.settleBatch(outcomes, now);
         total += settled.length;
         await this.applyDelayedRewards(settled);
+        await this.creditSparks(settled, now);
       }
 
       if (candidates.length < OUTCOME_BATCH_SIZE) break;
     }
 
     return total;
+  }
+
+  /** A settled `START` is a spark: credit each user once per batch. */
+  private async creditSparks(settled: Settled[], now: Date): Promise<void> {
+    if (!this.spirits) return;
+    const users = new Set(
+      settled.filter((s) => s.outcome === "STARTED").map((s) => s.userId),
+    );
+    for (const userId of users) await this.spirits.credit(userId, now);
   }
 
   private findCandidateBatch(
@@ -138,6 +151,7 @@ export class SessionOutcomeService {
       where: {
         type: SessionType.TASK,
         source: SessionSource.USER,
+        prepForSessionId: null,
         retainedAt: null,
         lastMovedAt: null,
         deleted: false,
@@ -273,12 +287,14 @@ export class SessionOutcomeService {
         s.reward,
         null,
       );
-      if (s.outcome === "DONE") {
+      // The kept hour learns from what the student did there: started or done
+      // raises it, a lapse lowers it, a skip or a wrong-time check-off leaves it.
+      if (s.reward !== 0) {
         await this.schedulingFeedback.reinforcePreferenceMatrix(
           s.userId,
           s.scheduledStartMs,
           s.timezone,
-          PREFERENCE_RETAINED_WEIGHT,
+          PREFERENCE_RETAINED_WEIGHT * s.reward,
         );
       }
     }

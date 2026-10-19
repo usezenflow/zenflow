@@ -12,6 +12,7 @@ import { UpstreamSessionRejectedError } from "../common/upstream-session-rejecte
 import { PortalAPIService } from "../portal/portal-api.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { parseExams } from "./core/parse-portal";
+import { examsCoverEnrolment } from "./core/seasonal-policy";
 import { resolveSemester } from "./core/semester";
 import { SyncDigest } from "./core/sync-digest";
 import { IngestionJobsService } from "./ingestion-jobs.service";
@@ -98,6 +99,8 @@ export class ExamWatcherService {
     // Changes are announced once per item type at the end of the run.
     const digest = new SyncDigest(new Date());
 
+    let deferUntil: Date | undefined;
+
     // One request, so one failure is a total failure — there is no partial
     // picture to salvage, unlike the week-by-week timetable walk.
     let ok = true;
@@ -131,6 +134,31 @@ export class ExamWatcherService {
         now,
         digest,
       );
+
+      // Enrolment discovery is the yardstick: once every enrolled section has an exam
+      // in the response there is nothing left to wait for this term.
+      const enrolled = await this.prisma.portalSectionEnrollment.findMany({
+        where: {
+          userId: target.userId,
+          yearStudy: academicYear,
+          termId: semester,
+          droppedAt: null,
+        },
+        select: { scheduleStudyUnitId: true },
+      });
+      const examSections = new Set(
+        rows
+          .map((row) => row?.ScheduleStudyUnitID)
+          .filter((id): id is string => typeof id === "string" && id !== ""),
+      );
+      if (
+        examsCoverEnrolment(
+          enrolled.map((e) => e.scheduleStudyUnitId),
+          examSections,
+        )
+      ) {
+        deferUntil = new Date(term.endDate.getTime() + 1);
+      }
 
       await this.jobs.completeItem("PORTAL", itemId, {
         status: "COMPLETED",
@@ -190,7 +218,11 @@ export class ExamWatcherService {
 
     await this.jobs.finishJob("PORTAL", jobId, "COMPLETED");
 
-    return { ok, servedFromCache: false };
+    return {
+      ok,
+      servedFromCache: false,
+      ...(ok && deferUntil ? { deferUntil } : {}),
+    };
   }
 
   private async signIn(

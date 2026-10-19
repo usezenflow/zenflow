@@ -11,7 +11,6 @@ export function planMovesOf(moves: PlacementMove[]): PlacementPlanMove[] {
     id: m.id,
     from: new Date(m.fromMs).toISOString(),
     to: new Date(m.toMs).toISOString(),
-    anchor: m.anchor,
     cost: m.cost,
   }));
 }

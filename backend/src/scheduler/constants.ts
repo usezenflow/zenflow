@@ -78,6 +78,12 @@ export const SESSION_STARTED_REWARD = 1.0;
 export const SESSION_SKIPPED_REWARD = 0.0;
 export const SESSION_WRONG_TIME_REWARD = 0.0;
 export const SESSION_LAPSED_REWARD = -0.25;
+/**
+ * Reward for the LinUCB arm when the user picks LinUCB's option in a shown
+ * pairwise comparison (`docs/scheduler/ab-testing.md` §3). Below completion:
+ * a preference, not an outcome.
+ */
+export const PAIRWISE_WIN_REWARD = 0.5;
 
 /**
  * Disjoint LinUCB scheduling parameters
@@ -168,3 +174,9 @@ export const SCAN_CAP_DAYS = 30;
 
 /** How long a placement plan waiting for confirmation stays valid (ADR-0022). */
 export const PLACEMENT_PLAN_TTL_MS = 30 * 60_000;
+
+/**
+ * Most automatic prep plans one student gets in 24 hours (level-up plan,
+ * Phase 1). Plans past the cap are skipped, not held.
+ */
+export const PREP_DAILY_CAP = 5;
