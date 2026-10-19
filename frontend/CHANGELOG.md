@@ -1,5 +1,13 @@
 # frontend
 
+## 1.0.0-beta.14
+
+### Patch Changes
+
+- Updated dependencies [0757d2d]
+  - @zenflow/shared@1.0.0-beta.14
+  - @zenflow/core@1.0.0-beta.14
+
 ## 1.0.0-beta.13
 
 ### Major Changes
