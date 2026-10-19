@@ -203,25 +203,4 @@ describe("TaskPlacementService.canPlaceTask / canPlaceSeries", () => {
       }),
     ).rejects.toThrow("boom");
   });
-
-});
-
-describe("TaskPlacementService.placeSeriesOnCreate", () => {
-  function prismaMock() {
-    return {
-      session: { update: jest.fn().mockReturnValue("update-one") },
-      $transaction: jest.fn().mockResolvedValue(undefined),
-    };
-  }
-
-  // Regression: series members must be persisted with their starts.
-});
-
-describe("TaskPlacementService.redistributeSeries", () => {
-});
-
-describe("TaskPlacementService.redistributeSeries never unschedules", () => {
-});
-
-describe("TaskPlacementService.planSeriesRespread", () => {
 });

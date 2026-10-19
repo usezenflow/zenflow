@@ -160,7 +160,7 @@ describe("PrepPlanService", () => {
     const h = makePrisma();
     const { service } = await makeService({ prisma: h.prisma });
 
-    await service.planFor({ ...USER, lang: "VI_VN" } as User, PARENT, NOW);
+    await service.planFor({ ...USER, lang: "VI_VN" }, PARENT, NOW);
 
     expect(h.created[0]).toMatchObject({ title: "Hoàn thành Calculus" });
   });

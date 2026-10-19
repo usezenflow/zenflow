@@ -67,7 +67,8 @@ METRICS = (
     "ttt",
 )
 _NON_TTT_METRICS = tuple(m for m in METRICS if m != "ttt")
-# LinUCB is better when the difference is negative (regret, drag, lapse, skip, wrong_time, ttt)
+# LinUCB is better when the difference is negative (regret, drag, lapse, skip,
+# wrong_time, ttt)
 # or positive (accept, started, done, chose_option).
 _BETTER_SIGN: dict[str, float] = {
     **{m: -1.0 for m in ("regret", "drag", "lapsed", "skipped", "wrong_time", "ttt")},

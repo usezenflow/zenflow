@@ -4,22 +4,11 @@ import { Prisma, type User } from "../../../generated/prisma";
 import { withSpan } from "../../observability/otel";
 import { PrismaService } from "../../prisma/prisma.service";
 import { PythonPlacer } from "./python-placer.service";
-import { placementData } from "./placement-write";
 import { toPlacementPlanDto } from "./placement-plan";
 import { PLACEMENT_PLAN_TTL_MS } from "../constants";
 import { ScheduleInfeasibleException } from "../schedule-infeasible.exception";
-import {
-  blocksPlacement,
-  ceilToSlot,
-  MS_PER_MINUTE,
-  type Interval,
-} from "../core/slot";
-import type {
-  PlaceableTask,
-  PlacementResult,
-  SeriesMemberInput,
-  SeriesPlacementRow,
-} from "../types/placement.types";
+import { ceilToSlot, MS_PER_MINUTE } from "../core/slot";
+import type { PlaceableTask, PlacementResult } from "../types/placement.types";
 
 type Trigger = "create" | "deadline-change";
 
@@ -215,5 +204,4 @@ export class TaskPlacementService {
       throw err;
     }
   }
-
 }

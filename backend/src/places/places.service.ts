@@ -42,7 +42,12 @@ const LAM_DONG = { west: 107.3, north: 12.3, east: 108.9, south: 11.1 };
 const DLU = { lat: 11.9558, lng: 108.4437 };
 
 export function inLamDong(lat: number, lng: number): boolean {
-  return lat <= LAM_DONG.north && lat >= LAM_DONG.south && lng >= LAM_DONG.west && lng <= LAM_DONG.east;
+  return (
+    lat <= LAM_DONG.north &&
+    lat >= LAM_DONG.south &&
+    lng >= LAM_DONG.west &&
+    lng <= LAM_DONG.east
+  );
 }
 
 /** "Phan Đình Phùng" to "phan dinh phung". */
@@ -84,8 +89,11 @@ export class PlacesService {
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
     config: ConfigService,
   ) {
-    this.baseUrl = config.get<string>("NOMINATIM_URL") ?? "https://nominatim.openstreetmap.org";
-    this.routingUrl = config.get<string>("ROUTING_URL") ?? "https://routing.openstreetmap.de";
+    this.baseUrl =
+      config.get<string>("NOMINATIM_URL") ??
+      "https://nominatim.openstreetmap.org";
+    this.routingUrl =
+      config.get<string>("ROUTING_URL") ?? "https://routing.openstreetmap.de";
   }
 
   /**
@@ -101,10 +109,15 @@ export class PlacesService {
     if (hit) return hit;
     try {
       const results = await this.enqueue(() => this.fetchRows(q), signal);
-      await this.cache.set(key, results, results.length > 0 ? CACHE_TTL_MS : EMPTY_CACHE_TTL_MS);
+      await this.cache.set(
+        key,
+        results,
+        results.length > 0 ? CACHE_TTL_MS : EMPTY_CACHE_TTL_MS,
+      );
       return results;
     } catch (error) {
-      if (!signal?.aborted) this.logger.warn(`Place search failed: ${(error as Error).message}`);
+      if (!signal?.aborted)
+        this.logger.warn(`Place search failed: ${(error as Error).message}`);
       return [];
     }
   }
@@ -115,7 +128,8 @@ export class PlacesService {
     from: { lat: number; lng: number },
     to: { lat: number; lng: number },
   ): Promise<RouteResult | null> {
-    if (!inLamDong(from.lat, from.lng) || !inLamDong(to.lat, to.lng)) return null;
+    if (!inLamDong(from.lat, from.lng) || !inLamDong(to.lat, to.lng))
+      return null;
     const round = (n: number) => n.toFixed(4);
     const key = `places:route:${profile}:${round(from.lat)},${round(from.lng)}:${round(to.lat)},${round(to.lng)}`;
     const hit = await this.cache.get<RouteResult | null>(key);
@@ -131,7 +145,10 @@ export class PlacesService {
     to: { lat: number; lng: number },
   ): Promise<RouteResult | null> {
     const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-    const url = new URL(`/routed-${profile}/route/v1/driving/${coords}`, this.routingUrl);
+    const url = new URL(
+      `/routed-${profile}/route/v1/driving/${coords}`,
+      this.routingUrl,
+    );
     url.searchParams.set("overview", "full");
     url.searchParams.set("geometries", "geojson");
     try {
@@ -181,13 +198,19 @@ export class PlacesService {
         if (inside.length > 0) return inside;
       }
       // Home addresses are often missing inside the box; widen to Vietnam and keep Lam Dong hits.
-      const wide = (await this.queryNominatim(text, LAM_DONG_VIEWBOX, false)).filter((place) => inLamDong(place.lat, place.lng));
+      const wide = (
+        await this.queryNominatim(text, LAM_DONG_VIEWBOX, false)
+      ).filter((place) => inLamDong(place.lat, place.lng));
       if (wide.length > 0) return wide;
     }
     return [];
   }
 
-  private async queryNominatim(q: string, viewbox: string, bounded: boolean): Promise<PlaceResult[]> {
+  private async queryNominatim(
+    q: string,
+    viewbox: string,
+    bounded: boolean,
+  ): Promise<PlaceResult[]> {
     const url = new URL("/search", this.baseUrl);
     url.searchParams.set("q", q);
     url.searchParams.set("format", "jsonv2");

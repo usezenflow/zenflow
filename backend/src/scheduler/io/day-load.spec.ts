@@ -679,16 +679,19 @@ describe("loadDayLoads (batched range read, #62 C)", () => {
     });
 
     it("gives the same intervals through the batched loader", async () => {
-      const [load] = await loadDayLoads(makeFakePrisma([lecture], []) as never, {
-        userId: "u1",
-        days: [
-          {
-            dayStartMs: new Date("2026-06-15T00:00:00.000Z").getTime(),
-            dayEndMs: new Date("2026-06-16T00:00:00.000Z").getTime(),
-          },
-        ],
-        timezone: TZ,
-      });
+      const [load] = await loadDayLoads(
+        makeFakePrisma([lecture], []) as never,
+        {
+          userId: "u1",
+          days: [
+            {
+              dayStartMs: new Date("2026-06-15T00:00:00.000Z").getTime(),
+              dayEndMs: new Date("2026-06-16T00:00:00.000Z").getTime(),
+            },
+          ],
+          timezone: TZ,
+        },
+      );
       expect(load.occupied).toEqual([widened]);
     });
 
@@ -699,12 +702,15 @@ describe("loadDayLoads (batched range read, #62 C)", () => {
         scheduledStartTime: new Date("2026-06-14T23:00:00.000Z"),
         commuteMinutes: 45,
       };
-      const { occupied } = await loadDayLoad(makeFakePrisma([late], []) as never, {
-        userId: "u1",
-        dayStart: new Date("2026-06-15T00:00:00.000Z"),
-        dayEnd: new Date("2026-06-16T00:00:00.000Z"),
-        timezone: TZ,
-      });
+      const { occupied } = await loadDayLoad(
+        makeFakePrisma([late], []) as never,
+        {
+          userId: "u1",
+          dayStart: new Date("2026-06-15T00:00:00.000Z"),
+          dayEnd: new Date("2026-06-16T00:00:00.000Z"),
+          timezone: TZ,
+        },
+      );
       expect(occupied).toEqual([
         {
           start: new Date("2026-06-14T22:15:00.000Z").getTime(),

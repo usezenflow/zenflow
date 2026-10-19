@@ -1,4 +1,11 @@
-import { BadRequestException, Controller, Get, Query, Res, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Query,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import type { Response } from "express";
 import { CookieAuthGuard } from "../auth/guards";
 import { PlacesService, type RouteProfile } from "./places.service";
@@ -26,7 +33,11 @@ export class PlacesController {
       if (!res.writableEnded) gone.abort();
     });
     const places = await this.places.search(q.slice(0, 120), gone.signal);
-    return { success: true, message: `Found ${places.length} places`, data: { places } };
+    return {
+      success: true,
+      message: `Found ${places.length} places`,
+      data: { places },
+    };
   }
 
   /** Route between two points in Lam Dong. `route` is `null` when there is none. */
@@ -39,7 +50,15 @@ export class PlacesController {
     if (!PROFILES.includes(profile as RouteProfile)) {
       throw new BadRequestException("Unknown profile.");
     }
-    const route = await this.places.route(profile as RouteProfile, parsePoint(from), parsePoint(to));
-    return { success: true, message: route ? "Found a route" : "No route", data: { route } };
+    const route = await this.places.route(
+      profile as RouteProfile,
+      parsePoint(from),
+      parsePoint(to),
+    );
+    return {
+      success: true,
+      message: route ? "Found a route" : "No route",
+      data: { route },
+    };
   }
 }

@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
-import { NO_FEASIBLE_SLOT_MESSAGE, SeriesService } from "./series.service";
+import { SeriesService } from "./series.service";
 import { occurrenceId } from "../scheduler/core/recurrence";
 import type { Tag, Session, SessionSeries, User } from "../../generated/prisma";
 
@@ -527,40 +527,6 @@ describe("SeriesService.updateRecurringFollowing", () => {
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
-});
-
-/**
- * Edit-mode "session count" resize/promote — the create-mode session-count
- * slider's edit-mode counterpart (issue: editable sessionCount). Exercises
- * `resizeSessionCount` (grow/shrink/no-op/not-found) and `promoteToSeries`
- * directly against hand-rolled `PrismaService` / `TaskPlacementService` /
- * `TagsService` doubles, mirroring this file's other describe blocks.
- * `SessionUpdateService`'s routing into these (single-TASK promotion, the
- * sessionCount-vs-deadline branch priority) is covered by
- * `session-update.service.spec.ts`.
- */
-describe("SeriesService series responses carry per-sitting proposals (#58)", () => {
-  const seriesId = "task-series-58";
-  const deadline = new Date("2026-07-01T00:00:00.000Z");
-  const s1 = new Date("2026-06-05T08:00:00.000Z");
-  const s2 = new Date("2026-06-07T08:00:00.000Z");
-  const alt = new Date("2026-06-05T14:00:00.000Z");
-  const placements = [
-    {
-      id: "c-1",
-      scheduledStartTime: s1,
-      slotProposalId: "sp-1",
-      alternativeSlot: alt,
-      divergent: true,
-    },
-    {
-      id: "c-2",
-      scheduledStartTime: s2,
-      slotProposalId: "sp-2",
-      alternativeSlot: null,
-      divergent: false,
-    },
-  ];
 });
 
 describe("SeriesService prep plan links", () => {

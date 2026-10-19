@@ -22,7 +22,7 @@ import type {
 } from "@zenflow/shared";
 import { MAX_COMMUTE_MINUTES, TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
-import { INFEASIBLE_POLICIES, MAX_SESSION_COUNT } from "./create-session.dto";
+import { INFEASIBLE_POLICIES } from "./create-session.dto";
 import {
   MAX_REMINDER_MINUTES,
   MAX_REMINDERS_PER_SESSION,

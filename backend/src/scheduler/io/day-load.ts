@@ -352,7 +352,8 @@ export function dayLoadFromItems(
   const hi = dayEndMs + lookaheadMs;
   for (const it of items) {
     const buffer = it.bufferMs ?? 0;
-    if (it.start < lo || it.start > hi || it.end + buffer <= dayStartMs) continue;
+    if (it.start < lo || it.start > hi || it.end + buffer <= dayStartMs)
+      continue;
     if (blocksPlacement(it.durationMinutes)) {
       occupied.push({ start: it.start - buffer, end: it.end + buffer });
     }

@@ -1,15 +1,11 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import type {
   RemoveSessionResponse,
   RemoveSessionSeriesResponse,
   SeriesSession,
   Session as SharedSession,
 } from "@zenflow/shared";
-import { Prisma, type SessionSeries, type User } from "../../generated/prisma";
+import { type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
@@ -27,7 +23,6 @@ import { minutesToUtc } from "../common/utils";
 import { SessionRow, WITH_TAGS_AND_SERIES } from "./types/session-row";
 import { toSeriesSessionDto, toSessionDto } from "./session-mapper";
 import { createEventData, recordCreateEvent } from "./session-events";
-import { placeOrDiscard } from "./placement-compensation";
 
 /**
  * Shown when a `TASK` (or series, or a series being grown) has no feasible

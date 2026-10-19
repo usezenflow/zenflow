@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unsafe-member-access */
 import { PlacesService } from "./places.service";
 
 const config = { get: () => undefined } as never;
@@ -120,12 +121,24 @@ describe("PlacesService", () => {
       name: `Place ${i}`,
       display_name: `Place ${i}`,
     }));
-    fetchMock.mockResolvedValue({ ok: true, json: async () => [...rows].reverse() });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [...rows].reverse(),
+    });
     const service = new PlacesService(cache, config);
     const results = await service.search("place");
-    expect(results.map((r) => r.name)).toEqual(["Place 0", "Place 1", "Place 2", "Place 3", "Place 4", "Place 5"]);
+    expect(results.map((r) => r.name)).toEqual([
+      "Place 0",
+      "Place 1",
+      "Place 2",
+      "Place 3",
+      "Place 4",
+      "Place 5",
+    ]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(decodeURIComponent(String(fetchMock.mock.calls[0][0]))).toContain("viewbox=108.3,12.05,108.6,11.85");
+    expect(decodeURIComponent(String(fetchMock.mock.calls[0][0]))).toContain(
+      "viewbox=108.3,12.05,108.6,11.85",
+    );
   });
 
   it("widens to Vietnam when the box has nothing, keeping Lam Dong hits", async () => {
