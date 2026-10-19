@@ -35,7 +35,7 @@ Closes #
 - [ ] `pnpm --filter <app> lint` passes for each touched app (mobile: `pnpm --filter mobile format` and `typecheck`)
 - [ ] `pnpm shared:build && pnpm -r typecheck` passes (rebuilt shared types if I changed them)
 - [ ] Added/updated tests — new behavior has a test, a bug fix has a regression test; scheduler changes update the matching `*.spec.ts`
-- [ ] Ran the relevant tests (`pnpm --filter backend test` / `test:e2e`, `pnpm --filter frontend test:e2e`, `pnpm --filter mobile test`)
+- [ ] Ran the relevant tests (`pnpm --filter backend test`, `pnpm --filter mobile test`)
 - [ ] If `mobile/` changed: its mockup in `mockups/` is updated, and I checked the screen on a simulator or device
 - [ ] Updated the matching README / ADR if I changed schema, endpoints, the scheduler, screens, conventions, or the ML roadmap
 - [ ] Respected the critical invariants in [AGENTS.md](../AGENTS.md) (pure scheduler, shared types as the contract, 15-min slot grid, response envelope, TZ wall-clock rule)

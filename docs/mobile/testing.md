@@ -6,7 +6,7 @@ Three layers, shaped as a pyramid: many fast tests at the bottom, a handful of s
 | --- | --- | --- | --- | --- |
 | Unit | Vitest (node) | `mobile/lib/__tests__/*.test.ts` | every PR (`ci.yml` → `unit-tests`) | `pnpm --filter mobile test:unit` |
 | Component | Vitest + happy-dom + MSW | `mobile/test/screens/*.test.tsx` | every PR (same job) | `pnpm --filter mobile test:component` |
-| E2E smoke | [Maestro](https://docs.maestro.dev) | `mobile/e2e/flows/*.yaml` | nightly, `release/**`, manual (`mobile.yml`) | `pnpm --filter mobile e2e` |
+| E2E smoke | [Maestro](https://docs.maestro.dev) | `mobile/e2e/flows/*.yaml` | local only, not in CI | `pnpm --filter mobile e2e` |
 
 `pnpm --filter mobile test` runs the first two.
 
@@ -92,12 +92,10 @@ Install Maestro first: <https://docs.maestro.dev/getting-started/installing-maes
 
 | Job | When | Output |
 | --- | --- | --- |
-| `build-android` | PRs touching `mobile/` or `packages/` (called from `ci.yml`), nightly, `release/**`, manual | `zenflow-android-apk` → `zenflow-android.apk` |
-| `e2e-android` | same, except releases | `maestro-android-results`: junit, failure screenshots, screen recording, logcat, `api.log` |
-| `build-ios` | nightly, `release/**`, manual with `run_ios_e2e` (simulator `.app`); releases (unsigned `.ipa`). Never in a PR | `zenflow-ios-simulator-app` → `zenflow-ios-simulator.zip`, or `zenflow-ios-unsigned-ipa` → `zenflow-ios-unsigned.ipa` |
-| `e2e-ios` | nightly, `release/**`, manual with `run_ios_e2e` (advisory) | `maestro-ios-results` |
+| `build-android` | PRs touching `mobile/` or `packages/` (called from `ci.yml`), releases, manual | `zenflow-android-apk` → `zenflow-android.apk` |
+| `build-ios` | releases only (unsigned `.ipa`). Never in a PR | `zenflow-ios-unsigned-ipa` → `zenflow-ios-unsigned.ipa` |
 
-In a PR, `ci.yml` calls it after lint, typecheck and unit tests pass, and `CI ok` requires the Android jobs. iOS runs only nightly and on `release/**`.
+In a PR, `ci.yml` calls it after lint, typecheck and unit tests pass, and `CI ok` requires the Android build. No e2e runs in CI.
 
 Builds run on GitHub runners via `expo prebuild` (no Expo/EAS account).
 

@@ -17,17 +17,17 @@ A `changes` job diffs the PR and skips jobs it cannot affect. Skipped jobs pass 
 
 | Area | Runs when the PR changes |
 | --- | --- |
-| Backend unit, backend e2e, frontend e2e | backend TS, `packages/`, lockfile, CI wiring, or `services/bandit/` |
+| Backend unit | backend TS, `packages/`, lockfile, CI wiring, or `services/bandit/` |
 | Bandit tests and image build | `services/bandit/` |
 | API image build | `backend/`, `packages/shared/`, root manifests |
 | Prisma drift | `backend/prisma/` |
 | Vault and compose validation | compose, ops, env, nginx, observability, `scripts/deploy/` |
 | Agents sync | `.agents/`, `.claude/`, `.codex/`, `AGENTS.md` |
-| Mobile build and Maestro e2e | `mobile/`, `packages/`, after lint, typecheck and unit tests |
+| Mobile build | `mobile/`, `packages/`, after lint, typecheck and unit tests |
 
 - Lint (changed files), typecheck (shared, core, backend, frontend, mobile).
 - Unit tests: backend Jest, mobile Vitest, bandit pytest and ruff.
-- Prisma drift, backend e2e (`compose.test.yml`), queue e2e (`backend-e2e-queue`), frontend Playwright e2e.
+- Prisma drift. No e2e runs in CI.
 - API image build smoke test, gitleaks.
 - Vault: `docker compose config` for every compose file, `render-secrets.sh` against a throwaway dev server, prod Vault config boots.
 - Agents: `.claude/` and `.codex/` match `.agents/` (`node scripts/sync-agents.mjs --check`), hook tests, ownership check.

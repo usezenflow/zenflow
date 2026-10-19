@@ -91,7 +91,6 @@ jobs:
       variant: release
       # Repository variable: the API the shipped app talks to (e.g. staging).
       api_url: ${{ vars.MOBILE_API_URL }}
-      skip_e2e: true
       # Already tested in the PR that produced this commit.
       skip_tests: true
 
