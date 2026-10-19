@@ -1,9 +1,7 @@
 name: Mobile
 
-# Native builds for mobile/ (issue #79). ci.yml calls this on every PR that
-# touches mobile/ or packages/, after lint, typecheck and unit tests pass, to
-# build the Android APK. release-beta.yml calls it to build the shipped APK and
-# unsigned .ipa. No e2e runs here.
+# Native builds for mobile/ (issue #79). release-beta.yml calls it to build the
+# shipped APK and unsigned .ipa. Not run in PRs; no e2e runs here.
 
 on:
   workflow_call:

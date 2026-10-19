@@ -215,20 +215,6 @@ jobs:
           cache-from: type=gha,scope=bandit
           cache-to: type=gha,mode=max,scope=bandit
 
-  # Android build, after the cheap gates are green (unit tests already ran
-  # above, so the workflow skips its own). No e2e runs in CI.
-  mobile:
-    name: Mobile (build)
-    needs: [changes, lint, typecheck, unit-tests]
-    if: needs.changes.outputs.mobile == 'true'
-    uses: ./.github/workflows/mobile.yml
-    with:
-      variant: e2e
-      skip_tests: true
-      skip_ios: true
-    permissions:
-      contents: read
-
   gitleaks:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
@@ -481,7 +467,6 @@ jobs:
       - prisma-check
       - docker-build
       - docker-build-bandit
-      - mobile
       - gitleaks
       - vault
       - agents

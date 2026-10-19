@@ -92,10 +92,10 @@ Install Maestro first: <https://docs.maestro.dev/getting-started/installing-maes
 
 | Job | When | Output |
 | --- | --- | --- |
-| `build-android` | PRs touching `mobile/` or `packages/` (called from `ci.yml`), releases, manual | `zenflow-android-apk` → `zenflow-android.apk` |
+| `build-android` | releases (`release-beta.yml`), manual | `zenflow-android-apk` → `zenflow-android.apk` |
 | `build-ios` | releases only (unsigned `.ipa`). Never in a PR | `zenflow-ios-unsigned-ipa` → `zenflow-ios-unsigned.ipa` |
 
-In a PR, `ci.yml` calls it after lint, typecheck and unit tests pass, and `CI ok` requires the Android build. No e2e runs in CI.
+No native build or e2e runs in a PR.
 
 Builds run on GitHub runners via `expo prebuild` (no Expo/EAS account).
 

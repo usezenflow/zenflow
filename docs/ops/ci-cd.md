@@ -23,7 +23,6 @@ A `changes` job diffs the PR and skips jobs it cannot affect. Skipped jobs pass 
 | Prisma drift | `backend/prisma/` |
 | Vault and compose validation | compose, ops, env, nginx, observability, `scripts/deploy/` |
 | Agents sync | `.agents/`, `.claude/`, `.codex/`, `AGENTS.md` |
-| Mobile build | `mobile/`, `packages/`, after lint, typecheck and unit tests |
 
 - Lint (changed files), typecheck (shared, core, backend, frontend, mobile).
 - Unit tests: backend Jest, mobile Vitest, bandit pytest and ruff.
