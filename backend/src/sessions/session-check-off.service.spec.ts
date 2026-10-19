@@ -23,6 +23,7 @@ function row(overrides: Partial<SessionRow> = {}): SessionRow {
     originLat: null,
     originLng: null,
     commuteMinutes: null,
+    commuteAuto: false,
     durationMinutes: 60,
     deadline: new Date("2026-10-20T00:00:00.000Z"),
     type: "TASK",

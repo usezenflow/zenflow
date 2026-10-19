@@ -16,3 +16,5 @@ export * from "./file-limits";
 export * from "./check-off";
 export * from "./course-colour";
 export * from "./student";
+export * from "./campus";
+export * from "./commute";

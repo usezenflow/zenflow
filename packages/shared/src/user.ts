@@ -65,6 +65,10 @@ export interface User extends UserPreferences {
   focusBand: FocusBand | null;
   /** Vehicle for commute routes; `null` reads as MOTORCYCLE. */
   defaultTransport: CommuteTransport | null;
+  /** Where trips to campus start; the point is set together with the name. Null = not set. */
+  homeLocation: string | null;
+  homeLat: number | null;
+  homeLng: number | null;
 }
 
 /** Partial update to a user's name and preferences. */
@@ -75,6 +79,10 @@ export interface UpdateUserInput {
   lang?: Lang;
   defaultReminderMinutes?: DefaultReminderChoice;
   defaultTransport?: CommuteTransport;
+  /** Set the three together; `null` clears them. */
+  homeLocation?: string | null;
+  homeLat?: number | null;
+  homeLng?: number | null;
   /**
    * `true` marks onboarding complete (sets `onboardedAt` to now if still
    * null; idempotent — never moves an existing timestamp). Can't be unset.

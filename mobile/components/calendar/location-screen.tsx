@@ -7,11 +7,12 @@ import { NoteScreen } from "@/components/tasks/note/description-field";
 import { Notice } from "@/components/ui/notice";
 import { Text } from "@/components/ui/text";
 import { useLanguage } from "@/hooks/use-language";
+import { useMyLocationStop } from "@/hooks/use-my-location-stop";
 import { useUserStore } from "@/hooks/use-user-store";
 import { type Route, VEHICLES, routeKilometres, routeMinutes, routeSeconds, vehicleFor } from "@/lib/campus-route";
 import type { MapPoint } from "@/lib/campus-map";
+import { homeStop } from "@/lib/home-stop";
 import { t } from "@/lib/i18n";
-import { getMyLocation } from "@/lib/my-location";
 import { cn } from "@/lib/utils";
 import { CAMPUS_PLACES, resolveCampusPlace } from "@zenflow/core";
 import type { CommuteTransport } from "@zenflow/shared";
@@ -137,8 +138,14 @@ function Body({
   const insets = useSafeAreaInsets();
   const user = useUserStore((s) => s.user);
   const [to, setTo] = useState<Stop>({ text: initial.text, point: initial.point });
+  const home = homeStop(user);
+  // A session with no start of its own begins at home, so the student sets it once in settings.
   const [from, setFrom] = useState<Stop>(() =>
-    initial.originPoint ? { text: initial.origin, point: initial.originPoint } : stopFromText(initial.origin),
+    initial.originPoint
+      ? { text: initial.origin, point: initial.originPoint }
+      : initial.origin.trim() === "" && home
+        ? home
+        : stopFromText(initial.origin),
   );
   /** The stop being searched, or null while the map is showing. */
   const [searching, setSearching] = useState<Field | null>(null);
@@ -148,9 +155,7 @@ function Body({
   const [route, setRoute] = useState<Route | null>(null);
   const [routing, setRouting] = useState(false);
   const [routeFailed, setRouteFailed] = useState(false);
-  const [locating, setLocating] = useState(false);
-  const [locationNote, setLocationNote] = useState<string | null>(null);
-  const [settingsNeeded, setSettingsNeeded] = useState(false);
+  const myLocation = useMyLocationStop();
 
   const vehicle = vehicleFor(vehicleId);
   const destination = to.point ?? resolveCampusPlace(to.text) ?? null;
@@ -188,8 +193,7 @@ function Body({
 
   const closePalette = () => {
     setSearching(null);
-    setLocationNote(null);
-    setSettingsNeeded(false);
+    myLocation.clear();
   };
 
   const choose = (stop: Stop) => {
@@ -199,24 +203,10 @@ function Body({
   };
 
   const useMyLocation = async () => {
-    setLocating(true);
-    setLocationNote(null);
-    setSettingsNeeded(false);
-    const result = await getMyLocation();
-    setLocating(false);
-    if (result.ok) {
-      setFrom({ text: t("My location"), point: result.point });
-      closePalette();
-      return;
-    }
-    setSettingsNeeded(result.reason === "blocked" || result.reason === "services-off");
-    setLocationNote(
-      result.reason === "denied" || result.reason === "blocked"
-        ? t("Location is off. Enable it in settings.")
-        : result.reason === "services-off"
-          ? t("Turn on location services.")
-          : t("Couldn't get your location."),
-    );
+    const point = await myLocation.locate();
+    if (!point) return;
+    setFrom({ text: t("My location"), point });
+    closePalette();
   };
 
   const pickVehicle = (id: CommuteTransport) => {
@@ -351,9 +341,10 @@ function Body({
           onClose={closePalette}
           onPickOnMap={closePalette}
           onMyLocation={searching === "from" ? () => void useMyLocation() : undefined}
-          locating={locating}
-          locationNote={locationNote}
-          settingsNeeded={settingsNeeded}
+          home={searching === "from" ? home : null}
+          locating={myLocation.locating}
+          locationNote={myLocation.note}
+          settingsNeeded={myLocation.settingsNeeded}
         />
       )}
     </View>

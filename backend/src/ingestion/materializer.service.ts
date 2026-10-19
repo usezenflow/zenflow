@@ -31,6 +31,7 @@ import {
   ingestionReconcileDeleted,
 } from "../observability/metrics";
 import { NotificationEvent } from "../notifications/types";
+import { CommuteDefaultsService } from "../commute/commute-defaults.service";
 import { SyncConflictsService } from "./sync-conflicts.service";
 
 /** Which DLU system a batch of blocks came from. */
@@ -178,6 +179,7 @@ export class MaterializerService {
     private readonly queues: QueueService,
     config: ConfigService,
     @Optional() private readonly syncConflicts?: SyncConflictsService,
+    @Optional() private readonly commuteDefaults?: CommuteDefaultsService,
   ) {
     this.dluTz = config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
   }
@@ -264,6 +266,10 @@ export class MaterializerService {
     }
 
     if (!digest) await this.flushDigest(userId, runDigest, now);
+
+    // New or moved rows may name a campus place: give them the home commute.
+    if (outcome.created + outcome.updated > 0)
+      void this.commuteDefaults?.applyQuietly(userId);
 
     // `unchanged` / total ≈ how much of the run was redundant re-work (the
     // thing a cache on this path would save). `source` is portal|lms.

@@ -440,6 +440,13 @@ export class SessionUpdateService {
       if (dto.originLng !== undefined) data.originLng = dto.originLng;
       if (dto.commuteMinutes !== undefined)
         data.commuteMinutes = dto.commuteMinutes;
+      if (
+        dto.originLocation !== undefined ||
+        dto.originLat !== undefined ||
+        dto.originLng !== undefined ||
+        dto.commuteMinutes !== undefined
+      )
+        data.commuteAuto = false;
 
       if (dto.durationMinutes !== undefined)
         data.durationMinutes = dto.durationMinutes;

@@ -41,10 +41,14 @@ docker compose -f compose.dev.yml up -d edge osrm-foot osrm-car
 The Location row opens a full-screen route planner (`components/calendar/location-screen.tsx`).
 
 - **To** is the session location. Search lists campus places first, then OpenStreetMap results from `GET /places/search`. Results stay inside Lam Dong and sort by distance to DLU.
-- **From** is the start, saved as `Session.originLocation`. The locate button asks for permission and uses the current position; otherwise search a place.
+- **From** is the start, saved as `Session.originLocation`. It begins as the home saved in Settings, Travel; otherwise the locate button asks for permission and uses the current position, or search a place.
 - Pins, route and basemap use the brand palette (`backend/scripts/build-map-style.cjs`, light and dark). Re-run it after changing colours.
 - Done saves the start and the travel time (`Session.commuteMinutes`). The session sheet shows `start to place` with the minutes, and the scheduler keeps that time clear on both sides ([ADR-0029](../adr/0029-commute-buffer.md)). Synced sessions keep their place and take only the start.
-- **Vehicle** is Motorcycle (default), Car, Bike or Walk, saved as `User.defaultTransport`.
+- **Vehicle** is Motorcycle (default), Car, Bike or Walk, saved as `User.defaultTransport`. Settings, Travel sets it too.
+
+## Home and default commute
+
+Settings, Travel saves a home (`User.homeLocation`, `homeLat`, `homeLng`) and a vehicle once. The server then gives every session that has a campus place and no commute of its own that home as the start and the travel time for the vehicle ([ADR-0031](../adr/0031-default-commute-from-home.md)). It runs after a sync and when the home or vehicle changes. Editing a session's start or minutes keeps them; removing the home takes back what was filled.
 - With both points set, `GET /places/route` returns the line, distance and time, drawn on the map. Tapping the map drops a pin in the active field.
 
 | Vehicle | Route profile | Time |
@@ -60,4 +64,4 @@ Search and routes use `NOMINATIM_URL` and `ROUTING_URL` (defaults: the public Op
 
 - Prod and staging `/osrm/` routes. Only `/maps/` is served there.
 - Glyphs and sprites for labels.
-- Walk minutes and leave-by in `backend/src/places` and `backend/src/commute`.
+- Walk minutes and leave-by.

@@ -42,6 +42,11 @@ model User {
   /// Transport used for commute estimates. Null = not set yet.
   defaultTransport CommuteTransport?
 
+  /// Where the student's trips to campus start. Filled into sessions that have no start of their own.
+  homeLocation String? @db.VarChar(200)
+  homeLat      Float?
+  homeLng      Float?
+
   /// When the user finished (or skipped through) first-run onboarding; null = not yet. Set once, server-side.
   onboardedAt DateTime?
 
@@ -233,6 +238,8 @@ model Session {
   // route the app showed. The scheduler keeps this much clear on both sides of
   // the session (ADR-0029). Null when unknown.
   commuteMinutes  Int?
+  // True while the start and minutes came from the student's home and vehicle, so a change there can redo them. Any manual edit of the commute clears it.
+  commuteAuto     Boolean       @default(false)
   durationMinutes Int // positive multiple of 15
   deadline        DateTime? // required for TASK; null for fixed types (ASSIGNMENT/EXAM/LECTURE/DND)
   type            SessionType   @default(TASK)

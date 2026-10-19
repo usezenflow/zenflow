@@ -1,4 +1,5 @@
 import { forwardRef, Module } from "@nestjs/common";
+import { CommuteModule } from "../commute/commute.module";
 import { QueueModule } from "../queue/queue.module";
 import { IntegrationsModule } from "../integrations/integrations.module";
 import { LMSModule } from "../lms/lms.module";
@@ -58,6 +59,7 @@ import { TimetableWatcherService } from "./timetable-watcher.service";
     TagsModule,
     NotificationsModule,
     QueueModule,
+    CommuteModule,
     forwardRef(() => IntegrationsModule),
   ],
   providers: [
