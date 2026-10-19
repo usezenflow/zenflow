@@ -17,6 +17,7 @@ import {
   type DeleteRecurringSheetHandle,
 } from "@/components/tasks/delete-recurring-sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import type { SkipScope } from "@/api/check-off";
 import { useCheckOff } from "@/hooks/use-check-off";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
@@ -119,6 +120,8 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
   const [preparing, setPreparing] = useState(false);
   const [preps, setPreps] = useState<Session[]>([]);
   const [justSaved, setJustSaved] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const placeRef = useRef<(() => void) | null>(null);
   // For a prep plan: the lecture, exam or assignment it prepares for.
   const [target, setTarget] = useState<Session | null>(null);
   const setCheckOff = useCheckOff();
@@ -500,6 +503,22 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                       <Text className="text-[12px] font-semibold text-card">{t("Saved")}</Text>
                     </Animated.View>
                   )}
+                  {!session && (
+                    <Pressable
+                      testID="session.place"
+                      accessibilityRole="button"
+                      accessibilityLabel={t("Schedule it")}
+                      accessibilityState={{ disabled: offline || placing, busy: placing }}
+                      disabled={offline || placing}
+                      onPress={() => placeRef.current?.()}
+                      className={cn(
+                        "h-10 w-10 items-center justify-center rounded-full bg-primary active:opacity-80",
+                        (offline || placing) && "opacity-40",
+                      )}
+                    >
+                      {placing ? <Spinner size={18} tone="onPrimary" /> : <Plus size={20} className="text-primary-foreground" />}
+                    </Pressable>
+                  )}
                   {session && !offline && SKIPPABLE.has(session.type) && (
                     <GlassButton
                       testID="session-detail-skip"
@@ -639,6 +658,8 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                     onSaved={onSaved}
                     onSavedChange={setJustSaved}
                     onPlace={placeDraft}
+                    placeRef={placeRef}
+                    onPlacingChange={setPlacing}
                   />
                 </BottomSheetScrollView>
               )}
