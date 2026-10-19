@@ -1,16 +1,13 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
+  DEFAULT_VEHICLE,
   resolveCampusPlace,
-  routeMinutes,
-  routeSeconds,
-  vehicleFor,
+  type CommuteTransport,
 } from "@zenflow/shared";
 import { MAX_COMMUTE_MINUTES } from "../common/constants";
 import { PlacesService } from "../places/places.service";
 import { PrismaService } from "../prisma/prisma.service";
 
-/** Sessions that ended more than this long ago keep what they have. */
-const LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const BATCH = 500;
 
 interface Point {
@@ -20,7 +17,8 @@ interface Point {
 
 /**
  * Gives sessions that have a place but no commute of their own the student's
- * home as the start and the travel time for their vehicle (ADR-0029). Rows it
+ * home as the start and the travel time for their vehicle, riding to the
+ * nearest gate and walking in (ADR-0029, ADR-0031). Rows it
  * filled are marked `commuteAuto`, so a new home or vehicle redoes them; a
  * commute the student edited is never touched.
  */
@@ -45,7 +43,7 @@ export class CommuteDefaultsService {
   }
 
   /** Rows changed. */
-  async apply(userId: string, now: Date = new Date()): Promise<number> {
+  async apply(userId: string): Promise<number> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -56,7 +54,6 @@ export class CommuteDefaultsService {
       },
     });
     if (!user) return 0;
-    const since = new Date(now.getTime() - LOOKBACK_MS);
 
     if (user.homeLat === null || user.homeLng === null || !user.homeLocation) {
       // No home: take back what it filled so nothing keeps a stale buffer.
@@ -74,28 +71,60 @@ export class CommuteDefaultsService {
     }
 
     const home: Point = { lat: user.homeLat, lng: user.homeLng };
-    const vehicle = vehicleFor(user.defaultTransport);
-    const rows = await this.prisma.session.findMany({
-      where: {
-        userId,
-        deleted: false,
-        location: { not: null },
-        scheduledStartTime: { gte: since },
-        OR: [
-          { commuteAuto: true },
-          { originLocation: null, commuteMinutes: null },
-        ],
-      },
-      select: {
-        id: true,
-        location: true,
-        locationLat: true,
-        locationLng: true,
-      },
-      take: BATCH,
-    });
+    const transport = user.defaultTransport ?? DEFAULT_VEHICLE;
 
-    // One route per distinct destination: a timetable repeats a few buildings.
+    // Every session the student has, past ones included, a page at a time.
+    // Rows that cannot be filled stay selected, so the cursor moves past them.
+    let changed = 0;
+    let cursor: string | undefined;
+    for (;;) {
+      const rows = await this.prisma.session.findMany({
+        where: {
+          userId,
+          deleted: false,
+          location: { not: null },
+          OR: [
+            { commuteAuto: true },
+            { originLocation: null, commuteMinutes: null },
+          ],
+        },
+        select: {
+          id: true,
+          location: true,
+          locationLat: true,
+          locationLng: true,
+        },
+        orderBy: { id: "asc" },
+        take: BATCH,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
+      if (rows.length === 0) break;
+      cursor = rows[rows.length - 1].id;
+      changed += await this.fill(
+        userId,
+        user.homeLocation,
+        home,
+        transport,
+        rows,
+      );
+      if (rows.length < BATCH) break;
+    }
+    return changed;
+  }
+
+  private async fill(
+    userId: string,
+    homeName: string,
+    home: Point,
+    transport: CommuteTransport,
+    rows: {
+      id: string;
+      location: string | null;
+      locationLat: number | null;
+      locationLng: number | null;
+    }[],
+  ): Promise<number> {
+    // One trip per distinct destination: a timetable repeats a few buildings.
     const byDestination = new Map<string, { to: Point; ids: string[] }>();
     for (const row of rows) {
       const to = this.destinationOf(row);
@@ -108,19 +137,15 @@ export class CommuteDefaultsService {
 
     let changed = 0;
     for (const { to, ids } of byDestination.values()) {
-      const route = await this.places.route(vehicle.profile, home, to);
-      if (!route) continue;
-      const minutes = Math.min(
-        MAX_COMMUTE_MINUTES,
-        routeMinutes(routeSeconds(route, vehicle)),
-      );
+      const commute = await this.places.commute(transport, home, to);
+      if (!commute) continue;
       const result = await this.prisma.session.updateMany({
         where: { id: { in: ids }, userId },
         data: {
-          originLocation: user.homeLocation,
+          originLocation: homeName,
           originLat: home.lat,
           originLng: home.lng,
-          commuteMinutes: minutes,
+          commuteMinutes: Math.min(MAX_COMMUTE_MINUTES, commute.minutes),
           commuteAuto: true,
         },
       });

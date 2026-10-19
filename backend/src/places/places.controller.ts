@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import type { Response } from "express";
 import { CookieAuthGuard } from "../auth/guards";
+import { COMMUTE_TRANSPORTS, type CommuteTransport } from "@zenflow/shared";
 import { PlacesService, type RouteProfile } from "./places.service";
 
 const PROFILES: readonly RouteProfile[] = ["car", "bike", "foot"];
@@ -37,6 +38,32 @@ export class PlacesController {
       success: true,
       message: `Found ${places.length} places`,
       data: { places },
+    };
+  }
+
+  /**
+   * The trip for one vehicle. To the campus it stops at the gate or parking
+   * with the shorter total and walks the rest. `commute` is `null` when there
+   * is none.
+   */
+  @Get("commute")
+  async commute(
+    @Query("transport") transport = "MOTORCYCLE",
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+  ) {
+    if (!COMMUTE_TRANSPORTS.includes(transport as CommuteTransport)) {
+      throw new BadRequestException("Unknown transport.");
+    }
+    const commute = await this.places.commute(
+      transport as CommuteTransport,
+      parsePoint(from),
+      parsePoint(to),
+    );
+    return {
+      success: true,
+      message: commute ? "Found a route" : "No route",
+      data: { commute },
     };
   }
 

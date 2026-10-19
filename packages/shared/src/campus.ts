@@ -140,3 +140,23 @@ export function searchCampusPlaces(query: string, limit = 6): CampusSuggestion[]
     .slice(0, limit)
     .map((hit) => hit.suggestion);
 }
+
+/** Where a vehicle stops: the gates and the parking. Students walk in from here. */
+export const CAMPUS_ENTRIES: readonly CampusPlace[] = CAMPUS_PLACES.filter(
+  (place) => place.kind === "GATE" || place.kind === "PARKING",
+);
+
+/** About 160 m around the outermost campus place. */
+const CAMPUS_MARGIN_DEGREES = 0.0015;
+
+/** Whether a point lies on or just around the campus. */
+export function onCampus(point: { lat: number; lng: number }): boolean {
+  const lats = CAMPUS_PLACES.map((place) => place.lat);
+  const lngs = CAMPUS_PLACES.map((place) => place.lng);
+  return (
+    point.lat >= Math.min(...lats) - CAMPUS_MARGIN_DEGREES &&
+    point.lat <= Math.max(...lats) + CAMPUS_MARGIN_DEGREES &&
+    point.lng >= Math.min(...lngs) - CAMPUS_MARGIN_DEGREES &&
+    point.lng <= Math.max(...lngs) + CAMPUS_MARGIN_DEGREES
+  );
+}

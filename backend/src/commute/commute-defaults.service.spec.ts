@@ -1,12 +1,11 @@
 import { CommuteDefaultsService } from "./commute-defaults.service";
 
-const NOW = new Date("2026-10-19T03:00:00.000Z");
 const HOME = { lat: 11.94, lng: 108.43 };
 
 function makeService(options: {
   user?: Record<string, unknown> | null;
   rows?: Record<string, unknown>[];
-  route?: { distanceMeters: number; durationSeconds: number } | null;
+  commute?: { minutes: number } | null;
 }) {
   const user =
     options.user === undefined
@@ -30,12 +29,10 @@ function makeService(options: {
     session,
   };
   const places = {
-    route: jest
+    commute: jest
       .fn()
       .mockResolvedValue(
-        options.route === undefined
-          ? { distanceMeters: 5000, durationSeconds: 600, coordinates: [] }
-          : options.route,
+        options.commute === undefined ? { minutes: 14 } : options.commute,
       ),
   };
   const service = new CommuteDefaultsService(prisma as never, places as never);
@@ -50,21 +47,21 @@ describe("CommuteDefaultsService", () => {
       ],
     });
 
-    await expect(service.apply("u1", NOW)).resolves.toBe(1);
+    await expect(service.apply("u1")).resolves.toBe(1);
 
-    expect(places.route).toHaveBeenCalledWith(
-      "car",
+    expect(places.commute).toHaveBeenCalledWith(
+      "MOTORCYCLE",
       HOME,
       expect.objectContaining({ lat: expect.any(Number) as number }),
     );
-    // 5 km at 30 km/h.
+    // Ride to the nearest gate plus the walk inside.
     expect(session.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ["a"] }, userId: "u1" },
       data: {
         originLocation: "Home",
         originLat: HOME.lat,
         originLng: HOME.lng,
-        commuteMinutes: 10,
+        commuteMinutes: 14,
         commuteAuto: true,
       },
     });
@@ -78,9 +75,9 @@ describe("CommuteDefaultsService", () => {
       ],
     });
 
-    await service.apply("u1", NOW);
+    await service.apply("u1");
 
-    expect(places.route).toHaveBeenCalledTimes(1);
+    expect(places.commute).toHaveBeenCalledTimes(1);
   });
 
   it("skips a room that is not a campus place", async () => {
@@ -90,9 +87,9 @@ describe("CommuteDefaultsService", () => {
       ],
     });
 
-    await expect(service.apply("u1", NOW)).resolves.toBe(0);
+    await expect(service.apply("u1")).resolves.toBe(0);
 
-    expect(places.route).not.toHaveBeenCalled();
+    expect(places.commute).not.toHaveBeenCalled();
     expect(session.updateMany).not.toHaveBeenCalled();
   });
 
@@ -103,9 +100,9 @@ describe("CommuteDefaultsService", () => {
       ],
     });
 
-    await service.apply("u1", NOW);
+    await service.apply("u1");
 
-    expect(places.route).toHaveBeenCalledWith("car", HOME, {
+    expect(places.commute).toHaveBeenCalledWith("MOTORCYCLE", HOME, {
       lat: 11.95,
       lng: 108.44,
     });
@@ -114,10 +111,10 @@ describe("CommuteDefaultsService", () => {
   it("leaves rows alone when there is no route", async () => {
     const { service, session } = makeService({
       rows: [{ id: "a", location: "A8", locationLat: null, locationLng: null }],
-      route: null,
+      commute: null,
     });
 
-    await expect(service.apply("u1", NOW)).resolves.toBe(0);
+    await expect(service.apply("u1")).resolves.toBe(0);
 
     expect(session.updateMany).not.toHaveBeenCalled();
   });
@@ -125,7 +122,7 @@ describe("CommuteDefaultsService", () => {
   it("only picks rows the student has not set up", async () => {
     const { service, session } = makeService({ rows: [] });
 
-    await service.apply("u1", NOW);
+    await service.apply("u1");
 
     expect(session.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -139,6 +136,32 @@ describe("CommuteDefaultsService", () => {
     );
   });
 
+  it("reads every page and past sessions too", async () => {
+    const page = (from: number) =>
+      Array.from({ length: 500 }, (_, i) => ({
+        id: `s${from + i}`,
+        location: "A8",
+        locationLat: null,
+        locationLng: null,
+      }));
+    const { service, session } = makeService({});
+    session.findMany
+      .mockResolvedValueOnce(page(0))
+      .mockResolvedValueOnce(page(500).slice(0, 3));
+
+    await service.apply("u1");
+
+    expect(session.findMany).toHaveBeenCalledTimes(2);
+    const calls = session.findMany.mock.calls as [
+      { where: Record<string, unknown> },
+    ][];
+    expect(calls[0][0].where).not.toHaveProperty("scheduledStartTime");
+    expect(calls[1][0]).toMatchObject({
+      cursor: { id: "s499" },
+      skip: 1,
+    });
+  });
+
   it("takes back what it filled when the home is cleared", async () => {
     const { service, session } = makeService({
       user: {
@@ -149,7 +172,7 @@ describe("CommuteDefaultsService", () => {
       },
     });
 
-    await expect(service.apply("u1", NOW)).resolves.toBe(3);
+    await expect(service.apply("u1")).resolves.toBe(3);
 
     expect(session.updateMany).toHaveBeenCalledWith({
       where: { userId: "u1", commuteAuto: true },

@@ -49,7 +49,7 @@ The Location row opens a full-screen route planner (`components/calendar/locatio
 ## Home and default commute
 
 Settings, Travel saves a home (`User.homeLocation`, `homeLat`, `homeLng`) and a vehicle once. The server then gives every session that has a campus place and no commute of its own that home as the start and the travel time for the vehicle ([ADR-0031](../adr/0031-default-commute-from-home.md)). It runs after a sync and when the home or vehicle changes. Editing a session's start or minutes keeps them; removing the home takes back what was filled.
-- With both points set, `GET /places/route` returns the line, distance and time, drawn on the map. Tapping the map drops a pin in the active field.
+- With both points set, `GET /places/commute` returns the trip. To the campus, a ridden trip stops at the gate or parking with the shorter ride plus walk (vehicles are not allowed inside), and the planner shows `ride min`, `walk min from <gate>` and draws both. `GET /places/route` returns a single line. Tapping the map drops a pin in the active field.
 
 | Vehicle | Route profile | Time |
 | --- | --- | --- |

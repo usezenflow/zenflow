@@ -1,9 +1,10 @@
 import { updateBasicInfo } from "@/api/users";
 import { CampusMap } from "@/components/calendar/campus-map";
 import { PlacePalette, type Stop } from "@/components/calendar/place-palette";
-import { ChevronRight, Home, Motorbike } from "@/components/Icons";
+import { ChevronRight, Home } from "@/components/Icons";
 import { OptionSheet, type OptionSheetHandle } from "@/components/settings/option-sheet";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
+import { VEHICLE_ICONS } from "@/components/vehicle-icons";
 import { NoteScreen } from "@/components/tasks/note/description-field";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
@@ -197,7 +198,7 @@ export function TravelSection() {
         <View className="h-px bg-border" />
         <Row
           testID="settings.vehicle"
-          Icon={Motorbike}
+          Icon={VEHICLE_ICONS[vehicle.id]}
           title={t("Vehicle")}
           value={t(vehicle.labelKey)}
           onPress={() => vehicleSheet.current?.open()}
@@ -206,7 +207,7 @@ export function TravelSection() {
       <OptionSheet
         ref={vehicleSheet}
         title={t("Vehicle")}
-        options={VEHICLES.map((item) => ({ value: item.id, label: t(item.labelKey) }))}
+        options={VEHICLES.map((item) => ({ value: item.id, label: t(item.labelKey), icon: VEHICLE_ICONS[item.id] }))}
         value={vehicle.id}
         onSelect={(defaultTransport: CommuteTransport) => void save({ defaultTransport })}
       />

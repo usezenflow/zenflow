@@ -711,6 +711,7 @@ export default {
   "Couldn't load the route. Try again later.": "Không tải được đường đi. Thử lại sau.",
   From: "Xuất phát từ",
   "Starting point": "Điểm xuất phát",
+  "{minutes} min from {gate}": "{minutes} phút đi bộ từ {gate}",
   Travel: "Di chuyển",
   Home: "Nhà",
   "Add home": "Thêm nhà",

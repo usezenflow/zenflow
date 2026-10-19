@@ -38,3 +38,30 @@ export function routeSeconds(
 export function routeMinutes(seconds: number): number {
   return Math.max(1, Math.round(seconds / 60));
 }
+
+/** One stretch of a trip, timed for the vehicle that covers it. */
+export interface RouteLeg {
+  distanceMeters: number;
+  durationSeconds: number;
+  /** Whole minutes, at least one. */
+  minutes: number;
+  /** `[lng, lat]` pairs along the leg. */
+  coordinates: [number, number][];
+}
+
+/**
+ * `data.commute` of `GET /places/commute`. A ridden trip to the campus stops at
+ * the gate or parking with the shorter total and walks the rest, because
+ * vehicles are not allowed inside.
+ */
+export interface CommuteRoute {
+  /** Both legs together, whole minutes, at least one. */
+  minutes: number;
+  distanceMeters: number;
+  /** Null when the trip is all on foot. */
+  ride: RouteLeg | null;
+  /** Null when the trip is all ridden or the stop is the destination. */
+  walk: RouteLeg | null;
+  /** Where the ride ends and the walk starts; null without a walk after a ride. */
+  entry: { name: string; lat: number; lng: number } | null;
+}

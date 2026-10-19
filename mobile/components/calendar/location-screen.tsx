@@ -1,7 +1,7 @@
-import { fetchRoute } from "@/api/places";
+import { fetchCommute } from "@/api/places";
 import { updateBasicInfo } from "@/api/users";
 import { CampusMap } from "@/components/calendar/campus-map";
-import { Bike, Car, Footprints, MapPin, Motorbike, type LucideIcon } from "@/components/Icons";
+import { Footprints, MapPin } from "@/components/Icons";
 import { PlacePalette, type Stop } from "@/components/calendar/place-palette";
 import { NoteScreen } from "@/components/tasks/note/description-field";
 import { Notice } from "@/components/ui/notice";
@@ -9,20 +9,14 @@ import { Text } from "@/components/ui/text";
 import { useLanguage } from "@/hooks/use-language";
 import { useMyLocationStop } from "@/hooks/use-my-location-stop";
 import { useUserStore } from "@/hooks/use-user-store";
-import { type Route, VEHICLES, routeKilometres, routeMinutes, routeSeconds, vehicleFor } from "@/lib/campus-route";
+import { VEHICLES, routeKilometres, vehicleFor } from "@/lib/campus-route";
 import type { MapPoint } from "@/lib/campus-map";
 import { homeStop } from "@/lib/home-stop";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { VEHICLE_ICONS } from "@/components/vehicle-icons";
 import { CAMPUS_PLACES, resolveCampusPlace } from "@zenflow/core";
-import type { CommuteTransport } from "@zenflow/shared";
-
-const VEHICLE_ICONS: Record<CommuteTransport, LucideIcon> = {
-  MOTORCYCLE: Motorbike,
-  CAR: Car,
-  BIKE: Bike,
-  WALK: Footprints,
-};
+import type { CommuteRoute, CommuteTransport } from "@zenflow/shared";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -152,7 +146,7 @@ function Body({
   /** The stop the next map tap pins. */
   const [pinning, setPinning] = useState<Field>(destinationLocked ? "from" : "to");
   const [vehicleId, setVehicleId] = useState<CommuteTransport>(vehicleFor(user?.defaultTransport).id);
-  const [route, setRoute] = useState<Route | null>(null);
+  const [commute, setCommute] = useState<CommuteRoute | null>(null);
   const [routing, setRouting] = useState(false);
   const [routeFailed, setRouteFailed] = useState(false);
   const myLocation = useMyLocationStop();
@@ -165,22 +159,22 @@ function Body({
   // The trail: from the start to the destination, drawn once both are known.
   const startKey = start ? `${start.lat},${start.lng}` : "";
   const endKey = destination ? `${destination.lat},${destination.lng}` : "";
-  const tripKey = `${startKey}|${endKey}|${vehicle.profile}`;
+  const tripKey = `${startKey}|${endKey}|${vehicle.id}`;
   const initialTripKey = useRef(tripKey);
   useEffect(() => {
     setRouteFailed(false);
     if (!start || !destination) {
-      setRoute(null);
+      setCommute(null);
       setRouting(false);
       return;
     }
     const controller = new AbortController();
     setRouting(true);
-    fetchRoute(vehicle.profile, start, destination, controller.signal)
-      .then((next) => setRoute(next))
+    fetchCommute(vehicle.id, start, destination, controller.signal)
+      .then((next) => setCommute(next))
       .catch(() => {
         if (controller.signal.aborted) return;
-        setRoute(null);
+        setCommute(null);
         setRouteFailed(true);
       })
       .finally(() => {
@@ -189,7 +183,7 @@ function Body({
     return () => controller.abort();
     // The points are rebuilt each render, so the effect keys on their values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startKey, endKey, vehicle.profile]);
+  }, [startKey, endKey, vehicle.id]);
 
   const closePalette = () => {
     setSearching(null);
@@ -218,7 +212,9 @@ function Body({
     }
   };
 
-  const minutes = route ? routeMinutes(routeSeconds(route, vehicle)) : null;
+  const minutes = commute?.minutes ?? null;
+  // The ride, then the walk from the gate, drawn as one trail.
+  const trail = commute ? [...(commute.ride?.coordinates ?? []), ...(commute.walk?.coordinates ?? [])] : null;
   // Closing before the route loads, with both ends as they were, keeps the saved time.
   const unchanged = tripKey === initialTripKey.current;
   const done = () =>
@@ -251,7 +247,7 @@ function Body({
             fill
             point={destination ?? CAMPUS_CENTER}
             start={start}
-            route={route?.coordinates ?? null}
+            route={trail}
             name={to.text}
             onPick={(picked) => {
               const current = pinning === "from" ? from : to;
@@ -303,7 +299,7 @@ function Body({
               />
             ))}
           </View>
-          {start && destination && !routing && !route ? (
+          {start && destination && !routing && !commute ? (
             <Notice
               testID="session.location.summary"
               tone={routeFailed ? "error" : "info"}
@@ -318,15 +314,32 @@ function Body({
           ) : start && destination ? (
             <View testID="session.location.summary" className="flex-row items-center gap-3 px-1 pt-1">
               <Vehicle size={20} className="text-primary" />
-              {!route || minutes === null ? (
+              {!commute || minutes === null ? (
                 <Text className="text-[15px] font-medium text-muted-foreground">{t("Finding a route…")}</Text>
               ) : (
-                <Text className="text-[17px] font-bold">
-                  {t("{minutes} min", { minutes: String(minutes) })}
-                  <Text className="text-[15px] font-medium text-muted-foreground">
-                    {`  ${routeKilometres(route.distanceMeters)} km`}
+                <View className="min-w-0 flex-1 gap-0.5">
+                  <Text className="text-[17px] font-bold">
+                    {t("{minutes} min", { minutes: String(minutes) })}
+                    <Text className="text-[15px] font-medium text-muted-foreground">
+                      {`  ${routeKilometres(commute.distanceMeters)} km`}
+                    </Text>
                   </Text>
-                </Text>
+                  {commute.ride && commute.walk && commute.entry ? (
+                    <View testID="session.location.legs" className="flex-row items-center gap-1.5">
+                      <Vehicle size={14} className="text-muted-foreground" />
+                      <Text className="text-[13px] text-muted-foreground">
+                        {t("{minutes} min", { minutes: String(commute.ride.minutes) })}
+                      </Text>
+                      <Footprints size={14} className="text-muted-foreground" />
+                      <Text numberOfLines={1} className="min-w-0 flex-1 text-[13px] text-muted-foreground">
+                        {t("{minutes} min from {gate}", {
+                          minutes: String(commute.walk.minutes),
+                          gate: commute.entry.name,
+                        })}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
               )}
             </View>
           ) : null}
