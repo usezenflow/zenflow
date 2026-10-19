@@ -3,7 +3,6 @@ import type {
   Session,
   SessionCheckOffResponse,
   SessionsListResponse,
-  StreakResponse,
 } from "@zenflow/shared";
 import request from "supertest";
 import { PrismaClient } from "../generated/prisma";
@@ -21,14 +20,13 @@ import {
 /**
  * Done and skipped state (#247) through the real API and Postgres:
  * complete, skip and undo on plain rows and recurring occurrences, the
- * `COMPLETE` / `SKIP` telemetry rows, and the daily streak.
+ * and the `COMPLETE` / `SKIP` telemetry rows.
  */
 jest.setTimeout(180_000);
 
 const SLOT = 15 * 60_000;
 const DAY = 24 * 3_600_000;
 const SESSIONS = "/api/v1/sessions";
-const STREAK = "/api/v1/users/me/streak";
 
 let api: Proc;
 let prisma: PrismaClient;
@@ -95,7 +93,6 @@ describe("completing a session", () => {
     expect(done.session.id).toBe(s.id);
     expect(done.session.completedAt).not.toBeNull();
     expect(done.session.skipped).toBe(false);
-    expect(done.streak).toMatchObject({ current: 1, todayDone: true });
     expect(await events(s.id)).toEqual([
       expect.objectContaining({ eventType: "COMPLETE" }),
     ]);
@@ -109,7 +106,6 @@ describe("completing a session", () => {
       await student.agent.delete(path(s.id, "complete")).expect(200),
     );
     expect(undone.session.completedAt).toBeNull();
-    expect(undone.streak).toMatchObject({ current: 0, todayDone: false });
     expect(await events(s.id)).toEqual([]);
   });
 
@@ -135,7 +131,6 @@ describe("completing a session", () => {
       await student.agent.post(path(s.id, "skip")).expect(201),
     );
     expect(skipped.session).toMatchObject({ completedAt: null, skipped: true });
-    expect(skipped.streak.current).toBe(0);
     expect(await events(s.id)).toEqual([
       expect.objectContaining({ eventType: "SKIP" }),
     ]);
@@ -156,7 +151,6 @@ describe("completing a session", () => {
 
   it("requires a login", async () => {
     await request(API_URL).post(path("any", "complete")).expect(401);
-    await request(API_URL).get(STREAK).expect(401);
   });
 });
 
@@ -200,37 +194,5 @@ describe("recurring occurrences", () => {
     const start = Date.parse(rep.scheduledStartTime as string);
     const bogus = `${rep.seriesId}::${iso(start + 10 * DAY)}`;
     await student.agent.post(path(bogus, "complete")).expect(404);
-  });
-});
-
-describe("GET /users/me/streak", () => {
-  it("ignores completed lectures", async () => {
-    const student = await signUp("streak-lecture");
-    const l = await lecture(student);
-    await student.agent.post(path(l.id, "complete")).expect(201);
-
-    const streak = data<StreakResponse>(
-      await student.agent.get(STREAK).expect(200),
-    );
-    expect(streak).toMatchObject({ current: 0, todayDone: false });
-  });
-
-  it("counts days with at least one completed task", async () => {
-    const student = await signUp("streak");
-    const a = await task(student, { title: "A" });
-    const b = await task(student, { title: "B" });
-    await student.agent.post(path(a.id, "complete")).expect(201);
-    await student.agent.post(path(b.id, "complete")).expect(201);
-
-    const streak = data<StreakResponse>(
-      await student.agent.get(STREAK).expect(200),
-    );
-    expect(streak).toMatchObject({
-      current: 1,
-      longest: 1,
-      freezesAvailable: 0,
-      frozenDays: [],
-      todayDone: true,
-    });
   });
 });

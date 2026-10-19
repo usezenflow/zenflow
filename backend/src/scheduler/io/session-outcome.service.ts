@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import {
   Prisma,
@@ -17,7 +17,6 @@ import {
   SESSION_WRONG_TIME_REWARD,
 } from "../constants";
 import { completionOutcome, type CompletionOutcome } from "../core/reward";
-import { SpiritsService } from "../../spirits/spirits.service";
 import { SchedulingFeedbackService } from "./scheduling-feedback.service";
 import { runCronJob } from "../../observability/cron";
 import { schedulerSessionEvents } from "../../observability/metrics";
@@ -97,7 +96,6 @@ export class SessionOutcomeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly schedulingFeedback: SchedulingFeedbackService,
-    @Optional() private readonly spirits?: SpiritsService,
   ) {}
 
   /** Every 30 minutes. `now` is injectable for tests. */
@@ -125,22 +123,12 @@ export class SessionOutcomeService {
         const settled = await this.settleBatch(outcomes, now);
         total += settled.length;
         await this.applyDelayedRewards(settled);
-        await this.creditSparks(settled, now);
       }
 
       if (candidates.length < OUTCOME_BATCH_SIZE) break;
     }
 
     return total;
-  }
-
-  /** A settled `START` is a spark: credit each user once per batch. */
-  private async creditSparks(settled: Settled[], now: Date): Promise<void> {
-    if (!this.spirits) return;
-    const users = new Set(
-      settled.filter((s) => s.outcome === "STARTED").map((s) => s.userId),
-    );
-    for (const userId of users) await this.spirits.credit(userId, now);
   }
 
   private findCandidateBatch(

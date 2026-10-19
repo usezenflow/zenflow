@@ -231,7 +231,7 @@ describe("SessionDetailSheet", () => {
         http.post(`${API}/sessions/prep-1/complete`, () => {
           called = true;
           return HttpResponse.json({
-            data: { session: { ...plan, completedAt: "2099-01-01T01:30:00.000Z" }, streak: null },
+            data: { session: { ...plan, completedAt: "2099-01-01T01:30:00.000Z" } },
           });
         }),
       );
@@ -263,7 +263,7 @@ describe("SessionDetailSheet", () => {
         http.post(`${API}/sessions/prep-1/complete`, () => {
           called = true;
           return HttpResponse.json({
-            data: { session: prep({ completedAt: "2099-01-01T01:30:00.000Z" }), streak: null },
+            data: { session: prep({ completedAt: "2099-01-01T01:30:00.000Z" }) },
           });
         }),
       );
@@ -286,7 +286,7 @@ describe("SessionDetailSheet", () => {
         http.get(`${API}/sessions/exam-1`, () => HttpResponse.json({ data: { ...exam, prepSessions: [] } })),
         http.post(`${API}/sessions/exam-1/skip`, () => {
           called = true;
-          return HttpResponse.json({ data: { session: { ...exam, skipped: true }, streak: null } });
+          return HttpResponse.json({ data: { session: { ...exam, skipped: true } } });
         }),
       );
       const ref = renderSheet();
@@ -310,7 +310,7 @@ describe("SessionDetailSheet", () => {
         http.get(`${API}/sessions/tt-1`, () => HttpResponse.json({ data: { ...skipped, prepSessions: [] } })),
         http.delete(`${API}/sessions/tt-1/skip`, ({ request }) => {
           url = request.url;
-          return HttpResponse.json({ data: { session: { ...skipped, skipped: false }, streak: null } });
+          return HttpResponse.json({ data: { session: { ...skipped, skipped: false } } });
         }),
       );
       const ref = renderSheet();

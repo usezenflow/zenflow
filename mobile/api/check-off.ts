@@ -7,7 +7,7 @@ export type SkipScope = "occurrence" | "following" | "all";
 
 /**
  * Set or undo a done (`complete`) or missed (`skip`) state. Returns the updated
- * session and the user's streak (`{ session, streak }`).
+ * session (`{ session }`).
  */
 export async function checkOff(
   id: string,

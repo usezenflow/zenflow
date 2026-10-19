@@ -22,7 +22,6 @@ owns:
   - backend/prisma/**
   - backend/scripts/send-test-notification.ts
   - backend/src/places/**
-  - backend/src/spirits/**
   - packages/shared/**
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---

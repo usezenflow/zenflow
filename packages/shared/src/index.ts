@@ -13,7 +13,6 @@ export * from "./placement";
 export * from "./prep";
 export * from "./file";
 export * from "./file-limits";
-export * from "./streak";
-export * from "./spirits";
+export * from "./check-off";
 export * from "./course-colour";
 export * from "./student";

@@ -24,9 +24,6 @@ export const LinearGradient = el("linearGradient");
 export const RadialGradient = el("radialGradient");
 export const Stop = el("stop");
 
-// Spirit art arrives as an XML string. Tests only need a sized element for it.
-export const SvgXml = ({ width, height }: { width?: number; height?: number }) =>
-  React.createElement("svg", { width, height, "data-testid": "svg-xml" });
 export const ClipPath = el("clipPath");
 export const Mask = el("mask");
 export const Text = el("text");

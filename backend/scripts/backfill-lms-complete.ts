@@ -3,8 +3,8 @@
  * completed them.
  *
  * The materializer now completes an assignment when it first sees the
- * submission. Rows already stamped `submittedAt` keep `completedAt` null, so
- * they earn no sparks. This writes `completedAt` and the `COMPLETE` event.
+ * submission. Rows already stamped `submittedAt` keep `completedAt` null.
+ * This writes `completedAt` and the `COMPLETE` event.
  *
  *   pnpm --filter backend backfill:lms-complete            # check them off
  *   pnpm --filter backend backfill:lms-complete --dry-run  # only count them

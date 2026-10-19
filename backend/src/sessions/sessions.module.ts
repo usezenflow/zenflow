@@ -11,8 +11,6 @@ import { TagsModule } from "../tags/tags.module";
 import { RemindersModule } from "../reminders/reminders.module";
 import { FilesModule } from "../files/files.module";
 import { SchedulerModule } from "../scheduler/scheduler.module";
-import { SpiritsModule } from "../spirits/spirits.module";
-import { StreaksModule } from "../streaks/streaks.module";
 import { SessionCheckOffService } from "./session-check-off.service";
 import { PlacementPlanService } from "./placement-plan.service";
 
@@ -23,8 +21,6 @@ import { PlacementPlanService } from "./placement-plan.service";
     SchedulerModule,
     RemindersModule,
     FilesModule,
-    StreaksModule,
-    SpiritsModule,
   ],
   controllers: [SessionsController],
   providers: [

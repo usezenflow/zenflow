@@ -1,9 +1,7 @@
 import { Test } from "@nestjs/testing";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import type { Streak } from "@zenflow/shared";
 import type { SessionSeries, User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
-import { StreaksService } from "../streaks/streaks.service";
 import {
   nextCheckOffState,
   SessionCheckOffService,
@@ -12,14 +10,6 @@ import type { SessionRow } from "./types/session-row";
 
 const user = { id: "user-1", timezone: "UTC" } as User;
 const now = new Date("2026-10-14T10:00:00.000Z");
-const streak: Streak = {
-  current: 1,
-  longest: 1,
-  freezesAvailable: 0,
-  frozenDays: [],
-  lastActiveDay: "2026-10-14",
-  todayDone: true,
-};
 
 function row(overrides: Partial<SessionRow> = {}): SessionRow {
   return {
@@ -112,10 +102,6 @@ async function build(prisma: unknown) {
     providers: [
       SessionCheckOffService,
       { provide: PrismaService, useValue: prisma },
-      {
-        provide: StreaksService,
-        useValue: { refresh: jest.fn().mockResolvedValue(streak) },
-      },
     ],
   }).compile();
   return module.get(SessionCheckOffService);
@@ -145,7 +131,7 @@ describe("nextCheckOffState", () => {
 });
 
 describe("SessionCheckOffService", () => {
-  it("completes a row, writes a COMPLETE event and returns the streak", async () => {
+  it("completes a row, writes a COMPLETE event", async () => {
     const { prisma, tx } = fakePrisma(row());
     const service = await build(prisma);
 
@@ -158,7 +144,6 @@ describe("SessionCheckOffService", () => {
       data: { eventType: "COMPLETE", sessionId: "s-1" },
     });
     expect(res.session.completedAt).toBe(now.toISOString());
-    expect(res.streak).toBe(streak);
   });
 
   it("undoing a completion deletes its event and writes none", async () => {

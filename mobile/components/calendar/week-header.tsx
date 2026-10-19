@@ -1,6 +1,5 @@
 import { Plus } from "@/components/Icons";
 import { GlassButton } from "@/components/ui/glass-button";
-import { StreakBadge } from "./streak-badge";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { format, formatTitle } from "@/lib/i18n";
@@ -179,7 +178,7 @@ interface WeekHeaderProps {
   displayDate?: Date;
   tz: string;
   onSelectDay: (day: Date) => void;
-  /** Opens a new, empty plan. The `+` sits beside the streak. */
+  /** Opens a new, empty plan. The `+` sits beside the search button. */
   onCreate?: () => void;
   /** Pager strip offset, owned by `WeekScreen`. The header's week swipe writes
    * it 1:1 with the finger so the pager slides one page in lockstep. */
@@ -438,7 +437,6 @@ function WeekHeaderImpl(
             </Text>
           </View>
           <View className="flex-row items-center gap-2">
-            <StreakBadge />
             {onCreate && (
               <GlassButton
                 icon={Plus}

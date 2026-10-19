@@ -4,7 +4,6 @@ import { Prisma } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { SyncDigest } from "./core/sync-digest";
 import { MaterializerService } from "./materializer.service";
-import { SpiritsService } from "../spirits/spirits.service";
 import { SyncConflictsService } from "./sync-conflicts.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import { NotificationPubSub } from "../notifications/notification-pubsub.service";
@@ -338,7 +337,6 @@ async function makeService(
 ) {
   const db = makePrismaDouble();
   const prisma = db.client as unknown as PrismaService;
-  const spirits = { credit: jest.fn().mockResolvedValue(1) };
   const config = {
     get: (name: string) => (name === "DLU_TZ" ? "Asia/Ho_Chi_Minh" : undefined),
   } as unknown as ConfigService;
@@ -358,12 +356,11 @@ async function makeService(
       ...(syncConflicts
         ? [{ provide: SyncConflictsService, useValue: syncConflicts }]
         : []),
-      { provide: SpiritsService, useValue: spirits },
     ],
   }).compile();
   const service = module.get<MaterializerService>(MaterializerService);
   const queues = module.get<{ enqueueBestEffort: jest.Mock }>(QueueService);
-  return { db, service, queues, spirits };
+  return { db, service, queues };
 }
 
 /** A lecture block for a DLU term (`now` in the tests sits in HK01 2026). */
@@ -658,25 +655,23 @@ describe("MaterializerService", () => {
       );
     });
 
-    it("settles the spark and raises a done notification on completion", async () => {
-      const { db, service, spirits } = await makeService();
+    it("raises a done notification on completion", async () => {
+      const { db, service } = await makeService();
 
       await service.materialize(USER, [submitted()], "LMS", FIRST);
 
-      expect(spirits.credit).toHaveBeenCalledWith(USER, FIRST);
       const done = db.notifications.filter(
         (n) => n.eventName === "assignment.completed",
       );
       expect(done).toHaveLength(1);
-      expect(done[0].content).toBe("Spark added to your egg.");
+      expect(done[0].content).toBe("Checked off from LMS.");
     });
 
     it("raises no done notification for an open assignment", async () => {
-      const { db, service, spirits } = await makeService();
+      const { db, service } = await makeService();
 
       await service.materialize(USER, [block()], "LMS", FIRST);
 
-      expect(spirits.credit).not.toHaveBeenCalled();
       expect(
         db.notifications.some((n) => n.eventName === "assignment.completed"),
       ).toBe(false);

@@ -61,15 +61,3 @@ export function MeTabIcon({ color, size }: TabIconProps) {
     </Svg>
   );
 }
-
-const EGG_OUTLINE =
-  "M100 34 C 136 34 156 98 156 128 C 156 162 132 182 100 182 C 68 182 44 162 44 128 C 44 98 64 34 100 34 Z";
-
-/** The egg from the spirit art: the Spirits tab. */
-export function SpiritTabIcon({ color, size }: TabIconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 200 200" fill="none">
-      <Path d={EGG_OUTLINE} stroke={color} strokeWidth={14} />
-    </Svg>
-  );
-}

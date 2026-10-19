@@ -5,7 +5,6 @@ import { LMSModule } from "../lms/lms.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { PortalAPIModule } from "../portal/portal-api.module";
 import { PrismaModule } from "../prisma/prisma.module";
-import { SpiritsModule } from "../spirits/spirits.module";
 import { TagsModule } from "../tags/tags.module";
 import { EnrollmentDiscoveryService } from "./enrollment-discovery.service";
 import { ExamWatcherService } from "./exam-watcher.service";
@@ -59,7 +58,6 @@ import { TimetableWatcherService } from "./timetable-watcher.service";
     TagsModule,
     NotificationsModule,
     QueueModule,
-    SpiritsModule,
     forwardRef(() => IntegrationsModule),
   ],
   providers: [

@@ -68,7 +68,6 @@
     "@prisma/instrumentation": "^6.19.3",
     "@react-email/components": "^1.0.12",
     "@zenflow/shared": "workspace:*",
-    "@zenflow/spirits": "workspace:*",
     "axios": "^1.11.0",
     "bullmq": "^6.3.11",
     "cache-manager": "^7.1.1",

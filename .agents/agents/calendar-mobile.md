@@ -4,7 +4,6 @@ summary: "Expo/React Native app and its HTML mockups"
 description: "Zenflow's native app: Expo Router, NativeWind, bottom sheets, SecureStore session, signed-URL file embeds, plus the static HTML mobile mockups in mockups/. Use for any mobile/ or mockups/ work."
 owns:
   - mobile/**
-  - packages/spirits/**
   - mockups/**
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---

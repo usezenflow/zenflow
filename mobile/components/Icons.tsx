@@ -128,7 +128,6 @@ import {
   Users,
   X,
   Crown,
-  Egg,
   Gem,
   Sprout,
   Target,
@@ -149,7 +148,6 @@ function interopIcon(icon: LucideIcon) {
 }
 interopIcon(Settings);
 interopIcon(Crown);
-interopIcon(Egg);
 interopIcon(Gem);
 interopIcon(Sprout);
 interopIcon(Target);
@@ -417,7 +415,6 @@ export {
   Palette,
   Smartphone,
   Crown,
-  Egg,
   Gem,
   Sprout,
   Target,
