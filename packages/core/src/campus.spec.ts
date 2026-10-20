@@ -20,8 +20,8 @@ describe("resolveCampusPlace", () => {
     ["san the chat", "Sân thể chất"],
     ["Sân thể chất", "Sân thể chất"],
     ["Thu vien", "Thư viện"],
-    ["Cổng sau", "Công sau"],
-    ["Công sau", "Công sau"],
+    ["Cổng sau", "Cổng sau"],
+    ["cong sau", "Cổng sau"],
   ])("resolves %s to %s", (location, name) => {
     expect(resolveCampusPlace(location)?.name).toBe(name);
   });
@@ -63,7 +63,7 @@ describe("searchCampusPlaces", () => {
   });
 
   it("stores the place name as the value", () => {
-    expect(searchCampusPlaces("cong sau")[0].value).toBe("Công sau");
+    expect(searchCampusPlaces("cong sau")[0].value).toBe("Cổng sau");
   });
 
   it("caps the result count", () => {

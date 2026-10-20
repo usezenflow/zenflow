@@ -1,10 +1,10 @@
 /**
- * Native mobile push — device registration + the payload the app receives.
+ * Push: device registration and the payload the client receives.
  *
- * A device is identified by a single opaque provider token (an FCM registration
- * token on Android, an APNs device token on iOS). Unlike the Web Push protocol
- * there is no per-endpoint key material to carry — the token is the whole
- * address — so registration is just `{ platform, pushToken }`.
+ * A device is identified by one opaque `pushToken`: an FCM registration token
+ * (Android), an APNs device token (iOS) or a Web Push subscription endpoint
+ * (WEB). WEB also carries the subscription's `p256dh` and `auth` keys; native
+ * platforms send `null` for both.
  *
  * As everywhere in this package: "absent" is an explicit value, never an
  * optional property, and everything that crosses the wire is a plain string.
@@ -31,10 +31,21 @@ export const PUSH_CATEGORY_CONFLICT = "sync_conflict";
 /** Action identifier of that button (`NotificationResponse.actionIdentifier`). */
 export const PUSH_ACTION_RESCHEDULE = "reschedule";
 
+/** iOS notification category of a two-time plan offer (background buttons). */
+export const PUSH_CATEGORY_PLAN_OFFER = "plan_offer";
+
+/** Action identifiers of the two plan-offer buttons: keep the scheduler's time, or prefer the other. */
+export const PUSH_ACTION_KEEP = "keep";
+export const PUSH_ACTION_PREFER = "prefer";
+
 /** Event slug → action category, or `null` when the push has no buttons. */
 export function pushCategoryFor(eventName: string): string | null {
-  return eventName.startsWith("sync_conflict.") ? PUSH_CATEGORY_CONFLICT : null;
+  if (eventName.startsWith("sync_conflict.")) return PUSH_CATEGORY_CONFLICT;
+  if (eventName.startsWith("plan_offer.")) return PUSH_CATEGORY_PLAN_OFFER;
+  return null;
 }
+
+
 
 /**
  * Android channel id per tone. Channel sound is immutable once created, so
@@ -52,12 +63,18 @@ export function pushSoundFile(tone: PushTone): string {
 }
 
 /** Which push provider a device token belongs to. Mirrors the Prisma enum. */
-export type DevicePlatform = "IOS" | "ANDROID";
+export type DevicePlatform = "IOS" | "ANDROID" | "WEB";
 
-/** Request body for `POST /devices` — register (or refresh) one device. */
+/**
+ * Request body for `POST /devices` — register (or refresh) one device.
+ * `p256dh` and `auth` are required (non-empty) when `platform` is `WEB`, and `null` otherwise.
+ */
 export interface RegisterDeviceInput {
   platform: DevicePlatform;
+  /** FCM or APNs token; for WEB, the push subscription endpoint URL (https). */
   pushToken: string;
+  p256dh: string | null;
+  auth: string | null;
 }
 
 /** Request body for `DELETE /devices` — unregister one device by its token. */
@@ -81,6 +98,8 @@ export interface PushDataPayload {
   /** The notification's `eventName` slug, for the app to classify without a round-trip. */
   eventName: string;
   sessionId: string;
+  /** A plan offer's proposal, or `""`. Keep and Prefer map to its two times. */
+  slotProposalId: string;
   /** In-app path to open — `"/calendar?session=<id>"` or `"/notifications"`. */
   url: string;
 }
