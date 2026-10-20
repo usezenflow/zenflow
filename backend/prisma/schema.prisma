@@ -25,6 +25,11 @@ enum Language {
   EN_US @map("en-US")
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model User {
   id                 String              @id @default(uuid())
   studentProfile     StudentProfile?
@@ -35,6 +40,9 @@ model User {
   email              String              @unique @db.VarChar(255)
   timezone           String              @default("Asia/Saigon") @db.VarChar(50)
   lang               Language            @default(VI_VN)
+
+  /// Gates `/admin/*` (read-only management data). Set in the database; no API grants it.
+  role UserRole @default(USER)
 
   /// Reminder lead time (minutes) applied to new sessions that omit `reminders`; 0 = none.
   defaultReminderMinutes Int @default(10)
@@ -52,7 +60,6 @@ model User {
 
   /// User intent for native push (Settings toggle / OS-permission denial, set by mobile). Gates push fan-out only; in-app/SSE unaffected.
   allowNotifications Boolean @default(true)
-
 
   preferenceMatrix          Float[]   @default([])
   preferenceMatrixDecayedAt DateTime?
@@ -75,6 +82,7 @@ model User {
   integrations   Integration[]
   notifications  Notification[]
   slotProposals  SlotProposal[]
+  clientEvents   ClientEvent[]
 
   banditArmStates BanditArmState[]
 
@@ -157,17 +165,21 @@ model UserEncryptionKey {
 enum DevicePlatform {
   IOS
   ANDROID
+  WEB
 }
 
-// Native push registration (FCM on Android, APNs on iOS); one row per device
-// so a user can have multiple. `pushToken` is the raw provider token — an
-// opaque string, unique per (app install, device, provider), so it is the
-// natural key: registration upserts on it and a device re-homes to whoever
-// logs in on it (the `userId` is rewritten on conflict).
+// Push registration (FCM on Android, APNs on iOS, Web Push on WEB); one row per
+// device so a user can have multiple. `pushToken` is the raw provider token —
+// for WEB the push subscription endpoint — unique, so it is the natural key:
+// registration upserts on it and a device re-homes to whoever logs in on it
+// (the `userId` is rewritten on conflict). `p256dh` and `auth` are the Web Push
+// subscription keys, set on WEB rows only.
 model UserDevice {
   id         String         @id @default(uuid())
   platform   DevicePlatform
   pushToken  String         @unique
+  p256dh     String?
+  auth       String?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   lastSeenAt DateTime?
@@ -188,10 +200,10 @@ model Tag {
 
   // Implicit many-to-many with Session.
   sessions Session[]
+  // GET /sessions/search uses the `Tag_name_unaccent_idx` expression index, which lives in migrations only.
 
   @@unique([userId, name])
   @@index([userId])
-  // GET /sessions/search uses the `Tag_name_unaccent_idx` expression index, which lives in migrations only.
 }
 
 enum SessionType {
@@ -264,8 +276,8 @@ model Session {
   // treats `lastMovedAt == null` as "never moved".
   lastMovedAt DateTime?
   // Set on insert; the daily cap on automatic prep plans counts rows by it.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   // Settlement stamp of the outcome sweep (ADR-0023): set once an unmoved TASK's
   // outcome (completed, skipped or missed) is recorded, so a re-run is a no-op.
   // The name predates ADR-0023; it is not a retained flag.
@@ -311,8 +323,8 @@ model Session {
   // `prepForOccurrenceStart` pins one occurrence when the target is a recurring lecture.
   prepForSessionId       String?
   prepForOccurrenceStart DateTime?
-  prepForSession   Session?  @relation("PrepFor", fields: [prepForSessionId], references: [id], onDelete: SetNull)
-  prepSessions     Session[] @relation("PrepFor")
+  prepForSession         Session?  @relation("PrepFor", fields: [prepForSessionId], references: [id], onDelete: SetNull)
+  prepSessions           Session[] @relation("PrepFor")
 
   seriesId String? // for series with rrule, only create a representative session and filter sessions belonging to a series whose rrule covers a particular day range
   series   SessionSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
@@ -391,12 +403,12 @@ model Session {
 }
 
 model SessionSeries {
-  id        String      @id @default(uuid())
-  createdAt DateTime    @default(now())
-  type      SessionType @default(DND) // recurring DND/ASSIGNMENT/EXAM/LECTURE (via rrule), or TASK (multi-sitting via sessionCount)
-  deadline  DateTime? // null for a recurring series; the shared deadline for a TASK series
-  rrule     String? // the recurrence rule — set for a recurring series, null for a TASK series
-  exdates   String[]    @default([]) // ISO instants of individually-deleted occurrences (rrule series only)
+  id          String      @id @default(uuid())
+  createdAt   DateTime    @default(now())
+  type        SessionType @default(DND) // recurring DND/ASSIGNMENT/EXAM/LECTURE (via rrule), or TASK (multi-sitting via sessionCount)
+  deadline    DateTime? // null for a recurring series; the shared deadline for a TASK series
+  rrule       String? // the recurrence rule — set for a recurring series, null for a TASK series
+  exdates     String[]    @default([]) // ISO instants of individually-deleted occurrences (rrule series only)
   skippedFrom DateTime? // occurrences starting at or after this are skipped ("skip this and following" / "all"); rrule series only
 
   userId String
@@ -682,8 +694,8 @@ model Integration {
 }
 
 model Notification {
-  id                 String    @id @default(uuid())
-  sentAt             DateTime  @default(now())
+  id                 String     @id @default(uuid())
+  sentAt             DateTime   @default(now())
   readAt             DateTime?
   actionTakenAt      DateTime?
   // Stable machine-readable slug ("assignment.created", "lecture.removed",
@@ -702,7 +714,11 @@ model Notification {
   eventEndsAt        DateTime?
   // A CONFLICT row's (see `notificationEventKind`) user's flexible tasks the
   // sync landed on top of.
-  conflictSessionIds String[]  @default([])
+  conflictSessionIds String[]   @default([])
+  // A `plan_offer.*` row's pairwise proposal, and its two start times as
+  // `[keep, prefer]`: the scheduler's time, then the other policy's.
+  slotProposalId     String?
+  offerSlots         DateTime[] @default([])
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -711,6 +727,7 @@ model Notification {
   session   Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([userId, sentAt(sort: Desc)])
+  @@index([slotProposalId])
 }
 
 enum JobStatus {
@@ -1323,4 +1340,26 @@ model LmsCourseSeen {
   @@id([userId, lmsCourseId, scope])
   // Fan-out direction: who last saw this exact view.
   @@index([lmsCourseId, scope, fingerprint])
+}
+
+enum ClientEventKind {
+  OFFER_SHOWN // a two-time offer was shown to the student
+  APP_OPEN // the app came to the foreground
+}
+
+/// Passive exposure from the app: what the student was shown and when they opened the app.
+/// Feeds the offer funnel and the activity-alignment metric (ADR-0025).
+model ClientEvent {
+  id             String          @id @default(uuid())
+  kind           ClientEventKind
+  channel        String? // "PUSH" | "INBOX" | "TOAST" for OFFER_SHOWN
+  slotProposalId String?
+  sessionId      String?
+  occurredAt     DateTime        @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt])
+  @@index([slotProposalId])
 }
