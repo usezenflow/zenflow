@@ -24,7 +24,7 @@ A `changes` job diffs the PR and skips jobs it cannot affect. Skipped jobs pass 
 | Vault and compose validation | compose, ops, env, nginx, observability, `scripts/deploy/` |
 | Agents sync | `.agents/`, `.claude/`, `.codex/`, `AGENTS.md` |
 
-- Lint (changed files), typecheck (shared, core, backend, frontend, mobile).
+- Lint (changed files), typecheck (shared, core, backend, pwa, mobile).
 - Unit tests: backend Jest, mobile Vitest, bandit pytest and ruff.
 - Prisma drift. No e2e runs in CI.
 - API image build smoke test, gitleaks.
@@ -42,7 +42,7 @@ E2E jobs generate a throwaway `backend/.env.test` with random secrets (`.github/
 ## Deploy
 
 - `scripts/deploy/deploy.sh` targets docker compose on a Linux host over SSH (`backend/compose.{staging,prod}.yml`, images from GHCR). For ECS, Fly or K8s replace its `REMOTE STEPS` block.
-- The frontend deploys through Netlify (`frontend/netlify.toml`).
+- The pwa deploys to Cloudflare Workers (`pwa/wrangler.jsonc`, `pnpm --filter pwa deploy`).
 - Deploys stay off until `DEPLOY_ENABLED` is set.
 - Compose reads `ZENFLOW_API_IMAGE` and `ZENFLOW_BANDIT_IMAGE`. Defaults build locally.
 
@@ -155,5 +155,5 @@ It checks the old colour, repoints nginx and the queue roles, and keeps the bad 
 
 ## Known gaps
 
-- Lint debt (about 32 backend, 5 frontend errors). `lint` checks changed files only.
-- `frontend/e2e/` is missing. The Playwright job skips until specs land.
+- Lint debt (about 32 backend, 5 pwa errors). `lint` checks changed files only.
+- `pwa/e2e/` is missing. The Playwright job skips until specs land.

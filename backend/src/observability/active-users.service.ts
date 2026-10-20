@@ -64,6 +64,26 @@ export class ActiveUsersService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Distinct active users per UTC day for the last `days` days, oldest first. */
+  async dailyCounts(
+    now = new Date(),
+    days = 8,
+  ): Promise<{ day: string; dau: number }[]> {
+    const keys = activeDayKeys(now, days).reverse();
+    const counts = await Promise.all(
+      keys.map((key) => this.redis.pfcount(key)),
+    );
+    return keys.map((key, i) => ({
+      day: key.slice("active:users:".length),
+      dau: counts[i],
+    }));
+  }
+
+  /** Distinct active users across the last seven UTC days. */
+  async weeklyCount(now = new Date()): Promise<number> {
+    return this.redis.pfcount(...activeDayKeys(now, 7));
+  }
+
   /** Recomputes the DAU and WAU gauges from Redis. */
   async refresh(now = new Date()): Promise<void> {
     try {

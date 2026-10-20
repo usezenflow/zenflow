@@ -66,7 +66,7 @@ export type NotifyJobData =
   /** Fire one session reminder; `startsAt` (ISO) is the occurrence it was armed for. */
   | { type: "reminder"; reminderId: string; startsAt: string };
 
-export type PushProvider = "fcm" | "apns";
+export type PushProvider = "fcm" | "apns" | "web";
 
 /**
  * Portal (DLU timetable/exam/discovery) fetches. One request at a time per
