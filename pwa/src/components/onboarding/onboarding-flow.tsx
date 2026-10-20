@@ -238,7 +238,7 @@ export function OnboardingFlow() {
     <Button
       type="button"
       size="lg"
-      className="h-12 w-full rounded-xl text-base"
+      className="h-12 w-full rounded-full text-base"
       disabled={busy || disabled}
       onClick={onClick}
     >

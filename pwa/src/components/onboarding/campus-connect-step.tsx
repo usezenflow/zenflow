@@ -143,7 +143,7 @@ function ProviderCard({
               value={username}
               disabled={busy}
               onChange={(e) => setUsername(e.target.value)}
-              className="h-11 rounded-xl pl-10 text-base"
+              className="h-11 rounded-full pl-10 text-base"
             />
           </div>
           <div className="relative">
@@ -159,7 +159,7 @@ function ProviderCard({
               value={password}
               disabled={busy}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-xl pl-10 text-base"
+              className="h-11 rounded-full pl-10 text-base"
             />
           </div>
           {error && (
@@ -167,7 +167,7 @@ function ProviderCard({
           )}
           <Button
             type="submit"
-            className="col-span-2 h-11 w-full rounded-xl text-base"
+            className="col-span-2 h-11 w-full rounded-full text-base"
             disabled={busy || !username.trim() || !password}
           >
             <DelayedSpinner busy={busy} className="size-4" />

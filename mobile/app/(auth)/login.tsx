@@ -535,7 +535,7 @@ export default function LoginScreen() {
                   testID="login.resend"
                   disabled={submitting}
                   onPress={() => handleEmailRequest(sentTo)}
-                  className="w-full rounded-xl"
+                  className="w-full rounded-full"
                 >
                   <Text className="text-sm font-semibold text-muted-foreground">
                     {t("Resend code")}
@@ -556,7 +556,7 @@ export default function LoginScreen() {
               </View>
             ) : (
               <Button
-                className="mt-[18px] flex-row h-[52px] rounded-xl"
+                className="mt-[18px] flex-row h-[52px] rounded-full"
                 testID="login.submit"
                 disabled={submitting}
                 onPress={handleSubmit(onSubmit)}

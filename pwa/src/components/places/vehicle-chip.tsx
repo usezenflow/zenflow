@@ -23,7 +23,7 @@ export function VehicleChip({
       data-testid={`session.location.vehicle.${id}`}
       onClick={onPress}
       className={cn(
-        "flex h-14 flex-1 flex-col items-center justify-center gap-1 rounded-2xl border border-border bg-muted text-muted-foreground transition-colors",
+        "flex h-14 flex-1 flex-col items-center justify-center gap-1 rounded-full border border-border bg-muted text-muted-foreground transition-colors",
         selected && "border-primary/50 bg-primary/15 text-primary",
       )}
     >

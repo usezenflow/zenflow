@@ -74,7 +74,7 @@ export function TagPicker({
           onPress={add}
           disabled={!draft.trim()}
           className={cn(
-            "rounded-lg bg-primary px-4 py-3",
+            "rounded-full bg-primary px-4 py-3",
             !draft.trim() && "opacity-50",
           )}
         >

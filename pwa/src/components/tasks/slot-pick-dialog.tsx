@@ -107,7 +107,7 @@ export function SlotPickDialog({
             size="lg"
             disabled={loading}
             onClick={keepPrimary}
-            className="h-14 w-full rounded-xl text-base font-semibold sm:flex-1"
+            className="h-14 w-full rounded-full text-base font-semibold sm:flex-1"
           >
             {t("Keep {time}", { time: slotLabel(primarySlot, tz) })}
           </Button>
@@ -116,7 +116,7 @@ export function SlotPickDialog({
             variant="outline"
             disabled={loading}
             onClick={preferAlternative}
-            className="h-14 w-full rounded-xl border-2 border-primary text-base font-semibold text-primary hover:bg-primary/10 hover:text-primary sm:flex-1"
+            className="h-14 w-full rounded-full border-2 border-primary text-base font-semibold text-primary hover:bg-primary/10 hover:text-primary sm:flex-1"
           >
             {t("Prefer {time}", { time: slotLabel(alternativeSlot, tz) })}
           </Button>

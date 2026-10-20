@@ -475,7 +475,7 @@ export function DluAccountsSection({
                 ) : (
                   <Button
                     size="sm"
-                    className="rounded-lg"
+                    className="rounded-full"
                     disabled={isSubmitting}
                     onPress={() => openSignInSheet(provider, "connect")}
                   >
@@ -491,7 +491,7 @@ export function DluAccountsSection({
                 <View className="mt-2.5 flex-row pl-[51px]">
                   <Button
                     size="sm"
-                    className="flex-row items-center gap-1.5 rounded-lg"
+                    className="flex-row items-center gap-1.5 rounded-full"
                     disabled={syncing.includes(provider)}
                     onPress={() => handleSync(provider)}
                     accessibilityLabel={t("Sync {provider} now", {
@@ -646,7 +646,7 @@ export function DluAccountsSection({
               />
             </View>
             <Button
-              className="h-[52px] w-full rounded-2xl"
+              className="h-[52px] w-full rounded-full"
               disabled={!canSubmit}
               onPress={handleSubmit}
             >
@@ -686,7 +686,7 @@ export function DluAccountsSection({
             <View className="flex-row gap-2.5">
               <Button
                 variant="outline"
-                className="h-[52px] flex-1 rounded-2xl"
+                className="h-[52px] flex-1 rounded-full"
                 onPress={() => confirmSheet.close()}
                 disabled={isSubmitting}
               >
@@ -696,7 +696,7 @@ export function DluAccountsSection({
               </Button>
               <Button
                 variant="destructive"
-                className="h-[52px] flex-1 rounded-2xl"
+                className="h-[52px] flex-1 rounded-full"
                 onPress={handleDisconnect}
                 disabled={isSubmitting}
               >

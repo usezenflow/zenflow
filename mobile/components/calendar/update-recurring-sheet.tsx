@@ -314,7 +314,7 @@ export const UpdateRecurringSheet = forwardRef<
                       </Pressable>
                       <Pressable
                         onPress={() => confirmExpanded(scope)}
-                        className="items-center justify-center rounded-xl bg-primary py-2.5"
+                        className="items-center justify-center rounded-full bg-primary py-2.5"
                       >
                         <Text className="text-[14px] font-semibold text-primary-foreground">
                           {t("Confirm")}

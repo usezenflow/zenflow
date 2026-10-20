@@ -450,7 +450,7 @@ export default function OnboardingScreen() {
   const primary = (label: string, onPress: () => void, disabled = false) => (
     <Button
       size="lg"
-      className="rounded-xl"
+      className="rounded-full"
       testID="onboarding.primary"
       disabled={busy || disabled}
       onPress={onPress}

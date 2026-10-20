@@ -1128,7 +1128,7 @@ export function DayTimeline({
             </Text>
             <Button
               variant="outline"
-              className="mt-5 rounded-xl px-8 gap-2"
+              className="mt-5 rounded-full px-8 gap-2"
               onPress={() => void refetch()}
             >
               <RotateCw size={16} className="text-foreground" />

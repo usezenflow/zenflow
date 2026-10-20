@@ -78,7 +78,7 @@ export function ProfileRow({ user }: { user: User }) {
             <Label htmlFor="profile-name">{t("Name")}</Label>
             <Input
               id="profile-name"
-              className="h-11 rounded-xl text-base"
+              className="h-11 rounded-full text-base"
               value={name}
               onChange={(event) => setName(event.target.value)}
               autoComplete="name"
