@@ -25,7 +25,8 @@ export const CAMPUS_PLACES: readonly CampusPlace[] = [
   { kind: "FACILITY", name: "Thư viện", lat: 11.95714258, lng: 108.4449201 },
   { kind: "SPORTS", name: "Sân thể chất", lat: 11.95626647, lng: 108.4476812 },
   { kind: "FACILITY", name: "Sân khấu ngoài trời", lat: 11.95467388, lng: 108.4456087 },
-  { kind: "FACILITY", name: "AIC", lat: 11.95578577, lng: 108.4438786 },
+  { kind: "FACILITY", name: "Hội trường thống nhất", lat: 11.95592909, lng: 108.4443694 },
+  { kind: "FACILITY", name: "Trung tâm Trí tuệ Nhân tạo", lat: 11.95578577, lng: 108.4438786 },
   { kind: "PARKING", name: "Nhà giữ xe công trước", lat: 11.95386457, lng: 108.4449788 },
   { kind: "TOWER", name: "A1", lat: 11.95448879, lng: 108.4443214 },
   { kind: "TOWER", name: "A2", lat: 11.95520588, lng: 108.444411 },
@@ -141,7 +142,7 @@ export function searchCampusPlaces(query: string, limit = 6): CampusSuggestion[]
  * the destination.
  */
 export const TWO_WHEEL_ENTRIES: readonly CampusPlace[] = [
-  { kind: "PARKING", name: "Bãi xe thư viện", lat: 11.956887, lng: 108.444726 },
+  { kind: "PARKING", name: "Bãi xe cổng sau", lat: 11.956887, lng: 108.444726 },
 ];
 
 /** From this local hour, motorbikes and bikes may ride inside the campus. */
