@@ -1,4 +1,7 @@
-"""Delayed rewards: graded MOVE (port of ``reward.ts``) and completion (ADR-0023, ADR-0025)."""
+"""Delayed rewards: graded MOVE (port of ``reward.ts``) and completion.
+
+See ADR-0023 and ADR-0025.
+"""
 
 from typing import Literal
 
