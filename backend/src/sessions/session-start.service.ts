@@ -7,6 +7,11 @@ import {
   type User,
 } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
+import {
+  PREFERENCE_KEPT_WEIGHT,
+  SESSION_STARTED_REWARD,
+} from "../scheduler/constants";
+import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { WITH_TAGS_AND_SERIES } from "./types/session-row";
 import { toSessionSnapshot } from "./session-mapper";
 import { recordSessionEvent } from "./session-events";
@@ -14,11 +19,15 @@ import { recordSessionEvent } from "./session-events";
 /**
  * Records that the user opened the app inside a placed block: one `START`
  * `SessionEvent` per unmoved placement, written only while `now` is inside its
- * slot. The outcome sweep settles the reward from the first one (ADR-0025).
+ * slot. The START is the reward (ADR-0035): LinUCB and the preference matrix
+ * learn from it as soon as it is recorded.
  */
 @Injectable()
 export class SessionStartService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly schedulingFeedback: SchedulingFeedbackService,
+  ) {}
 
   async record(
     id: string,
@@ -33,7 +42,6 @@ export class SessionStartService {
         type: SessionType.TASK,
         source: { in: [SessionSource.USER, SessionSource.AUTO] },
         lastMovedAt: null,
-        retainedAt: null,
         scheduledStartTime: { not: null },
       },
       include: WITH_TAGS_AND_SERIES,
@@ -56,16 +64,44 @@ export class SessionStartService {
     });
     if (existing) return { recorded: false };
 
-    await this.prisma.sessionEvent.create({
+    const event = await this.prisma.sessionEvent.create({
       data: {
         sessionId: row.id,
         userId: user.id,
         eventType: SessionEventType.START,
         newSnapshot: toSessionSnapshot(row),
+        rewardScore: SESSION_STARTED_REWARD,
         occurredAt: now,
       },
+      select: { id: true },
     });
     recordSessionEvent(SessionEventType.START);
+    await this.applyReward(user, row.id, event.id, start);
     return { recorded: true };
+  }
+
+  /**
+   * Best-effort, after the event is written. A placement LinUCB did not choose
+   * gets no bandit update; the preference matrix learns from either policy.
+   */
+  private async applyReward(
+    user: User,
+    sessionId: string,
+    eventId: bigint,
+    startMs: number,
+  ): Promise<void> {
+    await this.schedulingFeedback.applyDelayedReward(
+      user.id,
+      sessionId,
+      eventId,
+      SESSION_STARTED_REWARD,
+      null,
+    );
+    await this.schedulingFeedback.reinforcePreferenceMatrix(
+      user.id,
+      startMs,
+      user.timezone,
+      PREFERENCE_KEPT_WEIGHT * SESSION_STARTED_REWARD,
+    );
   }
 }

@@ -8,7 +8,7 @@ import {
 import {
   MOVE_REWARD_SCALE_MINUTES,
   PREFERENCE_LEARNING_RATE,
-  PREFERENCE_RETAINED_WEIGHT,
+  PREFERENCE_KEPT_WEIGHT,
 } from "../constants";
 
 describe("matrixIndex", () => {
@@ -121,16 +121,16 @@ describe("reinforcePreferenceCell", () => {
     expect(next[idx]).toBeCloseTo(0.25);
   });
 
-  it("accepts a fractional delta (e.g. the RETAINED weight)", () => {
+  it("accepts a fractional delta (e.g. the kept weight)", () => {
     const idx = matrixIndex(1, 9);
     const next = reinforcePreferenceCell(
       ZERO,
       MON_09,
       TZ,
-      PREFERENCE_RETAINED_WEIGHT,
+      PREFERENCE_KEPT_WEIGHT,
     );
     expect(next[idx]).toBeCloseTo(
-      PREFERENCE_LEARNING_RATE * PREFERENCE_RETAINED_WEIGHT,
+      PREFERENCE_LEARNING_RATE * PREFERENCE_KEPT_WEIGHT,
     );
   });
 });

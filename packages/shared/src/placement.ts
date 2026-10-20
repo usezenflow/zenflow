@@ -82,9 +82,7 @@ export interface PlacementFlexible {
   durationMinutes: number;
   deadlineMs: number;
   startMs: number;
-  /** Completed sessions never move. Started ones and those starting within
-   *  2 h of `nowMs` never move either; Python derives that from `startMs`. */
-  completed?: boolean;
+  /** Started ones and those starting within 2 h of `nowMs` never move; Python derives that from `startMs`. */
   /** Sittings of one series never share a local day after a move. */
   seriesId?: string;
 }

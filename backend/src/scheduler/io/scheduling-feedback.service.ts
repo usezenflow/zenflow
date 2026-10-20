@@ -37,10 +37,9 @@ type LinucbProposal = {
  * `acceptedWithoutModification`) that first modification stamps. Every step
  * is best-effort — a bandit failure never breaks the session update.
  *
- * The settled completion and missed outcomes of an unmoved session live in
- * {@link SessionOutcomeService}, which calls {@link applyDelayedReward}
- * directly; both paths share the same "find the LinUCB proposal, fold the
- * reward in, link the event back" logic.
+ * The START reward of an unmoved session comes from {@link SessionStartService},
+ * which calls {@link applyDelayedReward} directly; both paths share the same
+ * "find the LinUCB proposal, fold the reward in, link the event back" logic.
  */
 @Injectable()
 export class SchedulingFeedbackService {
@@ -132,7 +131,7 @@ export class SchedulingFeedbackService {
 
   /**
    * Shared delayed-reward path for both the first-`MOVE` (drag/pick) and
-   * `RETAINED` (cron) signals: finds the LinUCB `SlotProposal` behind
+   * `START` signals: finds the LinUCB `SlotProposal` behind
    * `sessionId` — `null` when the applied placement wasn't LinUCB's, per the
    * off-policy correctness rule (a proposal only gets rewarded for the
    * outcome of the arm it actually placed) — folds `reward` into that arm's
@@ -223,7 +222,7 @@ export class SchedulingFeedbackService {
 
   /**
    * Preference-matrix reinforcement (Item 3B3) of one hour cell, used for
-   * `RETAINED`. Runs regardless of which policy placed the session (both read
+   * `START`. Runs regardless of which policy placed the session (both read
    * the matrix). Row-locked against the decay cron; never throws.
    */
   async reinforcePreferenceMatrix(

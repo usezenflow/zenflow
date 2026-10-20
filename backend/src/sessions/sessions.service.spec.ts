@@ -7,7 +7,7 @@ import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { ScheduleInfeasibleException } from "../scheduler/schedule-infeasible.exception";
 import { SessionsService } from "./sessions.service";
-import { SessionCheckOffService } from "./session-check-off.service";
+import { SessionSkipService } from "./session-skip.service";
 import { SessionStartService } from "./session-start.service";
 import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
@@ -69,10 +69,8 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     submittedAt: null,
     prepForSessionId: null,
     prepForOccurrenceStart: null,
-    retainedAt: null,
     syncConfirmedAt: null,
     syncMissedAt: null,
-    completedAt: null,
     skipped: false,
     placementReason: null,
     placementReasonStartAt: null,
@@ -184,7 +182,7 @@ async function makeService(
       { provide: TaskPlacementService, useValue: placement },
       { provide: SchedulingFeedbackService, useValue: feedback },
       { provide: RemindersService, useValue: fakeReminders() },
-      { provide: SessionCheckOffService, useValue: {} },
+      { provide: SessionSkipService, useValue: {} },
       { provide: SessionStartService, useValue: {} },
       {
         provide: NoteFilesService,
@@ -372,7 +370,6 @@ describe("SessionsService.create", () => {
       sessionTotal: null,
       late: false,
       displacedSessions: [],
-      completedAt: null,
       skipped: false,
       reminders: [60],
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -689,8 +686,7 @@ describe("SessionsService.list", () => {
           {
             seriesId: "series-1",
             occurrenceStart: done,
-            completedAt: new Date("2026-06-15T13:00:00.000Z"),
-            skipped: false,
+            skipped: true,
           },
         ]),
       },
@@ -705,10 +701,8 @@ describe("SessionsService.list", () => {
     const stamped = sessions.find(
       (s) => s.id === `series-1::${done.toISOString()}`,
     );
-    expect(stamped?.completedAt).toBe("2026-06-15T13:00:00.000Z");
-    expect(
-      sessions.filter((s) => s.completedAt !== null || s.skipped),
-    ).toHaveLength(1);
+    expect(stamped?.skipped).toBe(true);
+    expect(sessions.filter((s) => s.skipped)).toHaveLength(1);
   });
 
   it("includes a plain session that starts the previous day and crosses midnight into the requested day", async () => {
@@ -1088,7 +1082,6 @@ describe("SessionsService.findById", () => {
           {
             seriesId: "series-2",
             occurrenceStart: new Date("2026-09-16T07:00:00.000Z"),
-            completedAt: null,
             skipped: true,
           },
         ],

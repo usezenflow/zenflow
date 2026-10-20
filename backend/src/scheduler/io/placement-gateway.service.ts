@@ -308,7 +308,6 @@ export class PlacementGateway {
         durationMinutes: it.durationMinutes,
         deadlineMs: it.deadlineMs as number,
         startMs: it.start,
-        completed: it.completed ?? false,
       })),
       fixed: windowItems
         .filter((it) => !isFlexible(it))

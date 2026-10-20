@@ -1,5 +1,5 @@
 import { IsIn, IsOptional } from "class-validator";
-import type { SkipScope } from "../session-check-off.service";
+import type { SkipScope } from "../session-skip.service";
 
 export class SkipScopeDto {
   /** Recurring occurrences only: `occurrence` (default), `following`, or `all`. */

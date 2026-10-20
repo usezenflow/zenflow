@@ -22,8 +22,8 @@ import { SchedulingFeedbackService } from "./io/scheduling-feedback.service";
  *  - `io/`    the only Prisma / bandit-HTTP layer — `PythonPlacer` (calls
  *             `POST /v1/place`), `FallbackPlacer` (Python-down degraded
  *             driver, built on `HeuristicPlacer`), `day-load`, the delayed-
- *             reward feedback. The two crons (MatrixDecayService,
- *             SessionOutcomeService) live in `SchedulerWorkerModule`.
+ *             reward feedback. The matrix-decay cron (MatrixDecayService)
+ *             lives in `SchedulerWorkerModule`.
  *
  * `SessionsModule` consumes only {@link TaskPlacementService} (place a TASK /
  * series and persist it) and {@link SchedulingFeedbackService} (first-move

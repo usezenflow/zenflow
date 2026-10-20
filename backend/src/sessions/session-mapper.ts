@@ -94,7 +94,6 @@ export function toSessionDto(row: SessionRow): SharedSession {
       .map((r) => r.remindBeforeMinutes)
       .sort((a, b) => b - a),
     late: isLate(row),
-    completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     skipped: row.skipped,
     placementReason: placementReasonOf(row),
     createdAt: row.createdAt.toISOString(),
@@ -180,7 +179,7 @@ export function toUpdateSessionResponse(
 }
 
 /** The `{ scheduledStartTime, durationMinutes, type, tags }` snapshot stored on a
- * `SessionEvent` (`CREATE` / `RETAINED`). */
+ * `SessionEvent` (`CREATE` / `START`). */
 export function toSessionSnapshot(row: SessionRow): Prisma.InputJsonValue {
   return {
     scheduledStartTime: row.scheduledStartTime

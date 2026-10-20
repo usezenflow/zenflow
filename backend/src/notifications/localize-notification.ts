@@ -258,11 +258,11 @@ export function dailyCheckinCopy(lang?: string): {
   if (lang === "VI_VN") {
     return {
       title: "Kiểm tra hôm nay",
-      body: "Đánh dấu các buổi hôm nay là xong hoặc bỏ lỡ.",
+      body: "Xem lại các buổi hôm nay.",
     };
   }
   return {
     title: "Check in on today",
-    body: "Mark today's sessions done or missed.",
+    body: "Look over today's sessions.",
   };
 }

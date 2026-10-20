@@ -100,7 +100,7 @@ services:
 
   # Queue roles (ADR-0007, ADR-0011). Each serves only GET /health on :5001.
   # `watcher` is the only cron runner (ingestion ticker, reminder sweep,
-  # retained-sessions, matrix decay): exactly one replica. The consumers scale
+  # matrix decay): exactly one replica. The consumers scale
   # independently (`replicas`), except that fetch concurrency is kept low to be
   # polite to DLU.
   # Enqueues work; consumes nothing.

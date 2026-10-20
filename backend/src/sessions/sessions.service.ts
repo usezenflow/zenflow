@@ -4,8 +4,8 @@ import type {
   RemoveSessionResponse,
   RemoveSessionSeriesResponse,
   RemoveTimetableGroupResponse,
-  SessionCheckOffResponse,
   SessionDetailResponse,
+  SessionSkipResponse,
   SessionStartResponse,
   SessionSuggestionsResponse,
   SessionsListResponse,
@@ -22,11 +22,7 @@ import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
 import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
-import {
-  type CheckOffKind,
-  type SkipScope,
-  SessionCheckOffService,
-} from "./session-check-off.service";
+import { type SkipScope, SessionSkipService } from "./session-skip.service";
 import { SessionStartService } from "./session-start.service";
 import { NoteFilesService } from "../files/note-files.service";
 import { RemindersService } from "../reminders/reminders.service";
@@ -38,7 +34,7 @@ import { RemindersService } from "../reminders/reminders.service";
  *  - {@link SessionUpdateService} `PATCH /sessions/:id`
  *  - {@link SeriesService}        every `SessionSeries` lifecycle op
  *  - {@link SlotPickService}      `POST /sessions/:id/slot-pick`
- *  - {@link SessionCheckOffService} `POST|DELETE /sessions/:id/complete|skip`
+ *  - {@link SessionSkipService}   `POST|DELETE /sessions/:id/skip`
  *  - {@link SessionStartService}  `POST /sessions/:id/start`
  *
  * The wire contract is unchanged — see `sessions.controller.ts`.
@@ -50,7 +46,7 @@ export class SessionsService {
     private readonly series: SeriesService,
     private readonly updates: SessionUpdateService,
     private readonly slotPickService: SlotPickService,
-    private readonly checkOff: SessionCheckOffService,
+    private readonly skips: SessionSkipService,
     private readonly sessionStart: SessionStartService,
     private readonly reminders: RemindersService,
     private readonly noteFiles: NoteFilesService,
@@ -138,15 +134,14 @@ export class SessionsService {
     return res;
   }
 
-  /** Set (`on`) or undo the done or skipped state of a session or occurrence. */
-  setCheckOff(
+  /** Set (`on`) or undo the skipped state of a session or occurrence. */
+  setSkip(
     id: string,
-    kind: CheckOffKind,
     on: boolean,
     user: User,
     scope?: SkipScope,
-  ): Promise<SessionCheckOffResponse> {
-    return this.checkOff.set(id, kind, on, user, new Date(), scope);
+  ): Promise<SessionSkipResponse> {
+    return this.skips.set(id, on, user, scope);
   }
 
   /** Skip a timetable group, or from `sessionId` onward (`POST /sessions/timetable-group/:sessionId/skip[/from]`). */
@@ -155,7 +150,7 @@ export class SessionsService {
     from: boolean,
     user: User,
   ): Promise<{ skippedSessionIds: string[] }> {
-    return this.checkOff.skipTimetableGroup(sessionId, from, user, new Date());
+    return this.skips.skipTimetableGroup(sessionId, from, user);
   }
 
   /** Records that the user is in this placed block now (`POST /sessions/:id/start`). */

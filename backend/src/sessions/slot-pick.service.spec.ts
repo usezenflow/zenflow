@@ -29,7 +29,6 @@ function row(overrides: Record<string, unknown> = {}) {
     conflict: false,
     scheduledStartTime: OLD_START,
     lastMovedAt: null,
-    retainedAt: null,
     userId: user.id,
     seriesId: null,
     sessionIndex: null,

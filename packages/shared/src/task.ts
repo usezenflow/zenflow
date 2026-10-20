@@ -100,13 +100,7 @@ export interface Session {
    * for unscheduled tasks.
    */
   late: boolean;
-  /**
-   * ISO-8601 instant the user checked the session off, or `null`. Set by
-   * `POST /sessions/:id/complete`, cleared by `DELETE /sessions/:id/complete`
-   * or a skip. Per occurrence for a recurring series.
-   */
-  completedAt: string | null;
-  /** The user marked the session skipped (missed). Never `true` with `completedAt`. */
+  /** The user skipped this session. Only non-TASK sessions can be skipped. Per occurrence for a recurring series. */
   skipped: boolean;
   /**
    * Why the scheduler picked the current start. `null` when unscheduled, when

@@ -18,7 +18,6 @@
     "golden:export": "ts-node scripts/export-golden-fixtures.ts",
     "backfill:unplaced": "dotenv -e .env.dev -- ts-node scripts/backfill-unplaced-tasks.ts",
     "backfill:lms-course": "dotenv -e .env.dev -- ts-node scripts/backfill-lms-course.ts",
-    "backfill:lms-complete": "dotenv -e .env.dev -- ts-node scripts/backfill-lms-complete.ts",
     "ab:report": "dotenv -e .env.dev -- ts-node scripts/ab-report.ts",
     "backfill:prep-plans": "dotenv -e .env.dev -- ts-node scripts/backfill-prep-plans.ts",
     "killswitch": "dotenv -e .env.dev -- ts-node src/killswitch/killswitch.cli.ts",
