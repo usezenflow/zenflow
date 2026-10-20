@@ -26,11 +26,11 @@ import {
 import { MAX_REMINDERS_PER_SESSION, type Session } from "@zenflow/shared";
 import { addDays, endOfMonth, endOfWeek, format, startOfDay } from "date-fns";
 import { format as formatDisplay } from "@/lib/format";
-import { Bell, CalendarClock, Clock, MapPin, Tag, type LucideIcon } from "lucide-react";
+import { Bell, CalendarClock, Clock, MapPin, Tag, Timer, type LucideIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useState } from "react";
 
 /** Which picker is open under a row. */
-type Row = "deadline" | "scheduled" | "when" | "reminder" | "tags";
+type Row = "deadline" | "length" | "scheduled" | "when" | "reminder" | "tags";
 
 /** Plan lengths the slider stops at: 15 minutes up to 8 hours. */
 const DURATION_STEPS = Array.from({ length: 32 }, (_, i) => (i + 1) * 15);
@@ -107,16 +107,6 @@ function PropertyRow({
           {children}
         </div>
       )}
-    </div>
-  );
-}
-
-/** A labelled group whose choices are always on screen, so a new plan takes one tap per choice. */
-function ChoiceRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2 px-2">
-      <span className="text-[12px] font-medium text-muted-foreground">{label}</span>
-      {children}
     </div>
   );
 }
@@ -382,11 +372,43 @@ export function SessionEditor({
       )}
 
       {isDraft && isTask && (
-        <div className="flex flex-col gap-4">
-          <ChoiceRow label={t("Deadline")}>{deadlineChoices}</ChoiceRow>
-          <ChoiceRow label={t("Length")}>{durationSlider}</ChoiceRow>
-          <ChoiceRow label={t("Reminder")}>{reminderChoices}</ChoiceRow>
-          <div className="flex flex-col gap-0.5">{location}{tags}</div>
+        <div className="flex flex-col gap-0.5">
+          <PropertyRow
+            icon={CalendarClock}
+            tone={tone}
+            label={t("Deadline")}
+            value={form.deadline ? dayLabel(form.deadline) : t("No deadline")}
+            open={open === "deadline"}
+            onToggle={disabled ? undefined : () => toggle("deadline")}
+          >
+            {deadlineChoices}
+          </PropertyRow>
+          <PropertyRow
+            icon={Timer}
+            tone={tone}
+            label={t("Length")}
+            value={durationLabel(form.duration)}
+            open={open === "length"}
+            onToggle={disabled ? undefined : () => toggle("length")}
+          >
+            {durationSlider}
+          </PropertyRow>
+          <PropertyRow
+            icon={Bell}
+            tone={tone}
+            label={t("Reminder")}
+            value={
+              form.reminders.length > 0
+                ? form.reminders.map((m) => t(reminderLabel(m))).join(", ")
+                : t("No reminder")
+            }
+            open={open === "reminder"}
+            onToggle={disabled ? undefined : () => toggle("reminder")}
+          >
+            {reminderChoices}
+          </PropertyRow>
+          {location}
+          {tags}
         </div>
       )}
 
