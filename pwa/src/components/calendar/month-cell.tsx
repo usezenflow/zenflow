@@ -60,21 +60,19 @@ export function MonthCell({
       <div className="mb-1 flex items-center justify-between">
         <span
           className={cn(
-            "text-[11px] font-bold",
-            outside
-              ? "text-muted-foreground/50"
-              : nonWork
-                ? "text-muted-foreground"
-                : "text-foreground",
+            "flex size-5 items-center justify-center rounded-full text-[11px] font-bold",
+            today
+              ? "bg-foreground text-background"
+              : outside
+                ? "text-muted-foreground/50"
+                : nonWork
+                  ? "text-muted-foreground"
+                  : "text-foreground",
           )}
         >
           {date.getDate()}
+          {today && <span className="sr-only">{t("Today")}</span>}
         </span>
-        {today && (
-          <span className="bg-foreground text-background rounded px-1 py-0.5 text-[11px] font-semibold">
-            {t("Today")}
-          </span>
-        )}
       </div>
 
       {/* Sessions — faded on off-days, mirroring the mockup. */}

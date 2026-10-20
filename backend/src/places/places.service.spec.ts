@@ -243,7 +243,7 @@ describe("PlacesService", () => {
       const trip = await service.commute("MOTORCYCLE", home, a8);
 
       // 5 km at 30 km/h (10 min) + 600 m at 5 km/h (7.2 min).
-      expect(trip?.entry?.name).toBe("Bãi xe thư viện");
+      expect(trip?.entry?.name).toBe("Nhà xe cổng sau");
       expect(trip?.ride?.minutes).toBe(10);
       expect(trip?.walk?.minutes).toBe(7);
       expect(trip?.minutes).toBe(17);
@@ -255,7 +255,7 @@ describe("PlacesService", () => {
 
       const trip = await service.commute("BIKE", home, a8);
 
-      expect(trip?.entry?.name).toBe("Bãi xe thư viện");
+      expect(trip?.entry?.name).toBe("Nhà xe cổng sau");
       expect(String(fetchMock.mock.calls[0][0])).toContain("routed-bike");
     }, 20000);
 
@@ -314,7 +314,7 @@ describe("PlacesService", () => {
 
       const trip = await service.commute("MOTORCYCLE", home, LIBRARY_PARKING);
 
-      expect(trip?.entry?.name).toBe("Bãi xe thư viện");
+      expect(trip?.entry?.name).toBe("Nhà xe cổng sau");
       expect(trip?.walk).toBeNull();
     }, 20000);
   });

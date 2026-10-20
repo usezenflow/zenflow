@@ -62,20 +62,44 @@ export interface NotificationStreamOptions {
 export function subscribeNotificationsStream(
   options: NotificationStreamOptions,
 ): () => void {
-  const source = new EventSource(`${api.defaults.baseURL}/notifications/stream`, {
-    withCredentials: true,
-  });
-  source.onopen = () => options.onOpen?.();
-  source.onmessage = (event: MessageEvent<string>) => {
-    try {
-      const data = JSON.parse(event.data) as NotificationDto;
-      if (data && typeof data === "object" && "id" in data) {
-        options.onNotification(data);
+  let source: EventSource | null = null;
+  let retry: ReturnType<typeof setTimeout> | null = null;
+  let attempt = 0;
+  let closed = false;
+
+  const connect = () => {
+    source = new EventSource(`${api.defaults.baseURL}/notifications/stream`, {
+      withCredentials: true,
+    });
+    source.onopen = () => {
+      attempt = 0;
+      options.onOpen?.();
+    };
+    source.onmessage = (event: MessageEvent<string>) => {
+      try {
+        const data = JSON.parse(event.data) as NotificationDto;
+        if (data && typeof data === "object" && "id" in data) {
+          options.onNotification(data);
+        }
+      } catch {
+        // A malformed frame is dropped; the next refresh catches the row up.
       }
-    } catch {
-      // A malformed frame is dropped; the next refresh catches the row up.
-    }
+    };
+    source.onerror = (event) => {
+      options.onError?.(event);
+      // The browser retries on its own, but gives up for good once the server
+      // answers with an error (for example after sign-out). Reopen after a backoff.
+      if (source?.readyState !== EventSource.CLOSED || closed) return;
+      const delay = Math.min(30_000, 1_000 * 2 ** attempt);
+      attempt += 1;
+      retry = setTimeout(connect, delay);
+    };
   };
-  source.onerror = (event) => options.onError?.(event);
-  return () => source.close();
+
+  connect();
+  return () => {
+    closed = true;
+    if (retry) clearTimeout(retry);
+    source?.close();
+  };
 }

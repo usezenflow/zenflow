@@ -19,11 +19,14 @@ import { RaiseDevNotificationDto } from "./dto/raise-dev-notification.dto";
 import { NotificationsService } from "./notifications.service";
 import { ConflictRescheduleService } from "../scheduler/io/conflict-reschedule.service";
 import { NotificationEvent } from "./types";
-import { filter, fromEvent, map, Observable } from "rxjs";
+import { filter, fromEvent, interval, map, merge, Observable } from "rxjs";
 import {
   sseActiveConnections,
   sseConnectionDuration,
 } from "../observability/metrics";
+
+/** Idle time before the stream sends a heartbeat; under common proxy timeouts (about 60 to 100 s). */
+const SSE_HEARTBEAT_MS = 25_000;
 
 /**
  * The ingestion inbox — read + acknowledge only.
@@ -42,7 +45,7 @@ export class NotificationsController {
   @Sse("stream")
   @UseGuards(CookieAuthGuard)
   sendInApp(@CurrentUser() user: User) {
-    const events$ = fromEvent(
+    const notices$ = fromEvent(
       this.notifications.notificationEmitter,
       NotificationEvent.NEW_SESSION,
     ).pipe(
@@ -51,6 +54,12 @@ export class NotificationsController {
         data: this.notifications.toNotificationDto(data as Notification),
       })),
     );
+    // Named `ping` frames keep idle connections open through proxies and edges.
+    // Browsers fire them as their own event, so the client's `onmessage` skips them.
+    const heartbeat$ = interval(SSE_HEARTBEAT_MS).pipe(
+      map(() => ({ type: "ping", data: "" })),
+    );
+    const events$ = merge(notices$, heartbeat$);
 
     // Track how many /notifications/stream subscriptions are open — long-lived
     // connections that leak on unclean disconnects show up as a rising gauge.

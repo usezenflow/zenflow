@@ -10,6 +10,7 @@ import { PlacePicker } from "@/components/places/place-picker";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { TimePicker } from "@/components/ui/time-picker";
+import { durationLabel } from "@/lib/duration-label";
 import { dateFnsLocale, t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { zonedDate, zonedNow } from "@/utils/tz";
@@ -38,8 +39,9 @@ const clock = (min: number) => {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
 
+/** A `yyyy-MM-dd` day as a label. An empty day has no label, so it never reaches the date formatter. */
 const dayLabel = (day: string) =>
-  formatDisplay(new Date(`${day}T00:00:00`), "EEE d MMM");
+  day ? formatDisplay(new Date(`${day}T00:00:00`), "EEE d MMM") : "";
 
 export interface SessionEditorProps {
   /** The saved session, or `null` for a draft. */
@@ -201,12 +203,14 @@ export function SessionEditor({
                   </Chip>
                 ))}
               </div>
-              <Calendar
-                mode="single"
-                className="w-full"
-                selected={form.deadline ? new Date(`${form.deadline}T00:00:00`) : undefined}
-                onSelect={(d) => d && onChange({ deadline: format(d, "yyyy-MM-dd") }, ["deadline"], true)}
-              />
+              <div className="w-full overflow-hidden">
+                <Calendar
+                  mode="single"
+                  className="w-full bg-transparent p-0"
+                  selected={form.deadline ? new Date(`${form.deadline}T00:00:00`) : undefined}
+                  onSelect={(d) => d && onChange({ deadline: format(d, "yyyy-MM-dd") }, ["deadline"], true)}
+                />
+              </div>
             </div>
           </PropertyRow>
         ) : (
@@ -214,19 +218,21 @@ export function SessionEditor({
             icon={Clock}
             tone={tone}
             label={t("When")}
-            value={`${dayLabel(form.date)}, ${clock(startMin)}–${clock(endMin)}`}
+            value={form.date ? `${dayLabel(form.date)}, ${clock(startMin)}–${clock(endMin)}` : t("Pick a day")}
             open={open === "when"}
             onToggle={isDraft && !disabled ? () => toggle("when") : undefined}
           >
             <div className="flex flex-col gap-3">
-              <Calendar
-                mode="single"
-                className="w-full"
-                selected={form.date ? new Date(`${form.date}T00:00:00`) : undefined}
-                onSelect={(d) =>
-                  d && onChange({ date: format(d, "yyyy-MM-dd") }, ["date", "startTime", "endTime"], true)
-                }
-              />
+              <div className="w-full overflow-hidden">
+                <Calendar
+                  mode="single"
+                  className="w-full bg-transparent p-0"
+                  selected={form.date ? new Date(`${form.date}T00:00:00`) : undefined}
+                  onSelect={(d) =>
+                    d && onChange({ date: format(d, "yyyy-MM-dd") }, ["date", "startTime", "endTime"], true)
+                  }
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <TimePicker
                   value={startMin}
@@ -253,7 +259,7 @@ export function SessionEditor({
             icon={Clock}
             tone={tone}
             label={t("Length")}
-            value={t("{minutes} min", { minutes: form.duration })}
+            value={durationLabel(form.duration)}
             open={open === "duration"}
             onToggle={disabled ? undefined : () => toggle("duration")}
           >
@@ -264,7 +270,7 @@ export function SessionEditor({
                   selected={form.duration === m}
                   onClick={() => onChange({ duration: m }, ["duration"], true)}
                 >
-                  {t("{minutes} min", { minutes: m })}
+                  {durationLabel(m)}
                 </Chip>
               ))}
             </div>
@@ -295,7 +301,7 @@ export function SessionEditor({
             open={open === "reminder"}
             onToggle={disabled ? undefined : () => toggle("reminder")}
           >
-            <div className="flex flex-wrap gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {REMINDER_PRESETS.map((m) => {
                 const selected = form.reminders.includes(m);
                 return (

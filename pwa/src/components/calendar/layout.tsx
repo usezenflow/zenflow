@@ -354,7 +354,7 @@ export function CalendarLayout() {
 
   return (
     <LateSessionsContext.Provider value={lateIds}>
-      <div className="flex h-dvh pb-[env(safe-area-inset-bottom)]">
+      <div className="flex h-dvh">
         <CalendarSidebar />
 
         <Sheet open={navOpen} onOpenChange={setNavOpen}>

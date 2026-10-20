@@ -141,7 +141,7 @@ export function searchCampusPlaces(query: string, limit = 6): CampusSuggestion[]
  * the destination.
  */
 export const TWO_WHEEL_ENTRIES: readonly CampusPlace[] = [
-  { kind: "PARKING", name: "Bãi xe thư viện", lat: 11.956887, lng: 108.444726 },
+  { kind: "PARKING", name: "Nhà xe cổng sau", lat: 11.956887, lng: 108.444726 },
 ];
 
 /** From this local hour, motorbikes and bikes may ride inside the campus. */
