@@ -680,12 +680,16 @@ describe("4. notification fan-out from a worker", () => {
     expect(otherSse.events).toHaveLength(0);
 
     // Push: exactly one job per (notification, provider), all processed.
+    const PUSH_JOBS_PER_ROW = 3;
     await until(
       "push jobs processed",
       async () => {
         for (const r of rows) {
           const jobs = await pushJobsFor(r.id);
-          if (jobs.length !== 2 || !jobs.every((j) => j.finishedOn))
+          if (
+            jobs.length !== PUSH_JOBS_PER_ROW ||
+            !jobs.every((j) => j.finishedOn)
+          )
             return false;
         }
         return true;
@@ -697,6 +701,7 @@ describe("4. notification fan-out from a worker", () => {
       expect(jobs.map((j) => j.id).sort()).toEqual([
         idempotencyKey("push", r.id, "apns"),
         idempotencyKey("push", r.id, "fcm"),
+        idempotencyKey("push", r.id, "web"),
       ]);
       for (const j of jobs) expect(await j.getState()).toBe("completed");
     }

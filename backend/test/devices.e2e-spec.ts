@@ -11,6 +11,7 @@ import { CookieAuthGuard } from "../src/auth/guards";
 import { ApnsSender } from "../src/devices/apns.sender";
 import { DevicesModule } from "../src/devices/devices.module";
 import { FcmSender } from "../src/devices/fcm.sender";
+import { WebPushSender } from "../src/devices/web-push.sender";
 import { PrismaService } from "../src/prisma/prisma.service";
 
 /**
@@ -27,6 +28,8 @@ interface DeviceRow {
   id: string;
   platform: string;
   pushToken: string;
+  p256dh: string | null;
+  auth: string | null;
   userId: string;
   lastSeenAt: Date | null;
 }
@@ -95,6 +98,8 @@ describe("Devices (e2e)", () => {
       .useValue(disabledSender)
       .overrideProvider(ApnsSender)
       .useValue(disabledSender)
+      .overrideProvider(WebPushSender)
+      .useValue({ ...disabledSender, publicKey: null })
       .overrideGuard(CookieAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
@@ -179,6 +184,47 @@ describe("Devices (e2e)", () => {
         .send({ platform: "ANDROID", pushToken: "tok-a", extra: 1 });
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe("POST /devices (WEB)", () => {
+    const endpoint = "https://push.example.test/sub/abc";
+    const keys = { p256dh: "p256-key", auth: "auth-secret" };
+
+    it("stores the endpoint and subscription keys", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/devices")
+        .send({ platform: "WEB", pushToken: endpoint, ...keys });
+
+      expect(res.status).toBe(200);
+      expect(store).toHaveLength(1);
+      expect(store[0]).toMatchObject({
+        platform: "WEB",
+        pushToken: endpoint,
+        ...keys,
+      });
+    });
+
+    it("rejects a WEB registration without its keys", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/devices")
+        .send({ platform: "WEB", pushToken: endpoint });
+
+      expect(res.status).toBe(400);
+      expect(store).toHaveLength(0);
+    });
+
+    it("rejects a WEB endpoint that is not https", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/devices")
+        .send({
+          platform: "WEB",
+          pushToken: "http://push.example.test/sub/abc",
+          ...keys,
+        });
+
+      expect(res.status).toBe(400);
+      expect(store).toHaveLength(0);
     });
   });
 
