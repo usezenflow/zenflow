@@ -1,5 +1,12 @@
 # @zenflow/core
 
+## 1.0.0-beta.16
+
+### Patch Changes
+
+- Updated dependencies [d1a27ed]
+  - @zenflow/shared@1.0.0-beta.16
+
 ## 1.0.0-beta.15
 
 ### Minor Changes

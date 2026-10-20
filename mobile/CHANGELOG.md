@@ -1,5 +1,14 @@
 # mobile
 
+## 1.0.0-beta.16
+
+### Patch Changes
+
+- d1a27ed: Session sheets open full height on phones, with a close button. Choosing a session type before picking a day no longer crashes. Durations read as hours and minutes, such as 2 hours 30 mins. The campus map shows its basemap, and the route stands out in dark mode. Notifications stay live on idle connections and reconnect after a server error. The two-wheel parking is named Nhà xe cổng sau.
+- Updated dependencies [d1a27ed]
+  - @zenflow/shared@1.0.0-beta.16
+  - @zenflow/core@1.0.0-beta.16
+
 ## 1.0.0-beta.15
 
 ### Minor Changes
