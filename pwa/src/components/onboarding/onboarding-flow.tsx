@@ -121,7 +121,7 @@ export function OnboardingFlow() {
   const home = user?.homeLocation ?? null;
 
   /** Asks the browser for location, then saves the position as home. */
-  async function useMyLocation() {
+  async function saveHomeFromLocation() {
     const point = await myLocation.locate();
     if (!point) return;
     setBusy(true);
@@ -366,7 +366,7 @@ export function OnboardingFlow() {
               type="button"
               data-testid="onboarding.commute.use-location"
               disabled={busy || myLocation.locating}
-              onClick={() => void useMyLocation()}
+              onClick={() => void saveHomeFromLocation()}
               className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left"
             >
               <span className="flex size-[38px] shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
