@@ -102,6 +102,7 @@ describe("WeekScreen", () => {
   it("offers to add a session on an empty day", async () => {
     renderScreen(<WeekScreen />);
     fireEvent.click(screen.getByLabelText("Friday, October 16"));
+    await waitFor(() => expect(requests).toContain("day:2026-10-16"));
     // Find and read the prompt in one poll: the day re-renders while loading,
     // so a separate find-then-get can see it disappear in between.
     const prompt = await waitFor(() =>
