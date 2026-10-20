@@ -1,4 +1,4 @@
-import { Event } from "@zenflow/shared";
+import { Event, type FocusBand } from "@zenflow/shared";
 import { DAILY_HORIZON, TIME_GRANULARITY } from "@zenflow/core";
 import { useEffect, useMemo, useRef } from "react";
 import { ScheduledBlockItem } from "./scheduled-block-item";
@@ -10,6 +10,7 @@ import { eventsForDay } from "@zenflow/core";
 import { useUserStore } from "@/hooks/use-user-store";
 import { useNow } from "@/hooks/use-now";
 import { isZonedToday, zonedDate } from "@/utils/tz";
+import { DEFAULT_FOCUS_BAND, FOCUS_BAND_HOURS } from "@/components/onboarding/onboarding-steps";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -17,8 +18,15 @@ function minutesSinceStartOfDay(date: Date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
+/** Start of the user's focus band, where an empty day opens. */
+function focusBandStartMin(band: FocusBand | null | undefined) {
+  const [h, m] = FOCUS_BAND_HOURS[band ?? DEFAULT_FOCUS_BAND].from.split(":").map(Number);
+  return h * 60 + m;
+}
+
 export function DayGrid({ events, date }: { events: Event[]; date: Date }) {
   const tz = useUserStore((s) => s.user?.timezone) || "UTC";
+  const focusBand = useUserStore((s) => s.user?.focusBand);
   const now = useNow();
   const nowTop = useMemo(() => {
     const mins = minutesSinceStartOfDay(zonedDate(now, tz));
@@ -30,8 +38,9 @@ export function DayGrid({ events, date }: { events: Event[]; date: Date }) {
   const segments = eventsForDay(events, date, tz);
   const layout = getOverlapLayout(segments);
 
-  // Open a day on now when it is today, else on its first session. Runs once
-  // per day, so later edits or the clock ticking don't move the scroll position.
+  // Open today on now, other days on their first session, and an empty day on
+  // the focus band start (where the "add a session" prompt sits). Runs once per
+  // day, so later edits or the clock ticking don't move the scroll position.
   const gridRef = useRef<HTMLDivElement>(null);
   const scrolledDay = useRef<string | null>(null);
   const today = isZonedToday(date, tz);
@@ -41,11 +50,11 @@ export function DayGrid({ events, date }: { events: Event[]; date: Date }) {
   const anchorMin = today
     ? minutesSinceStartOfDay(zonedDate(now, tz))
     : firstStartMs == null
-      ? null
+      ? focusBandStartMin(focusBand)
       : minutesSinceStartOfDay(zonedDate(new Date(firstStartMs), tz));
   useEffect(() => {
     const dayKey = `${date.toDateString()}|${tz}`;
-    if (scrolledDay.current === dayKey || anchorMin == null) return;
+    if (scrolledDay.current === dayKey) return;
     // The grid is the first child of the scroller in layout.tsx.
     const grid = gridRef.current;
     const scroller = grid?.parentElement;
