@@ -86,9 +86,6 @@ export default {
     "Tag giúp gom các buổi học theo môn hoặc loại. Thêm tag riêng bất cứ lúc nào.",
   "Turn them on in your browser settings to get reminders. For now, they stay off.":
     "Bật lại trong cài đặt trình duyệt để nhận nhắc nhở. Lúc này thông báo vẫn tắt.",
-  "Mark done": "Đánh dấu xong",
-  "Mark not done": "Bỏ đánh dấu xong",
-  Unskip: "Hủy bỏ qua",
   Allow: "Cho phép",
   "Allow them in browser settings.": "Cho phép trong cài đặt trình duyệt.",
   "Notifications aren't supported in this browser.":

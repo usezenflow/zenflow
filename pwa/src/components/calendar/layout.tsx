@@ -5,6 +5,7 @@ import { CalendarHeader } from "./header";
 import { OfflineBanner } from "./offline-banner";
 import { CalendarLoadError } from "./load-error";
 import { useViewShortcuts } from "@/hooks/use-view-shortcuts";
+import { recordBlockStarts } from "@/lib/block-start";
 import { DayView } from "./day-view";
 import { WeekView } from "./week-view";
 import { MonthView } from "./month-view";
@@ -144,6 +145,7 @@ export function CalendarLayout() {
     const key = cacheKey(viewMode, date);
     const show = (sessions: Session[]) => {
       sessionsRef.current = sessions;
+      recordBlockStarts(sessions);
       setLoaded(true);
       setLateIds(new Set(sessions.filter((s) => s.late).map((s) => s.id)));
       const next = tasksToBlocks(filterHidden(sessions));
@@ -176,6 +178,17 @@ export function CalendarLayout() {
       if (inFlight.current === load) inFlight.current = null;
     }
   }
+
+  // A block that starts while the calendar is open is caught by the minute tick.
+  useEffect(() => {
+    const check = () => recordBlockStarts(sessionsRef.current);
+    const timer = window.setInterval(check, 60_000);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, []);
 
   // Keep the next days and months readable offline, and refresh on reconnect.
   useEffect(() => {

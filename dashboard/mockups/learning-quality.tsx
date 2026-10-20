@@ -13,7 +13,6 @@ const NAME: Record<Policy, string> = { HEURISTIC: "Heuristic", LINUCB: "LinUCB" 
 const EVENTS: [SettledEvent, string][] = [
   ["START", "Started"],
   ["MOVE", "Moved"],
-  ["LAPSED", "Lapsed"],
 ];
 
 export function LearningQuality() {
@@ -44,7 +43,7 @@ export function LearningQuality() {
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <Stat label="Kept" value={pct(keptRate(p))} hint="Accepted unmodified" />
-                  <Stat label="Started" value={pct(startRate(p.events))} hint="Of settled sessions" />
+                  <Stat label="Started" value={pct(startRate(p))} hint="Of sessions whose slot has passed" />
                   <Stat label="Drag" value={`${p.dragMinutes} min`} hint="Average per move" />
                 </div>
               </div>

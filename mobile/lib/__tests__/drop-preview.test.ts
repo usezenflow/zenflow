@@ -17,10 +17,9 @@ const block = (
 const dragged = { id: "d", durationMin: 60 };
 
 describe("isImmovable", () => {
-  it("is true for fixed types and completed sessions", () => {
+  it("is true for fixed types", () => {
     expect(isImmovable({ type: "LECTURE" })).toBe(true);
     expect(isImmovable({ type: "EXAM" })).toBe(true);
-    expect(isImmovable({ type: "TASK", completedAt: "2026-10-15T01:00:00Z" })).toBe(true);
   });
 
   it("is false for an open plan", () => {

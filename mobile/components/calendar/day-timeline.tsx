@@ -6,7 +6,6 @@ import { useLanguage } from "@/hooks/use-language";
 import { locale } from "@/lib/i18n";
 import { format, formatTitle } from "@/lib/i18n";
 import { listSessions, updateSession } from "@/api/tasks";
-import { checkStateOf } from "@/lib/today-summary";
 import { undoMove } from "@/lib/move-undo";
 import { dropOnDay } from "@/lib/drop-preview";
 import {
@@ -127,15 +126,15 @@ const BLOCK_GUTTER = 2;
  * column's width, capped at {@link CASCADE_MAX_STEP} px. */
 const CASCADE_STEP_RATIO = 0.02;
 const CASCADE_MAX_STEP = 44;
-/** Room (px) a stacked block leaves above it so the title and the check-off
- * disc of the block beneath stay visible, e.g. when both start at the same time. */
+/** Room (px) a stacked block leaves above it so the title of the block beneath
+ * stays visible, e.g. when both start at the same time. */
 const TITLE_PEEK = 38;
 
 /**
  * Downward shift (px) per segment: a block drawn over an overlapping one whose
  * top is within {@link TITLE_PEEK} of its own moves below that block's title.
- * `covered` lists the blocks that have another drawn over them: their check-off
- * disc moves to the top, into the strip that stays visible.
+ * `covered` lists the blocks that have another drawn over them: their title
+ * moves to the top, into the strip that stays visible.
  */
 function stackShifts(
   segments: readonly DaySegment[],
@@ -535,8 +534,8 @@ export function DayTimeline({
     return set;
   }, [tasks]);
 
-  const checkStateById = useMemo(
-    () => new Map(tasks.map((t) => [t.id, checkStateOf(t)] as const)),
+  const skippedIds = useMemo(
+    () => new Set(tasks.filter((t) => t.skipped).map((t) => t.id)),
     [tasks],
   );
 
@@ -1276,7 +1275,7 @@ export function DayTimeline({
                       blockWidth={blockWidthPx}
                       deadline={deadlineBySession.get(segment.taskId) ?? null}
                       late={lateSessionIds.has(segment.taskId)}
-                      checkState={checkStateById.get(segment.taskId)}
+                      skipped={skippedIds.has(segment.taskId)}
                       commuteMinutes={commuteBySession.get(segment.taskId)}
                       onReschedule={handleReschedule}
                       settleKey={settleKey}

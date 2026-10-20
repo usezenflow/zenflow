@@ -6,7 +6,7 @@
 
 /** Same string unions as `SchedulingModel` and `SessionEventType` in the Prisma schema. */
 export type Policy = "HEURISTIC" | "LINUCB";
-export type SettledEvent = "START" | "LAPSED" | "MOVE";
+export type SettledEvent = "START" | "MOVE";
 
 /** `ActiveUsersService`: one HyperLogLog per UTC day, kept 8 days. */
 export interface ActiveDay {
@@ -134,7 +134,8 @@ function buildLearning(): LearningQuality {
       policy: "HEURISTIC",
       proposals: 1840,
       acceptedUnmodified: 1121,
-      events: { START: 902, LAPSED: 356, MOVE: 719 },
+      due: 1258,
+      events: { START: 902, MOVE: 719 },
       dragMinutes: 74,
       reward: 0.31,
     },
@@ -142,7 +143,8 @@ function buildLearning(): LearningQuality {
       policy: "LINUCB",
       proposals: 1795,
       acceptedUnmodified: 1236,
-      events: { START: 1013, LAPSED: 291, MOVE: 559 },
+      due: 1304,
+      events: { START: 1013, MOVE: 559 },
       dragMinutes: 52,
       reward: 0.42,
     },
@@ -221,8 +223,6 @@ export const workload: WorkloadGroup[] = [
 export const keptRate = (p: { acceptedUnmodified: number; proposals: number }) =>
   p.proposals ? p.acceptedUnmodified / p.proposals : 0;
 
-/** START over START and LAPSED, the settled outcomes. Check-off is no longer tracked. */
-export const startRate = (e: PolicyQuality["events"]) => {
-  const settled = e.START + e.LAPSED;
-  return settled ? e.START / settled : 0;
-};
+/** START over placed sessions whose slot has passed (`due`). */
+export const startRate = (p: Pick<PolicyQuality, "events" | "due">) =>
+  p.due ? p.events.START / p.due : 0;

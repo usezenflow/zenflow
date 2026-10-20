@@ -153,7 +153,6 @@ describe("SessionDetailSheet", () => {
         title: "Prepare for Math",
         type: "TASK",
         scheduledStartTime: "2099-01-01T01:00:00.000Z",
-        completedAt: null,
         ...over,
       });
     const details = (prepSessions: unknown[]) =>

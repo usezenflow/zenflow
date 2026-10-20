@@ -4,11 +4,9 @@ import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { listSessions } from "@/api/tasks";
 import { MonthGrid } from "@/components/calendar/month-grid";
 import { EmptyMark } from "@/components/brand/state-marks";
-import { useSessionCheck } from "@/components/calendar/session-check";
 import { LocationChip } from "@/components/calendar/location-chip";
 import { stripeColor } from "@/lib/stripe-color";
 import { useColorScheme } from "@/lib/useColorScheme";
-import { cn } from "@/lib/utils";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
 import { useLanguage } from "@/hooks/use-language";
@@ -32,7 +30,7 @@ import {
 import { sessionTimeRange } from "@/lib/session-search-list";
 import { useTabBarOverlayHeight } from "@/lib/tab-bar-metrics";
 import { showErrorToast } from "@/lib/task-toasts";
-import { deriveState, SESSION_TONES, sessionTone, zonedNow } from "@zenflow/core";
+import { deriveState, sessionTone, zonedNow } from "@zenflow/core";
 import type { Session } from "@zenflow/shared";
 import {
   memo,
@@ -122,8 +120,7 @@ function SessionRow({
   onHover: (key: string | null) => void;
   onDrop: (session: Session, key: string | null) => void;
 }) {
-  const { done } = useSessionCheck(session);
-  const tone = done ? "done" : sessionTone(deriveState(session), session.late);
+  const tone = sessionTone(deriveState(session), session.late);
   const { isDarkColorScheme } = useColorScheme();
   const lastKey = useSharedValue<string | null>(null);
   const canDrag = !continuation && !!session.scheduledStartTime;
@@ -181,7 +178,7 @@ function SessionRow({
         accessible
         accessibilityRole="button"
         accessibilityLabel={session.title}
-        className={cn("min-w-0 flex-1 rounded-r-xl", done && "opacity-60")}
+        className="min-w-0 flex-1 rounded-r-xl"
         style={{
           borderLeftWidth: 3,
           borderLeftColor: stripeColor(tone, isDarkColorScheme),
@@ -193,7 +190,7 @@ function SessionRow({
           </Text>
           <Text
             numberOfLines={1}
-            className={cn("text-[15px] font-medium", done && "text-muted-foreground line-through")}
+            className="text-[15px] font-medium"
           >
             {session.title}
           </Text>

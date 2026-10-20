@@ -523,7 +523,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                         session.scheduledStartTime &&
                         new Date(session.scheduledStartTime).getTime() > Date.now() &&
                         !session.skipped &&
-                        !session.completedAt &&
                         preps.length === 0 && (
                           <Pressable
                             testID="session-detail-prepare"
@@ -539,7 +538,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                         )}
                       {preps.length > 0 && (
                           preps.map((prep) => {
-                            const done = !!prep.completedAt;
                             return (
                               <View
                                 key={prep.id}
@@ -550,22 +548,15 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                                 <View
                                   className={cn(
                                     "h-10 w-10 items-center justify-center rounded-xl",
-                                    done ? "bg-muted" : "bg-primary/10",
+                                    "bg-primary/10",
                                   )}
                                 >
-                                  {done ? (
-                                    <Check size={18} className="text-muted-foreground" />
-                                  ) : (
-                                    <BookOpen size={18} className="text-primary" />
-                                  )}
+                                  <BookOpen size={18} className="text-primary" />
                                 </View>
                                 <View className="min-w-0 flex-1 gap-0.5">
                                   <Text
                                     numberOfLines={1}
-                                    className={cn(
-                                      "text-[15px] font-semibold",
-                                      done ? "text-muted-foreground line-through" : "text-foreground",
-                                    )}
+                                    className="text-[15px] font-semibold text-foreground"
                                   >
                                     {prep.title}
                                   </Text>

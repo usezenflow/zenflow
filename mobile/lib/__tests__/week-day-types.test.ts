@@ -19,7 +19,6 @@ function session(overrides: Partial<Session>): Session {
     durationMinutes: 60,
     deadline: null,
     late: false,
-    completedAt: null,
     placementReason: null,
     skipped: false,
     type: "TASK",

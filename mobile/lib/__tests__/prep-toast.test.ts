@@ -15,7 +15,6 @@ const NEW_START = "2026-10-20T09:00:00.000Z";
 const prep = (over: Partial<Session> = {}) =>
   ({
     id: "prep-1",
-    completedAt: null,
     skipped: false,
     deadline: "2026-10-19T09:00:00.000Z",
     ...over,
@@ -38,7 +37,7 @@ describe("offerPrepReschedule", () => {
 
   it("stays quiet when no open prep is linked", async () => {
     api.getSessionDetails.mockResolvedValue({
-      prepSessions: [prep({ completedAt: "2026-10-19T08:00:00.000Z" })],
+      prepSessions: [prep({ skipped: true })],
     });
     const toast = vi.fn();
     await offerPrepReschedule(toast, { id: "l", type: "LECTURE" }, NEW_START, "UTC");

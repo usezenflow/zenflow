@@ -10,6 +10,7 @@ import type {
   SessionSearchQuery,
   SessionSearchResponse,
   SessionsListResponse,
+  SessionStartResponse,
   SlotPickRequest,
   SlotPickResponse,
   UpdateSessionInput,
@@ -95,6 +96,12 @@ export async function updateSession(
  * call this on an affirmative choice; a "keep current" dismissal can just
  * close the UI without hitting this endpoint.
  */
+/** Records that the app is open inside a placed block. The server keeps one per slot. */
+export async function recordSessionStart(id: string): Promise<SessionStartResponse> {
+  const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/start`);
+  return data.data;
+}
+
 export async function slotPick(
   sessionId: string,
   body: SlotPickRequest,
@@ -124,12 +131,6 @@ export async function removeSession(
 /** Skip one session: it stays on the calendar, marked as skipped. */
 export async function skipSession(id: string): Promise<Session> {
   const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/skip`);
-  return data.data;
-}
-
-/** Undo a skip. */
-export async function unskipSession(id: string): Promise<Session> {
-  const { data } = await api.delete(`/sessions/${encodeURIComponent(id)}/skip`);
   return data.data;
 }
 

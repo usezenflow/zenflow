@@ -4,10 +4,8 @@ import {
   SessionRowSkeleton,
 } from "@/components/calendar/session-row-skeleton";
 import { LocationChip } from "@/components/calendar/location-chip";
-import { useSessionCheck } from "@/components/calendar/session-check";
 import { stripeColor } from "@/lib/stripe-color";
 import { useColorScheme } from "@/lib/useColorScheme";
-import { cn } from "@/lib/utils";
 import { Text } from "@/components/ui/text";
 import { useAfterPaint } from "@/hooks/use-after-paint";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
@@ -25,7 +23,7 @@ import {
 } from "@/lib/session-search-list";
 import { subscribeToSessionMutations } from "@/lib/session-cache";
 import { useTabBarOverlayHeight } from "@/lib/tab-bar-metrics";
-import { deriveState, SESSION_TONES, sessionTone, splitZoned } from "@zenflow/core";
+import { deriveState, sessionTone, splitZoned } from "@zenflow/core";
 import type { Session, SessionSearchDirection } from "@zenflow/shared";
 import { EmptyMark, NoResultsMark } from "@/components/brand/state-marks";
 import { type Href, useRouter } from "expo-router";
@@ -67,12 +65,11 @@ function AgendaRow({
   testIDPrefix: string;
   onOpen: (session: Session) => void;
 }) {
-  const { done } = useSessionCheck(session);
   const { isDarkColorScheme } = useColorScheme();
-  const tone = done ? "done" : sessionTone(deriveState(session), session.late);
+  const tone = sessionTone(deriveState(session), session.late);
   const location = session.location?.trim();
   return (
-    <View className={cn("mx-4 my-1 flex-row items-center", done && "opacity-60")}>
+    <View className="mx-4 my-1 flex-row items-center">
       <Pressable
         testID={`${testIDPrefix}.row.${session.id}`}
         onPress={() => onOpen(session)}
@@ -85,7 +82,7 @@ function AgendaRow({
           <Text testID={`${testIDPrefix}.time.${session.id}`} className="text-[12px] text-muted-foreground">
             {sessionTimeRange(session, tz)}
           </Text>
-          <Text numberOfLines={1} className={cn("text-[15px] font-medium", done && "line-through")}>
+          <Text numberOfLines={1} className="text-[15px] font-medium">
             {highlightParts(session.title, term).map((part, i) =>
               part.match ? (
                 <Text

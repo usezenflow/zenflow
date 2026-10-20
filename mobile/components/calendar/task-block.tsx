@@ -3,7 +3,6 @@ import { SessionTypeBadge, sessionTypeIcon } from "./session-type-badge";
 import { useLanguage } from "@/hooks/use-language";
 import { locale } from "@/lib/i18n";
 import { Text } from "@/components/ui/text";
-import { stripeColor } from "@/lib/stripe-color";
 import { useColorScheme } from "@/lib/useColorScheme";
 import { cn } from "@/lib/utils";
 import {
@@ -56,7 +55,6 @@ import {
   minToY,
 } from "@/lib/day-grid";
 import { LocationChip } from "@/components/calendar/location-chip";
-import type { CheckState } from "@/lib/today-summary";
 import { useToast } from "@/components/ui/toast";
 import { showErrorToast } from "@/lib/task-toasts";
 import { showMovedToast } from "@/lib/move-toast";
@@ -193,8 +191,8 @@ interface SessionBlockProps {
   settleKey?: number;
   /** Always draw the one-line title, whatever the block's height (week grid). */
   titleOnly?: boolean;
-  /** The session's done or skipped state, which restyles the block. */
-  checkState?: CheckState;
+  /** The session was skipped: the block fades and shows a skip mark. */
+  skipped?: boolean;
   /** Travel minutes kept clear on each side: drawn as a hatched zone inside the block. */
   commuteMinutes?: number | null;
   /** Width (px) of one day column. Set in the week grid, it lets a lifted block
@@ -227,7 +225,7 @@ function SessionBlockImpl({
   flash = false,
   settleKey = 0,
   titleOnly = false,
-  checkState,
+  skipped = false,
   commuteMinutes,
   dayWidth = 0,
   minDayShift = 0,
@@ -738,9 +736,7 @@ function SessionBlockImpl({
   // Translucent tone fill (12% light, 22% dark) so overlapping blocks blend.
   // One even 1px rim per tone; the 3px stripe is a separate rounded bar inset
   // inside the block, like Apple Calendar.
-  // A done block turns gray so it recedes behind the work still to do.
-  const isDone = checkState === "done";
-  const tone = isDone ? "dnd" : sessionTone(state, overdue);
+  const tone = sessionTone(state, overdue);
   // The session kind owns the colour (see `SESSION_TONES`), not its course.
   const stateClasses = `${flashRing} ${SESSION_TONE_CLASSES[tone].tint}`;
   // Solid single-colour rim, drawn as its own overlay ABOVE the blur: a border on
@@ -749,21 +745,12 @@ function SessionBlockImpl({
     SESSION_TONES[tone].base,
     isDarkColorScheme ? 0.45 : 0.55,
   );
-  // A done block shows a green left stripe and fades as a whole.
-  const isSkipped = checkState === "skipped";
-  const doneBlockStyle = isDone
-    ? ({ opacity: 0.62 } as const)
-    : isSkipped
-      ? ({ opacity: 0.45 } as const)
-      : null;
+  // A skipped block fades as a whole.
+  const doneBlockStyle = skipped ? ({ opacity: 0.45 } as const) : null;
   const topRadius = segment.continued || beforePx > 0 ? 0 : 14;
   const bottomRadius = (segment.continues && !drawsThrough) || afterPx > 0 ? 0 : 14;
 
-  const accentColor = isDone
-    ? stripeColor("done", isDarkColorScheme)
-    : isSkipped
-      ? SESSION_TONES.dnd.base
-      : SESSION_TONES[tone].base;
+  const accentColor = skipped ? SESSION_TONES.dnd.base : SESSION_TONES[tone].base;
   // Meta/time text: the tone's AA ink, or the course ink.
   const timeClass = SESSION_TONE_CLASSES[tone].text;
   // The type icon wears the course ink on a course block, so the type stays
@@ -964,17 +951,14 @@ function SessionBlockImpl({
                   the glyphs on Android. */}
               <TypeIcon size={11} color={typeInk} />
               <Text
-                className={cn(
-                  "min-w-0 flex-1 text-[11px] font-semibold leading-[14px]",
-                  isDone && "line-through",
-                )}
+                className="min-w-0 flex-1 text-[11px] font-semibold leading-[14px]"
                 style={COMPACT_TEXT_STYLE}
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
                 {segment.title}
               </Text>
-              {isSkipped && (
+              {skipped && (
                 <View testID={`skip-mark.${segment.taskId}`} className="shrink-0">
                   <SkipForward size={11} className="text-muted-foreground" />
                 </View>
@@ -995,16 +979,13 @@ function SessionBlockImpl({
               <View className="w-full min-w-0 flex-row items-center gap-1.5">
                 <SessionTypeBadge type={segment.type} size="md" className="shrink-0" />
                 <Text
-                  className={cn(
-                    "min-w-0 shrink text-[12px] font-semibold leading-4",
-                    isDone && "line-through",
-                  )}
+                  className="min-w-0 shrink text-[12px] font-semibold leading-4"
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
                   {segment.title}
                 </Text>
-                {isSkipped && (
+                {skipped && (
                   <View testID={`skip-mark.${segment.taskId}`} className="shrink-0">
                     <SkipForward size={12} className="text-muted-foreground" />
                   </View>

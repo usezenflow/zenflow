@@ -45,7 +45,7 @@ import {
   sessionTone,
 } from "@zenflow/core";
 import type { CreateSessionInput, CreateSessionResponse, PlacementPlan, Session } from "@zenflow/shared";
-import { Check, Trash2 } from "lucide-react";
+import { Check, SkipForward, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/lib/notify";
 
@@ -446,9 +446,9 @@ export function SessionDetailSheet({
               </Button>
             ) : (
               <GlassIconButton
-                icon={Trash2}
+                icon={isTask ? Trash2 : SkipForward}
                 label={t(isTask ? "Delete session" : "Skip session")}
-                destructive
+                destructive={isTask}
                 onClick={onDelete}
                 disabled={loading}
               />
