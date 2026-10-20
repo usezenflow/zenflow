@@ -12,7 +12,7 @@ You own how slots are scored and learned. Every placement ranking lives in `serv
 ## Map
 - `services/bandit/src/`: `api.py` and `place.py` (HTTP, `/v1/place`), `core/` (arms, scoring, constants), `policies/`, `models/`, `evaluators/`, `simulation/`, `telemetry.py`, `schemas_place.py`.
 - `backend/src/bandit/` holds per-student `(A, b)` state (`bandit-arm-state.repository.ts`); `backend/src/experiments/` assigns the policy (the only RNG).
-- Telemetry: `SessionEvent` (`CREATE`/`MOVE`/`RESIZE`/`COMPLETE`/`KEEP`/`ABANDON`) with `rewardScore`; `User.preferenceMatrix` is 7x96 signed ints; `User.roleArchetypeId` is reserved for cold start.
+- Telemetry: `SessionEvent` (`CREATE`/`MOVE`/`SYSTEM_MOVE`/`START`) with `rewardScore`; `User.preferenceMatrix` is 7x96 signed ints; `User.roleArchetypeId` is reserved for cold start.
 
 ## Rules
 - Behaviour change = Python change + pytest + updated `packages/shared/contract/place/*.json` fixtures. Never port logic back to TS.

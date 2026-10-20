@@ -82,3 +82,5 @@ Editing and deleting a series member:
 - Ranking now lives in Python: see [ADR-0003](0003-python-authoritative-placement.md).
 - Nest keeps a pure `backend/src/scheduler/core/*` (no I/O, clock or randomness) and an I/O `backend/src/scheduler/io/*`.
 - Layout detail: [backend/README.md](../../backend/README.md).
+
+**Addendum (2026-10-21, ADR-0035):** ADR-0035 removes the outcome sweep; START is rewarded on record.

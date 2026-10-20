@@ -55,17 +55,17 @@ LinUCB reward to avoid misattributing credit and mixing signal scales.
 ## 5. Reward — the only thing that updates learned state
 
 `preferenceMatrix` and LinUCB `(A, b)` are updated **only** by the move-or-keep signal
-(`MOVE` graded by drag distance, a started or checked-off placement `+1`, a lapsed one `-0.25`)
+(`MOVE` graded by drag distance, a START `+1`; an ignored proposal gives no signal)
 and by a pairwise pick of LinUCB's option (`+0.5`, `PAIRWISE_WIN_REWARD`). Only LinUCB-proposed
 arms learn; heuristic outcomes move the preference matrix alone;
-[ADR-0001](../adr/0001-linucb-model-design.md) §7, [ADR-0023](../adr/0023-completion-reward.md),
+[ADR-0001](../adr/0001-linucb-model-design.md) §7, [ADR-0035](../adr/0035-start-and-move-only-signals.md),
 [`services/bandit/README.md`](../../services/bandit/README.md)). 👍/👎 is offline-analysis data.
 
 ## 6. Metrics
 
 **Primary:** schedule acceptance rate (`SlotProposal.acceptedWithoutModification`).
 
-**Secondary:** completion rate (`COMPLETE` vs `SKIP` / `MISSED`), drag frequency/distance, deletion
+**Secondary:** start rate (START over placed sessions whose slot has passed), drag frequency/distance, deletion
 rate, like/dislike rate, pairwise win rate, time to first modification, policy divergence.
 
 `pnpm --filter backend ab:report [--since DATE]` prints these per primary policy.

@@ -1,6 +1,6 @@
 # ADR-0025: Completion outcomes: started, done, lapsed
 
-**Status:** accepted, amends ADR-0023; amended 2026-10-20 (check-off no longer rewards)
+**Status:** superseded by [ADR-0035](0035-start-and-move-only-signals.md)
 **Date:** 2026-10-17
 
 ## Context

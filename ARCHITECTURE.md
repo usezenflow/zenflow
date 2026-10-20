@@ -33,7 +33,7 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - `ExperimentService` holds the only RNG: the 50/50 policy roll and the pairwise draw.
 - A frozen heuristic (`FallbackPlacer`) answers only when the Bandit service is unavailable; the response is marked degraded, never a 503.
 - The Bandit service is the only ranking implementation, reached through `/v1/place` and `/v1/update`.
-- Delayed reward: the first user move (API) and the 30-minute retained sweep (watcher) call `/v1/update` and persist the arm state. A nightly job decays the preference matrix.
+- Reward: the first user move (API) and a START (API) call `/v1/update` and persist the arm state. A nightly job decays the preference matrix.
 
 ## Ingestion and notifications components
 

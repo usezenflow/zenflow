@@ -1,6 +1,6 @@
 # ADR-0030: Deadline pressure and LMS auto-complete
 
-**Status:** accepted
+**Status:** superseded by [ADR-0035](0035-start-and-move-only-signals.md) (LMS auto-complete removed with check-off)
 **Date:** 2026-10-19
 **Issue:** none
 
