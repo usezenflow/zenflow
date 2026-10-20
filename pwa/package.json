@@ -5,7 +5,7 @@
   "version": "1.0.0-beta.15",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @zenflow/core build && vite",
+    "dev": "pnpm --filter @zenflow/core build && vite --force",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
