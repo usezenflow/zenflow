@@ -30,27 +30,31 @@ export function DayGrid({ events, date }: { events: Event[]; date: Date }) {
   const segments = eventsForDay(events, date, tz);
   const layout = getOverlapLayout(segments);
 
-  // Open the day at its first session. Runs once per day, so later edits to
-  // the events don't move the scroll position.
+  // Open a day on now when it is today, else on its first session. Runs once
+  // per day, so later edits or the clock ticking don't move the scroll position.
   const gridRef = useRef<HTMLDivElement>(null);
   const scrolledDay = useRef<string | null>(null);
+  const today = isZonedToday(date, tz);
+  const firstStartMs = segments.length
+    ? Math.min(...segments.map((s) => Date.parse(s.start)))
+    : null;
+  const anchorMin = today
+    ? minutesSinceStartOfDay(zonedDate(now, tz))
+    : firstStartMs == null
+      ? null
+      : minutesSinceStartOfDay(zonedDate(new Date(firstStartMs), tz));
   useEffect(() => {
     const dayKey = `${date.toDateString()}|${tz}`;
-    if (scrolledDay.current === dayKey || segments.length === 0) return;
-    const first = segments.reduce((min, s) =>
-      Date.parse(s.start) < Date.parse(min.start) ? s : min,
-    );
+    if (scrolledDay.current === dayKey || anchorMin == null) return;
     // The grid is the first child of the scroller in layout.tsx.
     const grid = gridRef.current;
     const scroller = grid?.parentElement;
     if (!grid || !scroller) return;
-    const mins = minutesSinceStartOfDay(zonedDate(first.start, tz));
     scroller.scrollTo({
-      top: Math.max(0, (mins / DAILY_HORIZON) * grid.offsetHeight - 16),
-      behavior: "smooth",
+      top: Math.max(0, (anchorMin / DAILY_HORIZON) * grid.offsetHeight - 16),
     });
     scrolledDay.current = dayKey;
-  }, [date, tz, segments]);
+  }, [date, tz, anchorMin]);
 
   return (
     <div ref={gridRef} className="border-border grid flex-1 grid-cols-[3rem_1fr] overflow-hidden border-t sm:grid-cols-[4rem_1fr]">
