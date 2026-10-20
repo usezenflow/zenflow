@@ -27,49 +27,45 @@
       "expected": -1
     },
     {
-      "name": "completion-in-slot-settles-positive",
+      "name": "start-in-slot-settles-positive",
       "fn": "completionReward",
       "args": [
         0,
         3600000,
         600000,
-        false,
         4500000
       ],
       "expected": 1.0
     },
     {
-      "name": "completion-before-start-unsettled",
+      "name": "start-before-slot-unsettled",
       "fn": "completionReward",
       "args": [
         3600000,
         7200000,
         1800000,
-        false,
         9000000
       ],
       "expected": null
     },
     {
-      "name": "skip-settles-zero",
+      "name": "no-start-unsettled-before-cutoff",
       "fn": "completionReward",
       "args": [
         0,
         3600000,
         null,
-        true,
         4500000
       ],
-      "expected": 0.0
+      "expected": null
     },
     {
-      "name": "no-check-off-lapsed-at-cutoff",
+      "name": "no-start-lapsed-at-cutoff",
       "fn": "completionReward",
       "args": [
         0,
         3600000,
         null,
-        false,
         90000000
       ],
       "expected": -0.25

@@ -31,9 +31,9 @@ the task.
 A sampled subset shows both policies' proposed slots side by side, policy identity hidden,
 presentation position randomized 50/50. Recorded (`SlotProposal.pairwiseShown`,
 `pairwisePositions`, `chosenByUser`) for the win-rate metric. Picking LinUCB's option also
-rewards its arm with `PAIRWISE_WIN_REWARD` (§5).
+rewards its arm with `PAIRWISE_WIN_REWARD` (§5). Keeping the heuristic's option over a shown LinUCB option costs LinUCB's arm `PAIRWISE_LOSS_REWARD` (`-0.2`, the simulator's keep-default penalty) and adds `PAIRWISE_KEEP_PREFERENCE_WEIGHT` to the preference-matrix cell of the kept slot, so both policies learn from the answer. Keeping LinUCB's option is a `PAIRWISE_WIN_REWARD` on its arm; the schedule itself does not change on a keep.
 
-Rescheduling a lecture's prep plan shows the pair as two equal toast buttons (`mobile/lib/prep-toast.ts`); picking posts `slot-pick`. Button order is a stable client-side coin flip, not the logged `pairwisePositions`.
+Rescheduling a lecture's prep plan shows the pair as a toast with two large choices (`mobile/lib/prep-toast.ts`); picking posts `slot-pick`. Keep (the applied time) and Prefer are the two buttons, in that order. Dismissing the offer keeps the applied time and records nothing.
 
 A pair is only offered when the two starts are at least `MIN_ALTERNATIVE_GAP_MINUTES` (60)
 apart; closer picks (9:00 vs 9:15) aren't a real choice. They are still recorded, with
