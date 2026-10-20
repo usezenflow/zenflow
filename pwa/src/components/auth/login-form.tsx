@@ -231,7 +231,7 @@ export function LoginForm({
         <Form {...form}>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
             {stage === "email" ? (
-              <>
+              <div key="email" className="flex flex-col animate-rise-in">
                 <FormField
                   control={form.control}
                   name="email"
@@ -326,9 +326,9 @@ export function LoginForm({
                     {submitting ? t("Sending…") : t("Send OTP")}
                   </Button>
                 )}
-              </>
+              </div>
             ) : (
-              <>
+              <div key="otp" className="flex flex-col animate-rise-in">
                 <button
                   type="button"
                   disabled={otpLockout.active}
@@ -428,7 +428,7 @@ export function LoginForm({
                     {t("Resend code")}
                   </Button>
                 )}
-              </>
+              </div>
             )}
           </form>
         </Form>

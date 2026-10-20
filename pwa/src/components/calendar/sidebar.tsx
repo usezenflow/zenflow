@@ -70,7 +70,7 @@ function SidebarFooter() {
 /** Desktop rail, hidden below `lg` where the content moves into a drawer. */
 export function CalendarSidebar() {
   return (
-    <aside className="glass-frosted hidden w-80 xl:w-[500px] shrink-0 rounded-none border-y-0 border-l-0 border-r border-sidebar-border lg:block">
+    <aside className="glass-frosted hidden w-80 xl:w-96 shrink-0 overflow-hidden rounded-none border-y-0 border-l-0 border-r border-sidebar-border lg:block">
       <SidebarBody />
     </aside>
   );

@@ -51,6 +51,8 @@ export function CalendarHeader({
     }
   };
 
+  const title = formatByView();
+
   return (
     <div className="flex h-16 items-center justify-between gap-2 border-b border-border py-4 bg-card px-2 sm:px-4">
       <div className="flex min-w-0 items-center gap-1 sm:gap-4">
@@ -91,7 +93,9 @@ export function CalendarHeader({
         </Button>
 
         <h2 className={cn("truncate text-sm font-semibold sm:text-lg", currentView === "day" && "max-md:hidden")}>
-          {formatByView()}
+          <span key={title} className="block truncate animate-rise-in">
+            {title}
+          </span>
         </h2>
       </div>
 

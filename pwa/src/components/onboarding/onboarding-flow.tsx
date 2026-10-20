@@ -572,7 +572,7 @@ export function OnboardingFlow() {
                 <span
                   key={i}
                   className={cn(
-                    "h-1 flex-1 rounded-full",
+                    "h-1 flex-1 rounded-full transition-colors duration-200",
                     i < progress.index ? "bg-primary" : "bg-muted",
                   )}
                 />
@@ -595,7 +595,10 @@ export function OnboardingFlow() {
           frosted
           className="mt-8 flex flex-col rounded-3xl border p-[18px] shadow-xl shadow-primary/10"
         >
-        <div className={cn("flex flex-col", isDone && "items-center text-center")}>
+        <div
+          key={step}
+          className={cn("flex animate-rise-in flex-col", isDone && "items-center text-center")}
+        >
           {isDone ? (
             <span className="mb-5 flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
               <Check className="size-8" />
@@ -611,7 +614,7 @@ export function OnboardingFlow() {
           <p className="mt-2 text-[14.5px] leading-relaxed text-muted-foreground">{body}</p>
         </div>
 
-        <div className="mt-6">{content}</div>
+        <div key={step} className="mt-6 animate-rise-in">{content}</div>
         </Glass>
 
         <div className="mt-auto flex flex-col gap-1 pt-6">{footer}</div>

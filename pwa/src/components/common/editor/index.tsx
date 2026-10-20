@@ -106,7 +106,7 @@ export const Editor = ({ editor, newUploadsRef }: EditorProps) => {
       <EditorContent editor={editor} />
       {isDragging && (
         <div className="absolute inset-0 z-50 flex backdrop-blur-md flex-col items-center justify-center p-6 bg-primary/30 border border-dashed border-white pointer-events-none transition-opacity">
-          <FilePlus className="w-5 h-5 text-white animate-bounce" />
+          <FilePlus className="w-5 h-5 text-white motion-safe:animate-bounce" />
           <p className="font-medium text-white">{t("Drop files here")}</p>
           <p className="text-sm text-white/80">
             {t("Supports PDFs, images, audio and video.")}
