@@ -374,7 +374,7 @@ export function LoginForm({
                               }
                             }}
                           >
-                            <InputOTPGroup className="w-full gap-2.5 *:data-[slot=input-otp-slot]:rounded-xl *:data-[slot=input-otp-slot]:border">
+                            <InputOTPGroup className="w-full gap-2.5 *:data-[slot=input-otp-slot]:rounded-full *:data-[slot=input-otp-slot]:border">
                               {Array.from({ length: OTP_LENGTH }, (_, i) => (
                                 <InputOTPSlot
                                   key={i}
