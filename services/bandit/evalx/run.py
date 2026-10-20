@@ -283,10 +283,91 @@ def worlds() -> dict[str, Student]:
     return grid
 
 
-def run_suite(
-    seeds: int, students: int, weeks: int, tasks_per_week: int, arms: tuple[str, ...]
-) -> dict[str, Any]:
+def _seed_worker(args: tuple[int, int, int, int, tuple[str, ...]]) -> dict[str, Any]:
+    """One seed over every world and student: per-arm task counts for each world."""
+    seed, students, weeks, tasks_per_week, arms = args
     client = TestClient(app)
+    per_arm: dict[str, dict[str, list[int]]] = {
+        w: {a: [] for a in arms} for w in worlds()
+    }
+    infeasible: dict[str, dict[str, int]] = {w: {a: 0 for a in arms} for w in worlds()}
+    for world_name, student in worlds().items():
+        for idx in range(students):
+            rng = random.Random(f"tasks:{seed}:{idx}")
+            tasks = make_tasks(rng, weeks, tasks_per_week)
+            for arm in arms:
+                o = simulate(student, tasks, arm, seed * 100_000 + idx, client)
+                per_arm[world_name][arm].append(o.done)
+                infeasible[world_name][arm] += o.infeasible
+        print(f"seed {seed}: {world_name} done", flush=True)
+    return {"seed": seed, "per_arm": per_arm, "infeasible": infeasible}
+
+
+def run_suite(
+    seeds: int,
+    students: int,
+    weeks: int,
+    tasks_per_week: int,
+    arms: tuple[str, ...],
+    workers: int = 1,
+    parts_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Run each seed in its own process, then merge. Each process writes a part file,
+    so a crash loses one seed, not the run."""
+    import subprocess
+    import sys
+    from concurrent.futures import ThreadPoolExecutor
+
+    parts_dir = parts_dir or Path(__file__).parent / "out" / "parts"
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1")
+
+    def launch(seed: int) -> None:
+        part = parts_dir / f"seed-{seed:03d}.json"
+        if part.exists():
+            return
+        cmd = [
+            sys.executable,
+            "-m",
+            "evalx",
+            "seed",
+            "--seed",
+            str(seed),
+            "--students",
+            str(students),
+            "--weeks",
+            str(weeks),
+            "--tasks-per-week",
+            str(tasks_per_week),
+            "--arms",
+            ",".join(arms),
+            "--part",
+            str(part),
+        ]
+        subprocess.run(
+            cmd,
+            check=True,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(launch, range(seeds)))
+    chunks = [
+        json.loads((parts_dir / f"seed-{i:03d}.json").read_text()) for i in range(seeds)
+    ]
+    return _merge(chunks, seeds, students, weeks, tasks_per_week, arms)
+
+
+def _merge(
+    chunks: list[dict[str, Any]],
+    seeds: int,
+    students: int,
+    weeks: int,
+    tasks_per_week: int,
+    arms: tuple[str, ...],
+) -> dict[str, Any]:
     results: dict[str, Any] = {
         "config": {
             "seeds": seeds,
@@ -300,16 +381,12 @@ def run_suite(
         "worlds": {},
     }
     for world_name, student in worlds().items():
-        per_arm: dict[str, list[float]] = {a: [] for a in arms}
+        per_arm: dict[str, list[int]] = {a: [] for a in arms}
         infeasible = {a: 0 for a in arms}
-        for seed in range(seeds):
-            for idx in range(students):
-                rng = random.Random(f"tasks:{seed}:{idx}")
-                tasks = make_tasks(rng, weeks, tasks_per_week)
-                for arm in arms:
-                    o = simulate(student, tasks, arm, seed * 100_000 + idx, client)
-                    per_arm[arm].append(o.done)
-                    infeasible[arm] += o.infeasible
+        for chunk in chunks:
+            for arm in arms:
+                per_arm[arm].extend(chunk["per_arm"][world_name][arm])
+                infeasible[arm] += chunk["infeasible"][world_name][arm]
         tasks_total = seeds * students * weeks * tasks_per_week
         summary: dict[str, Any] = {"student": asdict(student), "arms": {}}
         for arm in arms:
@@ -323,14 +400,6 @@ def run_suite(
             diffs = [
                 lin - heu for lin, heu in zip(per_arm["L0"], per_arm["H0"], strict=True)
             ]
-            summary["L0_minus_H1"] = None
-            if "H1" in arms:
-                diffs_h1 = [
-                    lin - heu
-                    for lin, heu in zip(per_arm["L0"], per_arm["H1"], strict=True)
-                ]
-                m1, lo1, hi1 = bootstrap_ci(diffs_h1, seed=2)
-                summary["L0_minus_H1"] = {"mean": m1, "ci": [lo1, hi1]}
             m, lo, hi = bootstrap_ci(diffs, seed=1)
             summary["L0_minus_H0"] = {
                 "mean": m,
@@ -339,6 +408,12 @@ def run_suite(
                 "share_worse": sum(d < 0 for d in diffs) / len(diffs),
                 "worst_decile": worst_decile_mean(diffs),
             }
+        if "H1" in arms and "L0" in arms:
+            diffs_h1 = [
+                lin - heu for lin, heu in zip(per_arm["L0"], per_arm["H1"], strict=True)
+            ]
+            m1, lo1, hi1 = bootstrap_ci(diffs_h1, seed=2)
+            summary["L0_minus_H1"] = {"mean": m1, "ci": [lo1, hi1]}
         results["worlds"][world_name] = summary
     return results
 
@@ -394,6 +469,13 @@ def render(results: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="evalx")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    one = sub.add_parser("seed", help="run one seed and write its part file")
+    one.add_argument("--seed", type=int, required=True)
+    one.add_argument("--students", type=int, required=True)
+    one.add_argument("--weeks", type=int, required=True)
+    one.add_argument("--tasks-per-week", type=int, required=True)
+    one.add_argument("--arms", required=True)
+    one.add_argument("--part", type=Path, required=True)
     run = sub.add_parser(
         "run", help="run the grid and write results.json and report.md"
     )
@@ -402,12 +484,27 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--weeks", type=int, default=4)
     run.add_argument("--tasks-per-week", type=int, default=3)
     run.add_argument("--arms", default=",".join(ARMS))
+    run.add_argument("--workers", type=int, default=1)
     run.add_argument("--out", type=Path, default=Path(__file__).parent / "out")
     args = ap.parse_args(argv)
 
+    if args.cmd == "seed":
+        arms = tuple(a.strip() for a in args.arms.split(",") if a.strip())
+        chunk = _seed_worker(
+            (args.seed, args.students, args.weeks, args.tasks_per_week, arms)
+        )
+        args.part.parent.mkdir(parents=True, exist_ok=True)
+        args.part.write_text(json.dumps(chunk))
+        return 0
+
     arms = tuple(a.strip() for a in args.arms.split(",") if a.strip())
     results = run_suite(
-        args.seeds, args.students, args.weeks, args.tasks_per_week, arms
+        args.seeds,
+        args.students,
+        args.weeks,
+        args.tasks_per_week,
+        arms,
+        workers=args.workers,
     )
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "results.json").write_text(json.dumps(results, indent=2) + "\n")
