@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Zenflow Mobile — Settings</title>
+    <title>Zenflow Mobile, Me</title>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5.2.6/index.css"
@@ -30,14 +30,14 @@
   </head>
   <body>
     <div class="page-head">
-      <h1><span class="dot"></span> Settings — one flat scroll</h1>
+      <h1><span class="dot"></span> Me, one flat scroll</h1>
       <p>
         Mirrors <code>mobile/app/(app)/settings.tsx</code> exactly: a single
         scrollable screen, section-labelled like iOS Settings, not a home list +
         per-section detail screens (that two-level nav was a dead end — a phone
         has plenty of room to scroll three short cards, and splitting them cost
         an extra tap + back-chevron for no benefit). Section order:
-        <b>Profile · Appearance · Preferences · Notifications · Storage · Account</b>.
+        <b>Profile, Appearance, Preferences, Travel, Tags, LMS and portal, Advanced, Account</b>.
         Preferences holds Language, Timezone and Default reminder (pushes a
         picker sheet). Notifications holds the Allow notifications toggle. Storage shows the per-user file quota as a bar (light frame: normal; dark frame: past 80%, with an amber bar and a warning below it; at 100% the bar and callout turn red and the text says storage is full). The warning is a tinted card with dark same-hue text. Offline, the section stays: it shows the last known usage with an "Offline. Showing your last known usage." note, or, with nothing cached yet, an empty bar and "Usage is unavailable offline.").
         Working hours and Work days were dropped along with
@@ -70,7 +70,7 @@
       <div class="frame">
         <div class="caption">
           <span class="tag">Populated</span>
-          <div class="sub">All 5 sections · light theme</div>
+          <div class="sub">All sections, light theme</div>
         </div>
         <div class="device">
           <div class="island"></div>
@@ -145,7 +145,7 @@
                 class="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 px-5" style="padding-bottom: 116px"
               >
                 <div
-                  class="mx-1 mt-[18px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[18px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Profile
                 </div>
@@ -180,7 +180,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Appearance
                 </div>
@@ -217,7 +217,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Preferences
                 </div>
@@ -243,7 +243,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Notifications
                 </div>
@@ -259,7 +259,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Storage
                 </div>
@@ -276,7 +276,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Account
                 </div>
@@ -315,8 +315,8 @@
       <!-- Populated (dark) -->
       <div class="frame">
         <div class="caption">
-          <span class="tag dark-tag">Populated · Dark</span>
-          <div class="sub">Tiếng Việt · cùng bố cục, bảng màu tối</div>
+          <span class="tag dark-tag">Populated, dark</span>
+          <div class="sub">Tiếng Việt, cùng bố cục, bảng màu tối</div>
         </div>
         <div class="device dark">
           <div class="island"></div>
@@ -377,7 +377,7 @@
                 class="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 px-5" style="padding-bottom: 116px"
               >
                 <div
-                  class="mx-1 mt-[18px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[18px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Hồ sơ
                 </div>
@@ -412,7 +412,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Giao diện
                 </div>
@@ -449,7 +449,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Tùy chọn
                 </div>
@@ -475,7 +475,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Thông báo
                 </div>
@@ -491,7 +491,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Dung lượng
                 </div>
@@ -512,7 +512,7 @@
                 </div>
 
                 <div
-                  class="mx-1 mt-[22px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Tài khoản
                 </div>
@@ -600,7 +600,7 @@
         <div class="caption">
           <span class="tag">Loading</span>
           <div class="sub">
-            Shimmer placeholders · same row heights, no layout jump
+            Shimmer placeholders, same row heights, no layout jump
           </div>
         </div>
         <div class="device">
@@ -662,7 +662,7 @@
                 class="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 px-5" style="padding-bottom: 116px"
               >
                 <div
-                  class="mx-1 mt-[18px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[18px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Hồ sơ
                 </div>
@@ -697,7 +697,7 @@
       <!-- Account section — DLU connected -->
       <div class="frame">
         <div class="caption">
-          <span class="tag">Account · Connected</span>
+          <span class="tag">Account, connected</span>
           <div class="sub">
             LMS + Portal both connected · see dlu-connect.html for the flow
           </div>
@@ -761,7 +761,7 @@
                 class="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-0 [&::-webkit-scrollbar]:h-0 px-5" style="padding-bottom: 116px"
               >
                 <div
-                  class="mx-1 mt-[80px] mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                  class="mx-1 mt-[80px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
                   Tài khoản
                 </div>
@@ -791,7 +791,7 @@
                       <div
                         class="text-[12.5px] text-emerald-600 mt-0.5 font-medium"
                       >
-                        LMS · Portal connected
+                        LMS and portal connected
                       </div>
                     </div>
                     <span class="text-muted-foreground [&_svg]:size-[18px]"

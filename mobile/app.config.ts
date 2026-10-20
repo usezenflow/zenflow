@@ -27,9 +27,9 @@ const betaNumber = Number(prerelease?.split(".")[1] ?? 0);
 
 const widgetConfig: WithAndroidWidgetsParams = {
   fonts: [
-    "./assets/fonts/Geist-Regular.ttf",
-    "./assets/fonts/Geist-Medium.ttf",
-    "./assets/fonts/Geist-SemiBold.ttf",
+    "../packages/brand/fonts/Geist-Regular.ttf",
+    "../packages/brand/fonts/Geist-Medium.ttf",
+    "../packages/brand/fonts/Geist-SemiBold.ttf",
   ],
   widgets: [
     {
@@ -134,9 +134,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         // iOS and Android res/raw; Android channel sounds are immutable once
         // created, so channels using these need new ids.
         sounds: [
-          "./assets/sounds/zenflow_default.wav",
-          "./assets/sounds/zenflow_reminder.wav",
-          "./assets/sounds/zenflow_urgent.wav",
+          "../packages/brand/sounds/zenflow_default.wav",
+          "../packages/brand/sounds/zenflow_reminder.wav",
+          "../packages/brand/sounds/zenflow_urgent.wav",
         ],
       },
     ],

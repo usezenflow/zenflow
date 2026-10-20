@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { BusyOr } from "@/components/ui/delayed-spinner";
 import { useAfterPaint } from "@/hooks/use-after-paint";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { t } from "@/lib/i18n";
@@ -17,6 +17,10 @@ import {
 import { GlassButton } from "@/components/ui/glass-button";
 import { Text } from "@/components/ui/text";
 import { rescheduleWithToast } from "@/lib/reschedule-toast";
+import { choiceForButton, isOpenPlanOffer, offerTimes, pickPlanOffer } from "@/lib/plan-offer";
+import { timeLabel } from "@/lib/prep-toast";
+import { markNotificationActionTaken } from "@/api/notifications";
+import { reportInboxOffer } from "@/hooks/use-plan-offers";
 import { useToast } from "@/components/ui/toast";
 import {
   useNotificationsStore,
@@ -31,7 +35,7 @@ import { formatDistanceToNow } from "date-fns";
 import { zonedDate } from "@zenflow/core";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
   Modal,
@@ -136,9 +140,28 @@ export default function NotificationsScreen() {
     [fetchNotifications, toast],
   );
 
+  const handlePickOffer = useCallback(
+    async (n: NotificationDto, index: 0 | 1) => {
+      if (!n.sessionId || !n.slotProposalId) return;
+      const ok = await pickPlanOffer(
+        toast,
+        n.sessionId,
+        n.slotProposalId,
+        choiceForButton(index),
+      );
+      if (ok) void fetchNotifications("refresh");
+    },
+    [fetchNotifications, toast],
+  );
+
   const handleDismiss = useCallback(
     async (id: string) => {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      // Dismissing a plan offer keeps the time already applied; stop asking about it.
+      const offer = items.find((n) => n.id === id);
+      if (offer && isOpenPlanOffer(offer)) {
+        void markNotificationActionTaken(id).catch(() => undefined);
+      }
       try {
         await dismiss(id);
       } catch {
@@ -344,6 +367,7 @@ export default function NotificationsScreen() {
               onDismiss={() => handleDismiss(n.id)}
               rescheduling={reschedulingId === n.id}
               onRescheduleAll={() => handleRescheduleAll(n)}
+              onPickOffer={(index) => void handlePickOffer(n, index)}
             />
           )}
         />
@@ -428,6 +452,7 @@ function NotificationRowItem({
   onDismiss,
   rescheduling,
   onRescheduleAll,
+  onPickOffer,
 }: {
   n: NotificationDto;
   tz: string;
@@ -437,6 +462,7 @@ function NotificationRowItem({
   onDismiss: () => void;
   rescheduling: boolean;
   onRescheduleAll: () => void;
+  onPickOffer: (index: 0 | 1) => void;
 }) {
   useLanguage();
   const offline = useOffline();
@@ -452,6 +478,10 @@ function NotificationRowItem({
   // Reschedule stamps `actionTakenAt` but keeps `conflictSessionIds`.
   const hasConflicts =
     !n.actionTakenAt && (n.conflictSessionIds?.length ?? 0) > 0;
+  const offerOpen = isOpenPlanOffer(n) && !isSelecting && !offline;
+  useEffect(() => {
+    reportInboxOffer(n);
+  }, [n]);
 
   const renderRightActions = () => (
     <Pressable
@@ -576,6 +606,40 @@ function NotificationRowItem({
               )}
             </View>
 
+            {offerOpen && (
+              <View className="mt-3 flex-row gap-2">
+                {[0, 1].map((index) => {
+                  const keep = index === 0;
+                  const { primary, alternative } = offerTimes(n);
+                  const label = keep
+                    ? t("Keep {when}", { when: timeLabel(primary, tz) })
+                    : t("Prefer {when}", { when: timeLabel(alternative, tz) });
+                  return (
+                    <Pressable
+                      key={index}
+                      testID={keep ? "plan-offer-keep" : "plan-offer-prefer"}
+                      onPress={() => onPickOffer(index as 0 | 1)}
+                      accessibilityRole="button"
+                      accessibilityLabel={label}
+                      className={cn(
+                        "flex-1 items-center justify-center rounded-2xl py-3.5 active:opacity-80",
+                        keep ? "bg-primary" : "border-2 border-primary bg-card",
+                      )}
+                    >
+                      <Text
+                        className={cn(
+                          "text-[15px] font-bold",
+                          keep ? "text-primary-foreground" : "text-primary",
+                        )}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
             {hasConflicts && !isSelecting && !offline && (
               <Pressable
                 onPress={onRescheduleAll}
@@ -583,11 +647,9 @@ function NotificationRowItem({
                 hitSlop={6}
                 className="mt-2 flex-row items-center gap-1.5 self-start rounded-full bg-primary px-3 py-1 active:opacity-80"
               >
-                {rescheduling ? (
-                  <Spinner size={14} color="#ffffff" />
-                ) : (
+                <BusyOr busy={rescheduling} size={14} color="#ffffff">
                   <RefreshCw size={12} color="#ffffff" />
-                )}
+                </BusyOr>
                 <Text className="text-[12px] font-semibold text-white">
                   {t("Reschedule")}
                 </Text>

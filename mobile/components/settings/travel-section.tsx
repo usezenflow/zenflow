@@ -153,7 +153,7 @@ function HomeScreen({ initial, onClose }: { initial: Stop | null; onClose: (home
 }
 
 /** Where trips start and how the student gets to campus, filled into every session with a place. */
-export function TravelSection() {
+export function TravelSection({ hideLabel = false }: { hideLabel?: boolean } = {}) {
   useLanguage();
   const user = useUserStore((s) => s.user);
   const { toast } = useToast();
@@ -186,7 +186,7 @@ export function TravelSection() {
 
   return (
     <>
-      <SettingsSectionLabel>{t("Travel")}</SettingsSectionLabel>
+      {!hideLabel && <SettingsSectionLabel>{t("Travel")}</SettingsSectionLabel>}
       <View className="overflow-hidden rounded-2xl border border-border bg-card">
         <Row
           testID="settings.home"

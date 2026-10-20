@@ -17,9 +17,9 @@ import {
  * agnostic (no React/RN imports) so they're unit-testable with a plain
  * Node/Vitest run — see `lib/__tests__/month-date-math.test.ts`.
  *
- * Mirrors `frontend/src/components/calendar/month-grid.tsx`'s Monday-first
+ * Mirrors `pwa/src/components/calendar/month-grid.tsx`'s Monday-first
  * "pad to whole weeks" grid math (same `WEEK_STARTS_ON = 1` as
- * `frontend/src/utils/constants.ts`), translated to RN idioms.
+ * `pwa/src/utils/constants.ts`), translated to RN idioms.
  */
 
 export const WEEK_STARTS_ON = 1;

@@ -11,7 +11,7 @@ import { View } from "react-native";
  * Glass bell button that opens the notification inbox (`app/notifications.tsx`)
  * and shows an unread dot driven live by the SSE stream. Placed in the calendar
  * header (`components/calendar/calendar-header.tsx`).
- * Web counterpart: `frontend/src/components/notifications/notification-bell.tsx`.
+ * Web counterpart: `pwa/src/components/notifications/notification-bell.tsx`.
  */
 export function NotificationBell() {
   useLanguage();

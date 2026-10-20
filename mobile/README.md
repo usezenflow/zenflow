@@ -1,7 +1,7 @@
 # Zenflow Mobile
 
 For developers. Expo + React Native app (iOS, Android, web) that shares `@zenflow/shared`
-(contract) and `@zenflow/core` (logic) with the web [`frontend/`](../frontend/README.md).
+(contract) and `@zenflow/core` (logic) with the web [`pwa/`](../pwa/README.md).
 Part of the [Zenflow monorepo](../README.md). Screens are designed first in [`mockups/`](../mockups/); look and feel rules are in [`docs/mobile/design.md`](../docs/mobile/design.md).
 
 ## Run it

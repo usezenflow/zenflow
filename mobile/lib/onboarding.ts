@@ -8,7 +8,9 @@ import { BULK_TAGS_MAX, TAG_NAME_MAX } from "@zenflow/shared";
 
 export const ONBOARDING_STEPS = [
   "focus",
+  "tags",
   "dlu",
+  "commute",
   "notifications",
   "done",
 ] as const;

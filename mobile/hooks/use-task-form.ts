@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { useLanguage } from "@/hooks/use-language";
 
 /**
- * RN port of `frontend/src/hooks/use-task-form.ts` — same `sessionSchema`
+ * RN port of `pwa/src/hooks/use-task-form.ts` — same `sessionSchema`
  * (hoisted, unmodified, to `@zenflow/core` for RN migration Phase 5 / issue
  * #20), same React Hook Form + Zod wiring. `react-hook-form` works
  * identically in RN, no adaptation needed beyond the import path.

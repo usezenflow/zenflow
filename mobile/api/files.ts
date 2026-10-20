@@ -12,7 +12,7 @@ export interface PickedFilePart {
 }
 
 /**
- * Multipart upload — mirrors `frontend/src/hooks/use-file-uploads.ts`'s
+ * Multipart upload — mirrors `pwa/src/hooks/use-file-uploads.ts`'s
  * `fetch(.../files/upload, { body: formData })`. RN's `FormData` accepts a
  * `{ uri, name, type }` object directly for a file part (no in-memory read
  * needed); axios/RN set the `multipart/form-data` boundary themselves, so we

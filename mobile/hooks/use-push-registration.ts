@@ -9,6 +9,7 @@ import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useUserStore } from "@/hooks/use-user-store";
 import { rescheduleWithToast } from "@/lib/reschedule-toast";
 import { PUSH_ACTION_RESCHEDULE, pushCategoryFor } from "@zenflow/shared";
+import { choiceForAction, pickPlanOffer } from "@/lib/plan-offer";
 import { notificationToastVisual } from "@/lib/notification-visual";
 import {
   claimNotification,
@@ -83,6 +84,14 @@ export function usePushRegistration(): void {
         data?.notificationId
       ) {
         await rescheduleWithToast(data.notificationId, toast);
+        return;
+      }
+      // iOS "Keep" / "Prefer" on a plan offer: answer without opening the app.
+      const choice = data?.slotProposalId
+        ? choiceForAction(response.actionIdentifier)
+        : null;
+      if (choice && data?.sessionId && data.slotProposalId) {
+        await pickPlanOffer(toast, data.sessionId, data.slotProposalId, choice);
         return;
       }
       // A conflict has no session to open: show the inbox row with its button.

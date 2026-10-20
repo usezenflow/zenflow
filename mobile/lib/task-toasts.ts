@@ -102,7 +102,7 @@ export function shouldSurfaceRescheduleHint(): boolean {
  * Compose the create/edit placement toast copy — the mobile "toast surface"
  * for auto-scheduling placement (RN migration Phase 5 / issue #20). The
  * auto-scheduling logic itself, and the richer Phase-2 rationale UI
- * (`frontend/src/components/tasks/rationale-toast.tsx`'s preferred-window /
+ * (`pwa/src/components/tasks/rationale-toast.tsx`'s preferred-window /
  * top-cells breakdown), are both out of scope here — this only ports the
  * plain success/conflict messaging `create-task-dialog.tsx` already showed
  * via a one-line `toast.success`/`toast.warning` before any rationale data
@@ -120,7 +120,7 @@ export function placementToastMessage(
     // no slot before the deadline. That's not a hard failure — this used to
     // read as a destructive "couldn't be scheduled before its deadline" and
     // fired on *every* creation. Mirrors
-    // `frontend/src/components/tasks/create-task-dialog.tsx`.
+    // `pwa/src/components/tasks/create-task-dialog.tsx`.
     return {
       message: `${t("Plan created")}\n${t("No time found before its deadline.")}`,
       variant: "success",

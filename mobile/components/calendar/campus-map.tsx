@@ -13,6 +13,8 @@ export interface CampusMapProps {
   start?: MapPoint | null;
   /** `[lng, lat]` pairs of the route line. */
   route?: [number, number][] | null;
+  /** `[lng, lat]` pairs of the walk, drawn as footsteps. */
+  walk?: [number, number][] | null;
   /** Label for screen readers. */
   name?: string;
   /** Tapping the map picks that point. */
@@ -22,7 +24,7 @@ export interface CampusMapProps {
 }
 
 /** A map centred on one point. The marker follows `point` without reloading. */
-export function CampusMap({ point, start = null, route = null, name, onPick, fill }: CampusMapProps) {
+export function CampusMap({ point, start = null, route = null, walk = null, name, onPick, fill }: CampusMapProps) {
   const mapsUrl = campusMapsUrl();
   const first = useRef(point);
   const web = useRef<{ injectJavaScript: (script: string) => void } | null>(null);
@@ -34,8 +36,8 @@ export function CampusMap({ point, start = null, route = null, name, onPick, fil
   );
 
   // The page applies views once it has loaded, and says "ready" when it has.
-  const view = useRef<MapView>({ end: point, start, route });
-  view.current = { end: point, start, route };
+  const view = useRef<MapView>({ end: point, start, route, walk });
+  view.current = { end: point, start, route, walk };
   const send = useRef(() => {});
   send.current = () => {
     const message = mapViewMessage(view.current);
@@ -43,7 +45,7 @@ export function CampusMap({ point, start = null, route = null, name, onPick, fil
       `window.dispatchEvent(new MessageEvent("message",{data:${JSON.stringify(message)}}));true;`,
     );
   };
-  useEffect(() => send.current(), [point, start, route]);
+  useEffect(() => send.current(), [point, start, route, walk]);
 
   if (!html) return <CampusMapUnavailable />;
 

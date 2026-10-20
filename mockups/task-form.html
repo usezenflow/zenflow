@@ -22,10 +22,10 @@
         Every Radix <code>Dialog</code> becomes a
         <code>@gorhom/bottom-sheet</code> slide-up over a dimmed calendar
         (migration doc Phase 5). Ports
-        <code>frontend/src/components/tasks/create-task-dialog.tsx</code> +
+        <code>pwa/src/components/tasks/create-task-dialog.tsx</code> +
         <code>edit-task-dialog.tsx</code> + <code>use-task-form.ts</code>;
         fields match the zod schema in
-        <code>frontend/src/utils/tasks.ts</code> (title · duration 15-min steps
+        <code>pwa/src/utils/tasks.ts</code> (title · duration 15-min steps
         · deadline · <b>reminders</b> · tags · note). Duration uses a thumb-friendly stepper/slider
         instead of the web's drag handles; placement is fully automatic, and an
         unplaceable task surfaces as a non-blocking conflict toast, not a

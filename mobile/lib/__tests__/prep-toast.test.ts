@@ -9,7 +9,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/api/tasks", () => api);
 
-import { offerPrepAfterSkip, offerPrepReschedule } from "../prep-toast";
+import { offerPrepReschedule } from "../prep-toast";
 
 const NEW_START = "2026-10-20T09:00:00.000Z";
 const prep = (over: Partial<Session> = {}) =>
@@ -79,24 +79,20 @@ describe("offerPrepReschedule", () => {
       return toast;
     }
 
-    it("shows both times as equal buttons when the scheduler has two", async () => {
+    it("offers Keep and Prefer as two large choices that stay until taken", async () => {
       const toast = await reschedule(proposal);
 
-      const { title, actions } = toast.mock.calls[1][0];
+      const { title, confirm, persistent } = toast.mock.calls[1][0];
       expect(title).toBe("Pick a time for your prep");
-      expect(actions).toHaveLength(2);
-      const labels = actions.map((a: { label: string }) => a.label);
-      expect(labels.filter((l: string) => l.includes("Oct 20"))).toHaveLength(1);
-      expect(labels.filter((l: string) => l.includes("Oct 19"))).toHaveLength(1);
+      expect(confirm.cancelLabel).toBe("Keep 7:00 AM, Tue");
+      expect(confirm.confirmLabel).toBe("Prefer 3:00 PM, Mon");
+      expect(persistent).toBeUndefined();
     });
 
-    it("keeps the applied time when its button is picked", async () => {
+    it("keeps the applied time when Keep is picked", async () => {
       const toast = await reschedule(proposal);
-      const keep = toast.mock.calls[1][0].actions.find((a: { label: string }) =>
-        a.label.includes("Oct 20"),
-      );
 
-      keep.onPress();
+      toast.mock.calls[1][0].confirm.onCancel();
 
       await vi.waitFor(() =>
         expect(api.slotPick).toHaveBeenCalledWith("prep-1", {
@@ -106,13 +102,10 @@ describe("offerPrepReschedule", () => {
       );
     });
 
-    it("moves the plan when the other button is picked", async () => {
+    it("moves the plan when Prefer is picked", async () => {
       const toast = await reschedule(proposal);
-      const swap = toast.mock.calls[1][0].actions.find((a: { label: string }) =>
-        a.label.includes("Oct 19"),
-      );
 
-      swap.onPress();
+      toast.mock.calls[1][0].confirm.onConfirm();
 
       await vi.waitFor(() =>
         expect(api.slotPick).toHaveBeenCalledWith("prep-1", {
@@ -122,79 +115,18 @@ describe("offerPrepReschedule", () => {
       );
     });
 
+    it("sends nothing when the offer is dismissed, so the applied time stands", async () => {
+      const toast = await reschedule(proposal);
+
+      toast.mock.calls[1][0].confirm.onDismiss();
+
+      expect(api.slotPick).not.toHaveBeenCalled();
+    });
+
     it("confirms with a plain toast when there is only one time", async () => {
       const toast = await reschedule({ divergent: false });
 
       expect(toast.mock.calls[1][0].title).toBe("Prep plans rescheduled");
     });
-  });
-});
-
-describe("offerPrepAfterSkip", () => {
-  const NEXT = "2026-10-27T09:00:00.000Z";
-  const detail = (over: Record<string, unknown> = {}) => ({
-    prepSessions: [prep()],
-    nextPrepOccurrenceStart: NEXT,
-    ...over,
-  });
-
-  beforeEach(() => {
-    api.getSessionDetails.mockReset();
-    api.updateSession.mockReset().mockResolvedValue({});
-    api.removeSession.mockReset().mockResolvedValue({});
-  });
-
-  it("stays quiet when no plan is open", async () => {
-    api.getSessionDetails.mockResolvedValue(
-      detail({ prepSessions: [prep({ completedAt: "2026-10-19T08:00:00.000Z" })] }),
-    );
-    const toast = vi.fn();
-    await offerPrepAfterSkip(toast, { id: "l" }, "UTC");
-    expect(toast).not.toHaveBeenCalled();
-  });
-
-  it("offers delete and the next class, and keeps the plan if ignored", async () => {
-    api.getSessionDetails.mockResolvedValue(detail());
-    const toast = vi.fn();
-    await offerPrepAfterSkip(toast, { id: "l" }, "UTC");
-
-    const { actions } = toast.mock.calls[0][0];
-    expect(actions.map((a: { label: string }) => a.label)).toEqual(["Delete plan", "Next class"]);
-    expect(api.removeSession).not.toHaveBeenCalled();
-    expect(api.updateSession).not.toHaveBeenCalled();
-  });
-
-  it("hides the next class when there is none", async () => {
-    api.getSessionDetails.mockResolvedValue(detail({ nextPrepOccurrenceStart: null }));
-    const toast = vi.fn();
-    await offerPrepAfterSkip(toast, { id: "l" }, "UTC");
-
-    const { actions } = toast.mock.calls[0][0];
-    expect(actions.map((a: { label: string }) => a.label)).toEqual(["Delete plan"]);
-  });
-
-  it("deletes the open plans", async () => {
-    api.getSessionDetails.mockResolvedValue(detail());
-    const toast = vi.fn();
-    await offerPrepAfterSkip(toast, { id: "l" }, "UTC");
-
-    toast.mock.calls[0][0].actions[0].onPress();
-
-    await vi.waitFor(() => expect(api.removeSession).toHaveBeenCalledWith("prep-1"));
-  });
-
-  it("moves the plan to the next class", async () => {
-    api.getSessionDetails.mockResolvedValue(detail());
-    const toast = vi.fn();
-    await offerPrepAfterSkip(toast, { id: "l" }, "UTC");
-
-    toast.mock.calls[0][0].actions[1].onPress();
-
-    await vi.waitFor(() =>
-      expect(api.updateSession).toHaveBeenCalledWith("prep-1", {
-        deadline: NEXT,
-        prepForOccurrenceStart: NEXT,
-      }),
-    );
   });
 });

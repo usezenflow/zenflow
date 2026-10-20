@@ -299,13 +299,11 @@ function SessionBlockImpl({
   // no annotation. `layout` still cascades them (see `DayTimeline`).
   const state = segment.state;
   const isSplit = Boolean(segment.continued);
-  // Any whole (non-split) block can be dragged/long-pressed into "Move
-  // to…" — fixed types (DND/ASSIGNMENT/EXAM/LECTURE) route through the same
-  // gesture as TASK now; a series/recurring touch is disambiguated by the
-  // scope rule upstream (`resolveMoveScope` in `lib/recurring-scope.ts`),
-  // not by locking the gesture out here.
+  // Only plans move. Fixed blocks (DND/ASSIGNMENT/EXAM/LECTURE) still take the
+  // hold, so the student gets a toast instead of a silent no-op.
   // Offline there is nothing to write: drag and long-press are off, tap still opens.
   const offline = useOffline();
+  const movable = segment.type === "TASK";
   const isInteractive = !isSplit && !offline;
   // …but every block is tappable, the carried-over tail of a session that
   // crosses midnight included: it opens the same detail sheet as the head.
@@ -501,7 +499,7 @@ function SessionBlockImpl({
     // drop lands exactly where the dashed line / snapped card sat — never a
     // grid step off.
     (newStartMin: number, dayShift: number) => {
-      if (!isInteractive || !onReschedule) return;
+      if (!movable || !isInteractive || !onReschedule) return;
       if (newStartMin === startMin && dayShift === 0) return;
 
       const newWall = zonedDate(segment.taskStart, tz);
@@ -516,6 +514,7 @@ function SessionBlockImpl({
       onReschedule(segment.taskId, newStart.toISOString());
     },
     [
+      movable,
       isInteractive,
       onReschedule,
       startMin,
@@ -562,6 +561,12 @@ function SessionBlockImpl({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   }, []);
 
+  // A fixed block refuses the lift with a toast, and never follows the finger.
+  const notMovable = useCallback(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    toast({ title: t("Only plans can be moved"), variant: "info" });
+  }, [toast]);
+
   // The drag is hold-then-drag: a swipe that starts on a block scrolls the
   // day / pages the week right away, and only a finger held still for 350ms
   // lifts the block. Released without moving, the same hold opens the "Move
@@ -572,9 +577,14 @@ function SessionBlockImpl({
     .activateAfterLongPress(LIFT_HOLD_MS)
     .onStart(() => {
       movedSV.value = 0;
+      if (!movable) {
+        runOnJS(notMovable)();
+        return;
+      }
       runOnJS(liftHaptic)();
     })
     .onUpdate((e) => {
+      if (!movable) return;
       const absX = Math.abs(e.translationX);
       const absY = Math.abs(e.translationY);
 
@@ -634,6 +644,7 @@ function SessionBlockImpl({
       // (time) axis: another day is the "Move to…" sheet's job (long-press).
     })
     .onEnd((e) => {
+      if (!movable) return;
       const absX = Math.abs(e.translationX);
       const absY = Math.abs(e.translationY);
       const effTY = e.translationY + autoScroll.value;

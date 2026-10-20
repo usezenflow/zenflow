@@ -9,24 +9,30 @@ import {
   Check,
   ChevronLeft,
   GraduationCap,
+  LocateFixed,
   type LucideIcon,
   MoonStar,
   Sliders,
   Sun,
   Sunrise,
   Sunset,
+  Tag,
   User,
 } from "@/components/Icons";
 import { ImportedTimetable } from "@/components/onboarding/imported-timetable";
+import { TagPicker } from "@/components/onboarding/tag-picker";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
+import { TravelSection } from "@/components/settings/travel-section";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
 import { useIntegrationStore } from "@/hooks/use-integration-store";
+import { useMyLocationStop } from "@/hooks/use-my-location-stop";
 import { useNotificationToggle } from "@/hooks/use-notification-toggle";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useUserStore } from "@/hooks/use-user-store";
 import type { FocusBand } from "@zenflow/shared";
+import { homeStop } from "@/lib/home-stop";
 import { DEFAULT_FOCUS_BAND, focusBandOptions } from "@/lib/focus-band";
 import {
   FIRST_STEP,
@@ -41,7 +47,7 @@ import {
 import { LANGUAGES } from "@/lib/preferences";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
-import { Spinner } from "@/components/ui/spinner";
+import { BusyOr } from "@/components/ui/delayed-spinner";
 import {
   AppState,
   KeyboardAvoidingView,
@@ -78,6 +84,14 @@ const COPY = {
       return t("We'll try this part of the day first when we place your sessions.");
     },
   },
+  tags: {
+    get title() {
+      return t("Pick some tags");
+    },
+    get body() {
+      return t("Tags group your sessions by subject or kind. Add your own any time.");
+    },
+  },
   dlu: {
     get title() {
       return t("Connect your LMS or portal");
@@ -96,6 +110,25 @@ const COPY = {
       return t(
         "Your password is stored encrypted. Disconnect in Settings to delete it.",
       );
+    },
+  },
+  commute: {
+    get title() {
+      return t("Plan your commute");
+    },
+    get body() {
+      return t(
+        "Share where you leave from and how you travel. We'll add buffer time before sessions on campus.",
+      );
+    },
+    get useLocation() {
+      return t("Use my location");
+    },
+    get useLocationBody() {
+      return t("Set your home to where you are now");
+    },
+    get openSettings() {
+      return t("Open settings");
     },
   },
   notifications: {
@@ -159,7 +192,9 @@ const COPY = {
 
 const STEP_ICON: Partial<Record<OnboardingStep, typeof User>> = {
   focus: Sun,
+  tags: Tag,
   dlu: GraduationCap,
+  commute: LocateFixed,
   notifications: Bell,
 };
 
@@ -218,6 +253,7 @@ export default function OnboardingScreen() {
   const { setIntegrations, setLoading, integrations } = useIntegrationStore();
   const notif = useNotificationToggle();
   const { prefs, update } = notif;
+  const myLocation = useMyLocationStop();
 
   // Local UI step index only; every value below is persisted server-side.
   const [step, setStep] = useState<OnboardingStep>(FIRST_STEP);
@@ -230,6 +266,19 @@ export default function OnboardingScreen() {
   const [focusBand, setFocusBand] = useState<FocusBand>(
     user?.focusBand ?? DEFAULT_FOCUS_BAND,
   );
+
+  const [existingTags, setExistingTags] = useState<string[]>([]);
+  const [tagsSelected, setTagsSelected] = useState<string[]>([]);
+  const [tagsSaved, setTagsSaved] = useState(false);
+  useEffect(() => {
+    listTags()
+      .then((tags) => {
+        const names = tags.map((tag) => tag.name);
+        setExistingTags(names);
+        setTagsSelected(initialTagSelection(names));
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     listIntegrations()
@@ -267,6 +316,27 @@ export default function OnboardingScreen() {
     }
   };
   const dluConnected = integrations.some((i) => i.connected);
+  const home = homeStop(user);
+
+  /** Asks for location permission, then saves the position as home. */
+  async function useMyLocation() {
+    const point = await myLocation.locate();
+    if (!point) return;
+    setBusy(true);
+    try {
+      updateUser(
+        await updateBasicInfo({
+          homeLocation: t("My location"),
+          homeLat: point.lat,
+          homeLng: point.lng,
+        }),
+      );
+    } catch {
+      toast(COPY.saveFailed);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function run(fn: () => Promise<undefined | false>) {
     setBusy(true);
@@ -345,11 +415,19 @@ export default function OnboardingScreen() {
     go();
   }
 
-  /** Best effort: the four suggested tags; never blocks onboarding. */
-  async function seedDefaultTags() {
+  const saveTags = () =>
+    run(async () => {
+      const names = newTagsForBulk(tagsSelected, existingTags);
+      if (names.length > 0) await createTagsBulk(names);
+      setTagsSaved(true);
+      return undefined;
+    });
+
+  /** Best effort: the picks, or the suggested tags when the step was never saved; never blocks onboarding. */
+  async function seedTags() {
+    if (tagsSaved) return;
     try {
-      const existing = (await listTags()).map((tag) => tag.name);
-      const names = newTagsForBulk(initialTagSelection(existing), existing);
+      const names = newTagsForBulk(tagsSelected, existingTags);
       if (names.length > 0) await createTagsBulk(names);
     } catch {
       // Not worth blocking the first run on.
@@ -359,7 +437,7 @@ export default function OnboardingScreen() {
   async function finish() {
     setBusy(true);
     try {
-      await seedDefaultTags();
+      await seedTags();
       // Idempotent; the root AuthGate then routes to the app.
       updateUser(await updateBasicInfo({ onboarded: true }));
     } catch {
@@ -377,11 +455,9 @@ export default function OnboardingScreen() {
       disabled={busy || disabled}
       onPress={onPress}
     >
-      {busy ? (
-        <Spinner testID="onboarding.busy" tone="onPrimary" />
-      ) : (
+      <BusyOr busy={busy} testID="onboarding.busy" tone="onPrimary">
         <Text className="font-semibold text-primary-foreground">{label}</Text>
-      )}
+      </BusyOr>
     </Button>
   );
   const ghost = (label: string, onPress: () => void) => (
@@ -457,6 +533,16 @@ export default function OnboardingScreen() {
         </>
       );
       break;
+    case "tags":
+      ({ title, body } = COPY.tags);
+      content = <TagPicker selected={tagsSelected} onChange={setTagsSelected} />;
+      footer = (
+        <>
+          {primary(COPY.continue, saveTags)}
+          {ghost(COPY.skipForNow, () => void saveTags())}
+        </>
+      );
+      break;
     case "dlu":
       ({ title, body } = COPY.dlu);
       content = (
@@ -475,6 +561,61 @@ export default function OnboardingScreen() {
         <>
           {primary(COPY.continue, advance)}
           {!dluConnected && ghost(COPY.skipForNow, advance)}
+        </>
+      );
+      break;
+    case "commute":
+      ({ title, body } = COPY.commute);
+      content = (
+        <View className="gap-4">
+          <Pressable
+            testID="onboarding.commute.use-location"
+            onPress={() => void useMyLocation()}
+            disabled={busy || myLocation.locating}
+            accessibilityRole="button"
+            className="flex-row items-center gap-[13px] rounded-2xl border border-border bg-card px-4 py-3.5 active:opacity-80"
+          >
+            <View className="size-[38px] items-center justify-center rounded-xl bg-primary/10">
+              <BusyOr busy={myLocation.locating}>
+                <LocateFixed size={18} className="text-primary" />
+              </BusyOr>
+            </View>
+            <View className="min-w-0 flex-1">
+              <Text className="text-[15px] font-semibold">
+                {COPY.commute.useLocation}
+              </Text>
+              <Text className="mt-0.5 text-[13px] text-muted-foreground">
+                {COPY.commute.useLocationBody}
+              </Text>
+            </View>
+          </Pressable>
+          {myLocation.note && (
+            <View className="flex-row gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
+              <AlertCircle size={20} className="text-destructive" />
+              <View className="flex-1">
+                <Text className="text-[13.5px] leading-snug">
+                  {myLocation.note}
+                </Text>
+                {myLocation.settingsNeeded && (
+                  <Pressable
+                    onPress={() => void Linking.openSettings()}
+                    className="mt-2"
+                  >
+                    <Text className="text-[13.5px] font-semibold text-primary">
+                      {COPY.commute.openSettings}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          )}
+          <TravelSection hideLabel />
+        </View>
+      );
+      footer = (
+        <>
+          {primary(COPY.continue, advance)}
+          {!home && ghost(COPY.skipForNow, advance)}
         </>
       );
       break;
@@ -586,10 +727,22 @@ export default function OnboardingScreen() {
         },
         { k: t("Name"), v: user?.name ?? "" },
         {
+          k: t("Tags"),
+          v: tagsSelected.length > 0 ? String(tagsSelected.length) : t("Skipped"),
+          skipped: tagsSelected.length === 0,
+          step: "tags",
+        },
+        {
           k: t("LMS & portal"),
           v: dluConnected ? t("Connected") : t("Skipped"),
           skipped: !dluConnected,
           step: "dlu",
+        },
+        {
+          k: t("Home"),
+          v: home?.text ?? t("Skipped"),
+          skipped: !home,
+          step: "commute",
         },
         {
           k: t("Notifications"),

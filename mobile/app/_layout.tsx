@@ -90,17 +90,13 @@ function NotificationsSubscriber() {
 
 export default function RootLayout() {
   useLanguage();
+  // Geist is shared with the pwa: see packages/brand.
   const [fontsLoaded, fontError] = useFonts({
-    Geist: require("../assets/fonts/Geist-Regular.ttf"),
-    "Geist-Bold": require("../assets/fonts/Geist-Bold.ttf"),
-    "Geist-Medium": require("../assets/fonts/Geist-Medium.ttf"),
-    "Geist-SemiBold": require("../assets/fonts/Geist-SemiBold.ttf"),
-    "Geist-ExtraBold": require("../assets/fonts/Geist-ExtraBold.ttf"),
-    // Geist Mono backs the `font-mono` utility (see `components/ui/text.tsx`'s
-    // `resolveGeistFontFamily`) — task times, durations and other tabular
-    // figures. Only the two weights those call sites use are loaded.
-    GeistMono: require("../assets/fonts/GeistMono-Regular.ttf"),
-    "GeistMono-Medium": require("../assets/fonts/GeistMono-Medium.ttf"),
+    Geist: require("../../packages/brand/fonts/Geist-Regular.ttf"),
+    "Geist-Bold": require("../../packages/brand/fonts/Geist-Bold.ttf"),
+    "Geist-Medium": require("../../packages/brand/fonts/Geist-Medium.ttf"),
+    "Geist-SemiBold": require("../../packages/brand/fonts/Geist-SemiBold.ttf"),
+    "Geist-ExtraBold": require("../../packages/brand/fonts/Geist-ExtraBold.ttf"),
   });
   const { colorScheme, isDarkColorScheme, setColorScheme } = useColorScheme();
   const setUser = useUserStore((s) => s.setUser);

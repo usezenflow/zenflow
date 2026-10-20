@@ -17,9 +17,7 @@ import {
   type DeleteRecurringSheetHandle,
 } from "@/components/tasks/delete-recurring-sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
-import type { SkipScope } from "@/api/check-off";
-import { useCheckOff } from "@/hooks/use-check-off";
+import { BusyOr } from "@/components/ui/delayed-spinner";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { type SessionFormValues, getSeriesKind, zonedDate } from "@zenflow/core";
 import type { CreateSessionInput, InfeasiblePolicy, PlacementPlan, Session } from "@zenflow/shared";
@@ -44,14 +42,13 @@ import { hideSessions } from "@/lib/hidden-sessions";
 import { getPlacementPlan } from "@/lib/make-room";
 import { showMovedToast } from "@/lib/move-toast";
 import { isSyncedSession } from "@/lib/synced-session";
-import { offerPrepAfterSkip, offerPrepReschedule } from "@/lib/prep-toast";
+import { offerPrepReschedule } from "@/lib/prep-toast";
 import { notifySessionsMutated, subscribeToSessionMutations } from "@/lib/session-cache";
 import { rememberPlacement } from "@/lib/slot-alternatives";
 import { warmLandingDay } from "@/lib/warm-day";
 import { deferCommit, UNDO_WINDOW_MS } from "@/lib/undo";
 import { SESSION_DETAIL_SNAP_POINTS } from "@/lib/session-detail";
-import { BookOpen, Check, ChevronRight, Clock, Plus, SkipForward, Trash2, Undo2 } from "@/components/Icons";
-import * as Haptics from "expo-haptics";
+import { BookOpen, Check, ChevronRight, Clock, Plus, Trash2 } from "@/components/Icons";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { GLASS_HIT_SIZE, GLASS_SIZE, GlassButton } from "@/components/ui/glass-button";
 import { useOffline } from "@/hooks/use-offline";
@@ -71,8 +68,6 @@ interface SessionDetailSheetProps {
 }
 
 const DRAFT_DURATION = 60;
-/** Length of the study session "Prepare in advance" books. */
-const SKIPPABLE = new Set<Session["type"]>(["LECTURE", "EXAM", "ASSIGNMENT"]);
 const PREP_TARGETS = new Set<Session["type"]>(["LECTURE", "EXAM", "ASSIGNMENT"]);
 const PREPARE_DURATION = 60;
 
@@ -108,7 +103,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
   const user = useUserStore((s) => s.user);
   const offline = useOffline();
   const deleteScopeSheet = useRef<DeleteRecurringSheetHandle>(null);
-  const skipScopeSheet = useRef<DeleteRecurringSheetHandle>(null);
   const makeRoom = useRef<MakeRoomSheetHandle>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [draft, setDraft] = useState<{
@@ -124,7 +118,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
   const placeRef = useRef<(() => void) | null>(null);
   // For a prep plan: the lecture, exam or assignment it prepares for.
   const [target, setTarget] = useState<Session | null>(null);
-  const setCheckOff = useCheckOff();
   const showSkeleton = useDelayedLoading(!bodyReady);
 
   // A sync or another device may change the open session (e.g. an assignment
@@ -354,44 +347,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
     }
   };
 
-  // The header checkbox of a prep plan.
-  const togglePlan = async () => {
-    if (!session) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    const on = !session.completedAt;
-    if (await setCheckOff(session, "complete", on))
-      setSession({ ...session, completedAt: on ? new Date().toISOString() : null });
-  };
-
-  // Hold a plan to mark it done, or to undo that.
-  const togglePrep = async (prep: Session) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-    const on = !prep.completedAt;
-    if (!(await setCheckOff(prep, "complete", on))) return;
-    setPreps((prev) => prev.map((p) => (p.id === prep.id ? { ...p, completedAt: on ? new Date().toISOString() : null } : p)));
-  };
-
-  // Skip, or undo a skip, for a lecture, exam or assignment. A recurring one asks how far it reaches.
-  const runSkip = async (scope: DeleteRecurringScope, on = true) => {
-    if (!session) return;
-    // A scope only exists on a recurring series; a timetable row or one-off skips alone.
-    const reach: SkipScope = getSeriesKind(session) !== "recurring" ? "occurrence" : scope === "series" ? "all" : scope;
-    if (!(await setCheckOff(session, "skip", on, reach))) return;
-    setSession({ ...session, skipped: on });
-    if (on) void offerPrepAfterSkip(toast, session, tz);
-  };
-
-  const skip = () => {
-    if (!session) return;
-    if (session.skipped) {
-      void runSkip("following", false);
-    } else if (getSeriesKind(session) === "recurring" && session.scheduledStartTime) {
-      skipScopeSheet.current?.open(new Date(session.scheduledStartTime));
-    } else {
-      void runSkip("occurrence");
-    }
-  };
-
   // The block goes at once; nothing is sent until the undo window closes,
   // and Undo cancels the send and brings the block back.
   function runDelete(scope: DeleteRecurringScope) {
@@ -467,22 +422,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                 <View className="min-h-10 min-w-0 flex-1 justify-center gap-1.5">
                   {session ? (
                     <View className="flex-row flex-wrap items-center gap-2.5">
-                      {session.prepForSessionId && (
-                        <Pressable
-                          testID="session-detail-plan-check"
-                          onPress={() => void togglePlan()}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: !!session.completedAt }}
-                          accessibilityLabel={t("Mark done")}
-                          hitSlop={10}
-                          className={cn(
-                            "h-7 w-7 items-center justify-center rounded-full border-2",
-                            session.completedAt ? "border-brand-lime bg-brand-lime" : "border-muted-foreground",
-                          )}
-                        >
-                          {session.completedAt && <Check size={16} className="text-card" />}
-                        </Pressable>
-                      )}
                       <SessionTypeBadge type={session.type} size="lg" />
                     </View>
                   ) : (
@@ -528,17 +467,9 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                           borderRadius: GLASS_SIZE / 2,
                         }}
                       >
-                        {placing ? <Spinner size={18} tone="onPrimary" /> : <Plus size={20} className="text-primary-foreground" />}
+                        <BusyOr busy={placing} size={18} tone="onPrimary"><Plus size={20} className="text-primary-foreground" /></BusyOr>
                       </View>
                     </Pressable>
-                  )}
-                  {session && !offline && SKIPPABLE.has(session.type) && (
-                    <GlassButton
-                      testID="session-detail-skip"
-                      onPress={skip}
-                      icon={session.skipped ? Undo2 : SkipForward}
-                      accessibilityLabel={session.skipped ? t("Undo skip") : t("Skip")}
-                    />
                   )}
                   {session && !offline && !isSyncedSession(session) && (
                     <GlassButton
@@ -610,16 +541,11 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                           preps.map((prep) => {
                             const done = !!prep.completedAt;
                             return (
-                              <Pressable
+                              <View
                                 key={prep.id}
                                 testID={`session-detail-prep-${prep.id}`}
-                                onLongPress={() => void togglePrep(prep)}
-                                delayLongPress={350}
-                                accessibilityRole="button"
                                 accessibilityLabel={prep.title}
-                                accessibilityHint={t("Hold to mark done")}
-                                accessibilityState={{ checked: done }}
-                                className="flex-row items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-3 active:opacity-70"
+                                className="flex-row items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-3"
                               >
                                 <View
                                   className={cn(
@@ -657,7 +583,7 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                                     </View>
                                   )}
                                 </View>
-                              </Pressable>
+                              </View>
                             );
                           })
                       )}
@@ -685,7 +611,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
         kind={session && getSeriesKind(session) === "task" ? "task" : "recurring"}
         onChoose={runDelete}
       />
-      <DeleteRecurringSheet ref={skipScopeSheet} kind="skip" onChoose={(scope) => void runSkip(scope)} />
       <MakeRoomSheet ref={makeRoom} tz={tz} />
     </ScreenSheetProvider>
   );

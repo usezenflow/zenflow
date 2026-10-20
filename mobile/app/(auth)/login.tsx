@@ -1,4 +1,4 @@
-import { Spinner } from "@/components/ui/spinner";
+import { DelayedSpinner } from "@/components/ui/delayed-spinner";
 import { CircleUserRound, Mail } from "@/components/Icons";
 import { BackIcon, WaitIcon } from "@/components/brand/icons";
 import { SunriseBackdrop } from "@/components/brand/sunrise-backdrop";
@@ -267,8 +267,7 @@ export default function LoginScreen() {
               ? t(
                   "Zenflow is open to DLU students for now. Use your @dlu.edu.vn email.",
                 )
-              : (error.response.data?.message ??
-                t("Couldn't send the code. Try again."))
+              : t(error.response.data?.message ?? "Couldn't send the code. Try again.")
             : t("No connection. Check your internet and try again.");
         setError("email", { type: "manual", message });
       }
@@ -306,8 +305,7 @@ export default function LoginScreen() {
       } else {
         const message =
           isAxiosError(error) && error.response
-            ? (error.response.data?.message ??
-              t("Couldn't verify the code. Try again."))
+            ? t(error.response.data?.message ?? "Couldn't verify the code. Try again.")
             : t("No connection. Check your internet and try again.");
         setError("otp", { type: "manual", message });
       }
@@ -504,7 +502,7 @@ export default function LoginScreen() {
               />
               {submitting ? (
                 <View className="flex-row items-center justify-center gap-[9px]">
-                  <View className="mr-2"><Spinner size={18} tone="onPrimary" /></View>
+                  <DelayedSpinner busy={submitting} size={18} tone="onPrimary" wrapperClassName="mr-2" />
                   <Text className="text-[14px] text-muted-foreground">
                     {t("Verifying code…")}
                   </Text>
@@ -564,7 +562,7 @@ export default function LoginScreen() {
                 onPress={handleSubmit(onSubmit)}
               >
                 {submitting && (
-                  <View className="mr-2"><Spinner size={18} tone="onPrimary" /></View>
+                  <DelayedSpinner busy={submitting} size={18} tone="onPrimary" wrapperClassName="mr-2" />
                 )}
                 <Text
                   className={cn(
