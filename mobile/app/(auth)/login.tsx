@@ -147,7 +147,7 @@ function OtpBoxes({
         <View
           key={i}
           className={cn(
-            "flex-1 aspect-[1/1.18] max-w-[52px] items-center justify-center rounded-full border border-input bg-card",
+            "flex-1 aspect-square max-w-[52px] items-center justify-center rounded-full border border-input bg-card",
             !error && i < value.length && "border-ring/50",
             !error &&
               value.length === i &&

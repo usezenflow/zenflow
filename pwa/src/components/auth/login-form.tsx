@@ -379,7 +379,7 @@ export function LoginForm({
                                 <InputOTPSlot
                                   key={i}
                                   index={i}
-                                  className="h-12 min-w-0 flex-1 text-[22px] font-semibold"
+                                  className="aspect-square h-auto min-w-0 max-w-12 flex-1 text-[22px] font-semibold"
                                 />
                               ))}
                             </InputOTPGroup>
