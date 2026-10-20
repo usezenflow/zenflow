@@ -74,7 +74,7 @@ export function WeekStrip({ focusedDate, today, bars, onSelectDay, onShiftWeek }
               aria-pressed={isFocused}
               onClick={() => onSelectDay(day)}
               className={cn(
-                "flex flex-col items-center gap-1 rounded-xl border border-transparent py-1.5 transition-colors",
+                "flex flex-col items-center gap-1 rounded-full border border-transparent py-1.5 transition-colors",
                 isFocused &&
                   "border-[rgba(255,142,62,0.26)] bg-[rgba(255,142,62,0.12)] dark:border-[rgba(255,150,80,0.3)] dark:bg-[rgba(255,122,36,0.2)]",
               )}

@@ -256,7 +256,7 @@ export function LoginForm({
                             autoFocus={loginMode === "email"}
                             disabled={submitting || requestLockout.active}
                             className={cn(
-                              "h-11 rounded-xl px-4 text-base",
+                              "h-11 rounded-full px-4 text-base",
                               loginMode === "id" && "pr-[116px]",
                             )}
                             name={field.name}
@@ -319,7 +319,7 @@ export function LoginForm({
                 ) : (
                   <Button
                     type="submit"
-                    className="mt-[18px] h-12 w-full rounded-xl text-base"
+                    className="mt-[18px] h-12 w-full rounded-full text-base"
                     disabled={submitting}
                   >
                     <DelayedSpinner busy={submitting} className="size-4" />
@@ -374,12 +374,12 @@ export function LoginForm({
                               }
                             }}
                           >
-                            <InputOTPGroup className="w-full gap-2.5 *:data-[slot=input-otp-slot]:rounded-xl *:data-[slot=input-otp-slot]:border">
+                            <InputOTPGroup className="w-full gap-2.5 *:data-[slot=input-otp-slot]:rounded-full *:data-[slot=input-otp-slot]:border">
                               {Array.from({ length: OTP_LENGTH }, (_, i) => (
                                 <InputOTPSlot
                                   key={i}
                                   index={i}
-                                  className="h-12 min-w-0 flex-1 text-[22px] font-semibold"
+                                  className="aspect-square h-auto min-w-0 max-w-12 flex-1 text-[22px] font-semibold"
                                 />
                               ))}
                             </InputOTPGroup>
@@ -404,16 +404,16 @@ export function LoginForm({
                     {t("Verifying code…")}
                   </div>
                 ) : otpLockout.active ? (
-                  <Button type="button" variant="ghost" className="w-full rounded-xl" disabled>
+                  <Button type="button" variant="ghost" className="w-full rounded-full" disabled>
                     {t("Resend code")}
                   </Button>
                 ) : requestLockout.active ? (
-                  <Button type="button" variant="ghost" className="w-full rounded-xl" disabled>
+                  <Button type="button" variant="ghost" className="w-full rounded-full" disabled>
                     <Clock3 className="size-4" />
                     {t("Try again in {time}", { time: formatCountdown(requestLockout.remaining) })}
                   </Button>
                 ) : resendCooldown.active ? (
-                  <Button type="button" variant="ghost" className="w-full rounded-xl" disabled>
+                  <Button type="button" variant="ghost" className="w-full rounded-full" disabled>
                     <Clock3 className="size-4" />
                     {t("Resend code in {time}", { time: formatCountdown(resendCooldown.remaining) })}
                   </Button>
@@ -421,7 +421,7 @@ export function LoginForm({
                   <Button
                     type="button"
                     variant="ghost"
-                    className="w-full rounded-xl text-muted-foreground"
+                    className="w-full rounded-full text-muted-foreground"
                     disabled={submitting}
                     onClick={() => void handleEmailRequest(sentTo)}
                   >

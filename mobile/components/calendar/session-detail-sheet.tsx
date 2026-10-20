@@ -531,7 +531,7 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                             disabled={preparing}
                             accessibilityRole="button"
                             accessibilityLabel={t("Prepare in advance")}
-                            className="h-11 flex-row items-center gap-2 rounded-xl bg-primary/10 px-3 active:opacity-70"
+                            className="h-11 flex-row items-center gap-2 rounded-full bg-primary/10 px-3 active:opacity-70"
                           >
                             <Plus size={18} className="text-primary" />
                             <Text className="text-[15px] font-semibold text-primary">{t("Prepare in advance")}</Text>

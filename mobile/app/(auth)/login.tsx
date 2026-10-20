@@ -147,7 +147,7 @@ function OtpBoxes({
         <View
           key={i}
           className={cn(
-            "flex-1 aspect-[1/1.18] max-w-[52px] items-center justify-center rounded-xl border border-input bg-card",
+            "flex-1 aspect-square max-w-[52px] items-center justify-center rounded-full border border-input bg-card",
             !error && i < value.length && "border-ring/50",
             !error &&
               value.length === i &&
@@ -402,7 +402,7 @@ export default function LoginScreen() {
                       ) : undefined
                     }
                     className={cn(
-                      "h-[50px] rounded-xl border-glass-edge/35 bg-glass/10 px-4 dark:border-glass-edge/25 dark:bg-glass/[0.03] web:focus-visible:border-ring web:focus-visible:ring-ring/50 web:focus-visible:ring-[3px]",
+                      "h-[50px] rounded-full border-glass-edge/35 bg-glass/10 px-4 dark:border-glass-edge/25 dark:bg-glass/[0.03] web:focus-visible:border-ring web:focus-visible:ring-ring/50 web:focus-visible:ring-[3px]",
                       loginMode === "id" && "pr-[116px]",
                     )}
                   />
@@ -535,7 +535,7 @@ export default function LoginScreen() {
                   testID="login.resend"
                   disabled={submitting}
                   onPress={() => handleEmailRequest(sentTo)}
-                  className="w-full rounded-xl"
+                  className="w-full rounded-full"
                 >
                   <Text className="text-sm font-semibold text-muted-foreground">
                     {t("Resend code")}
@@ -556,7 +556,7 @@ export default function LoginScreen() {
               </View>
             ) : (
               <Button
-                className="mt-[18px] flex-row h-[52px] rounded-xl"
+                className="mt-[18px] flex-row h-[52px] rounded-full"
                 testID="login.submit"
                 disabled={submitting}
                 onPress={handleSubmit(onSubmit)}

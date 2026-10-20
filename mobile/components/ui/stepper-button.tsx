@@ -24,7 +24,7 @@ export function StepperButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       className={cn(
-        "size-11 items-center justify-center rounded-xl border border-glass-edge/35 bg-glass/70 dark:border-glass-edge/25 dark:bg-glass/[0.07]",
+        "size-11 items-center justify-center rounded-full border border-glass-edge/35 bg-glass/70 dark:border-glass-edge/25 dark:bg-glass/[0.07]",
         disabled && "opacity-40",
       )}
     >

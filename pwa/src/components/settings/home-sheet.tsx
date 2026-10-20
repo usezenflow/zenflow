@@ -84,7 +84,7 @@ export function HomeSheet({
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("Search home address")}
             aria-label={t("Search home address")}
-            className="h-11 rounded-xl pl-10 text-base focus-visible:border-primary/50 focus-visible:ring-primary/15"
+            className="h-11 rounded-full pl-10 text-base focus-visible:border-primary/50 focus-visible:ring-primary/15"
           />
         </div>
 
@@ -135,7 +135,7 @@ export function HomeSheet({
             variant="ghost"
             disabled={saving}
             onClick={() => void save({ homeLocation: null, homeLat: null, homeLng: null })}
-            className="h-11 w-full rounded-xl text-[15px] font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="h-11 w-full rounded-full text-[15px] font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="size-4" />
             {t("Remove home")}

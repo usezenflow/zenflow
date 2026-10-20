@@ -93,7 +93,7 @@ export function TagsRow() {
               InputComponent={BottomSheetInput}
             />
             <Button
-              className="mt-5 rounded-xl"
+              className="mt-5 rounded-full"
               disabled={saving}
               onPress={save}
             >

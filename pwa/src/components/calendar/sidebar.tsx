@@ -39,7 +39,7 @@ function SidebarFooter() {
       <button
         type="button"
         onClick={openSettings}
-        className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-sidebar-accent"
+        className="flex w-full items-center gap-2.5 rounded-full px-2 py-2 text-left transition-colors hover:bg-sidebar-accent"
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
           {initial}
@@ -59,7 +59,7 @@ function SidebarFooter() {
       <button
         type="button"
         onClick={handleLogout}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+        className="flex w-full items-center gap-2 rounded-full px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
       >
         <LogOut className="h-3.5 w-3.5" /> {t("Log out")}
       </button>

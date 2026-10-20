@@ -51,7 +51,7 @@ export function SessionSearchView({ onClose }: { onClose: () => void }) {
           testID="session-search.back"
         />
         <Input
-          className="flex-1"
+          className="flex-1 px-5"
           value={query}
           onChangeText={setQuery}
           placeholder={t("Search")}

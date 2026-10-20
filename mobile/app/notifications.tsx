@@ -403,7 +403,7 @@ export default function NotificationsScreen() {
                 </Pressable>
                 <Pressable
                   onPress={handleConfirmClearAll}
-                  className="h-11 flex-1 items-center justify-center rounded-xl bg-destructive active:opacity-90"
+                  className="h-11 flex-1 items-center justify-center rounded-full bg-destructive active:opacity-90"
                 >
                   <Text
                     style={{ color: "#ffffff" }}
