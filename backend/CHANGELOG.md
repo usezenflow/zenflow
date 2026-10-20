@@ -1,5 +1,16 @@
 # backend
 
+## 1.0.0-beta.15
+
+### Minor Changes
+
+- bc5324f: Adds web push notifications, admin tools, client event tracking, link previews and plan offers. Moves the web app to `pwa` and moves campus coordinates into the shared package.
+
+### Patch Changes
+
+- Updated dependencies [bc5324f]
+  - @zenflow/shared@1.0.0-beta.15
+
 ## 1.0.0-beta.14
 
 ### Minor Changes
