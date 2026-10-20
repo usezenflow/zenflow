@@ -144,7 +144,7 @@ export function NotificationInbox({
   const Title = phone ? SheetTitle : "h2";
   const panel = (
     <>
-      <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-3">
+      <div className={cn("flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-3", phone && "pe-14")}>
         {selecting ? (
           <>
             <Button
