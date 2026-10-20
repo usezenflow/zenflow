@@ -20,11 +20,9 @@ export function HourRuler() {
           </span>
         </div>
       ))}
-      <div className="absolute inset-x-0 top-full -translate-y-2.5 pe-2 text-right sm:pe-4">
+      <div className="absolute inset-x-0 bottom-0 pe-2 text-right sm:pe-4">
         <span className="text-muted-foreground block text-sm font-bold">{hourLabel(0)}</span>
-        <span className="text-primary block text-[9px] font-bold" style={{ marginTop: -1 }}>
-          {t("tomorrow")}
-        </span>
+        <span className="text-primary block text-[9px] font-bold">{t("tomorrow")}</span>
       </div>
     </div>
   );
