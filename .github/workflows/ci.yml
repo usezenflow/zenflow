@@ -24,7 +24,7 @@ jobs:
       backend: ${{ steps.diff.outputs.backend }}
       bandit: ${{ steps.diff.outputs.bandit }}
       image: ${{ steps.diff.outputs.image }}
-      frontend: ${{ steps.diff.outputs.frontend }}
+      pwa: ${{ steps.diff.outputs.pwa }}
       mobile: ${{ steps.diff.outputs.mobile }}
       prisma: ${{ steps.diff.outputs.prisma }}
       deploy: ${{ steps.diff.outputs.deploy }}
@@ -37,7 +37,7 @@ jobs:
         run: |
           out() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
           if [ "${{ github.event_name }}" != "pull_request" ]; then
-            for k in backend bandit image frontend mobile prisma deploy agents; do out "$k" true; done
+            for k in backend bandit image pwa mobile prisma deploy agents; do out "$k" true; done
             exit 0
           fi
           files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
@@ -52,7 +52,7 @@ jobs:
           # API image: its Dockerfile context (see .dockerignore): backend,
           # packages/shared, root manifests. Bandit image: services/bandit.
           flag image "^(backend/|packages/shared/|$root|\.dockerignore$|build_images\.sh$|\.github/workflows/(ci|images)\.yml$)"
-          flag frontend "^(frontend/|packages/|$root|\.github/(workflows/ci\.yml|actions/))"
+          flag pwa "^(pwa/|packages/|$root|\.github/(workflows/ci\.yml|actions/))"
           # Mobile: the app and the packages it imports.
           flag mobile "^(mobile/|packages/|$root|\.github/workflows/(ci|mobile)\.yml$|\.github/actions/)"
           flag prisma '^(backend/prisma/|backend/package\.json$|\.github/workflows/ci\.yml$)'
@@ -69,7 +69,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup
       # The tree currently carries pre-existing eslint errors (backend ~32,
-      # frontend ~5), so a whole-repo lint would be red on day one. Lint only
+      # pwa ~5), so a whole-repo lint would be red on day one. Lint only
       # the files this PR touches: new violations are blocked, and the debt can
       # be burned down separately (then switch to `eslint .`).
       # Read-only on purpose: `pnpm --filter backend lint` uses --fix.
@@ -84,14 +84,16 @@ jobs:
           files=$(git diff --name-only --diff-filter=ACMR "${{ steps.base.outputs.sha }}" HEAD -- 'backend/src/**/*.ts' 'backend/test/**/*.ts' | sed 's#^backend/##')
           [ -z "$files" ] && { echo "no backend TS changes"; exit 0; }
           pnpm --filter backend exec eslint $files
-      - name: Frontend (eslint)
+      - name: PWA (eslint)
         run: |
-          files=$(git diff --name-only --diff-filter=ACMR "${{ steps.base.outputs.sha }}" HEAD -- 'frontend/src/**/*.ts' 'frontend/src/**/*.tsx' 'frontend/e2e/**/*.ts' | sed 's#^frontend/##')
-          [ -z "$files" ] && { echo "no frontend changes"; exit 0; }
-          pnpm --filter frontend exec eslint $files
+          files=$(git diff --name-only --diff-filter=ACMR "${{ steps.base.outputs.sha }}" HEAD -- 'pwa/src/**/*.ts' 'pwa/src/**/*.tsx' 'pwa/e2e/**/*.ts' | sed 's#^pwa/##')
+          [ -z "$files" ] && { echo "no pwa changes"; exit 0; }
+          pnpm --filter pwa exec eslint $files
+      - name: Dashboard (eslint)
+        run: pnpm --filter dashboard lint
 
   typecheck:
-    name: Typecheck (shared, core, backend, frontend, mobile)
+    name: Typecheck (shared, core, backend, pwa, mobile)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
