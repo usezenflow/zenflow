@@ -403,13 +403,13 @@ export function SessionDetailSheet({
           className={cn(
             "glass flex flex-col gap-0 p-0",
             isMobile
-              ? "inset-0 h-dvh max-h-none w-full rounded-none border-0 pt-[env(safe-area-inset-top)] [&>button:last-child]:hidden"
+              ? "inset-0 h-dvh max-h-none w-full rounded-none border-0 p-0"
               : "w-full sm:max-w-2xl",
           )}
         >
           <SheetTitle className="sr-only">{isDraft ? t("New session") : form.title}</SheetTitle>
 
-          <header className={cn("flex shrink-0 items-center gap-3 px-5 pt-5 pb-4", isMobile ? "" : "pr-14")}>
+          <header className="flex shrink-0 items-center gap-3 py-5 ps-5 pe-14">
             <span
               aria-hidden="true"
               className={cn("size-3 shrink-0 rounded-full", SESSION_TONE_CLASSES[tone].dot)}
