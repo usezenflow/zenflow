@@ -1,7 +1,7 @@
 ---
 "backend": major
 "mobile": major
-"frontend": major
+"pwa": major
 "@zenflow/shared": major
 "@zenflow/core": major
 ---
