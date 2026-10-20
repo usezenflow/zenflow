@@ -1,5 +1,13 @@
 # mobile
 
+## 1.0.0-beta.17
+
+### Patch Changes
+
+- 1ffc480: Buttons, inputs, selects and toggles have fully rounded corners. The web day view opens on the current time today, on the first session on other days, and on the focus band start when a day is empty. Session blocks no longer show tags.
+  - @zenflow/shared@1.0.0-beta.17
+  - @zenflow/core@1.0.0-beta.17
+
 ## 1.0.0-beta.16
 
 ### Patch Changes
