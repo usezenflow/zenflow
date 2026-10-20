@@ -29,13 +29,17 @@
     "short-user-facing-copy",
     "split-ingestion-queues",
     "spread-tasks-and-focus-band",
-    "usezenflow-domains"
+    "usezenflow-domains",
+    "web-push-admin-plan-offers"
   ],
   "initialVersions": {
     "backend": "0.0.0",
     "frontend": "0.0.0",
     "mobile": "0.0.0",
     "@zenflow/core": "0.0.0",
-    "@zenflow/shared": "0.0.0"
+    "@zenflow/shared": "0.0.0",
+    "dashboard": "1.0.0-beta.14",
+    "@zenflow/brand": "0.0.0",
+    "pwa": "1.0.0-beta.14"
   }
 }
