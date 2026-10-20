@@ -35,25 +35,6 @@ function fmt(iso: string, tz: string) {
   });
 }
 
-/** Below this duration (minutes) a block is too short to carry tag pills. */
-const TAGS_MIN_DURATION = 45;
-
-// Tag pills rotate through the logo's three brand hues so a wall of tags reads
-// with some variety instead of a single accent. Lime is the palest stop, so it
-// gets a touch more fill to stay visible; text stays neutral for legibility.
-const TAG_TINTS = [
-  "border-brand-orange/40 bg-brand-orange/15",
-  "border-brand-yellow/45 bg-brand-yellow/15",
-  "border-brand-lime/55 bg-brand-lime/25",
-];
-
-/** Stable hue pick for a tag — same tag always lands on the same color. */
-function tagTint(tag: string) {
-  let h = 0;
-  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
-  return TAG_TINTS[h % TAG_TINTS.length];
-}
-
 /** Notify the layout to open the task detail panel for this block's task. */
 function openSession(taskId: string) {
   window.dispatchEvent(
@@ -313,10 +294,8 @@ export function ScheduledBlockItem({
   const deltaMinutes = preview ? dispDuration - (baseEnd - baseStart) : 0;
   const growingEdge: "top" | "bottom" | null = resizing.current?.edge ?? null;
   // Hour rows are 64px, so a block under 30 min (<32px) can't fit the stacked
-  // title + time + tags layout. Short blocks render as a single compact row.
+  // title + time layout. Short blocks render as a single compact row.
   const isCompact = dispDuration < 30;
-  // Tags need vertical room; on a short block they'd crowd out the title/time.
-  const showTags = dispDuration > TAGS_MIN_DURATION && block.tags.length > 0;
 
   // Pointer-drift tracking so a drag/resize gesture isn't mistaken for a tap.
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
@@ -585,21 +564,6 @@ export function ScheduledBlockItem({
                       </span>
                     </span>
                   )}
-                </div>
-              )}
-              {showTags && (
-                <div className="mt-0.5 flex flex-wrap gap-1 overflow-hidden">
-                  {block.tags.slice(0, 3).map((t) => (
-                    <span
-                      key={t}
-                      className={cn(
-                        "rounded border px-1.5 py-0.5 text-[11px] font-medium",
-                        tagTint(t),
-                      )}
-                    >
-                      {t}
-                    </span>
-                  ))}
                 </div>
               )}
             </>
