@@ -139,6 +139,7 @@ describe("PrepPlanService", () => {
       status: "PLACED",
       sessionId: "prep-1",
       startsAt: new Date("2026-10-25T10:00:00.000Z"),
+      offer: null,
     });
     expect(h.created[0]).toMatchObject({
       type: "TASK",

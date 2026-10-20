@@ -7,7 +7,10 @@ import type {
 import { SchedulingModel, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { MS_PER_MINUTE, overlapsAny } from "../scheduler/core/slot";
-import { SERIES_GAP_MINUTES } from "../scheduler/constants";
+import {
+  PAIRWISE_KEEP_PREFERENCE_WEIGHT,
+  SERIES_GAP_MINUTES,
+} from "../scheduler/constants";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { WITH_TAGS_AND_SERIES } from "./types/session-row";
 import { toSessionDto } from "./session-mapper";
@@ -77,6 +80,14 @@ export class SlotPickService {
       user.id,
     );
     if (!proposal) return this.unchangedResponse(sessionId, user, null);
+    await this.prisma.notification.updateMany({
+      where: {
+        userId: user.id,
+        slotProposalId: proposal.id,
+        actionTakenAt: null,
+      },
+      data: { actionTakenAt: new Date() },
+    });
 
     if (proposal.chosenByUser) {
       return this.unchangedResponse(
@@ -109,18 +120,37 @@ export class SlotPickService {
     if (
       dto.chose === "primary" &&
       proposal.pairwiseShown &&
+      proposal.primaryPolicy === SchedulingModel.HEURISTIC
+    ) {
+      await this.schedulingFeedback.onPairwiseLoss(user.id, proposal.id);
+    }
+    if (
+      dto.chose === "primary" &&
+      proposal.pairwiseShown &&
       proposal.primaryPolicy === SchedulingModel.LINUCB
     ) {
       await this.schedulingFeedback.onPairwiseWin(user.id, proposal.id);
+    }
+    const session = await this.currentSession(sessionId, user);
+    // The kept heuristic slot is the one the student chose: reinforce its cell.
+    if (
+      dto.chose === "primary" &&
+      proposal.pairwiseShown &&
+      proposal.primaryPolicy === SchedulingModel.HEURISTIC &&
+      session.scheduledStartTime
+    ) {
+      await this.schedulingFeedback.reinforcePreferenceMatrix(
+        user.id,
+        new Date(session.scheduledStartTime).getTime(),
+        user.timezone,
+        PAIRWISE_KEEP_PREFERENCE_WEIGHT,
+      );
     }
     schedulerSlotPicks.add(1, {
       policy: proposal.primaryPolicy,
       chose: "primary",
     });
-    return {
-      session: await this.currentSession(sessionId, user),
-      chosenByUser: "primary",
-    };
+    return { session, chosenByUser: "primary" };
   }
 
   private loadProposal(

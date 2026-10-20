@@ -38,6 +38,43 @@ export class SessionsController {
     private readonly placementPlans: PlacementPlanService,
   ) {}
 
+  // NOTE: must precede @Post(":id/...") routes so "timetable-group" isn't matched as an :id.
+  /** Skip every meeting in the timetable group of `:sessionId`, regardless of time. */
+  @Post("timetable-group/:sessionId/skip")
+  async skipTimetableGroup(
+    @Param("sessionId") sessionId: string,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.skipTimetableGroup(
+      sessionId,
+      false,
+      user,
+    );
+    return {
+      success: true,
+      message: `Skipped ${data.skippedSessionIds.length} sessions`,
+      data,
+    };
+  }
+
+  /** Skip `:sessionId` and every later meeting in its timetable group. */
+  @Post("timetable-group/:sessionId/skip/from")
+  async skipTimetableGroupFrom(
+    @Param("sessionId") sessionId: string,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.skipTimetableGroup(
+      sessionId,
+      true,
+      user,
+    );
+    return {
+      success: true,
+      message: `Skipped ${data.skippedSessionIds.length} sessions`,
+      data,
+    };
+  }
+
   // NOTE: must precede @Post(":id/...") routes so "placement" isn't matched as an :id.
   /** Apply a plan the scheduler asked to confirm (ADR-0022). Atomic. */
   @Post("placement/confirm")
@@ -189,6 +226,12 @@ export class SessionsController {
       query.scope,
     );
     return { success: true, message: "Skip undone", data };
+  }
+
+  @Post(":id/start")
+  async start(@Param("id") id: string, @CurrentUser() user: User) {
+    const data = await this.sessionsService.recordStart(id, user);
+    return { success: true, message: "Start recorded", data };
   }
 
   // NOTE: must precede @Delete(":id") so "series" isn't matched as an :id.

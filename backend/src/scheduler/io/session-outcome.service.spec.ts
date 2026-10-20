@@ -17,8 +17,7 @@ interface Row {
   type: string;
   scheduledStartTime: Date | null;
   durationMinutes: number;
-  completedAt: Date | null;
-  skipped: boolean;
+  events: { id: bigint; occurredAt: Date }[];
   tags: { name: string }[];
   user: { timezone: string };
 }
@@ -36,8 +35,7 @@ function row(over: Partial<Row> & { id: string }): Row {
     type: "TASK",
     scheduledStartTime: START,
     durationMinutes: 60,
-    completedAt: null,
-    skipped: false,
+    events: [],
     tags: [],
     user: { timezone: "UTC" },
     ...over,
@@ -46,10 +44,7 @@ function row(over: Partial<Row> & { id: string }): Row {
 
 async function makeService(
   batches: Row[][],
-  opts: {
-    proposal?: Record<string, unknown> | null;
-    checkOffEventId?: bigint | null;
-  } = {},
+  opts: { proposal?: Record<string, unknown> | null } = {},
 ) {
   const updates: { id: string; data: Record<string, unknown> }[] = [];
   const events: Record<string, unknown>[] = [];
@@ -76,13 +71,6 @@ async function makeService(
       ),
     },
     sessionEvent: {
-      findFirst: jest.fn(() =>
-        Promise.resolve(
-          opts.checkOffEventId === undefined || opts.checkOffEventId === null
-            ? null
-            : { id: opts.checkOffEventId },
-        ),
-      ),
       updateMany: jest.fn(
         (args: { where: { id: bigint }; data: Record<string, unknown> }) => {
           eventUpdates.push({ id: args.where.id, data: args.data });
@@ -156,118 +144,91 @@ async function makeService(
 }
 
 describe("SessionOutcomeService.sweep", () => {
-  describe("completion", () => {
-    it("settles a check-off inside the slot as +1 on the COMPLETE event", async () => {
-      const { service, updates, events, eventUpdates } = await makeService(
-        [
-          [
-            row({
-              id: "s1",
-              completedAt: new Date("2026-06-15T08:30:00.000Z"),
-            }),
-          ],
-        ],
-        { checkOffEventId: 7n },
-      );
+  const during = (ms: number) => new Date(START.getTime() + ms);
+  const MIN = 60_000;
+
+  describe("start", () => {
+    it("settles a start inside the slot as +1 on the START event", async () => {
+      const { service, events, eventUpdates } = await makeService([
+        [row({ id: "s1", events: [{ id: 7n, occurredAt: during(5 * MIN) }] })],
+      ]);
 
       expect(await service.sweep(SETTLE_NOW)).toBe(1);
-
-      expect(updates).toEqual([{ id: "s1", data: { retainedAt: SETTLE_NOW } }]);
       expect(eventUpdates).toEqual([{ id: 7n, data: { rewardScore: 1 } }]);
       expect(events).toHaveLength(0);
     });
 
-    it("counts a check-off at the exact start", async () => {
-      const { service, eventUpdates } = await makeService(
-        [[row({ id: "s1", completedAt: START })]],
-        { checkOffEventId: 7n },
-      );
-
-      expect(await service.sweep(SETTLE_NOW)).toBe(1);
-      expect(eventUpdates[0].data).toEqual({ rewardScore: 1 });
-    });
-
-    it("does not settle a completed session before end + grace", async () => {
-      const { service, updates } = await makeService([
-        [row({ id: "s1", completedAt: START })],
+    it("counts a start at the exact start", async () => {
+      const { service, eventUpdates } = await makeService([
+        [row({ id: "s1", events: [{ id: 7n, occurredAt: START }] })],
       ]);
-      const justBefore = new Date(SETTLE_NOW.getTime() - 1);
-
-      expect(await service.sweep(justBefore)).toBe(0);
-      expect(updates).toHaveLength(0);
-    });
-
-    it("settles a check-off before the start as WRONG_TIME at 0", async () => {
-      const early = new Date("2026-06-15T07:50:00.000Z");
-      const r = row({ id: "s1", completedAt: early });
-      const { service, events, eventUpdates } = await makeService([[r], [r]], {
-        checkOffEventId: 7n,
-      });
-
-      expect(await service.sweep(SETTLE_NOW)).toBe(0);
-      expect(await service.sweep(MISS_NOW)).toBe(1);
-      expect(eventUpdates).toHaveLength(0);
-      expect(events[0].eventType).toBe("WRONG_TIME");
-      expect(events[0].rewardScore).toBe(0);
-    });
-  });
-
-  describe("skip", () => {
-    it("settles a skip as 0 on the SKIP event at end + grace", async () => {
-      const { service, updates, eventUpdates } = await makeService(
-        [[row({ id: "s1", skipped: true })]],
-        { checkOffEventId: 9n },
-      );
-
-      expect(await service.sweep(SETTLE_NOW)).toBe(1);
-
-      expect(updates).toEqual([{ id: "s1", data: { retainedAt: SETTLE_NOW } }]);
-      expect(eventUpdates).toEqual([{ id: 9n, data: { rewardScore: 0 } }]);
-    });
-
-    it("wins over a completion timestamp", async () => {
-      const { service, eventUpdates } = await makeService(
-        [
-          [
-            row({
-              id: "s1",
-              skipped: true,
-              completedAt: new Date("2026-06-15T08:10:00.000Z"),
-            }),
-          ],
-        ],
-        { checkOffEventId: 9n },
-      );
 
       await service.sweep(SETTLE_NOW);
-      expect(eventUpdates[0].data).toEqual({ rewardScore: 0 });
+
+      expect(eventUpdates).toEqual([{ id: 7n, data: { rewardScore: 1 } }]);
+    });
+
+    it("rewards the first start inside the slot only", async () => {
+      const { service, eventUpdates } = await makeService([
+        [
+          row({
+            id: "s1",
+            events: [
+              { id: 3n, occurredAt: during(10 * MIN) },
+              { id: 4n, occurredAt: during(20 * MIN) },
+            ],
+          }),
+        ],
+      ]);
+
+      await service.sweep(SETTLE_NOW);
+
+      expect(eventUpdates.map((u) => u.id)).toEqual([3n]);
+    });
+
+    it("ignores a start before the slot and writes LAPSED", async () => {
+      const { service, events, eventUpdates } = await makeService([
+        [row({ id: "s1", events: [{ id: 7n, occurredAt: during(-5 * MIN) }] })],
+      ]);
+
+      await service.sweep(MISS_NOW);
+
+      expect(eventUpdates).toHaveLength(0);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        eventType: "LAPSED",
+        rewardScore: -0.25,
+      });
+    });
+
+    it("does not settle a start before end + grace", async () => {
+      const { service, events, eventUpdates } = await makeService([
+        [row({ id: "s1", events: [{ id: 7n, occurredAt: during(5 * MIN) }] })],
+      ]);
+
+      expect(await service.sweep(new Date(SETTLE_NOW.getTime() - 1))).toBe(0);
+      expect(eventUpdates).toHaveLength(0);
+      expect(events).toHaveLength(0);
     });
   });
 
-  describe("missed", () => {
+  describe("lapse", () => {
     it("is not settled before the miss cutoff", async () => {
-      const { service, updates, events } = await makeService([
-        [row({ id: "s1" })],
-      ]);
-      const justBefore = new Date(MISS_NOW.getTime() - 1);
+      const { service, events } = await makeService([[row({ id: "s1" })]]);
 
-      expect(await service.sweep(justBefore)).toBe(0);
-      expect(updates).toHaveLength(0);
+      expect(await service.sweep(SETTLE_NOW)).toBe(0);
       expect(events).toHaveLength(0);
     });
 
-    it("writes a LAPSED event with -0.25 when no start or check-off lands by the cutoff", async () => {
-      const { service, updates, events } = await makeService([
-        [row({ id: "s1" })],
-      ]);
+    it("writes a LAPSED event with -0.25 when no start lands by the cutoff", async () => {
+      const { service, events } = await makeService([[row({ id: "s1" })]]);
 
       expect(await service.sweep(MISS_NOW)).toBe(1);
-
-      expect(updates).toEqual([{ id: "s1", data: { retainedAt: MISS_NOW } }]);
       expect(events).toHaveLength(1);
-      expect(events[0].eventType).toBe("LAPSED");
-      expect(events[0].rewardScore).toBe(-0.25);
-      expect(events[0].sessionId).toBe("s1");
+      expect(events[0]).toMatchObject({
+        eventType: "LAPSED",
+        rewardScore: -0.25,
+      });
     });
   });
 
@@ -277,7 +238,9 @@ describe("SessionOutcomeService.sweep", () => {
         row({
           id: "s1",
           scheduledStartTime: new Date("2026-06-15T10:59:00.000Z"),
-          completedAt: new Date("2026-06-15T10:59:00.000Z"),
+          events: [
+            { id: 7n, occurredAt: new Date("2026-06-15T10:59:00.000Z") },
+          ],
         }),
       ],
     ]);
@@ -294,7 +257,7 @@ describe("SessionOutcomeService.sweep", () => {
 
     expect(findMany.mock.calls[0][0].where).toMatchObject({
       type: "TASK",
-      source: "USER",
+      source: { in: ["USER", "AUTO"] },
       retainedAt: null,
       lastMovedAt: null,
       deleted: false,
@@ -302,10 +265,8 @@ describe("SessionOutcomeService.sweep", () => {
   });
 
   it("is idempotent: an overlapping sweep settles and records nothing twice", async () => {
-    const r = row({ id: "s1", completedAt: START });
-    const { service, events, eventUpdates } = await makeService([[r], [r]], {
-      checkOffEventId: 7n,
-    });
+    const r = row({ id: "s1", events: [{ id: 7n, occurredAt: START }] });
+    const { service, events, eventUpdates } = await makeService([[r], [r]]);
 
     expect(await service.sweep(SETTLE_NOW)).toBe(1);
     expect(await service.sweep(SETTLE_NOW)).toBe(0);
@@ -314,10 +275,10 @@ describe("SessionOutcomeService.sweep", () => {
   });
 
   it("paginates by cursor across full batches", async () => {
-    const big = Array.from({ length: 100 }, (_, i) =>
-      row({ id: `s${i}`, completedAt: START }),
-    );
-    const rest = [row({ id: "s100", completedAt: START })];
+    const started = (id: string) =>
+      row({ id, events: [{ id: 1n, occurredAt: START }] });
+    const big = Array.from({ length: 100 }, (_, i) => started(`s${i}`));
+    const rest = [started("s100")];
     const { service, findMany } = await makeService([big, rest]);
 
     expect(await service.sweep(SETTLE_NOW)).toBe(101);
@@ -325,11 +286,10 @@ describe("SessionOutcomeService.sweep", () => {
     expect(findMany.mock.calls[1][0].cursor).toEqual({ id: "s99" });
   });
 
-  it("delivers +1 to the LinUCB arm for a completion", async () => {
+  it("delivers +1 to the LinUCB arm for a start", async () => {
     const { service, banditUpdate, armSave } = await makeService(
-      [[row({ id: "s1", completedAt: START })]],
+      [[row({ id: "s1", events: [{ id: 7n, occurredAt: START }] })]],
       {
-        checkOffEventId: 7n,
         proposal: {
           id: "prop-1",
           selectedArm: "MORNING",
@@ -373,25 +333,24 @@ describe("SessionOutcomeService.sweep", () => {
 
   it("skips the bandit update when there is no LinUCB proposal", async () => {
     const { service, banditUpdate } = await makeService([
-      [row({ id: "s1", completedAt: START })],
+      [row({ id: "s1", events: [{ id: 7n, occurredAt: START }] })],
     ]);
     await service.sweep(SETTLE_NOW);
     expect(banditUpdate).not.toHaveBeenCalled();
   });
 
-  it("reinforces the preference matrix on the kept hour only for a completion", async () => {
-    const { service, userUpdates } = await makeService(
+  it("reinforces the preference matrix on the kept hour for a start", async () => {
+    const { service, userUpdates } = await makeService([
       [
-        [
-          row({
-            id: "s1",
-            scheduledStartTime: new Date("2026-06-15T09:00:00.000Z"), // Monday 09:00 UTC
-            completedAt: new Date("2026-06-15T09:05:00.000Z"),
-          }),
-        ],
+        row({
+          id: "s1",
+          scheduledStartTime: new Date("2026-06-15T09:00:00.000Z"), // Monday 09:00 UTC
+          events: [
+            { id: 7n, occurredAt: new Date("2026-06-15T09:05:00.000Z") },
+          ],
+        }),
       ],
-      { checkOffEventId: 7n },
-    );
+    ]);
 
     await service.sweep(new Date("2026-06-15T11:00:00.000Z"));
 

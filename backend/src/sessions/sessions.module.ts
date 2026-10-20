@@ -12,6 +12,7 @@ import { RemindersModule } from "../reminders/reminders.module";
 import { FilesModule } from "../files/files.module";
 import { SchedulerModule } from "../scheduler/scheduler.module";
 import { SessionCheckOffService } from "./session-check-off.service";
+import { SessionStartService } from "./session-start.service";
 import { PlacementPlanService } from "./placement-plan.service";
 
 @Module({
@@ -31,6 +32,7 @@ import { PlacementPlanService } from "./placement-plan.service";
     SlotPickService,
     SessionSearchService,
     SessionCheckOffService,
+    SessionStartService,
     PlacementPlanService,
   ],
   exports: [SessionsService],

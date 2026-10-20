@@ -67,16 +67,12 @@ export const STABILITY_SATURATION_HOURS = 4;
 
 /**
  * Reward written on the `SessionEvent` for each outcome (ADR-0023, amended by
- * the level-up plan). A user drag/resize of a scheduled TASK is graded by
- * displacement (`MOVE`). An unmoved TASK is positive when started or done in
- * its slot, neutral when skipped or checked off at the wrong time, and a small
- * negative when lapsed. `CREATE` events carry a neutral 0.
+ * ADR-0025). A user drag/resize of a scheduled TASK is graded by displacement
+ * (`MOVE`). An unmoved TASK is positive when started in its slot and a small
+ * negative when no start is seen. `CREATE` events carry a neutral 0.
  */
 export const SESSION_MOVE_REWARD = -1.0;
-export const SESSION_COMPLETED_REWARD = 1.0;
 export const SESSION_STARTED_REWARD = 1.0;
-export const SESSION_SKIPPED_REWARD = 0.0;
-export const SESSION_WRONG_TIME_REWARD = 0.0;
 export const SESSION_LAPSED_REWARD = -0.25;
 /**
  * Reward for the LinUCB arm when the user picks LinUCB's option in a shown
@@ -84,6 +80,19 @@ export const SESSION_LAPSED_REWARD = -0.25;
  * a preference, not an outcome.
  */
 export const PAIRWISE_WIN_REWARD = 0.5;
+/**
+ * Reward for the LinUCB arm when the user keeps the heuristic's option over a
+ * shown LinUCB option. Matches the simulator's keep-default penalty
+ * (`services/bandit/src/simulation/engine.py`). Without it, LinUCB is only
+ * rewarded for being chosen.
+ */
+export const PAIRWISE_LOSS_REWARD = -0.2;
+/**
+ * Preference-matrix bonus at the kept slot when the user keeps the heuristic's
+ * shown option: the same scale as a pairwise win on the matrix.
+ */
+export const PAIRWISE_KEEP_PREFERENCE_WEIGHT =
+  PREFERENCE_RETAINED_WEIGHT * PAIRWISE_WIN_REWARD;
 
 /**
  * Disjoint LinUCB scheduling parameters

@@ -10,11 +10,8 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { OUTCOME_BATCH_SIZE } from "../../common/constants";
 import {
   PREFERENCE_RETAINED_WEIGHT,
-  SESSION_COMPLETED_REWARD,
   SESSION_LAPSED_REWARD,
-  SESSION_SKIPPED_REWARD,
   SESSION_STARTED_REWARD,
-  SESSION_WRONG_TIME_REWARD,
 } from "../constants";
 import { completionOutcome, type CompletionOutcome } from "../core/reward";
 import { SchedulingFeedbackService } from "./scheduling-feedback.service";
@@ -28,12 +25,18 @@ type OutcomeCandidate = Prisma.SessionGetPayload<{
     type: true;
     scheduledStartTime: true;
     durationMinutes: true;
-    completedAt: true;
-    skipped: true;
+    events: { select: { id: true; occurredAt: true } };
     tags: { select: { name: true } };
     user: { select: { timezone: true } };
   };
 }>;
+
+type Decided = {
+  session: OutcomeCandidate;
+  outcome: CompletionOutcome;
+  /** The START event that proves the outcome, when it is `STARTED`. */
+  startEventId: bigint | null;
+};
 
 type Settled = {
   sessionId: string;
@@ -49,16 +52,13 @@ type Settled = {
  * Half-hourly sweep that settles the outcome of an unmoved scheduled `TASK`
  * (ADR-0023). It is the only layer here that touches Prisma.
  *
- * A row qualifies when it is a user-created `TASK` with a `scheduledStartTime`,
- * has never been moved (`lastMovedAt == null`) and is not yet settled
- * (`retainedAt == null`; the column stamps the settlement). The pure
- * {@link completionReward} decides the outcome:
+ * A row qualifies when it is a `TASK` with a `scheduledStartTime` placed by the
+ * user or by the system (prep), has never been moved (`lastMovedAt == null`) and
+ * is not yet settled (`retainedAt == null`; the column stamps the settlement).
+ * The pure {@link completionOutcome} decides the outcome:
  *
- * - checked off inside the slot: `DONE`, `+1`, settled at `end + grace`;
- * - started inside the slot without a check-off: `STARTED`, `+1`;
- * - skipped: `SKIPPED`, `0`, settled at `end + grace`;
- * - checked off before the start: `WRONG_TIME`, `0`, settled at `end + cutoff`;
- * - no start or check-off by `end + cutoff`: `LAPSED`, `-0.25`.
+ * - a START inside the slot: `STARTED`, `+1`, settled at `end + grace`;
+ * - no START by `end + cutoff`: `LAPSED`, `-0.25`.
  *
  * The settled reward is delivered to the LinUCB arm behind the placement via
  * {@link SchedulingFeedbackService.applyDelayedReward}. The same reward also
@@ -67,26 +67,8 @@ type Settled = {
  */
 /** Reward written on the settled event, per outcome. */
 const OUTCOME_REWARD: Record<CompletionOutcome, number> = {
-  DONE: SESSION_COMPLETED_REWARD,
   STARTED: SESSION_STARTED_REWARD,
-  SKIPPED: SESSION_SKIPPED_REWARD,
-  WRONG_TIME: SESSION_WRONG_TIME_REWARD,
   LAPSED: SESSION_LAPSED_REWARD,
-};
-
-/** The event a user writes for an outcome they chose; the outcome updates its reward. */
-const USER_EVENT_OF: Partial<Record<CompletionOutcome, SessionEventType>> = {
-  DONE: SessionEventType.COMPLETE,
-  SKIPPED: SessionEventType.SKIP,
-};
-
-/** The event written when the system settles an outcome with no user event. */
-const EVENT_OF: Record<CompletionOutcome, SessionEventType> = {
-  DONE: SessionEventType.COMPLETE,
-  STARTED: SessionEventType.START,
-  SKIPPED: SessionEventType.SKIP,
-  WRONG_TIME: SessionEventType.WRONG_TIME,
-  LAPSED: SessionEventType.LAPSED,
 };
 
 @Injectable()
@@ -138,8 +120,7 @@ export class SessionOutcomeService {
     return this.prisma.session.findMany({
       where: {
         type: SessionType.TASK,
-        source: SessionSource.USER,
-        prepForSessionId: null,
+        source: { in: [SessionSource.USER, SessionSource.AUTO] },
         retainedAt: null,
         lastMovedAt: null,
         deleted: false,
@@ -152,8 +133,11 @@ export class SessionOutcomeService {
         type: true,
         scheduledStartTime: true,
         durationMinutes: true,
-        completedAt: true,
-        skipped: true,
+        events: {
+          where: { eventType: SessionEventType.START },
+          select: { id: true, occurredAt: true },
+          orderBy: { occurredAt: "asc" },
+        },
         tags: { select: { name: true } },
         user: { select: { timezone: true } },
       },
@@ -164,33 +148,34 @@ export class SessionOutcomeService {
   }
 
   /** Candidates whose outcome is settled at `now`; the rest are stepped over. */
-  private decideOutcomes(
-    candidates: OutcomeCandidate[],
-    now: Date,
-  ): { session: OutcomeCandidate; outcome: CompletionOutcome }[] {
-    const out: { session: OutcomeCandidate; outcome: CompletionOutcome }[] = [];
+  private decideOutcomes(candidates: OutcomeCandidate[], now: Date): Decided[] {
+    const out: Decided[] = [];
     for (const session of candidates) {
       const start = session.scheduledStartTime!.getTime();
+      const end = start + session.durationMinutes * 60_000;
+      // The first START inside the slot is the one that counts.
+      const startEvent = session.events.find(
+        (e) => e.occurredAt.getTime() >= start && e.occurredAt.getTime() < end,
+      );
       const outcome = completionOutcome(
         start,
-        start + session.durationMinutes * 60_000,
-        session.completedAt ? session.completedAt.getTime() : null,
-        session.skipped,
+        end,
+        startEvent ? startEvent.occurredAt.getTime() : null,
         now.getTime(),
-        null,
       );
-      if (outcome) out.push({ session, outcome });
+      if (outcome)
+        out.push({ session, outcome, startEventId: startEvent?.id ?? null });
     }
     return out;
   }
 
   private async settleBatch(
-    outcomes: { session: OutcomeCandidate; outcome: CompletionOutcome }[],
+    outcomes: Decided[],
     now: Date,
   ): Promise<Settled[]> {
     const settled: Settled[] = [];
     await this.prisma.$transaction(async (tx) => {
-      for (const { session, outcome } of outcomes) {
+      for (const { session, outcome, startEventId } of outcomes) {
         // Claim: an overlapping sweep (two workers during a deploy) loses the
         // race here and must not double-record the event or reward.
         const claimed = await tx.session.updateMany({
@@ -198,7 +183,12 @@ export class SessionOutcomeService {
           data: { retainedAt: now },
         });
         if (claimed.count === 0) continue;
-        const eventId = await this.writeOutcomeEvent(tx, session, outcome);
+        const eventId = await this.writeOutcomeEvent(
+          tx,
+          session,
+          outcome,
+          startEventId,
+        );
         settled.push({
           sessionId: session.id,
           userId: session.userId,
@@ -214,58 +204,45 @@ export class SessionOutcomeService {
   }
 
   /**
-   * Sets the reward on the check-off `SessionEvent` the user wrote (`COMPLETE`
-   * or `SKIP`), or writes the outcome's own event when there is none. Returns the id
-   * of the event that carries the reward.
+   * Sets the reward on the START event that proves a `STARTED` outcome, or
+   * writes a `LAPSED` event. Returns the id of the event that carries the reward.
    */
   private async writeOutcomeEvent(
     tx: Prisma.TransactionClient,
     session: OutcomeCandidate,
     outcome: CompletionOutcome,
+    startEventId: bigint | null,
   ): Promise<bigint> {
-    const checkOff = USER_EVENT_OF[outcome] ?? null;
     const reward = OUTCOME_REWARD[outcome];
 
-    if (checkOff) {
-      const existing = await tx.sessionEvent.findFirst({
-        where: {
-          sessionId: session.id,
-          userId: session.userId,
-          eventType: checkOff,
-        },
-        orderBy: { occurredAt: "desc" },
-        select: { id: true },
+    if (startEventId !== null) {
+      await tx.sessionEvent.updateMany({
+        where: { id: startEventId },
+        data: { rewardScore: reward },
       });
-      if (existing) {
-        await tx.sessionEvent.updateMany({
-          where: { id: existing.id },
-          data: { rewardScore: reward },
-        });
-        return existing.id;
-      }
+      return startEventId;
     }
 
+    const eventType =
+      outcome === "STARTED" ? SessionEventType.START : SessionEventType.LAPSED;
     const event = await tx.sessionEvent.create({
       data: {
         sessionId: session.id,
         userId: session.userId,
-        eventType: checkOff ?? EVENT_OF[outcome],
+        eventType,
         oldSnapshot: Prisma.JsonNull,
         newSnapshot: this.snapshot(session),
         rewardScore: reward,
       },
       select: { id: true },
     });
-    schedulerSessionEvents.add(1, {
-      type: checkOff ?? EVENT_OF[outcome],
-    });
+    schedulerSessionEvents.add(1, { type: eventType });
     return event.id;
   }
 
-  /** Delayed LinUCB reward and, for a completion, preference-matrix
-   * reinforcement. Best-effort, outside the transaction. A placement that
-   * was not chosen by LinUCB gets no bandit update; the matrix is updated
-   * for either policy. */
+  /** Delayed LinUCB reward and preference-matrix reinforcement. Best-effort,
+   * outside the transaction. A placement that was not chosen by LinUCB gets
+   * no bandit update; the matrix is updated for either policy. */
   private async applyDelayedRewards(settled: Settled[]): Promise<void> {
     for (const s of settled) {
       await this.schedulingFeedback.applyDelayedReward(
@@ -275,8 +252,8 @@ export class SessionOutcomeService {
         s.reward,
         null,
       );
-      // The kept hour learns from what the student did there: started or done
-      // raises it, a lapse lowers it, a skip or a wrong-time check-off leaves it.
+      // The kept hour learns from what the student did there: a start raises
+      // it, a lapse lowers it.
       if (s.reward !== 0) {
         await this.schedulingFeedback.reinforcePreferenceMatrix(
           s.userId,

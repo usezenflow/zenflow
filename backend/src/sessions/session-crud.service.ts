@@ -662,7 +662,7 @@ export class SessionCrudService {
   }
 
   /**
-   * Timetable-group delete (backend-only scope for the frontend's
+   * Timetable-group delete (backend-only scope for the pwa's
    * three-way delete choice on a portal-ingested `LECTURE`): soft-delete
    * `sessionId` and every later meeting sharing its
    * `(userId, scheduleStudyUnitId)` group ("this and following"). A

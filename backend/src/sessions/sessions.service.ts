@@ -6,6 +6,7 @@ import type {
   RemoveTimetableGroupResponse,
   SessionCheckOffResponse,
   SessionDetailResponse,
+  SessionStartResponse,
   SessionSuggestionsResponse,
   SessionsListResponse,
   SlotPickResponse,
@@ -26,6 +27,7 @@ import {
   type SkipScope,
   SessionCheckOffService,
 } from "./session-check-off.service";
+import { SessionStartService } from "./session-start.service";
 import { NoteFilesService } from "../files/note-files.service";
 import { RemindersService } from "../reminders/reminders.service";
 
@@ -37,6 +39,7 @@ import { RemindersService } from "../reminders/reminders.service";
  *  - {@link SeriesService}        every `SessionSeries` lifecycle op
  *  - {@link SlotPickService}      `POST /sessions/:id/slot-pick`
  *  - {@link SessionCheckOffService} `POST|DELETE /sessions/:id/complete|skip`
+ *  - {@link SessionStartService}  `POST /sessions/:id/start`
  *
  * The wire contract is unchanged — see `sessions.controller.ts`.
  */
@@ -48,6 +51,7 @@ export class SessionsService {
     private readonly updates: SessionUpdateService,
     private readonly slotPickService: SlotPickService,
     private readonly checkOff: SessionCheckOffService,
+    private readonly sessionStart: SessionStartService,
     private readonly reminders: RemindersService,
     private readonly noteFiles: NoteFilesService,
   ) {}
@@ -143,6 +147,20 @@ export class SessionsService {
     scope?: SkipScope,
   ): Promise<SessionCheckOffResponse> {
     return this.checkOff.set(id, kind, on, user, new Date(), scope);
+  }
+
+  /** Skip a timetable group, or from `sessionId` onward (`POST /sessions/timetable-group/:sessionId/skip[/from]`). */
+  skipTimetableGroup(
+    sessionId: string,
+    from: boolean,
+    user: User,
+  ): Promise<{ skippedSessionIds: string[] }> {
+    return this.checkOff.skipTimetableGroup(sessionId, from, user, new Date());
+  }
+
+  /** Records that the user is in this placed block now (`POST /sessions/:id/start`). */
+  recordStart(id: string, user: User): Promise<SessionStartResponse> {
+    return this.sessionStart.record(id, user);
   }
 
   async truncateSeriesFrom(

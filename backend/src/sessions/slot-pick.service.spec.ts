@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { SchedulingModel, type User } from "../../generated/prisma";
 import { SlotPickService } from "./slot-pick.service";
+import { PAIRWISE_KEEP_PREFERENCE_WEIGHT } from "../scheduler/constants";
 import { PrismaService } from "../prisma/prisma.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { SLOT_TAKEN_MESSAGE, SlotTakenException } from "./slot-taken.exception";
@@ -71,12 +72,15 @@ async function makeService(
       findFirst: jest.fn().mockResolvedValue(existing),
       findMany: jest.fn().mockResolvedValue(siblings),
     },
+    notification: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     $transaction: (fn: (t: typeof tx) => unknown) => fn(tx),
   };
   const schedulingFeedback = {
     onFirstMove: jest.fn().mockResolvedValue(undefined),
     reinforcePreferenceMove: jest.fn().mockResolvedValue(undefined),
     onPairwiseWin: jest.fn().mockResolvedValue(undefined),
+    onPairwiseLoss: jest.fn().mockResolvedValue(undefined),
+    reinforcePreferenceMatrix: jest.fn().mockResolvedValue(undefined),
   };
   const module: TestingModule = await Test.createTestingModule({
     providers: [
@@ -168,6 +172,65 @@ describe("SlotPickService — pairwise reward for LinUCB", () => {
       user,
     );
     expect(schedulingFeedback.onPairwiseWin).not.toHaveBeenCalled();
+  });
+
+  it("penalises LinUCB when the user keeps the heuristic's shown primary pick", async () => {
+    const { service, schedulingFeedback } = await makeService(row());
+    await service.recordPick(
+      "task-1",
+      { slotProposalId: "prop-1", chose: "primary" },
+      user,
+    );
+    expect(schedulingFeedback.onPairwiseLoss).toHaveBeenCalledWith(
+      "user-1",
+      "prop-1",
+    );
+  });
+
+  it("reinforces the kept heuristic slot in the preference matrix", async () => {
+    const { service, schedulingFeedback } = await makeService(row());
+    await service.recordPick(
+      "task-1",
+      { slotProposalId: "prop-1", chose: "primary" },
+      user,
+    );
+    expect(schedulingFeedback.reinforcePreferenceMatrix).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Number),
+      expect.any(String),
+      PAIRWISE_KEEP_PREFERENCE_WEIGHT,
+    );
+  });
+
+  it("does not reinforce the matrix when LinUCB was primary", async () => {
+    const { service, schedulingFeedback } = await makeService(
+      row(),
+      [],
+      SchedulingModel.LINUCB,
+    );
+    await service.recordPick(
+      "task-1",
+      { slotProposalId: "prop-1", chose: "primary" },
+      user,
+    );
+    expect(schedulingFeedback.reinforcePreferenceMatrix).not.toHaveBeenCalled();
+  });
+
+  it("marks the offer answered on any pick", async () => {
+    const { service, prisma } = await makeService(row());
+    await service.recordPick(
+      "task-1",
+      { slotProposalId: "prop-1", chose: "primary" },
+      user,
+    );
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        slotProposalId: "prop-1",
+        actionTakenAt: null,
+      },
+      data: { actionTakenAt: expect.any(Date) as Date },
+    });
   });
 
   it("does not reward LinUCB when the user switches away from it", async () => {

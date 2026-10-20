@@ -15,8 +15,23 @@ export interface PrepParent {
   deadline: Date;
 }
 
+/**
+ * The two times a placed prep plan offers the student, when the placement was
+ * pairwise-sampled: `primary` is where it went, `alternative` the other policy's pick.
+ */
+export interface PrepOffer {
+  slotProposalId: string;
+  primary: Date;
+  alternative: Date;
+}
+
 export type PrepPlanOutcome =
-  | { status: "PLACED"; sessionId: string; startsAt: Date }
+  | {
+      status: "PLACED";
+      sessionId: string;
+      startsAt: Date;
+      offer: PrepOffer | null;
+    }
   /** A plan for this parent exists, or was deleted by the student. */
   | { status: "SKIPPED_EXISTS" }
   | { status: "SKIPPED_CAP" }
@@ -101,11 +116,11 @@ export class PrepPlanService {
     });
 
     try {
-      const placed = await placeOrDiscard(
+      const res = await placeOrDiscard(
         this.prisma,
         { userId: user.id, sessionIds: [row.id] },
         async () => {
-          const res = await this.placement.placeOnDeadlineChange({
+          const placed = await this.placement.placeOnDeadlineChange({
             user,
             task: {
               id: row.id,
@@ -115,13 +130,22 @@ export class PrepPlanService {
             now: new Date(sized.windowStartMs),
             allowLastResort: false,
           });
-          if (res.pendingPlan || !res.scheduledStartTime) {
+          if (placed.pendingPlan || !placed.scheduledStartTime) {
             throw new NoPrepSlotError(row.id);
           }
-          return res.scheduledStartTime;
+          return placed;
         },
       );
-      return { status: "PLACED", sessionId: row.id, startsAt: placed };
+      const startsAt = res.scheduledStartTime!;
+      const offer =
+        res.divergent && res.slotProposalId && res.alternativeSlot
+          ? {
+              slotProposalId: res.slotProposalId,
+              primary: startsAt,
+              alternative: res.alternativeSlot,
+            }
+          : null;
+      return { status: "PLACED", sessionId: row.id, startsAt, offer };
     } catch (err) {
       if (err instanceof NoPrepSlotError) return { status: "SKIPPED_NO_SLOT" };
       throw err;

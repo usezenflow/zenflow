@@ -359,3 +359,134 @@ describe("SessionCheckOffService", () => {
     });
   });
 });
+
+describe("SessionCheckOffService.skipTimetableGroup", () => {
+  const at = (day: number) => new Date(Date.UTC(2026, 5, day, 8, 0, 0));
+
+  /** A stateful double: `findFirst`/`findMany` read `rows`, `update` writes it back. */
+  function timetablePrisma(rows: SessionRow[]) {
+    const find = (where: {
+      id?: string;
+      scheduleStudyUnitId?: { not: null };
+    }) =>
+      rows.find(
+        (r) =>
+          (where.id === undefined || r.id === where.id) &&
+          !r.deleted &&
+          r.userId === user.id &&
+          (!where.scheduleStudyUnitId || r.scheduleStudyUnitId !== null),
+      ) ?? null;
+    const tx = {
+      session: {
+        update: jest.fn(
+          ({ where, data }: { where: { id: string }; data: object }) => {
+            const r = rows.find((x) => x.id === where.id) as SessionRow;
+            Object.assign(r, data);
+            return Promise.resolve({ ...r });
+          },
+        ),
+      },
+      sessionEvent: {
+        create: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    const prisma = {
+      session: {
+        findFirst: jest.fn(({ where }: { where: Parameters<typeof find>[0] }) =>
+          Promise.resolve(find(where)),
+        ),
+        findMany: jest.fn(
+          ({
+            where,
+          }: {
+            where: {
+              scheduleStudyUnitId: string;
+              scheduledStartTime: { gte?: Date; not?: null };
+            };
+          }) =>
+            Promise.resolve(
+              rows
+                .filter(
+                  (r) =>
+                    !r.deleted &&
+                    r.userId === user.id &&
+                    r.scheduleStudyUnitId === where.scheduleStudyUnitId &&
+                    r.scheduledStartTime !== null &&
+                    (!where.scheduledStartTime.gte ||
+                      r.scheduledStartTime.getTime() >=
+                        where.scheduledStartTime.gte.getTime()),
+                )
+                .sort(
+                  (a, b) =>
+                    (a.scheduledStartTime as Date).getTime() -
+                    (b.scheduledStartTime as Date).getTime(),
+                )
+                .map((r) => ({ id: r.id })),
+            ),
+        ),
+      },
+      $transaction: (fn: (t: typeof tx) => unknown) => fn(tx),
+    };
+    return { prisma, tx };
+  }
+
+  const section = [
+    row({ id: "m-1", scheduleStudyUnitId: "SEC-A", scheduledStartTime: at(1) }),
+    row({ id: "m-2", scheduleStudyUnitId: "SEC-A", scheduledStartTime: at(8) }),
+    row({
+      id: "m-3",
+      scheduleStudyUnitId: "SEC-A",
+      scheduledStartTime: at(15),
+    }),
+    row({
+      id: "other-1",
+      scheduleStudyUnitId: "SEC-B",
+      scheduledStartTime: at(8),
+    }),
+  ];
+
+  it("skips every meeting in the group, regardless of time, each with a SKIP event", async () => {
+    const rows = section.map((r) => ({ ...r }));
+    const { prisma, tx } = timetablePrisma(rows);
+    const service = await build(prisma);
+
+    const res = await service.skipTimetableGroup("m-2", false, user, now);
+
+    expect(res.skippedSessionIds.sort()).toEqual(["m-1", "m-2", "m-3"]);
+    expect(tx.sessionEvent.create).toHaveBeenCalledTimes(3);
+    expect(rows.find((r) => r.id === "other-1")?.skipped).toBe(false);
+    expect(
+      rows
+        .filter((r) => r.skipped)
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(["m-1", "m-2", "m-3"]);
+  });
+
+  it("from: skips the anchor and later meetings only", async () => {
+    const rows = section.map((r) => ({ ...r }));
+    const { prisma } = timetablePrisma(rows);
+    const service = await build(prisma);
+
+    const res = await service.skipTimetableGroup("m-2", true, user, now);
+
+    expect(res.skippedSessionIds.sort()).toEqual(["m-2", "m-3"]);
+    expect(rows.find((r) => r.id === "m-1")?.skipped).toBe(false);
+    expect(rows.find((r) => r.id === "m-3")?.skipped).toBe(true);
+  });
+
+  it("404s a session that is not a grouped timetable meeting, writing nothing", async () => {
+    const rows = [row({ id: "t-1", scheduleStudyUnitId: null })];
+    const { prisma, tx } = timetablePrisma(rows);
+    const service = await build(prisma);
+
+    await expect(
+      service.skipTimetableGroup("t-1", false, user, now),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.skipTimetableGroup("t-1", true, user, now),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(tx.session.update).not.toHaveBeenCalled();
+  });
+});

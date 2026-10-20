@@ -47,7 +47,7 @@ export function viewDayRange(
  * Inclusive local-date range to FETCH/DISPLAY for a view, which can be wider
  * than the focal {@link viewDayRange}. For `month`, the focal month is padded
  * out to whole Monday-started weeks so the response covers every cell the
- * frontend month grid renders (`startOfWeek(startOfMonth)`..`endOfWeek(
+ * pwa month grid renders (`startOfWeek(startOfMonth)`..`endOfWeek(
  * endOfMonth)`, Monday week start) — otherwise the leading/trailing
  * adjacent-month days would be blank. `week`/`day` need no padding and are
  * identical to {@link viewDayRange}.
@@ -74,7 +74,7 @@ export function displayDayRange(
  * `startStr` is the inclusive first day of the period; `nextStr` is the
  * EXCLUSIVE upper bound (the first day of the next period). Reuses
  * {@link weekStartStr} / {@link monthRange} so the period definition matches the
- * display/meta ranges the frontend calendar uses. Pure string math.
+ * display/meta ranges the pwa calendar uses. Pure string math.
  */
 export function periodBoundsStr(
   view: ViewMode,
