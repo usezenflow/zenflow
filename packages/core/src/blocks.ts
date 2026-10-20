@@ -20,6 +20,7 @@ export function taskToBlock(task: Session): Event | null {
     state: deriveState(task),
     location: task.location,
     courseKey: task.courseKey,
+    commuteMinutes: task.commuteMinutes,
   };
 }
 

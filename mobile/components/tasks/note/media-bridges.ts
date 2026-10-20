@@ -10,7 +10,7 @@ import { Node, mergeAttributes } from "@tiptap/core";
  * parser on `editor.setContent(...)`, the same "nothing renders" failure
  * images had before `ImageBridge` was added.
  *
- * These mirror `frontend/src/components/common/editor/video-block.tsx` /
+ * These mirror `pwa/src/components/common/editor/video-block.tsx` /
  * `audio-block.tsx` (same minimal parse/render shape) rather than
  * reinventing one. No bridge messaging is wired up — unlike `LinkBridge`/
  * `ImageBridge`, nothing here is ever inserted via an RN-invoked command,

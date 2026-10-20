@@ -50,13 +50,16 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 | DELETE | `/sessions/series/:seriesId/truncate?from=` | Recurring: pull `UNTIL` back ("this and following") |
 | DELETE | `/sessions/series/:seriesId/from/:sessionId` | Materialized `TASK` series: delete that sitting and later ones |
 | DELETE | `/sessions/timetable-group/:sessionId[/from]` | Portal `LECTURE`s only: soft-delete a section's meetings |
+| POST | `/sessions/timetable-group/:sessionId/skip` | Portal `LECTURE`s only: skip every meeting in the section. `{ skippedSessionIds }` |
+| POST | `/sessions/timetable-group/:sessionId/skip/from` | Portal `LECTURE`s only: skip that meeting and every later one. `{ skippedSessionIds }` |
 | POST | `/sessions/placement/confirm` | `{ planId }`: apply a plan the scheduler held for confirmation. Atomic, single use. `201` with `{ session, displacedSessions, undoGroupId }`. `409 PLACEMENT_STALE` when the plan no longer holds |
 | POST | `/sessions/undo/:groupId` | Revert every move and create of one undo group. `201` with `{ undoGroupId, restored, removedSessionIds, skippedSessionIds }` |
 | POST | `/sessions/:id/slot-pick` | `{ slotProposalId, chose }`: record a pairwise A/B pick ([ab-testing](../scheduler/ab-testing.md)). An `alternative` pick returns `undoGroupId` |
-| POST | `/sessions/:id/complete` | Mark done. Clears skip. Idempotent |
-| DELETE | `/sessions/:id/complete` | Undo done |
-| POST | `/sessions/:id/skip` | Mark skipped (missed). Clears done. Idempotent |
-| DELETE | `/sessions/:id/skip` | Undo skip |
+| POST | `/sessions/:id/start` | Record that the app is open inside a placed task's slot. One per slot. Returns `{ recorded }` |
+| POST | `/sessions/:id/complete` | Legacy, frozen: mark done. No UI, no reward. Idempotent |
+| DELETE | `/sessions/:id/complete` | Legacy, frozen: undo done |
+| POST | `/sessions/:id/skip` | Legacy, frozen: mark skipped. No UI, no reward. Idempotent |
+| DELETE | `/sessions/:id/skip` | Legacy, frozen: undo skip |
 
 - **Placement reason (#254):** `placementReason` (`PREFERRED_HOUR` | `BEFORE_DEADLINE` | `ONLY_FREE_SLOT` | `NEAR_CLASS` | `MOVED_FOR_DEADLINE` | `BEST_AVAILABLE`, or `null`) says why the scheduler picked the start. It is `null` once the start has moved, or for a fallback placement. See [bandit placement](../bandit/placement.md#reason-codes).
 - **Confirmation:** a create or deadline change whose only plan moves a `CHOSEN` session is not applied.
@@ -95,6 +98,14 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 - Bytes live in an S3-compatible bucket (`S3_*`). `File.path` is `<userId>/<uuid>`. Uploads buffer to `UPLOAD_TMP_DIR`, stream to S3, then are removed. [ADR-0004](../adr/0004-s3-file-storage.md).
 - **Notes:** `Session.note` stores refs as `/api/v1/files/<id>` without `sig`. Responses add `?sig=`. `POST` and `PATCH` strip it and neutralise refs to files the caller does not own.
 
+## Link preview (`/link-preview`)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/link-preview?url=` | Open Graph card of an http(s) page as `LinkPreview`, or `data: null` when the page has none or cannot be fetched. Successes cached for 1 h |
+
+- Public addresses only, checked on the connected address. Ports 80 and 443, at most 3 redirects, 5 s timeout, 256 KB read, `text/html` only.
+
 ## Integrations (`/integrations`)
 
 A student's LMS or portal login for ingestion. Credentials are never returned.
@@ -132,8 +143,13 @@ The ingestion inbox, written by the materializer. `eventName` (for example `assi
 
 ## Devices (`/devices`)
 
-- `POST /devices` upserts on `pushToken`. `DELETE /devices` unregisters.
-- Push runs as `notify:push` jobs in `worker-notify` (backoff, then `notify.dlq`; `fcm` and `apns` breakers). A provider with no env is disabled. Dead tokens are pruned on send.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/devices` | Register or refresh one device (`RegisterDeviceInput`). Upserts on `pushToken`. Returns `{ id }` |
+| DELETE | `/devices` | Unregister by `pushToken`. Idempotent |
+
+- `platform` is `IOS`, `ANDROID` or `WEB`. A `WEB` row needs an `https` `pushToken` (the subscription endpoint) and non-empty `p256dh` and `auth`. Native platforms omit the keys.
+- Push runs as `notify:push` jobs in `worker-notify` (backoff, then `notify.dlq`; `fcm`, `apns` and `web` breakers). A provider with no env is disabled. Dead tokens are pruned on send.
 
 ## Rate limits
 

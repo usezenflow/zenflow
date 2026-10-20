@@ -12,15 +12,11 @@ PREFERENCE_RETAINED_WEIGHT = 0.25
 STABILITY_WEIGHT = 0.1
 STABILITY_SATURATION_HOURS = 4
 MOVE_REWARD_SCALE_MINUTES = 240
-# Completion reward (ADR-0023, amended by the level-up plan). An unmoved
-# placement settles after its end plus the grace when it was started or done in
-# its slot (positive) or skipped (0). A check-off before the start is WRONG_TIME
-# (0) and a placement with no start or check-off is LAPSED (small negative), both
-# settled at end plus the cutoff.
-COMPLETED_REWARD = 1.0
+# Completion reward (ADR-0023, amended by ADR-0025). An unmoved placement settles
+# after its end plus the grace when the app was opened inside its slot (STARTED,
+# positive). A placement with no start is LAPSED (small negative), settled at end
+# plus the cutoff.
 STARTED_REWARD = 1.0
-SKIPPED_REWARD = 0.0
-WRONG_TIME_REWARD = 0.0
 LAPSED_REWARD = -0.25
 CHECK_OFF_GRACE_MS = 15 * 60_000
 MISS_CUTOFF_MS = 24 * 60 * 60_000

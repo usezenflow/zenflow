@@ -4,7 +4,7 @@
 
 /*
  * Warm Sunrise tokens: orange, yellow and lime on warm paper and ink. Keep in
- * step with frontend/src/index.css and the hex values in packages/core/src/palette.ts
+ * step with pwa/src/index.css and the hex values in packages/core/src/palette.ts
  * (lib/__tests__/palette.test.ts checks).
  *
  * Stored as space-separated "R G B" channels (not hex) and consumed via rgb(var(--x) / <alpha-value>)

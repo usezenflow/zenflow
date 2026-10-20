@@ -290,7 +290,7 @@ export function useNotificationsSubscription(): void {
 
         // A sync watcher wrote/removed a session behind this notification —
         // the calendar needs to resync. Mirrors the web app's precedent
-        // (`frontend/src/components/notifications/notification-bell.tsx`):
+        // (`pwa/src/components/notifications/notification-bell.tsx`):
         // `CONFLICT` rows carry no session change of their own (they just
         // flag the user's own tasks against a session that already raised
         // its own CREATED/UPDATED elsewhere, and the actual fix-up action —

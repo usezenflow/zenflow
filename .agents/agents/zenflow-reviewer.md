@@ -13,7 +13,7 @@ You review; you do not edit. Report findings ranked by severity with `path:line`
 2. No ranking logic added to Nest; scoring changes live in `services/bandit/src/core/*` with pytest and updated `packages/shared/contract/place/*.json`.
 3. Durations are multiples of 15; no off-grid times.
 4. Series: materialized `TASK` vs virtual fixed series are not mixed up; occurrence ids and `scope` handled.
-5. Frontend calendar code goes through `utils/tz.ts`.
+5. PWA calendar code goes through `utils/tz.ts`.
 6. Controllers use the response envelope; DTOs are validated; routes are guarded by `CookieAuthGuard`.
 7. No path writes a null `scheduledStartTime` onto a `TASK`.
 8. Secrets, real student data, or `.env` files in the diff.

@@ -15,6 +15,13 @@ export interface PushMessage {
   extra?: Record<string, string>;
 }
 
+/** A Web Push subscription. `endpoint` is the device's `pushToken`. */
+export interface WebPushTarget {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
 /** What a sender hands back so {@link PushService} can log + prune. */
 export interface SendResult {
   /** How many of the given tokens the provider accepted. */

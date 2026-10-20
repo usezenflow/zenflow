@@ -2,7 +2,7 @@ import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
-  CAMPUS_ENTRIES,
+  TWO_WHEEL_ENTRIES,
   onCampus,
   routeMinutes,
   routeSeconds,
@@ -176,19 +176,21 @@ export class PlacesService {
   }
 
   /**
-   * The trip from `from` to `to` for one vehicle. A ridden trip to the campus
-   * ends at the gate or parking with the shorter ride plus walk, since students
-   * may not ride inside. `null` when no route exists.
+   * The trip from `from` to `to` for one vehicle. A car drives onto the campus
+   * to the destination, and so does a motorbike or bike when `rideInside` is
+   * set (after 6pm). Otherwise a motorbike or bike stops at the library parking
+   * and walks the rest. `null` when no route exists.
    */
   async commute(
     transport: CommuteTransport,
     from: { lat: number; lng: number },
     to: { lat: number; lng: number },
+    rideInside = false,
   ): Promise<CommuteRoute | null> {
     const vehicle = vehicleFor(transport);
     const foot = vehicleFor("WALK");
     const walkAll = vehicle.id === "WALK" || onCampus(from);
-    if (walkAll || !onCampus(to)) {
+    if (walkAll || vehicle.id === "CAR" || rideInside || !onCampus(to)) {
       const route = await this.route(
         walkAll ? foot.profile : vehicle.profile,
         from,
@@ -207,7 +209,7 @@ export class PlacesService {
 
     let best: CommuteRoute | null = null;
     let bestSeconds = Infinity;
-    for (const entry of CAMPUS_ENTRIES) {
+    for (const entry of TWO_WHEEL_ENTRIES) {
       const rideRoute = await this.route(vehicle.profile, from, entry);
       if (!rideRoute) continue;
       const ride = toLeg(rideRoute, vehicle);

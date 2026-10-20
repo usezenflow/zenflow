@@ -6,7 +6,7 @@ body:
     id: area
     attributes:
       label: Area
-      options: [frontend, backend, mobile, ml, infra, security, other]
+      options: [pwa, backend, mobile, ml, infra, security, other]
     validations: { required: true }
   - type: textarea
     id: steps

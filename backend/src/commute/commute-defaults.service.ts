@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
   DEFAULT_VEHICLE,
+  rideInsideAllowed,
   resolveCampusPlace,
   type CommuteTransport,
 } from "@zenflow/shared";
@@ -51,6 +52,7 @@ export class CommuteDefaultsService {
         homeLat: true,
         homeLng: true,
         defaultTransport: true,
+        timezone: true,
       },
     });
     if (!user) return 0;
@@ -93,6 +95,7 @@ export class CommuteDefaultsService {
           location: true,
           locationLat: true,
           locationLng: true,
+          scheduledStartTime: true,
         },
         orderBy: { id: "asc" },
         take: BATCH,
@@ -105,6 +108,7 @@ export class CommuteDefaultsService {
         user.homeLocation,
         home,
         transport,
+        user.timezone,
         rows,
       );
       if (rows.length < BATCH) break;
@@ -117,27 +121,38 @@ export class CommuteDefaultsService {
     homeName: string,
     home: Point,
     transport: CommuteTransport,
+    timezone: string,
     rows: {
       id: string;
       location: string | null;
       locationLat: number | null;
       locationLng: number | null;
+      scheduledStartTime: Date | null;
     }[],
   ): Promise<number> {
-    // One trip per distinct destination: a timetable repeats a few buildings.
-    const byDestination = new Map<string, { to: Point; ids: string[] }>();
+    // One trip per distinct destination and riding rule: a timetable repeats a few buildings.
+    const byDestination = new Map<
+      string,
+      { to: Point; rideInside: boolean; ids: string[] }
+    >();
     for (const row of rows) {
       const to = this.destinationOf(row);
       if (!to) continue;
-      const key = `${to.lat.toFixed(4)},${to.lng.toFixed(4)}`;
-      const group = byDestination.get(key) ?? { to, ids: [] };
+      const rideInside = rideInsideAllowed(row.scheduledStartTime, timezone);
+      const key = `${to.lat.toFixed(4)},${to.lng.toFixed(4)},${rideInside}`;
+      const group = byDestination.get(key) ?? { to, rideInside, ids: [] };
       group.ids.push(row.id);
       byDestination.set(key, group);
     }
 
     let changed = 0;
-    for (const { to, ids } of byDestination.values()) {
-      const commute = await this.places.commute(transport, home, to);
+    for (const { to, rideInside, ids } of byDestination.values()) {
+      const commute = await this.places.commute(
+        transport,
+        home,
+        to,
+        rideInside,
+      );
       if (!commute) continue;
       const result = await this.prisma.session.updateMany({
         where: { id: { in: ids }, userId },

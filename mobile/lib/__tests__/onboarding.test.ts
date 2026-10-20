@@ -37,12 +37,16 @@ describe("routeForSession", () => {
 
 describe("step navigation", () => {
   it("walks forward and clamps", () => {
-    expect(nextStep("focus")).toBe("dlu");
+    expect(nextStep("focus")).toBe("tags");
+    expect(nextStep("tags")).toBe("dlu");
+    expect(nextStep("dlu")).toBe("commute");
+    expect(nextStep("commute")).toBe("notifications");
     expect(nextStep("notifications")).toBe("done");
     expect(nextStep("done")).toBe("done");
   });
   it("walks back and clamps; no back on first/done", () => {
-    expect(prevStep("dlu")).toBe("focus");
+    expect(prevStep("tags")).toBe("focus");
+    expect(prevStep("dlu")).toBe("tags");
     expect(prevStep("focus")).toBe("focus");
     expect(canGoBack("focus")).toBe(false);
     expect(canGoBack("dlu")).toBe(true);

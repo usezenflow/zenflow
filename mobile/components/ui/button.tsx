@@ -1,4 +1,5 @@
 import { Spinner } from "@/components/ui/spinner";
+import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { TextClassContext } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { type VariantProps, cva } from "class-variance-authority";
@@ -94,6 +95,7 @@ const Button = React.forwardRef<
   ButtonProps
 >(({ className, variant, size, loading = false, children, ...props }, ref) => {
   const disabled = props.disabled || loading;
+  const showSpinner = useDelayedLoading(loading);
   const tone = SPINNER_TONE[variant ?? "default"];
   return (
     <TextClassContext.Provider
@@ -113,7 +115,7 @@ const Button = React.forwardRef<
         disabled={disabled}
         accessibilityState={{ disabled, busy: loading }}
       >
-        {loading ? <Spinner size={24} tone={tone} testID="button.spinner" /> : children}
+        {showSpinner ? <Spinner size={24} tone={tone} testID="button.spinner" /> : children}
       </Pressable>
     </TextClassContext.Provider>
   );

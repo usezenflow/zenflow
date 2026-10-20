@@ -75,6 +75,54 @@ export class SessionCheckOffService {
     return { session };
   }
 
+  /**
+   * Skip every meeting in `sessionId`'s timetable group (`scheduleStudyUnitId`),
+   * or only those at or after it (`from`). Each goes through {@link set}, so
+   * state and `SKIP` events match a single skip. 404 when the session isn't the
+   * caller's, doesn't exist, or isn't a grouped timetable meeting.
+   */
+  async skipTimetableGroup(
+    sessionId: string,
+    from: boolean,
+    user: User,
+    now: Date = new Date(),
+  ): Promise<{ skippedSessionIds: string[] }> {
+    const anchor = await this.prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        userId: user.id,
+        deleted: false,
+        scheduleStudyUnitId: { not: null },
+      },
+      select: { scheduleStudyUnitId: true, scheduledStartTime: true },
+    });
+    if (!anchor?.scheduleStudyUnitId)
+      throw new NotFoundException(
+        `Cannot find groupable timetable session ${sessionId}`,
+      );
+    const start = anchor.scheduledStartTime;
+    if (from && !start)
+      throw new BadRequestException("Session is not scheduled");
+
+    const targets = await this.prisma.session.findMany({
+      where: {
+        userId: user.id,
+        deleted: false,
+        scheduleStudyUnitId: anchor.scheduleStudyUnitId,
+        scheduledStartTime: from && start ? { gte: start } : { not: null },
+      },
+      orderBy: { scheduledStartTime: "asc" },
+      select: { id: true },
+    });
+
+    const skippedSessionIds: string[] = [];
+    for (const t of targets) {
+      await this.set(t.id, "skip", true, user, now);
+      skippedSessionIds.push(t.id);
+    }
+    return { skippedSessionIds };
+  }
+
   private async setRow(
     id: string,
     kind: CheckOffKind,

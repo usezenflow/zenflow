@@ -40,6 +40,7 @@ import {
   SESSION_TONES,
   SESSION_TYPE_TONE,
   type SessionFormValues,
+  combineToUtc,
   displayLocation,
   hhmmToMinutes,
   zonedDate,
@@ -604,6 +605,7 @@ export function SessionEditor({
       {locationOpen && (
         <LocationScreen
           destinationLocked={locked}
+          at={values.date && values.startTime ? combineToUtc(values.date, values.startTime, tz) : null}
           initial={{
             text: values.location ?? "",
             point:

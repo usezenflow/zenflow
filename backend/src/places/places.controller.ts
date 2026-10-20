@@ -8,7 +8,13 @@ import {
 } from "@nestjs/common";
 import type { Response } from "express";
 import { CookieAuthGuard } from "../auth/guards";
-import { COMMUTE_TRANSPORTS, type CommuteTransport } from "@zenflow/shared";
+import {
+  COMMUTE_TRANSPORTS,
+  rideInsideAllowed,
+  type CommuteTransport,
+} from "@zenflow/shared";
+import { CurrentUser } from "../users/decorators/current-user.decorator";
+import type { User } from "../../generated/prisma";
 import { PlacesService, type RouteProfile } from "./places.service";
 
 const PROFILES: readonly RouteProfile[] = ["car", "bike", "foot"];
@@ -51,6 +57,8 @@ export class PlacesController {
     @Query("transport") transport = "MOTORCYCLE",
     @Query("from") from?: string,
     @Query("to") to?: string,
+    @Query("at") at?: string,
+    @CurrentUser() user?: User,
   ) {
     if (!COMMUTE_TRANSPORTS.includes(transport as CommuteTransport)) {
       throw new BadRequestException("Unknown transport.");
@@ -59,6 +67,10 @@ export class PlacesController {
       transport as CommuteTransport,
       parsePoint(from),
       parsePoint(to),
+      rideInsideAllowed(
+        at ? new Date(at) : new Date(),
+        user?.timezone ?? "UTC",
+      ),
     );
     return {
       success: true,

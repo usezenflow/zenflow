@@ -3,6 +3,7 @@ import { type Notification } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApnsSender } from "./apns.sender";
 import { FcmSender } from "./fcm.sender";
+import { WebPushSender } from "./web-push.sender";
 import {
   PushProviderError,
   PushService,
@@ -11,9 +12,11 @@ import {
 import type { SendResult } from "./types";
 
 interface DeviceRow {
-  platform: "IOS" | "ANDROID";
+  platform: "IOS" | "ANDROID" | "WEB";
   pushToken: string;
   userId: string;
+  p256dh?: string | null;
+  auth?: string | null;
 }
 
 function makePrismaDouble(devices: DeviceRow[], allowNotifications = true) {
@@ -64,11 +67,13 @@ async function make(opts: {
   devices?: DeviceRow[];
   fcm?: ReturnType<typeof fakeSender>;
   apns?: ReturnType<typeof fakeSender>;
+  web?: ReturnType<typeof fakeSender>;
   allowNotifications?: boolean;
 }) {
   const db = makePrismaDouble(opts.devices ?? [], opts.allowNotifications);
   const fcm = opts.fcm ?? fakeSender(true);
   const apns = opts.apns ?? fakeSender(true);
+  const web = opts.web ?? fakeSender(true);
 
   const module: TestingModule = await Test.createTestingModule({
     providers: [
@@ -76,20 +81,22 @@ async function make(opts: {
       { provide: PrismaService, useValue: db.client },
       { provide: FcmSender, useValue: fcm },
       { provide: ApnsSender, useValue: apns },
+      { provide: WebPushSender, useValue: web },
     ],
   }).compile();
   const service = module.get<PushService>(PushService);
 
-  return { db, service, fcm, apns };
+  return { db, service, fcm, apns, web };
 }
 
 describe("PushService", () => {
   describe("sendToUser", () => {
-    it("is a no-op when both senders are disabled", async () => {
-      const { service, db, fcm, apns } = await make({
+    it("is a no-op when all senders are disabled", async () => {
+      const { service, db, fcm, apns, web } = await make({
         devices: [{ platform: "ANDROID", pushToken: "a1", userId: "u1" }],
         fcm: fakeSender(false),
         apns: fakeSender(false),
+        web: fakeSender(false),
       });
 
       await service.sendToUser("u1", ROW);
@@ -97,6 +104,7 @@ describe("PushService", () => {
       expect(db.client.userDevice.findMany).not.toHaveBeenCalled();
       expect(fcm.send).not.toHaveBeenCalled();
       expect(apns.send).not.toHaveBeenCalled();
+      expect(web.send).not.toHaveBeenCalled();
     });
 
     it("skips native push when the user has allowNotifications=false", async () => {
@@ -140,6 +148,7 @@ describe("PushService", () => {
           notificationId: "n1",
           eventName: "exam.created",
           sessionId: "s1",
+          slotProposalId: "",
           url: "/calendar?session=s1",
         },
         tone: "default",
@@ -165,6 +174,53 @@ describe("PushService", () => {
       );
     });
 
+    it("routes WEB rows with their subscription keys to Web Push", async () => {
+      const { service, web, fcm } = await make({
+        devices: [
+          {
+            platform: "WEB",
+            pushToken: "https://push.example.test/w1",
+            p256dh: "p1",
+            auth: "x1",
+            userId: "u1",
+          },
+          { platform: "ANDROID", pushToken: "a1", userId: "u1" },
+        ],
+      });
+
+      await service.sendToUser("u1", ROW);
+
+      expect(web.send).toHaveBeenCalledWith(
+        [
+          {
+            endpoint: "https://push.example.test/w1",
+            p256dh: "p1",
+            auth: "x1",
+          },
+        ],
+        expect.objectContaining({ title: ROW.title, tone: "default" }),
+      );
+      expect(fcm.send).toHaveBeenCalledWith(["a1"], expect.anything());
+    });
+
+    it("skips a WEB row that has no keys", async () => {
+      const { service, web } = await make({
+        devices: [
+          {
+            platform: "WEB",
+            pushToken: "https://push.example.test/w1",
+            p256dh: null,
+            auth: null,
+            userId: "u1",
+          },
+        ],
+      });
+
+      await service.sendToUser("u1", ROW);
+
+      expect(web.send).not.toHaveBeenCalled();
+    });
+
     it("uses the /notifications url when the row has no session", async () => {
       const { service, fcm } = await make({
         devices: [{ platform: "ANDROID", pushToken: "a1", userId: "u1" }],
@@ -186,7 +242,29 @@ describe("PushService", () => {
       );
     });
 
-    it("prunes every dead token both senders report", async () => {
+    it("prunes dead Web Push endpoints", async () => {
+      const { service, db } = await make({
+        devices: [
+          {
+            platform: "WEB",
+            pushToken: "https://push.example.test/gone",
+            p256dh: "p",
+            auth: "a",
+            userId: "u1",
+          },
+        ],
+        web: fakeSender(true, {
+          sent: 0,
+          invalidTokens: ["https://push.example.test/gone"],
+        }),
+      });
+
+      await service.sendToUser("u1", ROW);
+
+      expect(db.devices).toHaveLength(0);
+    });
+
+    it("prunes every dead token all senders report", async () => {
       const { service, db } = await make({
         devices: [
           { platform: "ANDROID", pushToken: "a-dead", userId: "u1" },
@@ -222,20 +300,46 @@ describe("PushService", () => {
       { platform: "IOS", pushToken: "i1", userId: "u1" },
     ];
 
+    const WITH_WEB: DeviceRow[] = [
+      ...BOTH,
+      {
+        platform: "WEB",
+        pushToken: "https://push.example.test/w1",
+        p256dh: "p",
+        auth: "a",
+        userId: "u1",
+      },
+    ];
+
     it("a per-provider job only touches that provider", async () => {
-      const { service, fcm, apns } = await make({ devices: BOTH });
+      const { service, fcm, apns, web } = await make({ devices: WITH_WEB });
 
       await service.sendToUser("u1", ROW, { provider: "apns" });
 
       expect(fcm.send).not.toHaveBeenCalled();
+      expect(web.send).not.toHaveBeenCalled();
       expect(apns.send).toHaveBeenCalledWith(["i1"], expect.anything());
+    });
+
+    it("a web job only touches Web Push, and is a no-op while it is disabled", async () => {
+      const { service, fcm, web, db } = await make({
+        devices: WITH_WEB,
+        web: fakeSender(false),
+      });
+
+      await service.sendToUser("u1", ROW, { provider: "web" });
+
+      expect(db.client.userDevice.findMany).not.toHaveBeenCalled();
+      expect(fcm.send).not.toHaveBeenCalled();
+      expect(web.send).not.toHaveBeenCalled();
     });
 
     it("runs each provider through the guard under its own name", async () => {
       const { service } = await make({
-        devices: BOTH,
+        devices: WITH_WEB,
         fcm: fakeSender(true, { sent: 1, invalidTokens: [] }),
         apns: fakeSender(true, { sent: 1, invalidTokens: [] }),
+        web: fakeSender(true, { sent: 1, invalidTokens: [] }),
       });
       const calls: string[] = [];
       const guard: ProviderGuard = (p, fn) => {
@@ -245,7 +349,7 @@ describe("PushService", () => {
 
       await service.sendToUser("u1", ROW, { guard });
 
-      expect(calls.sort()).toEqual(["apns", "fcm"]);
+      expect(calls.sort()).toEqual(["apns", "fcm", "web"]);
     });
 
     it("throws PushProviderError when every token failed transiently, so the job retries", async () => {
@@ -268,6 +372,25 @@ describe("PushService", () => {
 
       await expect(service.sendToUser("u1", ROW)).resolves.toBeUndefined();
       expect(db.devices).toHaveLength(0);
+    });
+
+    it("throws PushProviderError when every Web Push send failed transiently", async () => {
+      const { service } = await make({
+        devices: [
+          {
+            platform: "WEB",
+            pushToken: "https://push.example.test/w1",
+            p256dh: "p",
+            auth: "a",
+            userId: "u1",
+          },
+        ],
+        web: fakeSender(true, { sent: 0, invalidTokens: [] }),
+      });
+
+      await expect(
+        service.sendToUser("u1", ROW, { provider: "web" }),
+      ).rejects.toBeInstanceOf(PushProviderError);
     });
 
     it("a guard rejection (breaker open) still lets the other provider finish and prune", async () => {

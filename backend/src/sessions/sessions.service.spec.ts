@@ -8,6 +8,7 @@ import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.s
 import { ScheduleInfeasibleException } from "../scheduler/schedule-infeasible.exception";
 import { SessionsService } from "./sessions.service";
 import { SessionCheckOffService } from "./session-check-off.service";
+import { SessionStartService } from "./session-start.service";
 import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
 import { SessionUpdateService } from "./session-update.service";
@@ -184,6 +185,7 @@ async function makeService(
       { provide: SchedulingFeedbackService, useValue: feedback },
       { provide: RemindersService, useValue: fakeReminders() },
       { provide: SessionCheckOffService, useValue: {} },
+      { provide: SessionStartService, useValue: {} },
       {
         provide: NoteFilesService,
         useValue: {

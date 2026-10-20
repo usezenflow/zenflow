@@ -8,7 +8,8 @@ import { type Notification } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApnsSender } from "./apns.sender";
 import { FcmSender } from "./fcm.sender";
-import type { PushMessage, SendResult } from "./types";
+import { WebPushSender } from "./web-push.sender";
+import type { PushMessage, SendResult, WebPushTarget } from "./types";
 import { pushDevicesPruned, pushSend } from "../observability/metrics";
 import { withSpan } from "../observability/otel";
 import { localizeNotification } from "../notifications/localize-notification";
@@ -16,7 +17,7 @@ import type { PushProvider } from "../queue/queues";
 
 /**
  * Wraps one provider call, e.g. with that provider's circuit breaker
- * (`fcm` / `apns`). The default runs it as is.
+ * (`fcm` / `apns` / `web`). The default runs it as is.
  */
 export type ProviderGuard = <T>(
   provider: PushProvider,
@@ -57,8 +58,8 @@ export class PushProviderError extends Error {
  *
  * A provider that answers nothing useful for every token throws
  * {@link PushProviderError} so the job retries with backoff and the
- * `fcm`/`apns` breaker counts it; a partial success is a success. Tokens the
- * providers report dead are pruned.
+ * `fcm`/`apns`/`web` breaker counts it; a partial success is a success. Tokens
+ * the providers report dead are pruned.
  */
 @Injectable()
 export class PushService {
@@ -68,6 +69,7 @@ export class PushService {
     private readonly prisma: PrismaService,
     private readonly fcm: FcmSender,
     private readonly apns: ApnsSender,
+    private readonly web: WebPushSender,
   ) {}
 
   /**
@@ -122,11 +124,14 @@ export class PushService {
     opts: SendOptions = {},
   ): Promise<void> {
     const guard = opts.guard ?? unguarded;
-    const wantFcm = !opts.provider || opts.provider === "fcm";
-    const wantApns = !opts.provider || opts.provider === "apns";
-    if ((!wantFcm || !this.fcm.enabled) && (!wantApns || !this.apns.enabled)) {
+    const wants = (p: PushProvider) => !opts.provider || opts.provider === p;
+    const anyEnabled =
+      (wants("fcm") && this.fcm.enabled) ||
+      (wants("apns") && this.apns.enabled) ||
+      (wants("web") && this.web.enabled);
+    if (!anyEnabled) {
       this.logger.warn(
-        `sendToUser(${userId}): sender disabled — set FCM_SERVICE_ACCOUNT and/or the APNS_* vars`,
+        `sendToUser(${userId}): sender disabled — set FCM_SERVICE_ACCOUNT, the APNS_* and/or the VAPID_* vars`,
       );
       return;
     }
@@ -141,7 +146,7 @@ export class PushService {
 
     const devices = await this.prisma.userDevice.findMany({
       where: { userId },
-      select: { platform: true, pushToken: true },
+      select: { platform: true, pushToken: true, p256dh: true, auth: true },
     });
     if (devices.length === 0) {
       this.logger.warn(
@@ -150,21 +155,31 @@ export class PushService {
       return;
     }
 
-    const android = wantFcm
+    const android = wants("fcm")
       ? devices.filter((d) => d.platform === "ANDROID").map((d) => d.pushToken)
       : [];
-    const ios = wantApns
+    const ios = wants("apns")
       ? devices.filter((d) => d.platform === "IOS").map((d) => d.pushToken)
       : [];
+    // A WEB row without its keys cannot be encrypted for; skip it.
+    const web: WebPushTarget[] = wants("web")
+      ? devices.flatMap((d) =>
+          d.platform === "WEB" && d.p256dh && d.auth
+            ? [{ endpoint: d.pushToken, p256dh: d.p256dh, auth: d.auth }]
+            : [],
+        )
+      : [];
     this.logger.log(
-      `sendToUser(${userId}): ${android.length} android + ${ios.length} ios device(s)` +
+      `sendToUser(${userId}): ${android.length} android + ${ios.length} ios + ${web.length} web device(s)` +
         `${!this.fcm.enabled && android.length ? " [FCM disabled]" : ""}` +
-        `${!this.apns.enabled && ios.length ? " [APNs disabled]" : ""}`,
+        `${!this.apns.enabled && ios.length ? " [APNs disabled]" : ""}` +
+        `${!this.web.enabled && web.length ? " [Web Push disabled]" : ""}`,
     );
 
     const settled = await Promise.allSettled([
       this.sendVia("fcm", this.fcm, android, msg, guard),
       this.sendVia("apns", this.apns, ios, msg, guard),
+      this.sendVia("web", this.web, web, msg, guard),
     ]);
     const stale = settled.flatMap((r) =>
       r.status === "fulfilled" ? r.value.invalidTokens : [],
@@ -176,34 +191,34 @@ export class PushService {
       this.logger.log(`pruned ${count} dead device token(s)`);
       pushDevicesPruned.add(count);
     }
-    // Both providers have been tried (and dead tokens pruned) before a failure
+    // Every provider has been tried (and dead tokens pruned) before a failure
     // surfaces, so a retry never re-sends to the one that succeeded unless the
     // job was provider-less.
     const failed = settled.find((r) => r.status === "rejected");
     if (failed) throw failed.reason;
   }
 
-  private async sendVia(
+  private async sendVia<T>(
     provider: PushProvider,
     sender: {
       enabled: boolean;
-      send(t: string[], m: PushMessage): Promise<SendResult>;
+      send(targets: T[], m: PushMessage): Promise<SendResult>;
     },
-    tokens: string[],
+    targets: T[],
     msg: PushMessage,
     guard: ProviderGuard,
   ): Promise<SendResult> {
-    if (tokens.length === 0 || !sender.enabled) {
+    if (targets.length === 0 || !sender.enabled) {
       return { sent: 0, invalidTokens: [] };
     }
     const res = await guard(provider, async () => {
-      const r = await sender.send(tokens, msg);
-      recordPushResult(provider, tokens.length, r);
+      const r = await sender.send(targets, msg);
+      recordPushResult(provider, targets.length, r);
       this.logger.log(
-        `${provider}: ${r.sent}/${tokens.length} ok, ${r.invalidTokens.length} dead`,
+        `${provider}: ${r.sent}/${targets.length} ok, ${r.invalidTokens.length} dead`,
       );
       if (r.sent === 0 && r.invalidTokens.length === 0) {
-        throw new PushProviderError(provider, tokens.length);
+        throw new PushProviderError(provider, targets.length);
       }
       return r;
     });
@@ -215,6 +230,7 @@ export class PushService {
       notificationId: row.id,
       eventName: row.eventName,
       sessionId: row.sessionId ?? "",
+      slotProposalId: row.slotProposalId ?? "",
       url: row.sessionId
         ? `/calendar?session=${row.sessionId}`
         : "/notifications",
@@ -224,7 +240,7 @@ export class PushService {
 
 /** Split one provider's send result into sent / failed / invalid_token counts. */
 function recordPushResult(
-  provider: "fcm" | "apns",
+  provider: PushProvider,
   attempted: number,
   res: { sent: number; invalidTokens: string[] },
 ): void {

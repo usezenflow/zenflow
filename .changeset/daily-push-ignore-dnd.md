@@ -1,6 +1,6 @@
 ---
 "backend": patch
-"frontend": patch
+"pwa": patch
 "mobile": patch
 "@zenflow/shared": patch
 "@zenflow/core": patch

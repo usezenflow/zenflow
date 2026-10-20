@@ -213,19 +213,13 @@ describe("PlacesService", () => {
   describe("commute", () => {
     const home = { lat: 11.94, lng: 108.43 };
     const a8 = { lat: 11.95571296, lng: 108.4468659 };
-    const BACK_GATE = "108.4433524,11.95784143";
+    const LIBRARY_PARKING = { lat: 11.956887, lng: 108.444726 };
 
-    /** Rides to the back gate take 12 min, to the front 10; the walk from the front is longer. */
-    function mockRoutes(walkFromBack: number, walkFromFront: number) {
+    /** Every ride is 5 km, so 10 min at 30 km/h; the walk is `walkMeters`. */
+    function mockRoutes(walkMeters: number) {
       fetchMock.mockImplementation(async (url: URL) => {
         const path = decodeURIComponent(String(url));
-        const meters = path.includes("routed-foot")
-          ? path.includes(`${BACK_GATE};`)
-            ? walkFromBack
-            : walkFromFront
-          : path.endsWith(BACK_GATE) || path.includes(`;${BACK_GATE}?`)
-            ? 6000
-            : 5000;
+        const meters = path.includes("routed-foot") ? walkMeters : 5000;
         return {
           ok: true,
           json: async () => ({
@@ -242,30 +236,56 @@ describe("PlacesService", () => {
       });
     }
 
-    it("stops at the gate with the shorter ride plus walk", async () => {
-      mockRoutes(600, 900);
+    it("parks at the library and walks in on a motorbike", async () => {
+      mockRoutes(600);
       const service = new PlacesService(cache, config);
 
       const trip = await service.commute("MOTORCYCLE", home, a8);
 
-      // Back gate: 6 km at 30 km/h (12 min) + 600 m at 5 km/h (7.2 min).
-      expect(trip?.entry?.name).toBe("Công sau");
-      expect(trip?.ride?.minutes).toBe(12);
+      // 5 km at 30 km/h (10 min) + 600 m at 5 km/h (7.2 min).
+      expect(trip?.entry?.name).toBe("Bãi xe thư viện");
+      expect(trip?.ride?.minutes).toBe(10);
       expect(trip?.walk?.minutes).toBe(7);
-      expect(trip?.minutes).toBe(19);
+      expect(trip?.minutes).toBe(17);
     }, 20000);
 
-    it("prefers the front when the walk from the back is long", async () => {
-      mockRoutes(1500, 300);
+    it("parks at the library on a bike", async () => {
+      mockRoutes(600);
       const service = new PlacesService(cache, config);
 
-      const trip = await service.commute("MOTORCYCLE", home, a8);
+      const trip = await service.commute("BIKE", home, a8);
 
-      expect(trip?.entry?.name).toBe("Nhà giữ xe công trước");
+      expect(trip?.entry?.name).toBe("Bãi xe thư viện");
+      expect(String(fetchMock.mock.calls[0][0])).toContain("routed-bike");
     }, 20000);
 
-    it("walks all the way on foot, without a gate", async () => {
-      mockRoutes(600, 900);
+    it("rides a motorbike onto the campus after 6pm", async () => {
+      mockRoutes(600);
+      const service = new PlacesService(cache, config);
+
+      const trip = await service.commute("MOTORCYCLE", home, a8, true);
+
+      expect(trip).toMatchObject({ walk: null, entry: null });
+      expect(String(fetchMock.mock.calls[0][0])).toContain(
+        `108.4468659,11.95571296`,
+      );
+    }, 20000);
+
+    it("drives a car onto the campus with no parking or walk", async () => {
+      mockRoutes(600);
+      const service = new PlacesService(cache, config);
+
+      const trip = await service.commute("CAR", home, a8);
+
+      expect(trip).toMatchObject({ walk: null, entry: null });
+      expect(trip?.ride).not.toBeNull();
+      expect(String(fetchMock.mock.calls[0][0])).toContain(
+        `108.4468659,11.95571296`,
+      );
+    }, 20000);
+
+    it("walks all the way on foot, without a parking", async () => {
+      mockRoutes(600);
       const service = new PlacesService(cache, config);
 
       const trip = await service.commute("WALK", home, a8);
@@ -276,7 +296,7 @@ describe("PlacesService", () => {
     });
 
     it("rides straight to a place off campus", async () => {
-      mockRoutes(600, 900);
+      mockRoutes(600);
       const service = new PlacesService(cache, config);
 
       const trip = await service.commute("MOTORCYCLE", home, {
@@ -288,16 +308,13 @@ describe("PlacesService", () => {
       expect(trip?.ride).not.toBeNull();
     });
 
-    it("needs no walk when the destination is the gate", async () => {
-      mockRoutes(600, 900);
+    it("needs no walk when the destination is the library parking", async () => {
+      mockRoutes(600);
       const service = new PlacesService(cache, config);
 
-      const trip = await service.commute("MOTORCYCLE", home, {
-        lat: 11.95784143,
-        lng: 108.4433524,
-      });
+      const trip = await service.commute("MOTORCYCLE", home, LIBRARY_PARKING);
 
-      expect(trip?.entry?.name).toBe("Công sau");
+      expect(trip?.entry?.name).toBe("Bãi xe thư viện");
       expect(trip?.walk).toBeNull();
     }, 20000);
   });

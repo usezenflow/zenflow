@@ -135,6 +135,10 @@ export interface NotificationDto {
    * all?" — `POST /notifications/:id/reschedule-conflicts`). Empty otherwise.
    */
   conflictSessionIds: string[];
+  /** A `plan_offer.*` row's pairwise proposal, or `null`. */
+  slotProposalId: string | null;
+  /** A `plan_offer.*` row's two start times, `[keep, prefer]`; `[]` otherwise. */
+  offerSlots: string[];
 }
 
 /** `data` payload for `POST /notifications/:id/reschedule-conflicts`. */

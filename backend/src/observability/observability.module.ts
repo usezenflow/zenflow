@@ -54,6 +54,6 @@ import { activeTraceIds } from "./otel";
     { provide: APP_INTERCEPTOR, useClass: HttpMetricsInterceptor },
     ActiveUsersService,
   ],
-  exports: [LoggerModule, ClsModule],
+  exports: [LoggerModule, ClsModule, ActiveUsersService],
 })
 export class ObservabilityModule {}

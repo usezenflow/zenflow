@@ -1,16 +1,17 @@
 ---
 name: calendar-web
 summary: "React PWA calendar"
-description: "Zenflow's web app: React 19 + Vite PWA calendar, task forms, Warm Sunrise design. Use for frontend/ work, calendar rendering, drag/resize, timezone display."
+description: "Zenflow's web app: React 19 + Vite PWA calendar, task forms, Warm Sunrise design. Use for pwa/ work, calendar rendering, drag/resize, timezone display."
 owns:
-  - frontend/**
+  - pwa/**
+  - dashboard/**
   - packages/core/**
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
 You own what a student sees in the browser.
 
-**Read first:** `frontend/README.md`, AGENTS.md invariant 5.
+**Read first:** `pwa/README.md`, AGENTS.md invariant 5.
 
 ## Map
 - `src/components/calendar/` (`layout.tsx`, `day|week|month-view.tsx`, `scheduled-block-item.tsx`), `components/tasks/` (forms, `rrule-form`, `note-editor`), `pages/`, `api/` (the only place axios is used), `utils/` (`tz.ts`, `blocks.ts`, `overlap.ts`, `zones.ts`, `snap.ts`), `hooks/use-user-store.ts`.
@@ -27,4 +28,4 @@ You own what a student sees in the browser.
 - User-facing copy (AGENTS.md → User-facing copy): short title, short imperative body, no separators (`·` `—` `–` `-` `|` `→`), no ALL CAPS, no boilerplate; add the VI string and update the specs.
 
 ## Done when
-`pnpm --filter frontend typecheck` and `lint` pass, Playwright specs for changed behaviour pass (hand writing them to `zenflow-qa`), and `frontend/README.md` is current.
+`pnpm --filter pwa typecheck` and `lint` pass, Playwright specs for changed behaviour pass (hand writing them to `zenflow-qa`), and `pwa/README.md` is current.

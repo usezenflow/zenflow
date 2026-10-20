@@ -626,6 +626,11 @@ export interface RemoveTimetableGroupResponse {
   removedSessionIds: string[];
 }
 
+/** `POST /sessions/timetable-group/:sessionId/skip` and `/skip/from`: the meetings skipped. */
+export interface SkipTimetableGroupResponse {
+  skippedSessionIds: string[];
+}
+
 /**
  * Response for `GET /sessions/deadline-options`: the six deadline quick-action
  * chip values (see `services/bandit/README.md`), each an ISO-8601 instant

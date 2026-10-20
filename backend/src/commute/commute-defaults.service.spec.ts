@@ -14,6 +14,7 @@ function makeService(options: {
           homeLat: HOME.lat,
           homeLng: HOME.lng,
           defaultTransport: "MOTORCYCLE",
+          timezone: "Asia/Ho_Chi_Minh",
         }
       : options.user;
   const session = {
@@ -53,8 +54,9 @@ describe("CommuteDefaultsService", () => {
       "MOTORCYCLE",
       HOME,
       expect.objectContaining({ lat: expect.any(Number) as number }),
+      false,
     );
-    // Ride to the nearest gate plus the walk inside.
+    // Ride to the library parking plus the walk inside.
     expect(session.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ["a"] }, userId: "u1" },
       data: {
@@ -102,10 +104,36 @@ describe("CommuteDefaultsService", () => {
 
     await service.apply("u1");
 
-    expect(places.commute).toHaveBeenCalledWith("MOTORCYCLE", HOME, {
-      lat: 11.95,
-      lng: 108.44,
+    expect(places.commute).toHaveBeenCalledWith(
+      "MOTORCYCLE",
+      HOME,
+      { lat: 11.95, lng: 108.44 },
+      false,
+    );
+  });
+
+  it("rides inside the campus for a session that starts after 6pm", async () => {
+    const { service, places } = makeService({
+      rows: [
+        {
+          id: "a",
+          location: "A8 - 101",
+          locationLat: null,
+          locationLng: null,
+          // 19:00 in Ho Chi Minh City (UTC+7).
+          scheduledStartTime: new Date("2026-10-20T12:00:00Z"),
+        },
+      ],
     });
+
+    await service.apply("u1");
+
+    expect(places.commute).toHaveBeenCalledWith(
+      "MOTORCYCLE",
+      HOME,
+      expect.objectContaining({ lat: expect.any(Number) as number }),
+      true,
+    );
   });
 
   it("leaves rows alone when there is no route", async () => {

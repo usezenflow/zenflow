@@ -94,6 +94,28 @@ describe("NotifyProcessor", () => {
     });
   });
 
+  it("push: a web job delivers through the web provider and parks on its own breaker", async () => {
+    const { processor, push, breakers, job } = await setup();
+    await processor.process(
+      job({ type: "push", notificationId: "n1", provider: "web" }),
+      "tok",
+    );
+    expect(push.deliver).toHaveBeenCalledWith("n1", {
+      provider: "web",
+      guard: expect.any(Function),
+    });
+    await breakers
+      .run("web", () => Promise.reject(new Error("down")))
+      .catch(() => 0);
+    const { guard } = push.deliver.mock.calls[0][1] as {
+      guard: (p: string, fn: () => Promise<unknown>) => Promise<unknown>;
+    };
+    const fn = jest.fn();
+    await expect(guard("web", fn)).rejects.toBeInstanceOf(DelayedError);
+    expect(fn).not.toHaveBeenCalled();
+    await expect(guard("fcm", () => Promise.resolve(1))).resolves.toBe(1);
+  });
+
   it("push: the guard runs the provider under its named breaker and parks the job when it is open", async () => {
     const { processor, push, breakers, job } = await setup();
     // Trip the fcm breaker.

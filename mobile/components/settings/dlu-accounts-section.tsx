@@ -29,7 +29,7 @@ import {
   useBottomSheet,
 } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { DelayedSpinner } from "@/components/ui/delayed-spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
@@ -650,9 +650,7 @@ export function DluAccountsSection({
               disabled={!canSubmit}
               onPress={handleSubmit}
             >
-              {isSubmitting && (
-                <View className="mr-2"><Spinner size={18} tone="onPrimary" /></View>
-              )}
+              <DelayedSpinner busy={isSubmitting} size={18} tone="onPrimary" wrapperClassName="mr-2" />
               <Text className="font-semibold text-primary-foreground">
                 {isSubmitting
                   ? mode === "connect"

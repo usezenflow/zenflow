@@ -8,7 +8,11 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { BanditArmStateRepository } from "../../bandit/bandit-arm-state.repository";
 import { BanditService } from "../../bandit/bandit.service";
 import { dragDistanceReward } from "../core/reward";
-import { isCurrentModelVersion, PAIRWISE_WIN_REWARD } from "../constants";
+import {
+  isCurrentModelVersion,
+  PAIRWISE_LOSS_REWARD,
+  PAIRWISE_WIN_REWARD,
+} from "../constants";
 import {
   reinforcePreferenceCell,
   reinforcePreferenceMove,
@@ -73,8 +77,25 @@ export class SchedulingFeedbackService {
    * as the `MOVE` the pick applies. Never throws.
    */
   async onPairwiseWin(userId: string, slotProposalId: string): Promise<void> {
+    return this.onPairwise(userId, slotProposalId, PAIRWISE_WIN_REWARD);
+  }
+
+  /**
+   * The user kept the heuristic's option over a shown LinUCB option: a small
+   * negative on the arm LinUCB proposed. Never throws.
+   */
+  async onPairwiseLoss(userId: string, slotProposalId: string): Promise<void> {
+    return this.onPairwise(userId, slotProposalId, PAIRWISE_LOSS_REWARD);
+  }
+
+  private async onPairwise(
+    userId: string,
+    slotProposalId: string,
+    reward: number,
+  ): Promise<void> {
+    const source = reward > 0 ? "pairwise" : "pairwise_loss";
     const count = (result: string): void =>
-      schedulerRewardUpdates.add(1, { source: "pairwise", result });
+      schedulerRewardUpdates.add(1, { source, result });
     try {
       const proposal = await this.prisma.slotProposal.findFirst({
         where: { id: slotProposalId, userId, selectedArm: { not: null } },
@@ -96,7 +117,7 @@ export class SchedulingFeedbackService {
         userId,
         proposal.selectedArm,
         proposal.featureVector,
-        PAIRWISE_WIN_REWARD,
+        reward,
       );
       count(applied ? "applied" : "bandit_unavailable");
     } catch (err) {

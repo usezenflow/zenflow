@@ -14,7 +14,7 @@ const SESSION_COOKIE_KEY = "zenflow.session.cookie";
 export async function cacheSessionUser(user: User) {
   // No-op on web: expo-secure-store has no web implementation. The browser's
   // own cookie jar + `/auth/me` is the source of truth there anyway (same as
-  // `frontend/`), so there's nothing to warm a cache for.
+  // `pwa/`), so there's nothing to warm a cache for.
   if (Platform.OS === "web") return;
   await SecureStore.setItemAsync(SESSION_USER_KEY, JSON.stringify(user));
 }

@@ -4,14 +4,14 @@
  *
  * `mockups/feedback.md` item 5 flags: "The tag autocomplete is strange when
  * the prefix is far from the remaining text." Investigating the web
- * implementation (`frontend/src/components/tasks/form/tag-field.tsx`)
+ * implementation (`pwa/src/components/tasks/form/tag-field.tsx`)
  * confirms the bug: its `<Command>` list runs through cmdk's *default*
  * filter, a scattered-character fuzzy scorer (`command-score`). That scorer
  * happily matches e.g. "de" against "backend-team"
  * (b-a-c-k-e-n-**d**-**e**-a-m) with a non-trivial score even though "de"
  * isn't a meaningful substring there, and doesn't reliably rank a true
  * prefix match above a scattered one — exactly "strange when the prefix is
- * far from the remaining text". (`frontend/src/components/tasks/form/
+ * far from the remaining text". (`pwa/src/components/tasks/form/
  * title-field.tsx`'s combobox sidesteps this entirely with
  * `shouldFilter={false}`, since it filters server-side — only the tags
  * combobox is affected.)

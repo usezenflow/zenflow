@@ -23,7 +23,7 @@
   <div class="hero">
     <div class="inline-flex items-center gap-[9px] font-bold tracking-[-0.02em] text-[22px] mb-[18px]"><img src="logo.svg" alt="Zenflow logo" class="size-[30px]" /> Zenflow</div>
     <h1>Mobile app mockups<br /><span class="amber">Warm Sunrise</span>, rebuilt for touch.</h1>
-    <p class="lede">Static HTML mockups for the React Native migration (<code style="font-family:var(--font-mono);font-size:14px">docs/react-native-migration.md</code>). Every screen mirrors <code style="font-family:var(--font-mono);font-size:14px">frontend/src/pages/</code> but is redesigned to be far more intuitive on a phone — native bottom sheets, gesture-first calendar, thumb-reachable actions. Each file shows multiple states (populated · empty · loading · error) plus a dark variant.</p>
+    <p class="lede">Static HTML mockups for the React Native migration (<code style="font-family:var(--font-mono);font-size:14px">docs/react-native-migration.md</code>). Every screen mirrors <code style="font-family:var(--font-mono);font-size:14px">pwa/src/pages/</code> but is redesigned to be far more intuitive on a phone — native bottom sheets, gesture-first calendar, thumb-reachable actions. Each file shows multiple states (populated · empty · loading · error) plus a dark variant.</p>
     <div class="meta-row">
       <span class="mtag"><span class="k"></span> iPhone 15 Pro · 393×852</span>
       <span class="mtag"><span class="k"></span> Taupe + Amber tokens (verbatim)</span>
@@ -160,7 +160,7 @@
   </div>
 
   <div class="foot">
-    Built with <b>Tailwind v4 installed as an npm package</b> (the <code>mobile-mockups</code> pnpm workspace member) and compiled with the Tailwind CLI — no browser CDN, no inline <code>@theme</code> block. The design tokens (ported verbatim from <code>frontend/src/index.css</code>) and a small set of reusable component classes live in <code>src/input.css</code>; screen content is plain Tailwind utility classes in the markup so it maps cleanly to future NativeWind class names. Run <code>pnpm --filter mobile-mockups build</code> once (or <code>pnpm --filter mobile-mockups watch</code> while iterating) to produce <code>dist/output.css</code>, then open any HTML file directly. Frame: iPhone 15 Pro (393×852pt), Dynamic Island, 64dp/hr calendar grid. See <code>docs/react-native-migration.md</code> §"Figma Design Scope" for the full screen + micro-state inventory these implement.
+    Built with <b>Tailwind v4 installed as an npm package</b> (the <code>mobile-mockups</code> pnpm workspace member) and compiled with the Tailwind CLI — no browser CDN, no inline <code>@theme</code> block. The design tokens (ported verbatim from <code>pwa/src/index.css</code>) and a small set of reusable component classes live in <code>src/input.css</code>; screen content is plain Tailwind utility classes in the markup so it maps cleanly to future NativeWind class names. Run <code>pnpm --filter mobile-mockups build</code> once (or <code>pnpm --filter mobile-mockups watch</code> while iterating) to produce <code>dist/output.css</code>, then open any HTML file directly. Frame: iPhone 15 Pro (393×852pt), Dynamic Island, 64dp/hr calendar grid. See <code>docs/react-native-migration.md</code> §"Figma Design Scope" for the full screen + micro-state inventory these implement.
   </div>
 </body>
 </html>

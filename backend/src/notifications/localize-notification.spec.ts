@@ -6,6 +6,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { PushService } from "../devices/push.service";
 import { FcmSender } from "../devices/fcm.sender";
 import { ApnsSender } from "../devices/apns.sender";
+import { WebPushSender } from "../devices/web-push.sender";
 import type { PushMessage, SendResult } from "../devices/types";
 import type { User } from "../../generated/prisma";
 import { ConfigService } from "@nestjs/config";
@@ -29,6 +30,7 @@ async function build(
       { provide: QueueService, useValue: { enqueueBestEffort: jest.fn() } },
       { provide: FcmSender, useValue: sender },
       { provide: ApnsSender, useValue: sender },
+      { provide: WebPushSender, useValue: sender },
     ],
   }).compile();
   return {

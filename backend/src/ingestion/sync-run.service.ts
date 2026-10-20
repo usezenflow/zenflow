@@ -152,10 +152,26 @@ export class SyncRunService {
           });
           if (existing) return null;
         }
+        // "Ready" opens the term's first lecture, so the notice links to it.
+        const firstLecture =
+          note.event === "timetable.ready"
+            ? await tx.session.findFirst({
+                where: {
+                  userId,
+                  type: "LECTURE",
+                  deleted: false,
+                  scheduledStartTime: note.since
+                    ? { gte: note.since }
+                    : undefined,
+                },
+                orderBy: { scheduledStartTime: "asc" },
+                select: { id: true },
+              })
+            : null;
         return this.notifications.create(
           userId,
           {
-            sessionId: null,
+            sessionId: firstLecture?.id ?? null,
             title: note.title,
             content:
               note.content ??

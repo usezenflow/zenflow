@@ -117,8 +117,8 @@ export function getSessionMutationEpoch(): number {
 /** Listeners registered via {@link subscribeToSessionMutations}, fired by
  * `notifySessionsMutated`. This is the RN equivalent of the web app's
  * `window.dispatchEvent(new CustomEvent("zenflow:calendar-refresh"))` /
- * `addEventListener` pair (`frontend/src/components/notifications/notification-bell.tsx`
- * + `frontend/src/components/calendar/layout.tsx`) — there's no `window` to
+ * `addEventListener` pair (`pwa/src/components/notifications/notification-bell.tsx`
+ * + `pwa/src/components/calendar/layout.tsx`) — there's no `window` to
  * hang a `CustomEvent` off on native, so this is a minimal in-module pub/sub
  * instead. Expiring `fetchedAt` alone only takes effect the next time a
  * screen re-checks freshness, which today only happens on mount or on the

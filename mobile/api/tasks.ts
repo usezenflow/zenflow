@@ -9,6 +9,7 @@ import type {
   RemoveSessionSeriesResponse,
   Session,
   SessionDetailResponse,
+  SessionStartResponse,
   SessionSearchQuery,
   SessionSearchResponse,
   SessionsListResponse,
@@ -195,6 +196,12 @@ export async function undoPlacement(
  * `divergent: true` and the user chooses between `primarySlot` and
  * `alternativeSlot`. Non-blocking — failures are surfaced as toasts by callers.
  */
+/** Records that the app is open inside a placed block. The server keeps one per slot. */
+export async function recordSessionStart(id: string): Promise<SessionStartResponse> {
+  const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/start`);
+  return data.data;
+}
+
 export async function slotPick(
   id: string,
   input: SlotPickRequest,

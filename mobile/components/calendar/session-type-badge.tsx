@@ -100,7 +100,7 @@ export function SessionTypeBadge({
 
 /**
  * A small tag-like chip flagging a session placed or moved past its deadline —
- * mirrors the web `OverdueBadge` (`frontend/src/components/calendar/
+ * mirrors the web `OverdueBadge` (`pwa/src/components/calendar/
  * session-type-badge.tsx`). Additive to the red late card treatment in
  * `task-block.tsx`, not a replacement. `iconOnly` for the one-line compact
  * block, where the labelled chip won't fit.

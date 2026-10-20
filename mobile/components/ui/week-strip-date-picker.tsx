@@ -1,5 +1,5 @@
 import { useLanguage } from "@/hooks/use-language";
-import { dateFnsLocale, t } from "@/lib/i18n";
+import { dateFnsLocale, formatTitle, t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
   addDays,
@@ -57,7 +57,7 @@ export function WeekStripDatePicker({
           <ChevronLeft size={18} className="text-muted-foreground" />
         </Pressable>
         <Text className="text-[13.5px] font-semibold capitalize text-foreground">
-          {format(weekStart, "MMMM yyyy", { locale })}
+          {formatTitle(weekStart, "MMMM yyyy", { locale })}
         </Text>
         <Pressable
           testID={testID ? `${testID}.next` : undefined}

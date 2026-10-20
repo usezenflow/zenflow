@@ -576,7 +576,7 @@ export class TimetableWatcherService {
    * whoever is reading it. Parsing it in the viewer's zone would place the
    * class at the wrong instant for any student not set to Asia/Saigon — one
    * studying abroad, or mid-exchange. The user's timezone governs *rendering*
-   * (invariant #5, `frontend/src/utils/tz.ts`), which happens later, off the
+   * (invariant #5, `pwa/src/utils/tz.ts`), which happens later, off the
    * UTC instant stored here.
    */
   private wallClockTimezone(): string {

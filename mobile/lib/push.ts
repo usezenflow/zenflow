@@ -5,8 +5,11 @@ import {
   type DevicePlatform,
   type PushDataPayload,
   type PushTone,
+  PUSH_ACTION_KEEP,
+  PUSH_ACTION_PREFER,
   PUSH_ACTION_RESCHEDULE,
   PUSH_CATEGORY_CONFLICT,
+  PUSH_CATEGORY_PLAN_OFFER,
   pushChannelId,
   pushSoundFile,
 } from "@zenflow/shared";
@@ -147,9 +150,10 @@ export async function ensureAndroidChannel(): Promise<void> {
 }
 
 /**
- * iOS action buttons: the sync-conflict push gets one "Reschedule" that runs
- * in the background. Android shows no buttons on FCM notification messages, so
- * a tap there opens the inbox instead (see `use-push-registration.ts`).
+ * iOS action buttons, run in the background: the sync-conflict push gets one
+ * "Reschedule", a plan offer gets its two times. Android shows no buttons on
+ * FCM notification messages, so a tap there opens the inbox instead (see
+ * `use-push-registration.ts`).
  */
 export async function registerPushCategories(): Promise<void> {
   if (Platform.OS === "ios") {
@@ -157,6 +161,18 @@ export async function registerPushCategories(): Promise<void> {
       {
         identifier: PUSH_ACTION_RESCHEDULE,
         buttonTitle: t("Reschedule"),
+        options: { opensAppToForeground: false },
+      },
+    ]);
+    await Notifications.setNotificationCategoryAsync(PUSH_CATEGORY_PLAN_OFFER, [
+      {
+        identifier: PUSH_ACTION_KEEP,
+        buttonTitle: t("Keep"),
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: PUSH_ACTION_PREFER,
+        buttonTitle: t("Prefer"),
         options: { opensAppToForeground: false },
       },
     ]);

@@ -58,7 +58,8 @@ import {
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
-import { useTodayLoader } from "@/hooks/use-today";
+import { useBlockStartRecorder, useTodayLoader } from "@/hooks/use-today";
+import { usePlanOffers } from "@/hooks/use-plan-offers";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, useWindowDimensions } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
@@ -88,6 +89,8 @@ export default function CalendarScreen() {
   const tz = user?.timezone || "UTC";
   const { toast, confirm } = useToast();
   useTodayLoader(tz);
+  useBlockStartRecorder();
+  usePlanOffers(tz);
   const {
     date: dateParam,
     flash: flashParam,

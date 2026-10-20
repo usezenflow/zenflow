@@ -1,0 +1,154 @@
+import { cn } from "@/lib/utils";
+import { LATE_CARD_CLASSES, useIsLate } from "./late-context";
+import { Event } from "@zenflow/shared";
+import { TASK_CARD_CLASSES } from "@zenflow/core";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { format, isSameDay, isSameMonth } from "date-fns";
+import { format as formatDisplay } from "@/lib/format";
+import { t } from "@/lib/i18n";
+import { Button } from "@/components/ui/button";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import { useUserStore } from "@/hooks/use-user-store";
+import { isZonedToday, zonedDate } from "@/utils/tz";
+
+export function MonthCell({
+  date,
+  currentDate,
+  events,
+  onOpenDay,
+}: {
+  date: Date;
+  onOpenDay: (day: Date) => void;
+  currentDate: Date;
+  events: Event[];
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: format(date, "yyyy-MM-dd"),
+  });
+  const tz = useUserStore((s) => s.user?.timezone) || "UTC";
+
+  const outside = !isSameMonth(date, currentDate);
+  const today = isZonedToday(date, tz);
+  // There is no working-hours concept left to shade (see
+  // `day-column-background.tsx`'s doc comment) — the only remaining reason a
+  // cell dims is that it belongs to an adjacent month.
+  const nonWork = outside;
+
+  return (
+    <div
+      ref={setNodeRef}
+      data-outside-cell={outside ? "true" : undefined}
+      data-today={today ? "true" : undefined}
+      onClick={(e) => {
+        // Event chips and the "more" popover handle their own taps.
+        if ((e.target as HTMLElement).closest("button, [role=dialog]")) return;
+        onOpenDay(date);
+      }}
+      className={cn(
+        "flex min-h-[110px] cursor-pointer flex-col p-1.5 transition-colors",
+        today ? "day-today" : nonWork ? "bg-muted" : "bg-card",
+        today && "border-t-foreground border-t-2",
+        isOver && "ring-brand-yellow/70 ring-1 ring-inset",
+      )}
+    >
+      {/* Date row */}
+      <div className="mb-1 flex items-center justify-between">
+        <span
+          className={cn(
+            "text-[11px] font-bold",
+            outside
+              ? "text-muted-foreground/50"
+              : nonWork
+                ? "text-muted-foreground"
+                : "text-foreground",
+          )}
+        >
+          {date.getDate()}
+        </span>
+        {today && (
+          <span className="bg-foreground text-background rounded px-1 py-0.5 text-[11px] font-semibold">
+            {t("Today")}
+          </span>
+        )}
+      </div>
+
+      {/* Sessions — faded on off-days, mirroring the mockup. */}
+      <div
+        className={cn(
+          "flex-1 space-y-0.5 overflow-hidden",
+          nonWork && !today && "opacity-45",
+        )}
+      >
+        {events.slice(0, 3).map((ev) => (
+          <MonthEventItem key={ev.id} ev={ev} />
+        ))}
+
+        {events.length > 3 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                className="text-muted-foreground h-4 w-full justify-start px-1.5 text-[11px] font-medium"
+                variant="ghost"
+                size="sm"
+              >
+                {t("+{count} more", { count: events.length - 3 })}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[250px]">
+              <h5 className="mb-2 text-sm font-medium">
+                {formatDisplay(date, "EEE d")}
+              </h5>
+              <div className="space-y-0.5">
+                {events
+                  .filter((ev) => isSameDay(zonedDate(ev.start, tz), date))
+                  .map((ev) => (
+                    <MonthEventItem key={ev.id} ev={ev} />
+                  ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MonthEventItem({ ev }: { ev: Event }) {
+  const late = useIsLate(ev.taskId);
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: ev.id,
+  });
+  const style = {
+    // Outputs `translate3d(x, y, 0)`
+    transform: CSS.Translate.toString(transform),
+  };
+
+  return (
+    <Button
+      {...attributes}
+      {...listeners}
+      ref={setNodeRef}
+      size="sm"
+      variant="ghost"
+      style={style}
+      onClick={() =>
+        window.dispatchEvent(
+          new CustomEvent("zenflow:open-task", { detail: ev.id }),
+        )
+      }
+      className={cn(
+        "relative z-30 mt-0 h-auto w-full justify-start gap-x-1 rounded border border-l-2 px-1.5 py-0.5 text-[11px] font-medium",
+        transform && "cursor-grabbing shadow-lg",
+        TASK_CARD_CLASSES[ev.state],
+        late && LATE_CARD_CLASSES,
+      )}
+    >
+      <span className="truncate">{ev.title}</span>
+    </Button>
+  );
+}

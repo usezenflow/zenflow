@@ -191,6 +191,8 @@ export interface ToastConfirm {
   cancelLabel?: string;
   /** Optional second line under the message. */
   description?: string;
+  /** Swiping the toast away. Defaults to `onCancel`. */
+  onDismiss?: () => void;
 }
 
 export interface ToastConfirmOptions extends ToastConfirm {
@@ -368,7 +370,8 @@ function Toast({
   // pressing Cancel.
   const handleSwipeDismiss = useCallback(
     (direction: 0 | 1 | -1, vertical: 0 | 1 | -1 = 0) => {
-      if (confirm && !dismissedRef.current) confirm.onCancel?.();
+      if (confirm && !dismissedRef.current)
+        (confirm.onDismiss ?? confirm.onCancel)?.();
       dismiss(direction, vertical);
     },
     [confirm, dismiss],
@@ -754,6 +757,8 @@ export interface ToastInput {
   position?: "top" | "bottom";
   action?: ToastAction;
   actions?: ToastAction[];
+  /** Two big choices that stay until one is taken: a decision, not a notice. */
+  confirm?: ToastConfirm;
 }
 type ToastPositionalArgs = [
   message: string,
@@ -818,6 +823,7 @@ function ToastProvider({
       action,
       actions,
       description,
+      confirm: confirmChoice,
     } = normalizeToastArgs(args);
     setMessages((prev) => [
       ...prev,
@@ -833,6 +839,7 @@ function ToastProvider({
         action,
         actions,
         description,
+        confirm: confirmChoice,
       },
     ]);
   }) as ToastFn, []);

@@ -10,7 +10,8 @@
 **/.turbo
 
 # Workspaces not part of the API image
-frontend
+pwa
+dashboard
 services
 
 # Repo tooling / docs / assets not needed to build the API

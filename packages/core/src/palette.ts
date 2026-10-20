@@ -4,7 +4,7 @@ import type { SessionCardState, SessionType } from "@zenflow/shared";
  * Warm Sunrise palette: orange, yellow and lime on warm paper and ink. Hex
  * source of truth for code that paints with raw colours (RN style props, SVG,
  * WebView CSS). The Tailwind tokens in `mobile/app/global.css`,
- * `frontend/src/index.css` and `landing/src/styles/global.css` carry the same
+ * `pwa/src/index.css` and `landing/src/styles/global.css` carry the same
  * values; `mobile/lib/__tests__/palette.test.ts` keeps them in sync.
  */
 export const BRAND = {

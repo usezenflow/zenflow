@@ -1,12 +1,16 @@
+import { BadRequestException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import { type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { DevicesService } from "./devices.service";
+import { WebPushSender } from "./web-push.sender";
 
 interface Row {
   id: string;
-  platform: "IOS" | "ANDROID";
+  platform: "IOS" | "ANDROID" | "WEB";
   pushToken: string;
+  p256dh: string | null;
+  auth: string | null;
   userId: string;
   lastSeenAt: Date | null;
 }
@@ -48,13 +52,22 @@ function makePrismaDouble(rows: Row[]) {
 }
 
 const USER = { id: "u1" } as User;
+const ENDPOINT = "https://fcm.googleapis.com/fcm/send/abc";
+const WEB_KEYS = { p256dh: "p256dh-key", auth: "auth-secret" };
 
-async function makeService(rows: Row[] = []) {
+async function makeService(
+  rows: Row[] = [],
+  webPush: { enabled: boolean; publicKey: string | null } = {
+    enabled: false,
+    publicKey: null,
+  },
+) {
   const db = makePrismaDouble(rows);
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       DevicesService,
       { provide: PrismaService, useValue: db.client },
+      { provide: WebPushSender, useValue: webPush },
     ],
   }).compile();
   return { db, service: module.get<DevicesService>(DevicesService) };
@@ -68,6 +81,8 @@ describe("DevicesService", () => {
       const { id } = await service.registerDevice(USER, {
         platform: "ANDROID",
         pushToken: "tok-a",
+        p256dh: null,
+        auth: null,
       });
 
       expect(id).toBeDefined();
@@ -76,8 +91,116 @@ describe("DevicesService", () => {
         pushToken: "tok-a",
         platform: "ANDROID",
         userId: "u1",
+        p256dh: null,
+        auth: null,
       });
       expect(db.rows[0].lastSeenAt).toBeInstanceOf(Date);
+    });
+
+    it("stores the subscription keys on a WEB row", async () => {
+      const { db, service } = await makeService();
+
+      await service.registerDevice(USER, {
+        platform: "WEB",
+        pushToken: ENDPOINT,
+        ...WEB_KEYS,
+      });
+
+      expect(db.rows[0]).toMatchObject({
+        platform: "WEB",
+        pushToken: ENDPOINT,
+        p256dh: "p256dh-key",
+        auth: "auth-secret",
+        userId: "u1",
+      });
+    });
+
+    it("rejects a WEB endpoint that is not a browser push service", async () => {
+      const { db, service } = await makeService();
+
+      await expect(
+        service.registerDevice(USER, {
+          platform: "WEB",
+          pushToken: "https://attacker.example.test/hook",
+          ...WEB_KEYS,
+        }),
+      ).rejects.toThrow("browser push service endpoint");
+      expect(db.rows).toHaveLength(0);
+    });
+
+    it("rejects a browser push host on a non-default port or with credentials", async () => {
+      const { service } = await makeService();
+
+      for (const pushToken of [
+        "https://fcm.googleapis.com:8443/wpush/x",
+        "https://user:pw@fcm.googleapis.com/wpush/x",
+      ]) {
+        await expect(
+          service.registerDevice(USER, {
+            platform: "WEB",
+            pushToken,
+            ...WEB_KEYS,
+          }),
+        ).rejects.toThrow("browser push service endpoint");
+      }
+    });
+
+    it("refreshes the keys when a WEB subscription re-registers", async () => {
+      const { db, service } = await makeService([
+        {
+          id: "d1",
+          platform: "WEB",
+          pushToken: ENDPOINT,
+          p256dh: "old",
+          auth: "old",
+          userId: "u1",
+          lastSeenAt: null,
+        },
+      ]);
+
+      await service.registerDevice(USER, {
+        platform: "WEB",
+        pushToken: ENDPOINT,
+        ...WEB_KEYS,
+      });
+
+      expect(db.rows).toHaveLength(1);
+      expect(db.rows[0]).toMatchObject({
+        p256dh: "p256dh-key",
+        auth: "auth-secret",
+      });
+    });
+
+    it("drops keys sent with a native platform", async () => {
+      const { db, service } = await makeService();
+
+      await service.registerDevice(USER, {
+        platform: "IOS",
+        pushToken: "tok-i",
+        ...WEB_KEYS,
+      });
+
+      expect(db.rows[0]).toMatchObject({ p256dh: null, auth: null });
+    });
+
+    it("rejects a WEB endpoint that is not https", async () => {
+      const { db, service } = await makeService();
+
+      await expect(
+        service.registerDevice(USER, {
+          platform: "WEB",
+          pushToken: "http://push.example.test/abc",
+          ...WEB_KEYS,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.registerDevice(USER, {
+          platform: "WEB",
+          pushToken: "not a url",
+          ...WEB_KEYS,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(db.rows).toHaveLength(0);
     });
 
     it("re-homes an existing token to the caller instead of duplicating", async () => {
@@ -86,6 +209,8 @@ describe("DevicesService", () => {
           id: "d1",
           platform: "IOS",
           pushToken: "tok-shared",
+          p256dh: null,
+          auth: null,
           userId: "someone-else",
           lastSeenAt: null,
         },
@@ -94,6 +219,8 @@ describe("DevicesService", () => {
       const { id } = await service.registerDevice(USER, {
         platform: "ANDROID",
         pushToken: "tok-shared",
+        p256dh: null,
+        auth: null,
       });
 
       expect(id).toBe("d1");
@@ -113,6 +240,8 @@ describe("DevicesService", () => {
           id: "d1",
           platform: "ANDROID",
           pushToken: "tok-a",
+          p256dh: null,
+          auth: null,
           userId: "u1",
           lastSeenAt: null,
         },
@@ -130,6 +259,8 @@ describe("DevicesService", () => {
           id: "d1",
           platform: "ANDROID",
           pushToken: "tok-a",
+          p256dh: null,
+          auth: null,
           userId: "someone-else",
           lastSeenAt: null,
         },

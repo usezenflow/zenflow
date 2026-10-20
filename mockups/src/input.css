@@ -5,11 +5,11 @@
    Watch while iterating: `pnpm --filter mobile-mockups watch`
 
    This file is the SINGLE source of truth for anything Tailwind-processed:
-     1. The DESIGN SYSTEM — a VERBATIM port of frontend/src/index.css (tokens,
+     1. The DESIGN SYSTEM — a VERBATIM port of pwa/src/index.css (tokens,
         @theme mapping, component layer). Keep it in sync with that file; do
         not diverge the token values here. (`--success` is a mockup-only
         addition the real app doesn't have — kept as documented.)
-     2. A small `@layer components` set that mirrors frontend/src/index.css's
+     2. A small `@layer components` set that mirrors pwa/src/index.css's
         own component layer (zone tints, glass cards, hatch-conflict, the
         focus ring) — legitimate reusable design tokens, not mockup chrome.
 
@@ -29,7 +29,7 @@ body {
 }
 
 /* Gentle "breathing" pulse for the logo mark (verbatim port of
-   frontend/src/index.css). */
+   pwa/src/index.css). */
 @keyframes breathe {
   0%,
   100% {
@@ -41,7 +41,7 @@ body {
 }
 
 /* Ring-glow pulse that fires once on a newly scheduled task block (verbatim
-   port of frontend/src/index.css). */
+   port of pwa/src/index.css). */
 @keyframes block-highlight {
   0% {
     box-shadow:
@@ -123,7 +123,7 @@ body {
 }
 
 /* Zenflow design tokens — Taupe base, logo brand (orange→yellow→lime),
-   New York style, small radius. Verbatim port of frontend/src/index.css,
+   New York style, small radius. Verbatim port of pwa/src/index.css,
    plus a mockup-only --success token (documented above). */
 :root {
   --radius: 0.375rem;
@@ -206,7 +206,7 @@ body {
   --sidebar-ring: var(--brand-orange);
 }
 
-/* Calendar grid surfaces + glass cards — mirrors frontend/src/index.css's own
+/* Calendar grid surfaces + glass cards — mirrors pwa/src/index.css's own
    @layer components. Legitimate reusable design tokens, not mockup chrome, so
    they stay here rather than inline. */
 @layer components {
@@ -248,7 +248,7 @@ body {
   /* --- Conflict task treatment ------------------------------------------
      A conflict must read as a *problem*, distinct from the frosted-amber
      "fluid" card and the flat-rose "overdue" card — a flat amber tint
-     (mirrors frontend/src/lib/task-card.ts's flat-amber
+     (mirrors pwa/src/lib/task-card.ts's flat-amber
      TASK_CARD_CLASSES.conflict, kept visually distinct from overdue's rose).
      Pair on the block with:
        hatch-conflict border-l-amber-500 ring-1 ring-inset ring-amber-500/40

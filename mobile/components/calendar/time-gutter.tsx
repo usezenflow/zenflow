@@ -2,10 +2,9 @@ import { getLanguage, t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { Text } from "@/components/ui/text";
 import { type DayGrid, minToY, visibleHourMinutes } from "@/lib/day-grid";
-import { minutesToTime } from "@zenflow/core";
 import { View } from "react-native";
 
-/** Width of the time column; the day grid starts here. Wide enough for "12:00 AM" with the "tomorrow" tag. */
+/** Width of the time column; the day grid starts here. Wide enough for "12AM" with the "tomorrow" tag. */
 export const TIME_GUTTER_WIDTH = 76;
 
 interface TimeGutterProps {
@@ -23,10 +22,9 @@ export function TimeGutter({
 }: TimeGutterProps) {
   useLanguage();
   const label = (min: number) => {
-    const hour = min / 60;
-    return getLanguage() === "vi"
-      ? `${String(hour % 24).padStart(2, "0")}:00`
-      : minutesToTime((hour % 24) * 60);
+    const hour = (min / 60) % 24;
+    if (getLanguage() === "vi") return `${hour}h`;
+    return `${hour % 12 || 12}${hour < 12 ? "AM" : "PM"}`;
   };
 
   return (
@@ -42,7 +40,7 @@ export function TimeGutter({
           style={{ top: minToY(grid, min) }}
         >
           {(min !== 0 || showZeroLabel) && (
-            <Text className="text-[12px] font-medium text-muted-foreground">
+            <Text className="text-[14px] font-medium text-muted-foreground">
               {label(min)}
             </Text>
           )}
@@ -54,7 +52,7 @@ export function TimeGutter({
           className="absolute right-1.5 items-end"
           style={{ top: grid.height }}
         >
-          <Text className="text-[12px] font-medium text-muted-foreground">
+          <Text className="text-[14px] font-medium text-muted-foreground">
             {label(24 * 60)}
           </Text>
           <Text

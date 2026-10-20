@@ -1,6 +1,6 @@
-# Frontend screens and behaviour
+# PWA screens and behaviour
 
-For developers working on `frontend/`. Setup and conventions live in [frontend/README.md](../../frontend/README.md).
+For developers working on `pwa/`. Setup and conventions live in [pwa/README.md](../../pwa/README.md).
 
 ## Routing and auth
 

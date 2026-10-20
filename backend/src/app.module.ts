@@ -14,6 +14,7 @@ import { UsersModule } from "./users/users.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { CourseColoursModule } from "./course-colours/course-colours.module";
 import { TagsModule } from "./tags/tags.module";
+import { LinkPreviewModule } from "./link-preview/link-preview.module";
 import { PlacesModule } from "./places/places.module";
 import { FilesModule } from "./files/files.module";
 import { SchedulerModule } from "./scheduler/scheduler.module";
@@ -27,6 +28,8 @@ import { LMSModule } from "./lms/lms.module";
 import { PortalAPIModule } from "./portal/portal-api.module";
 import { IngestionModule } from "./ingestion/ingestion.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { ClientEventsModule } from "./client-events/client-events.module";
+import { AdminModule } from "./admin/admin.module";
 import { RemindersModule } from "./reminders/reminders.module";
 import { DevicesModule } from "./devices/devices.module";
 import { ObservabilityModule } from "./observability/observability.module";
@@ -158,7 +161,7 @@ const jobModules = [
           .positive()
           .default(7 * 24 * 60 * 60 * 1000),
         // Session cookie flags, decoupled from NODE_ENV so each environment can
-        // opt in independently. Production (cross-site FE on Netlify, API behind
+        // opt in independently. Production (cross-site FE on Cloudflare, API behind
         // TLS) needs COOKIE_SECURE=true + COOKIE_SAMESITE=none; same-origin dev
         // keeps the lax/insecure defaults.
         COOKIE_SECURE: Joi.boolean().default(true),
@@ -406,8 +409,9 @@ const jobModules = [
         // --- Native mobile push (devices/) --------------------------------
         // Each provider self-disables when its vars are unset, like
         // BANDIT_SERVICE_URL: FcmSender needs FCM_SERVICE_ACCOUNT, ApnsSender
-        // needs all four APNS_* below. With neither configured, POST /devices
-        // still records tokens but nothing is ever sent.
+        // needs all four APNS_* below, WebPushSender needs all three VAPID_*
+        // below. With none configured, POST /devices still records tokens but
+        // nothing is ever sent.
         // Base64 of the Firebase service-account JSON (the `project_id` is
         // inside it). Android delivery via firebase-admin.
         FCM_SERVICE_ACCOUNT: Joi.string().optional(),
@@ -420,6 +424,16 @@ const jobModules = [
         APNS_BUNDLE_ID: Joi.string().optional(),
         // true -> api.push.apple.com, false -> the sandbox gateway.
         APNS_PRODUCTION: Joi.boolean().default(false),
+        // Web Push (WebPushSender) needs all three. The public key is also
+        // baked into the web build as VITE_VAPID_PUBLIC_KEY; the private key
+        // never leaves the API.
+        // Generate with `npx web-push generate-vapid-keys`.
+        VAPID_PUBLIC_KEY: Joi.string().optional(),
+        VAPID_PRIVATE_KEY: Joi.string().optional(),
+        // A mailto: or https: contact URL the push services may use.
+        VAPID_SUBJECT: Joi.string()
+          .pattern(/^(mailto:|https:)/)
+          .optional(),
         // --- Observability (observability/, tracing.ts) -------------------
         // NODE_ENV is also read directly by several modules; declare it so it
         // has one validated default. `tracing.ts` reads the OTEL_* vars
@@ -566,11 +580,14 @@ const jobModules = [
     AuthModule,
     MailModule,
     SessionsModule,
+    ClientEventsModule,
+    AdminModule,
     CourseColoursModule,
     CryptoModule,
     LMSModule,
     PortalAPIModule,
     TagsModule,
+    LinkPreviewModule,
     PlacesModule,
     FilesModule,
     // Background cron providers (MatrixDecayService, SessionOutcomeService)
@@ -583,9 +600,10 @@ const jobModules = [
     // dependent with IntegrationsModule via forwardRef, see ingestion.module.ts.
     IngestionModule,
     NotificationsModule,
-    // Native mobile push — a second subscriber to the notification emitter
-    // (like the SSE stream), plus POST/DELETE /devices. Self-disables per
-    // provider when its FCM_*/APNS_* env is unset; see devices.module.ts.
+    // Push — a second subscriber to the notification emitter (like the SSE
+    // stream), plus POST/DELETE /devices. Self-
+    // disables per provider when its FCM_*/APNS_*/VAPID_* env is unset; see
+    // devices.module.ts.
     DevicesModule,
     // Per-session reminders: SchedulerRegistry one-shot timers -> notifications.
     RemindersModule,

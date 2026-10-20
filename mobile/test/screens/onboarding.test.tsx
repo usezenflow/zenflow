@@ -32,6 +32,9 @@ vi.mock("@/hooks/use-push-status-store", () => ({
     getState: () => ({ permission: "denied", refresh: vi.fn(async () => {}) }),
   }),
 }));
+vi.mock("@/components/settings/travel-section", () => ({
+  TravelSection: () => <div data-testid="travel-section" />,
+}));
 vi.mock("@/components/settings/dlu-accounts-section", () => ({
   DluAccountsSection: () => <div data-testid="dlu-section" />,
 }));
@@ -77,6 +80,7 @@ const next = async (title: string) =>
 const TITLES = [
   "When do you focus best?",
   "Connect your LMS or portal",
+  "Plan your commute",
   "Stay ahead of deadlines",
   "You’re all set",
 ];

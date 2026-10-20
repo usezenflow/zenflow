@@ -67,16 +67,23 @@ export async function fetchRoute(
  * The trip for one vehicle: ridden to the gate or parking with the shorter total,
  * then on foot. `null` when there is none, a throw when the service could not be
  * reached. An API without `/places/commute` gets a plain ride instead.
+ * `at` is the trip's start instant; unset, the server uses the current time.
  */
 export async function fetchCommute(
   transport: CommuteTransport,
   from: { lat: number; lng: number },
   to: { lat: number; lng: number },
   signal?: AbortSignal,
+  at?: string | null,
 ): Promise<CommuteRoute | null> {
   try {
     const { data } = await api.get("/places/commute", {
-      params: { transport, from: `${from.lat},${from.lng}`, to: `${to.lat},${to.lng}` },
+      params: {
+        transport,
+        from: `${from.lat},${from.lng}`,
+        to: `${to.lat},${to.lng}`,
+        at: at ?? undefined,
+      },
       signal,
     });
     return data.data.commute;

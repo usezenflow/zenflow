@@ -597,95 +597,22 @@ describe("MaterializerService", () => {
   });
 
   describe("submission", () => {
-    const submitted = (): ParsedBlock & { submitted: boolean } => ({
-      ...block(),
-      submitted: true,
-    });
-    const FIRST = new Date("2026-09-09T10:00:00.000Z");
-    const LATER = new Date("2026-09-09T12:00:00.000Z");
-
-    it("stamps submittedAt when the first sighting is already submitted", async () => {
+    it("does not check off a submitted assignment or raise a done notification", async () => {
       const { db, service } = await makeService();
+      const FIRST = new Date("2026-09-09T10:00:00.000Z");
 
-      await service.materialize(USER, [submitted()], "LMS", FIRST);
-
-      expect(db.sessions[0].submittedAt).toEqual(FIRST);
-    });
-
-    it("leaves submittedAt null while the assignment is still open", async () => {
-      const { db, service } = await makeService();
-
-      await service.materialize(USER, [block()], "LMS", FIRST);
-
-      expect(db.sessions[0].submittedAt).toBeNull();
-    });
-
-    it("stamps an existing row once and keeps the first observation", async () => {
-      const { db, service } = await makeService();
-      await service.materialize(USER, [block()], "LMS", FIRST);
-
-      await service.materialize(USER, [submitted()], "LMS", LATER);
-      await service.materialize(USER, [submitted()], "LMS", LATER);
-
-      expect(db.sessions[0].submittedAt).toEqual(LATER);
-    });
-
-    it("checks a newly seen submitted assignment off with a COMPLETE event", async () => {
-      const { db, service } = await makeService();
-
-      await service.materialize(USER, [submitted()], "LMS", FIRST);
-
-      expect(db.sessions[0].completedAt).toEqual(FIRST);
-      expect(db.events.filter((e) => e.eventType === "COMPLETE")).toHaveLength(
-        1,
+      await service.materialize(
+        USER,
+        [{ ...block(), submitted: true } as ParsedBlock],
+        "LMS",
+        FIRST,
       );
-    });
-
-    it("checks an existing assignment off once, so a manual un-check sticks", async () => {
-      const { db, service } = await makeService();
-      await service.materialize(USER, [block()], "LMS", FIRST);
-
-      await service.materialize(USER, [submitted()], "LMS", LATER);
-      db.sessions[0].completedAt = null;
-      await service.materialize(USER, [submitted()], "LMS", LATER);
-
-      expect(db.sessions[0].completedAt).toBeNull();
-      expect(db.events.filter((e) => e.eventType === "COMPLETE")).toHaveLength(
-        1,
-      );
-    });
-
-    it("raises a done notification on completion", async () => {
-      const { db, service } = await makeService();
-
-      await service.materialize(USER, [submitted()], "LMS", FIRST);
-
-      const done = db.notifications.filter(
-        (n) => n.eventName === "assignment.completed",
-      );
-      expect(done).toHaveLength(1);
-      expect(done[0].content).toBe("Checked off from LMS.");
-    });
-
-    it("raises no done notification for an open assignment", async () => {
-      const { db, service } = await makeService();
-
-      await service.materialize(USER, [block()], "LMS", FIRST);
-
-      expect(
-        db.notifications.some((n) => n.eventName === "assignment.completed"),
-      ).toBe(false);
-    });
-
-    it("leaves a skipped assignment unchecked", async () => {
-      const { db, service } = await makeService();
-      await service.materialize(USER, [block()], "LMS", FIRST);
-      db.sessions[0].skipped = true;
-
-      await service.materialize(USER, [submitted()], "LMS", LATER);
 
       expect(db.sessions[0].completedAt).toBeNull();
       expect(db.events.some((e) => e.eventType === "COMPLETE")).toBe(false);
+      expect(
+        db.notifications.some((n) => n.eventName === "assignment.completed"),
+      ).toBe(false);
     });
   });
 
@@ -1445,7 +1372,7 @@ describe("automatic prep plans (level-up plan, Phase 1)", () => {
     expect(prepCalls(queues)).toEqual([]);
   });
 
-  it("queues nothing for an assignment already submitted", async () => {
+  it("queues prep for an assignment already submitted, which stays until its deadline", async () => {
     const { service, queues } = await makeService();
 
     await service.materialize(
@@ -1455,7 +1382,7 @@ describe("automatic prep plans (level-up plan, Phase 1)", () => {
       BEFORE,
     );
 
-    expect(prepCalls(queues)).toEqual([]);
+    expect(prepCalls(queues)).toHaveLength(1);
   });
 
   it("removes an untouched prep plan when its parent goes upstream", async () => {

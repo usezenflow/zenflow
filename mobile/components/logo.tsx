@@ -44,7 +44,7 @@ const GLOW = {
 } as const;
 
 /**
- * Zenflow sunrise mark — ported from frontend/src/components/logo.tsx (react-native-svg
+ * Zenflow sunrise mark — ported from pwa/src/components/logo.tsx (react-native-svg
  * instead of inline <svg>; no CSS hover animation on native).
  */
 export function Logo({

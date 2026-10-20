@@ -221,31 +221,19 @@ describe("SessionDetailSheet", () => {
       expect(card.textContent).toContain("Math");
     });
 
-    it("puts a done checkbox in the header of a plan", async () => {
-      let called = false;
+    it("offers no done or skip control on a plan", async () => {
       const plan = prep({ prepForSessionId: "lec" });
       server.use(
         http.get(`${API}/sessions/prep-1`, () =>
           HttpResponse.json({ data: { ...plan, prepSessions: [], prepTarget: null } }),
         ),
-        http.post(`${API}/sessions/prep-1/complete`, () => {
-          called = true;
-          return HttpResponse.json({
-            data: { session: { ...plan, completedAt: "2099-01-01T01:30:00.000Z" } },
-          });
-        }),
       );
       const ref = renderSheet();
       act(() => ref.current?.open(plan));
-      fireEvent.click(await screen.findByTestId("session-detail-plan-check"));
-      await waitFor(() => expect(called).toBe(true));
-    });
-
-    it("has no header checkbox on a plain session", async () => {
-      const ref = renderSheet();
-      act(() => ref.current?.open(makeSession({ id: "t", type: "TASK" })));
       await screen.findByTestId("session.editor");
+      await waitForContent();
       expect(screen.queryByTestId("session-detail-plan-check")).toBeNull();
+      expect(screen.queryByTestId("session-detail-skip")).toBeNull();
     });
 
     it("lists the linked plan instead of the button", async () => {
@@ -254,80 +242,6 @@ describe("SessionDetailSheet", () => {
       act(() => ref.current?.open(lecture("2099-01-01T03:00:00.000Z")));
       await screen.findByTestId("session-detail-prep-prep-1");
       expect(screen.queryByTestId("session-detail-prepare")).toBeNull();
-    });
-
-    it("marks a plan done on a long press", async () => {
-      let called = false;
-      server.use(
-        details([prep()]),
-        http.post(`${API}/sessions/prep-1/complete`, () => {
-          called = true;
-          return HttpResponse.json({
-            data: { session: prep({ completedAt: "2099-01-01T01:30:00.000Z" }) },
-          });
-        }),
-      );
-      const ref = renderSheet();
-      act(() => ref.current?.open(lecture("2099-01-01T03:00:00.000Z")));
-      const row = await screen.findByTestId("session-detail-prep-prep-1");
-      fireEvent.mouseDown(row);
-      await new Promise((resolve) => setTimeout(resolve, 450));
-      fireEvent.mouseUp(row);
-      await waitFor(() => expect(called).toBe(true));
-    });
-  });
-
-  describe("skip", () => {
-    const exam = makeSession({ id: "exam-1", title: "Final", type: "EXAM", scheduledStartTime: "2099-01-01T03:00:00.000Z" });
-
-    it("skips a one-off exam in one tap", async () => {
-      let called = false;
-      server.use(
-        http.get(`${API}/sessions/exam-1`, () => HttpResponse.json({ data: { ...exam, prepSessions: [] } })),
-        http.post(`${API}/sessions/exam-1/skip`, () => {
-          called = true;
-          return HttpResponse.json({ data: { session: { ...exam, skipped: true } } });
-        }),
-      );
-      const ref = renderSheet();
-      act(() => ref.current?.open(exam));
-      await screen.findByTestId("session.editor");
-      await waitForContent();
-      fireEvent.click(await screen.findByTestId("session-detail-skip"));
-      await waitFor(() => expect(called).toBe(true));
-    });
-
-    it("undoes a skip on a timetable row without a scope", async () => {
-      const skipped = makeSession({
-        id: "tt-1",
-        type: "LECTURE",
-        source: "PORTAL",
-        skipped: true,
-        scheduledStartTime: "2099-01-01T03:00:00.000Z",
-      });
-      let url = "";
-      server.use(
-        http.get(`${API}/sessions/tt-1`, () => HttpResponse.json({ data: { ...skipped, prepSessions: [] } })),
-        http.delete(`${API}/sessions/tt-1/skip`, ({ request }) => {
-          url = request.url;
-          return HttpResponse.json({ data: { session: { ...skipped, skipped: false } } });
-        }),
-      );
-      const ref = renderSheet();
-      act(() => ref.current?.open(skipped));
-      await screen.findByTestId("session.editor");
-      await waitForContent();
-      fireEvent.click(await screen.findByTestId("session-detail-skip"));
-      await waitFor(() => expect(url).toContain("/sessions/tt-1/skip"));
-      expect(url).not.toContain("scope");
-    });
-
-    it("offers no skip for a task", async () => {
-      const ref = renderSheet();
-      act(() => ref.current?.open(makeSession({ id: "t", type: "TASK" })));
-      await screen.findByTestId("session.editor");
-      await waitForContent();
-      expect(screen.queryByTestId("session-detail-skip")).toBeNull();
     });
   });
 

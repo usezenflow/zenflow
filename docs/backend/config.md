@@ -116,6 +116,7 @@ Behaviour: [ingestion.md](ingestion.md).
 | `FCM_SERVICE_ACCOUNT` | none | Enables Android push (base64 service-account JSON). |
 | `APNS_KEY` / `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_BUNDLE_ID` | none | All four enable iOS push. `APNS_KEY` is base64 of the `.p8`. |
 | `APNS_PRODUCTION` | `false` | `true` uses `api.push.apple.com`, else the sandbox. |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | none | All three enable Web Push. Keys are base64url; subject is `mailto:` or `https:`. |
 | `OTEL_SDK_DISABLED` | `false` | `true` makes tracing a no-op. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | `http://otel-collector:4318` in the compose stack. |
 | `OTEL_SERVICE_NAME` | `zenflow-api` | |

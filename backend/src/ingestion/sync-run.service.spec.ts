@@ -95,6 +95,7 @@ function makeDb(units: string[]) {
       update: jest.fn(() => Promise.resolve(run)),
     },
     notification: { findFirst: jest.fn().mockResolvedValue(null) },
+    session: { findFirst: jest.fn().mockResolvedValue({ id: "lecture1" }) },
     integration: {
       findUnique: jest.fn().mockResolvedValue({ userId: "u1" }),
     },
@@ -189,6 +190,7 @@ describe("SyncRunService", () => {
         title: note.title,
         content: "Still syncing, check back soon.",
         eventName: "timetable.ready",
+        sessionId: "lecture1",
       }),
       expect.anything(),
     );

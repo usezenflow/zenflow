@@ -54,7 +54,7 @@ Vault uses file storage on `vault_data`, listens on `127.0.0.1:8200` only, and a
    V="docker exec -e VAULT_TOKEN zenflow-vault-prod vault"
    $V secrets enable -path=secret -version=2 kv
    # Secrets only. Read values from a prompt or file, not shell history.
-   $V kv put -mount=secret zenflow/prod/api SESSION_SECRET=... FILE_URL_SECRET=... MASTER_LMS_ENCRYPTION_KEY_V1=... MASTER_PORTAL_ENCRYPTION_KEY_V1=... POSTGRES_PASSWORD=... MAIL_PASSWORD=... S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... PORTAL_API_KEY=... BANDIT_SERVICE_TOKEN=...
+   $V kv put -mount=secret zenflow/prod/api SESSION_SECRET=... FILE_URL_SECRET=... MASTER_LMS_ENCRYPTION_KEY_V1=... MASTER_PORTAL_ENCRYPTION_KEY_V1=... POSTGRES_PASSWORD=... MAIL_PASSWORD=... S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... PORTAL_API_KEY=... BANDIT_SERVICE_TOKEN=... VAPID_PRIVATE_KEY=...
    $V kv put -mount=secret zenflow/prod/bandit BANDIT_SERVICE_TOKEN=...
    $V kv put -mount=secret zenflow/prod/postgres POSTGRES_PASSWORD=...
    $V kv put -mount=secret zenflow/prod/minio S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=...
@@ -72,6 +72,7 @@ Vault uses file storage on `vault_data`, listens on `127.0.0.1:8200` only, and a
      -v /etc/zenflow/vault:/creds -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN -e ENV_NAME=prod \
      hashicorp/vault:1.20.4 /ops/setup-approle.sh --role-id-file /creds/role_id --secret-id-file /creds/secret_id
    ```
+   The VAPID public key and subject are not secrets. They go in `backend/env/prod.env` (`VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`), not in Vault.
    Or import an existing `.env.prod` in parts format. The importer writes each secret to every set that needs it and rejects unknown keys (Grafana uses `GF_SECURITY_ADMIN_PASSWORD` and `GF_SMTP_PASSWORD`):
    ```bash
    export VAULT_ADDR=http://127.0.0.1:8200 VAULT_ENV=prod
@@ -181,5 +182,6 @@ docker compose -f compose.prod.yml start vault        # unseal with the SAME sha
 | Redis password | Patch `api` and the instance's set, deploy. Brief outage, see [secrets.md](secrets.md#redis-passwords) |
 | Database password | Run `ALTER USER`, patch `POSTGRES_PASSWORD` in `api`, `postgres` and `backup`, deploy |
 | Crypto master keys | Patch in `MASTER_*_ENCRYPTION_KEY_V2`, set `MASTER_KEY_CURRENT_VERSION=2` in `backend/env/prod.env`, deploy |
+| VAPID private key | Patch `VAPID_PRIVATE_KEY` in `api`, deploy. The public key is not in Vault: it lives in `backend/env/prod.env` and in the web build as `VITE_VAPID_PUBLIC_KEY`. A new pair means rebuilding the web app, and browsers resubscribe. See [ADR-0033](../adr/0033-web-push.md) |
 
 Never `kv put` over a set that holds V1 keys: it replaces all keys, and V1 must stay while rows reference it.

@@ -1,0 +1,210 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+body {
+  font-family: "Geist", sans-serif;
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  @apply w-2.5 h-2.5;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-border border-[1px] border-transparent border-solid bg-clip-padding;
+}
+
+@theme inline {
+  --font-sans: "Geist", "Geist Fallback", system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  /* Logo brand colors — usable as bg-brand-orange / text-brand-lime etc. */
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-lime: var(--brand-lime);
+  --color-success: var(--success);
+  --color-glass: var(--glass);
+  --color-glass-edge: var(--glass-edge);
+  --color-session-lecture: var(--session-lecture);
+  --color-session-lecture-ink: var(--session-lecture-ink);
+  --color-session-exam: var(--session-exam);
+  --color-session-exam-ink: var(--session-exam-ink);
+  --color-session-assignment: var(--session-assignment);
+  --color-session-assignment-ink: var(--session-assignment-ink);
+  --color-session-task: var(--session-task);
+  --color-session-task-ink: var(--session-task-ink);
+  --color-session-dnd: var(--session-dnd);
+  --color-session-dnd-ink: var(--session-dnd-ink);
+  --color-session-done: var(--session-done);
+  --color-session-done-ink: var(--session-done-ink);
+  --color-session-late: var(--session-late);
+  --color-session-late-ink: var(--session-late-ink);
+  --color-session-conflict: var(--session-conflict);
+  --color-session-conflict-ink: var(--session-conflict-ink);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Warm Sunrise tokens: orange, yellow and lime on warm paper and ink. Same
+   values as mobile/app/global.css and the hex in packages/core/src/palette.ts.
+   Keep all three in step. */
+:root {
+  --radius: 0.375rem;
+
+  --background: #fefcfa;
+  --foreground: #0f0d0a;
+  --card: #ffffff;
+  --card-foreground: #0f0d0a;
+  --popover: #ffffff;
+  --popover-foreground: #0f0d0a;
+  --primary: #ff8e3e;
+  --primary-foreground: #2b1406;
+  --secondary: #f6f3ef;
+  --secondary-foreground: #0f0d0a;
+  --muted: #f6f3ef;
+  --muted-foreground: #6f665b;
+  --accent: #f6f3ef;
+  --accent-foreground: #0f0d0a;
+  --destructive: #e7000b;
+  --destructive-foreground: #ffffff;
+  --border: #e8e5df;
+  --input: #e8e5df;
+  --ring: #ff8e3e;
+
+  /* Logo brand palette, used as the accent identity and in charts. */
+  --brand-orange: #ff8e3e;
+  --brand-yellow: #f0b101;
+  --brand-lime: #527f0c;
+  --success: #d8f998;
+  --glass: #ffffff;
+  --glass-edge: #ff8e3e;
+
+  /* Session block colours: base for stripe and dot, ink for text on the tint. */
+  --session-lecture: #3b82c4;
+  --session-lecture-ink: #245c94;
+  --session-exam: #14a09b;
+  --session-exam-ink: #0e6f6b;
+  --session-assignment: #f0b101;
+  --session-assignment-ink: #7a5a00;
+  --session-task: #ff8e3e;
+  --session-task-ink: #9a4a0c;
+  --session-dnd: #a8a29e;
+  --session-dnd-ink: #5f574d;
+  --session-done: #d8f998;
+  --session-done-ink: #4f6b14;
+  --session-late: #e7000b;
+  --session-late-ink: #b80009;
+  --session-conflict: #9bc53d;
+  --session-conflict-ink: #4f6b14;
+
+  --chart-1: var(--brand-orange);
+  --chart-2: var(--brand-yellow);
+  --chart-3: oklch(0.8 0.16 124);
+  --chart-4: oklch(0.62 0.2 42);
+  --chart-5: oklch(0.7 0.15 128);
+  --sidebar: #fefcfa;
+  --sidebar-foreground: #0f0d0a;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #2b1406;
+  --sidebar-accent: #f6f3ef;
+  --sidebar-accent-foreground: #0f0d0a;
+  --sidebar-border: #e8e5df;
+  --sidebar-ring: var(--ring);
+}
+
+.dark {
+  --background: #0f0d0a;
+  --foreground: #fbfaf8;
+  --card: #1d1a17;
+  --card-foreground: #fbfaf8;
+  --popover: #1d1a17;
+  --popover-foreground: #fbfaf8;
+  --primary: #ff7a24;
+  --primary-foreground: #2b1406;
+  --secondary: #2c2822;
+  --secondary-foreground: #fbfaf8;
+  --muted: #2c2822;
+  --muted-foreground: #aca397;
+  --accent: #2c2822;
+  --accent-foreground: #fbfaf8;
+  --destructive: #ff6467;
+  --destructive-foreground: #0f0d0a;
+  --border: #36322d;
+  --input: #36322d;
+  --ring: #ff7a24;
+
+  --brand-orange: #ff7a24;
+  --brand-yellow: #f0b101;
+  --brand-lime: #d8f998;
+  --success: #d8f998;
+  --glass: #ffecdc;
+  --glass-edge: #ffaa64;
+
+  --session-lecture: #3b82c4;
+  --session-lecture-ink: #8fbde8;
+  --session-exam: #14a09b;
+  --session-exam-ink: #6fd3cd;
+  --session-assignment: #f0b101;
+  --session-assignment-ink: #f6c93c;
+  --session-task: #ff8e3e;
+  --session-task-ink: #ffa866;
+  --session-dnd: #a8a29e;
+  --session-dnd-ink: #b8b0a4;
+  --session-done: #d8f998;
+  --session-done-ink: #d8f998;
+  --session-late: #e7000b;
+  --session-late-ink: #ff8083;
+  --session-conflict: #9bc53d;
+  --session-conflict-ink: #c7e27b;
+
+  --chart-1: var(--brand-orange);
+  --chart-2: var(--brand-yellow);
+  --chart-3: oklch(0.86 0.15 124);
+  --chart-4: oklch(0.66 0.19 42);
+  --chart-5: oklch(0.75 0.15 128);
+  --sidebar: #1d1a17;
+  --sidebar-foreground: #fbfaf8;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #2b1406;
+  --sidebar-accent: #2c2822;
+  --sidebar-accent-foreground: #fbfaf8;
+  --sidebar-border: #36322d;
+  --sidebar-ring: var(--ring);
+}

@@ -16,7 +16,7 @@ import * as Haptics from "expo-haptics";
 import { useCallback } from "react";
 import { Pressable, View } from "react-native";
 
-/** Minutes always step by 15, the scheduler's grid (see `frontend/src/components/ui/time-picker.tsx`). */
+/** Minutes always step by 15, the scheduler's grid (see `pwa/src/components/ui/time-picker.tsx`). */
 const MINUTE_STEPS = [0, 15, 30, 45];
 const MERIDIEMS = ["AM", "PM"] as const;
 type Meridiem = (typeof MERIDIEMS)[number];
@@ -130,7 +130,7 @@ function Grid<T extends number | string>({
 
 /**
  * Hour / 15-minute / AM-PM picker body, RN port of
- * `frontend/src/components/ui/time-picker.tsx`. Every option is visible at
+ * `pwa/src/components/ui/time-picker.tsx`. Every option is visible at
  * once (no scroll columns), so the sheet sizes itself to its content with no
  * dead space under the Done button. English: 12 hours + AM/PM. Vietnamese:
  * 24 hours, no meridiem.

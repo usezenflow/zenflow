@@ -26,7 +26,7 @@ import { QueueService } from "../queue/queue.service";
 import { NOTIFY_QUEUE, type PushProvider } from "../queue/queues";
 import { idempotencyKey } from "../queue/queue.types";
 
-const PUSH_PROVIDERS: readonly PushProvider[] = ["fcm", "apns"];
+const PUSH_PROVIDERS: readonly PushProvider[] = ["fcm", "apns", "web"];
 
 /** Delay before each enqueue attempt of {@link NotificationsService.announce}. */
 const ENQUEUE_RETRY_DELAYS_MS = [0, 250, 1_000];
@@ -95,6 +95,9 @@ export interface CreateNotificationInput {
   content: string;
   /** Fixed end instant of the session behind the row, or null (groups/drops). */
   eventEndsAt: Date | null;
+  /** A `plan_offer.*` row: its pairwise proposal and the two start times, in button order. */
+  slotProposalId?: string | null;
+  offerSlots?: Date[];
   /**
    * Whether {@link NotificationsService.create} may synthesize a placeholder
    * calendar session when the caller doesn't attach one (`sessionId: null`).
@@ -147,6 +150,8 @@ function toNotificationDto(row: Notification): NotificationDto {
     eventEndsAt: row.eventEndsAt ? row.eventEndsAt.toISOString() : null,
     sessionId: row.sessionId,
     conflictSessionIds: row.conflictSessionIds ?? [],
+    slotProposalId: row.slotProposalId ?? null,
+    offerSlots: (row.offerSlots ?? []).map((d) => d.toISOString()),
   };
 }
 

@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { ApnsSender } from "../src/devices/apns.sender";
 import { FcmSender } from "../src/devices/fcm.sender";
 import { PushProviderError, PushService } from "../src/devices/push.service";
+import { WebPushSender } from "../src/devices/web-push.sender";
 import type { PushMessage, SendResult } from "../src/devices/types";
 import { PrismaService } from "../src/prisma/prisma.service";
 
@@ -11,7 +12,8 @@ import { PrismaService } from "../src/prisma/prisma.service";
  * Push delivery against the real database with fake FCM / APNs senders: who a
  * notification is sent to, what is sent, what is pruned and when the queue job
  * must retry. (The real providers need Firebase / Apple credentials, so the two
- * senders are the only fakes; `PushService`, Prisma and Postgres are real.)
+ * senders are the only fakes; `PushService`, Prisma and Postgres are real. The
+ * Web Push sender is real and self-disabled: no VAPID env in the test env.)
  */
 jest.setTimeout(60_000);
 
@@ -41,6 +43,7 @@ async function boot(opts: { fcm?: Sender; apns?: Sender } = {}) {
       PrismaService,
       { provide: FcmSender, useValue: fcm },
       { provide: ApnsSender, useValue: apns },
+      WebPushSender,
     ],
   }).compile();
   await moduleRef.init();
