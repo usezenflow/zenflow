@@ -51,6 +51,7 @@ import { t } from "@/lib/i18n";
 import { zonedNow } from "@/utils/tz";
 import { addDays, format, isValid } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
+import { useSlideDirection } from "@/hooks/use-slide-direction";
 
 const VALID_VIEWS: ViewMode[] = ["day", "week", "month"];
 const DATE_PARAM_FORMAT = "yyyy-MM-dd";
@@ -91,13 +92,16 @@ export function CalendarLayout() {
   }, [date, viewMode, setSearchParams]);
 
   useViewShortcuts(viewMode, setViewMode, setDate);
+  const daySlide = useSlideDirection(date.getTime());
 
   const [blocks, setBlocks] = useState<Event[]>([]);
   // Phones show Day and Month; the week strip above the day view replaces Week there.
+  // Desktop shows Week and Month: the week grid already shows a day in full.
   const phone = useIsPhone();
   const dayBars = useWeekDayBars(date, tz, true);
   useEffect(() => {
     if (phone && viewMode === "week") setViewMode("day");
+    if (!phone && viewMode === "day") setViewMode("week");
   }, [phone, viewMode]);
   const [lateIds, setLateIds] = useState<Set<string>>(() => new Set());
   const [sheet, setSheet] = useState<SessionSheetTarget | null>(null);
@@ -203,6 +207,26 @@ export function CalendarLayout() {
     refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, viewMode]);
+
+  // Warm the days either side, so a day switch paints from the cache.
+  useEffect(() => {
+    if (!userId || !online || viewMode !== "day") return;
+    for (const offset of [-1, 1]) {
+      const target = addDays(date, offset);
+      void listSessions("day", target)
+        .then((res) => writeCalendar(userId, cacheKey("day", target), res.sessions))
+        .catch(() => undefined);
+    }
+  }, [date, viewMode, userId, online]);
+
+  // Fetch the sheet chunks while the calendar is idle, so the first open does not lag.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      void import("./session-detail-sheet");
+      void import("@/components/settings/settings-dialog");
+    }, 1500);
+    return () => window.clearTimeout(id);
+  }, []);
 
   useEffect(() => {
     const handler = (e: Event | CustomEvent) => {
@@ -354,7 +378,7 @@ export function CalendarLayout() {
 
   return (
     <LateSessionsContext.Provider value={lateIds}>
-      <div className="flex h-dvh">
+      <div className="flex h-dvh overflow-hidden">
         <CalendarSidebar />
 
         <Sheet open={navOpen} onOpenChange={setNavOpen}>
@@ -401,49 +425,67 @@ export function CalendarLayout() {
             </Button>
 
 
+            {/* Absolute fill, not h-full: a flex child's percentage height is unreliable
+                in Safari, and the page must never scroll instead of this box. */}
             <div
-              className="h-full overflow-auto"
+              data-scroll-container
+              className="absolute inset-0 overflow-auto overscroll-contain"
               style={{ "--week-cells-height": "64px" } as React.CSSProperties}
             >
               {viewMode === "day" && (
-                <DayView
-                  events={blocks}
-                  date={date}
-                  setEvents={setBlocks}
-                  onReschedule={onReschedule}
-                />
+                <div
+                  key={daySlide.position}
+                  className={daySlide.direction === "next" ? "animate-day-in-next" : "animate-day-in-prev"}
+                >
+                  <DayView
+                    events={blocks}
+                    date={date}
+                    setEvents={setBlocks}
+                    onReschedule={onReschedule}
+                  />
+                </div>
               )}
-              {viewMode === "week" && (
-                <WeekView
-                  events={blocks}
-                  date={date}
-                  setEvents={setBlocks}
-                  onReschedule={onReschedule}
-                />
-              )}
-              {viewMode === "month" && (
-                <MonthView
-                  events={blocks}
-                  date={date}
-                  onOpenDay={(d) => {
-                    setDate(d);
-                    setViewMode("day");
-                  }}
-                  setEvents={setBlocks}
-                  onReschedule={onReschedule}
-                />
+              {viewMode !== "day" && (
+                <div key={viewMode} className="h-full animate-in fade-in duration-200">
+                  {viewMode === "week" && (
+                    <WeekView
+                      events={blocks}
+                      date={date}
+                      setEvents={setBlocks}
+                      onReschedule={onReschedule}
+                    />
+                  )}
+                  {viewMode === "month" && (
+                    <MonthView
+                      events={blocks}
+                      date={date}
+                      onOpenDay={(d) => {
+                        setDate(d);
+                        setViewMode("day");
+                      }}
+                      setEvents={setBlocks}
+                      onReschedule={onReschedule}
+                    />
+                  )}
+                </div>
               )}
             </div>
-            {showSkeleton && (
-              <div className="absolute inset-0 z-10 bg-background">
-                <ViewSkeleton view={viewMode} />
-              </div>
-            )}
-            {loadFailed && (
-              <div className="absolute inset-0 z-20 bg-background">
-                <CalendarLoadError onRetry={() => void refetch()} />
-              </div>
-            )}
+            <div
+              className={cn(
+                "absolute inset-0 z-10 bg-background transition-[opacity,visibility] duration-200",
+                !showSkeleton && "invisible pointer-events-none opacity-0",
+              )}
+            >
+              <ViewSkeleton view={viewMode} />
+            </div>
+            <div
+              className={cn(
+                "absolute inset-0 z-20 bg-background transition-[opacity,visibility] duration-200",
+                !loadFailed && "invisible pointer-events-none opacity-0",
+              )}
+            >
+              <CalendarLoadError onRetry={() => void refetch()} />
+            </div>
           </div>
         </div>
         {sheetMounted.current && (

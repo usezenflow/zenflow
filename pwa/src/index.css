@@ -81,6 +81,43 @@ body {
   }
 }
 
+/* Day and week strip slides: the new page enters from the side it moved toward. */
+@keyframes day-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes day-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Reduced motion: every transition and animation finishes at once. Infinite
+   loops stop, except the spinner's gentle fade (see the rule above). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .zf-spinner {
+    animation-duration: 1.4s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
 ::-webkit-scrollbar {
   @apply w-2.5 h-2.5;
 }
@@ -97,6 +134,13 @@ body {
   --font-sans: "Geist", "Geist Fallback", system-ui, sans-serif;
   --animate-breathe: breathe 4s ease-in-out infinite;
   --animate-block-highlight: block-highlight 0.75s ease-out forwards;
+  --animate-day-in-next: day-in-next var(--duration-base) var(--ease-out-cubic);
+  --animate-day-in-prev: day-in-prev var(--duration-base) var(--ease-out-cubic);
+  --animate-rise-in: rise-in var(--duration-base) var(--ease-out-cubic);
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-slow: 280ms;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -537,4 +581,10 @@ body {
 }
 .zf-toast-bar {
   animation: zf-toast-bar linear forwards;
+}
+
+/* Set on <html> for a moment after a theme change (see lib/theme.ts). */
+.theme-switching,
+.theme-switching * {
+  transition: background-color 250ms ease, border-color 250ms ease, color 250ms ease !important;
 }

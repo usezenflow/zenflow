@@ -12,7 +12,6 @@ import { format as formatDisplay } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import { useUserStore } from "@/hooks/use-user-store";
 import { isZonedToday, zonedDate } from "@/utils/tz";
 
@@ -118,13 +117,9 @@ export function MonthCell({
 
 function MonthEventItem({ ev }: { ev: Event }) {
   const late = useIsLate(ev.taskId);
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: ev.id,
   });
-  const style = {
-    // Outputs `translate3d(x, y, 0)`
-    transform: CSS.Translate.toString(transform),
-  };
 
   return (
     <Button
@@ -133,7 +128,6 @@ function MonthEventItem({ ev }: { ev: Event }) {
       ref={setNodeRef}
       size="sm"
       variant="ghost"
-      style={style}
       onClick={() =>
         window.dispatchEvent(
           new CustomEvent("zenflow:open-task", { detail: ev.id }),
@@ -141,7 +135,7 @@ function MonthEventItem({ ev }: { ev: Event }) {
       }
       className={cn(
         "relative z-30 mt-0 h-auto w-full justify-start gap-x-1 rounded border border-l-2 px-1.5 py-0.5 text-[11px] font-medium",
-        transform && "cursor-grabbing shadow-lg",
+        isDragging && "opacity-40",
         TASK_CARD_CLASSES[ev.state],
         late && LATE_CARD_CLASSES,
       )}

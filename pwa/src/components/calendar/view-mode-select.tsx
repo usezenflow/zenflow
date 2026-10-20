@@ -35,7 +35,7 @@ export function ViewModeSelect({
         </span>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem className="flex flex-1 w-full justify-between" value="day">
+        <SelectItem className="flex flex-1 w-full justify-between md:hidden" value="day">
           <span className="flex items-center gap-2"><Calendar1 className="size-4 text-muted-foreground" />{t("Day")}</span>
           <span className="text-muted-foreground tabular-nums">D</span>
         </SelectItem>

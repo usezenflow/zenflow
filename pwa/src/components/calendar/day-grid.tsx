@@ -55,9 +55,8 @@ export function DayGrid({ events, date }: { events: Event[]; date: Date }) {
   useEffect(() => {
     const dayKey = `${date.toDateString()}|${tz}`;
     if (scrolledDay.current === dayKey) return;
-    // The grid is the first child of the scroller in layout.tsx.
     const grid = gridRef.current;
-    const scroller = grid?.parentElement;
+    const scroller = grid?.closest<HTMLElement>("[data-scroll-container]");
     if (!grid || !scroller) return;
     scroller.scrollTo({
       top: Math.max(0, (anchorMin / DAILY_HORIZON) * grid.offsetHeight - 16),
@@ -76,12 +75,12 @@ export function DayGrid({ events, date }: { events: Event[]; date: Date }) {
 
         {isZonedToday(date, tz) && (
           <div
-            className="pointer-events-none absolute inset-x-0 z-50 transition-[top] duration-1000 ease-linear"
+            className="pointer-events-none absolute inset-x-0 z-50 animate-in fade-in transition-[top] duration-1000 ease-linear"
             style={{ top: nowTop }}
           >
             <div className="relative flex items-center">
               <div className="absolute -left-1 h-2 w-2 rounded-full bg-rose-500 shadow-sm" />
-              <div className="absolute animate-ping -left-1 h-2 w-2 rounded-full bg-rose-500 shadow-sm" />
+              <div className="motion-safe:animate-ping absolute -left-1 h-2 w-2 rounded-full bg-rose-500 shadow-sm" />
               <div className="h-[2px] w-full bg-gradient-to-r from-rose-500 via-rose-400/50 to-transparent" />
             </div>
           </div>

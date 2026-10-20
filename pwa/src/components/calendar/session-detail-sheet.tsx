@@ -404,7 +404,7 @@ export function SessionDetailSheet({
             "glass flex flex-col gap-0 p-0",
             isMobile
               ? "inset-0 h-dvh max-h-none w-full rounded-none border-0 p-0"
-              : "w-full sm:max-w-2xl",
+              : "w-full sm:max-w-md",
           )}
         >
           <SheetTitle className="sr-only">{isDraft ? t("New session") : form.title}</SheetTitle>

@@ -1,10 +1,10 @@
 import { useUserStore } from "@/hooks/use-user-store";
 import { useHighlightStore } from "@/hooks/use-highlight-store";
 import { cn } from "@/lib/utils";
-import { TASK_CARD_CLASSES } from "@zenflow/core";
 import { DaySegment } from "@zenflow/shared";
 import {
   DAILY_HORIZON,
+  SESSION_TONE_CLASSES,
   SESSION_TONES,
   TIME_GRANULARITY,
   hexAlpha,
@@ -19,7 +19,7 @@ import { toZonedTime } from "date-fns-tz";
 import { Car, CornerDownRight, Globe, MapPin } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { OverdueBadge, SessionTypeBadge } from "./session-type-badge";
-import { LATE_CARD_CLASSES, useIsLate } from "./late-context";
+import { useIsLate } from "./late-context";
 import { locale, t } from "@/lib/i18n";
 import { toast } from "@/lib/notify";
 
@@ -58,9 +58,11 @@ function requestResize(
 // Touch: how far a finger may drift before a press counts as a drag, not a tap.
 const TAP_MOVE_TOLERANCE = 8;
 
-/** Hour rows are 64px, so a zone of this many minutes (about 22px) fits its label. */
-const BUFFER_LABEL_MIN_MINUTES = 21;
-const HATCH_PX = 7;
+const HATCH_PX = 5;
+/** A travel zone is never thinner than this, so a short trip still shows. */
+const MIN_BUFFER_PX = 6;
+/** Mobile's 20px label height, in minutes at 64px per hour. */
+const BUFFER_LABEL_MIN_MINUTES = 19;
 
 /** Travel time kept clear before or after a session: the block's tone, hatched, so it reads as time to cross. */
 function BufferZone({
@@ -70,6 +72,7 @@ function BufferZone({
   tone,
   leftPct,
   widthPct,
+  dragTransform,
 }: {
   edge: "before" | "after";
   startMin: number;
@@ -77,30 +80,34 @@ function BufferZone({
   tone: ReturnType<typeof sessionTone>;
   leftPct: number;
   widthPct: number;
+  /** The card's drag offset, so a zone moves with its session. */
+  dragTransform?: string;
 }) {
-  const { base, ink } = SESSION_TONES[tone];
+  const { base } = SESSION_TONES[tone];
   return (
     <div
       aria-hidden
       data-testid={`commute.${edge}`}
       className={cn(
-        "pointer-events-none absolute z-0 flex items-center gap-1 overflow-hidden border px-2",
-        edge === "before" ? "rounded-t-md border-b-0" : "rounded-b-md border-t-0",
+        "pointer-events-none absolute z-0 flex items-center gap-1 overflow-hidden border pl-3.5 pr-2",
+        edge === "before" ? "rounded-t-[14px] border-b-0" : "rounded-b-[14px] border-t-0",
+        SESSION_TONE_CLASSES[tone].text,
       )}
       style={{
         top: `${(startMin / DAILY_HORIZON) * 100}%`,
         height: `${(minutes / DAILY_HORIZON) * 100}%`,
+        minHeight: MIN_BUFFER_PX,
         left: `calc(${leftPct}% + 2px)`,
         width: `calc(${widthPct}% - 4px)`,
-        borderColor: hexAlpha(base, 0.7),
-        backgroundColor: hexAlpha(base, 0.16),
-        backgroundImage: `repeating-linear-gradient(135deg, ${hexAlpha(base, 0.45)} 0 1px, transparent 1px ${HATCH_PX}px)`,
-        color: ink.light,
+        transform: dragTransform,
+        borderColor: hexAlpha(base, 0.55),
+        backgroundColor: hexAlpha(base, 0.07),
+        backgroundImage: `repeating-linear-gradient(135deg, ${hexAlpha(base, 0.3)} 0 1px, transparent 1px ${HATCH_PX}px)`,
       }}
     >
       {minutes >= BUFFER_LABEL_MIN_MINUTES && (
         <>
-          <Car className="size-3 shrink-0" />
+          <Car className="size-[11px] shrink-0" />
           <span className="truncate text-[11px] font-semibold">
             {t("{minutes} min", { minutes })}
           </span>
@@ -364,6 +371,7 @@ export function ScheduledBlockItem({
           tone={tone}
           leftPct={leftPct}
           widthPct={width}
+          dragTransform={CSS.Translate.toString(transform)}
         />
       )}
       {!isNested && afterMin > 0 && (
@@ -374,6 +382,7 @@ export function ScheduledBlockItem({
           tone={tone}
           leftPct={leftPct}
           widthPct={width}
+          dragTransform={CSS.Translate.toString(transform)}
         />
       )}
       <div
@@ -485,7 +494,7 @@ export function ScheduledBlockItem({
         )}
         <div
           className={cn(
-            "flex h-full overflow-hidden rounded border border-l-4 px-2 shadow-sm transition-shadow hover:shadow-md backdrop-blur-lg",
+            "relative flex h-full overflow-hidden rounded-[14px] border shadow-sm transition-[box-shadow,background-color,border-color,color] duration-200 hover:shadow-md backdrop-blur-lg",
             // While shrinking, outline the block in rose so the removed extent
             // reads distinctly from a normal resize.
             preview && deltaMinutes < 0 && "ring-1 ring-rose-400/60",
@@ -495,21 +504,26 @@ export function ScheduledBlockItem({
             isInteractive
               ? "cursor-grab active:cursor-grabbing"
               : "cursor-pointer",
-            isCompact ? "items-center gap-1.5" : "flex-col py-1",
-            // Cross-midnight segments visually butt against the day boundary:
-            // the head loses its bottom rounding, the tail its top, so the two
-            // halves read as one continued block split by midnight.
-            block.continues && "rounded-b-none",
-            block.continued &&
-              "rounded-t-none border-t-0 border-l-4 border-dashed",
-            TASK_CARD_CLASSES[state],
-            late && LATE_CARD_CLASSES,
+            isCompact ? "items-center gap-1.5 pl-3.5 pr-2" : "flex-col gap-0.5 py-1.5 pl-4 pr-2.5",
+            // A travel zone above or below the block takes the square edge,
+            // so the zone and the block read as one shape.
+            (block.continued || beforeMin > 0) && "rounded-t-none",
+            (block.continues || afterMin > 0) && "rounded-b-none",
+            block.continued && "border-t-0 border-dashed",
+            SESSION_TONE_CLASSES[tone].tint,
+            SESSION_TONE_CLASSES[tone].text,
             // Ring-glow pulse that fires once after the task is created so the
             // user's eye is drawn to where it landed on the grid.
             isHighlighted && "animate-block-highlight",
           )}
+          style={{ borderColor: hexAlpha(SESSION_TONES[tone].base, 0.55) }}
           onAnimationEnd={isHighlighted ? clearHighlight : undefined}
         >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[3px] rounded-full"
+            style={{ backgroundColor: SESSION_TONES[tone].base }}
+          />
           {isCompact ? (
             <>
               <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -533,11 +547,11 @@ export function ScheduledBlockItem({
                 {block.continued && (
                   <CornerDownRight className="h-3 w-3 shrink-0 text-muted-foreground" />
                 )}
-                <span className="truncate text-xs font-semibold">
+                <span className="truncate text-[12px] font-semibold leading-4">
                   {block.title}
                 </span>
               </div>
-              <span className="tabular-nums text-[11px]">
+              <span className="tabular-nums text-[12px] font-medium leading-[15px]">
                 {block.continued
                   ? t("Continues, ends {time}", { time: fmt(block.taskEnd, tz) })
                   : block.continues

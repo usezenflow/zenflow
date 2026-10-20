@@ -9,13 +9,13 @@ export function DayBarView({ bar, height = 4 }: { bar?: DayBar; height?: number 
   return (
     <div
       aria-hidden
-      className="relative w-full overflow-hidden bg-muted-foreground/30"
+      className="relative w-full overflow-hidden bg-muted-foreground/30 transition-colors"
       style={{ height, borderRadius: height / 2 }}
     >
       {bar?.segments.map((segment) => (
         <div
           key={`${segment.start}-${segment.kind}`}
-          className="absolute top-0 bottom-0"
+          className="absolute top-0 bottom-0 transition-[left,width,background-color] duration-200 ease-out-cubic"
           style={{
             left: `${(segment.start / 1440) * 100}%`,
             width: `${((segment.end - segment.start) / 1440) * 100}%`,

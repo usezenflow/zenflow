@@ -177,7 +177,7 @@ function TermCard({
         <Chevron className="size-4 text-muted-foreground" />
       </button>
       {open ? (
-        <div className="border-t border-border px-4 py-1">
+        <div className="animate-in fade-in-0 slide-in-from-top-1 border-t border-border px-4 py-1 duration-200">
           {term.marks.map((mark) => (
             <MarkRow key={`${mark.curriculumId}${mark.curriculumName}`} mark={mark} />
           ))}

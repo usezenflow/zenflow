@@ -19,9 +19,14 @@ function readStored(): ThemeChoice {
 let choice: ThemeChoice = readStored();
 const listeners = new Set<() => void>();
 
-function apply() {
+function apply(animate = false) {
+  const root = document.documentElement;
   const dark = choice === "dark" || (choice === "system" && query.matches);
-  document.documentElement.classList.toggle("dark", dark);
+  root.classList.toggle("dark", dark);
+  if (!animate) return;
+  // Colours fade for a moment, then snap back, so static transitions stay as they were.
+  root.classList.add("theme-switching");
+  window.setTimeout(() => root.classList.remove("theme-switching"), 250);
 }
 
 export function setTheme(next: ThemeChoice) {
@@ -31,7 +36,7 @@ export function setTheme(next: ThemeChoice) {
   } catch {
     // The choice still applies for this session.
   }
-  apply();
+  apply(true);
   for (const listener of listeners) listener();
 }
 
