@@ -3,7 +3,7 @@
 Diagram-first companion to [README.md](README.md), for contributors placing a change before reading the detail.
 
 - Conventions and invariants: [AGENTS.md](AGENTS.md)
-- Per-app detail: [backend](backend/README.md), [frontend](frontend/README.md), [bandit service](services/bandit/README.md)
+- Per-app detail: [backend](backend/README.md), [pwa](pwa/README.md), [bandit service](services/bandit/README.md)
 - Backend reference: [docs/backend/](docs/backend/)
 - Sequence flows: [docs/architecture/scheduler-flows.md](docs/architecture/scheduler-flows.md)
 - Decisions behind this shape: [docs/adr/](docs/adr/)

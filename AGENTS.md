@@ -13,7 +13,7 @@ Agents own domains, not tech layers. Exact globs live in `.agents/agents/*.md` (
 | `scheduler` | Placement, sessions, series, TS fallback, Python contract | [ADR-0003](docs/adr/0003-python-authoritative-placement.md), [docs/backend/scheduler.md](docs/backend/scheduler.md) |
 | `bandit` | `services/bandit`, LinUCB, telemetry, A/B | [services/bandit/README.md](services/bandit/README.md), [ADR-0001](docs/adr/0001-linucb-model-design.md) |
 | `campus-sync` | DLU/LMS ingestion, integrations | [docs/backend/ingestion.md](docs/backend/ingestion.md) |
-| `calendar-web` | `frontend/`, `packages/core` | [frontend/README.md](frontend/README.md) |
+| `calendar-web` | `pwa/`, `dashboard/`, `packages/core` | [pwa/README.md](pwa/README.md), [dashboard/README.md](dashboard/README.md) |
 | `calendar-mobile` | `mobile/`, `mockups/` | [mobile/README.md](mobile/README.md) |
 | `accounts-api` | Auth, users, files, notifications, Prisma, `packages/shared` | [ADR-0004](docs/adr/0004-s3-file-storage.md) |
 | `platform` | Compose, CI/CD, observability, secrets, load tests | [docs/ops/](docs/ops/) |
@@ -31,11 +31,11 @@ Delegate work in a domain to its agent; cross-domain changes go to each owner in
 pnpm install            # install all workspaces
 pnpm shared:build       # build @zenflow/shared — run BEFORE typechecking FE/BE
 pnpm -r build | typecheck | test     # run a script across all packages
-pnpm --filter backend <script>       # target one app (also: frontend)
+pnpm --filter backend <script>       # target one app (also: pwa, dashboard)
 ```
 
 Per-app scripts: backend `start:dev | typecheck | lint | test | test:e2e | prisma:dev:*`;
-frontend `dev | build | typecheck | lint | test:e2e`.
+pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typecheck | lint` (port 5174).
 
 ## Critical invariants
 
@@ -80,8 +80,8 @@ frontend `dev | build | typecheck | lint | test:e2e`.
    `DELETE /sessions/series/:id/truncate?from=<ISO>` pulls the rrule `UNTIL` back ("this and
    following"); `DELETE /sessions/series/:id` drops the whole series.
 
-5. **Timezone wall-clock rule (frontend).** All calendar `Date`s carry the user-tz wall
-   clock in their local fields — go through `frontend/src/utils/tz.ts`, never a bare
+5. **Timezone wall-clock rule (pwa).** All calendar `Date`s carry the user-tz wall
+   clock in their local fields — go through `pwa/src/utils/tz.ts`, never a bare
    `new Date()` in day/grid logic. Convert back with `zonedWallClockToUtc` before calling
    the API.
 
@@ -104,7 +104,7 @@ frontend `dev | build | typecheck | lint | test:e2e`.
   a strict global pipe (`whitelist` + `forbidNonWhitelisted` + `transform`); custom
   decorators `@CurrentUser`, `@IsValidTimezone`, `@IsRRule`; Prisma errors via
   `src/prisma/error-codes.ts`. Global prefix `/api/v1`; Swagger at `/api`.
-- **Frontend:** kebab-case files, PascalCase components; axios only in `src/api/`; Zustand
+- **PWA:** kebab-case files, PascalCase components; axios only in `src/api/`; Zustand
   for the user store; build UI from `components/ui/` primitives; Tailwind v4 tokens
   ("Warm Sunrise", `packages/core/src/palette.ts`); **no mobile-responsive target**.
 
@@ -112,27 +112,28 @@ frontend `dev | build | typecheck | lint | test:e2e`.
 
 - Backend unit tests are `*.spec.ts` (Jest) next to the code — pure functions like the
   scheduler are the priority to cover. E2e is `backend/test/jest-e2e.json` (needs the test
-  stack; see `docs/backend/testing.md`). Frontend e2e is Playwright (`testDir` is `frontend/e2e/`; no specs checked in yet; needs the backend stack + Mailpit). CI runs unit tests only. Mobile has unit, component (MSW) and Maestro e2e layers: see `docs/mobile/testing.md`.
+  stack; see `docs/backend/testing.md`). PWA e2e is Playwright (`testDir` is `pwa/e2e/`; no specs checked in yet; needs the backend stack + Mailpit). CI runs unit tests only. Mobile has unit, component (MSW) and Maestro e2e layers: see `docs/mobile/testing.md`.
 - **Backend tests use NestJS DI.** Build the unit under test with `Test.createTestingModule({ providers: [Svc, { provide: Dep, useValue: mock }] })`, fetch it with `module.get(Svc)`, and replace real providers with `.overrideProvider(Dep).useValue(...)`; `useMocker` for broad auto-mocks. No `new Svc(mockA, mockB)`, no `as any` casts to satisfy constructors, no reaching into private fields. Inject tokens (`@Inject(TOKEN)`) are provided by token. E2E boots `AppModule` the same way and overrides externals. Exempt: pure functions and classes with no Nest deps (`scheduler/core/*`). Apply to new and touched specs; do not mass-rewrite old ones.
 - Run `pnpm --filter <app> typecheck` and `lint` before finishing. After editing shared
   types, `pnpm shared:build` first.
 - **Formatting:** ESLint (+ Prettier on the backend), 2-space indentation (`.editorconfig`);
-  frontend uses the `@/…` import alias. **Commits** follow
+  pwa uses the `@/…` import alias. **Commits** follow
   [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
   (`type(scope): summary`). Full guidelines: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Where things run
 
 - API → `http://localhost:8000`; Swagger UI → `http://localhost:8000/api`.
-- Frontend dev → `http://localhost:5173` (`VITE_API_URL` points at the API).
+- PWA dev → `http://localhost:5173` (`VITE_API_URL` points at the API).
 - Mobile dev → `http://localhost:8081` (Expo/Metro, web target only —
   `EXPO_PUBLIC_API_URL` points at the API; native iOS/Android isn't
   origin-based). Backend `CORS_ORIGIN` (`.env.dev`) is a comma-separated list
   (split in `main.ts`) and must contain both dev web origins.
 - OTP login emails are caught by Mailpit (UI/API on `:8025`) in the local Docker stack.
-- Native push (`backend/src/devices/`, `POST`/`DELETE /devices`): Android via
+- Push (`backend/src/devices/`, `POST`/`DELETE /devices`): Android via
   `FCM_SERVICE_ACCOUNT`, iOS via `APNS_KEY` + `APNS_KEY_ID` + `APNS_TEAM_ID` +
-  `APNS_BUNDLE_ID` (+ `APNS_PRODUCTION`). All optional — each provider
+  `APNS_BUNDLE_ID` (+ `APNS_PRODUCTION`), Web via `VAPID_PUBLIC_KEY` +
+  `VAPID_PRIVATE_KEY` + `VAPID_SUBJECT`. All optional — each provider
   self-disables when its vars are unset, like `BANDIT_SERVICE_URL`; unset in
   `.env.test`. `PushService` fans every notification out over the same emitter
   the SSE stream uses.

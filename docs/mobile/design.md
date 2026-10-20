@@ -37,7 +37,7 @@ Present on login (hero), splash and loading, empty states (as the sun), the offl
 and settings/about. Not a header or watermark on every screen: it competes with principle 3.
 
 ## Sound
-Three chimes, one motif (soft mallet, glass-bell bloom). Files: `mobile/assets/sounds/zenflow_*.wav` (underscores: Android resource names forbid hyphens)
+Three chimes, one motif (soft mallet, glass-bell bloom). Files: `packages/brand/sounds/zenflow_*.wav`, shared with the pwa (underscores: Android resource names forbid hyphens)
 (mono, 48 kHz, 16-bit, about -17 LUFS). Tone is chosen by event in `@zenflow/shared` (`pushToneFor`).
 Android binds sound to the channel and it is immutable, so channels are `zenflow-default|reminder|urgent`;
 a changed sound needs a new channel id. Needs a dev-client rebuild.

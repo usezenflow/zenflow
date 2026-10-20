@@ -28,7 +28,18 @@ Completion is not shown. Check-off is no longer tracked.
 
 `Session.durationMinutes` summed by weekday and hour of `scheduledStartTime`, grouped by `StudentProfile.faculty`, `className` or `cohort`. Groups under 5 students are hidden.
 
-## Needed to ship
+## Endpoints
 
-- `/admin/*` read-only endpoints, an admin role and a 403 for others. None exist.
-- Aggregate DTOs in `@zenflow/shared`. None exist.
+Read-only, `CookieAuthGuard` then `AdminGuard` (403 for non-admins). DTOs in `packages/shared/src/admin.ts`.
+
+| Route | Returns |
+| --- | --- |
+| `GET /admin/engagement` | `EngagementResponse` |
+| `GET /admin/learning-quality` | `LearningQualityResponse` |
+| `GET /admin/workload` | `WorkloadResponse`, all three dimensions |
+
+Grant the role in the database. No API sets it:
+
+```sql
+UPDATE "User" SET role = 'ADMIN' WHERE email = '<email>';
+```

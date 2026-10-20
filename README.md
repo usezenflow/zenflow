@@ -24,7 +24,7 @@ docker compose -f compose.dev.yml up -d   # Postgres, Redis, mail catcher
 pnpm prisma:dev:migrate
 pnpm start:dev                            # API http://localhost:8000, Swagger /api
 
-cd ../frontend && pnpm dev                # http://localhost:5173
+cd ../pwa && pnpm dev                # http://localhost:5173
 ```
 
 Env: see each app's `.env.example`. Details: [backend/README.md](backend/README.md).
@@ -33,7 +33,7 @@ Env: see each app's `.env.example`. Details: [backend/README.md](backend/README.
 
 | Path | What | Docs |
 | --- | --- | --- |
-| `frontend/` | React 19 + Vite PWA | [README](frontend/README.md) |
+| `pwa/` | React 19 + Vite PWA | [README](pwa/README.md) |
 | `mobile/` | Expo + React Native app | [README](mobile/README.md) |
 | `backend/` | NestJS API, scheduler, ingestion | [README](backend/README.md) |
 | `services/bandit/` | FastAPI placement and LinUCB service | [README](services/bandit/README.md) |
