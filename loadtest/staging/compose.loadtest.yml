@@ -38,6 +38,9 @@ services:
   worker-lms:
     environment: *loadtest-env
     <<: *fake-dlu-net
+  worker-scheduler:
+    environment: *loadtest-env
+    <<: *fake-dlu-net
 
   # Stand-in for lms.dlu.edu.vn / portal-api.dlu.edu.vn so ingestion can be load
   # tested without touching the real university. Any credentials work except the

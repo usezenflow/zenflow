@@ -46,7 +46,7 @@ Keep the old host untouched until the end.
 3. **Take last backups** on the old host. Stop the writers first to lose less:
    ```bash
    cd $DEPLOY_PATH/backend
-   docker compose -f compose.prod.yml stop api-blue api-green watcher worker-portal worker-lms worker-notify
+   docker compose -f compose.prod.yml stop api-blue api-green watcher worker-portal worker-lms worker-notify worker-scheduler
    docker compose -f compose.prod.yml stop vault
    docker exec zenflow-backup-prod sh -c '. /run/backup.env; sh /opt/backup/backup.sh; sh /opt/backup/backup-files.sh'
    docker compose -f compose.prod.yml start vault      # then unseal (3 shares)
@@ -72,7 +72,7 @@ Keep the old host untouched until the end.
 8. **Load data** with writers stopped:
    ```bash
    export ZENFLOW_SECRETS_DIR=/run/zenflow/prod
-   docker compose --env-file .env.prod -f compose.prod.yml stop api-blue api-green watcher worker-portal worker-lms worker-notify storage
+   docker compose --env-file .env.prod -f compose.prod.yml stop api-blue api-green watcher worker-portal worker-lms worker-notify worker-scheduler storage
    docker exec -i zenflow-db-prod sh -c 'pg_restore --no-owner --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < zenflow.dump
    docker run --rm -i -v zenflow-prod_storage_data:/data alpine sh -c 'rm -rf /data/* /data/.[!.]* ; tar -xf - -C /data' < files.tar
    docker compose --env-file .env.prod -f compose.prod.yml up -d storage
