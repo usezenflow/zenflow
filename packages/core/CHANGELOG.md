@@ -1,5 +1,11 @@
 # @zenflow/core
 
+## 1.0.0-beta.17
+
+### Patch Changes
+
+- @zenflow/shared@1.0.0-beta.17
+
 ## 1.0.0-beta.16
 
 ### Patch Changes
