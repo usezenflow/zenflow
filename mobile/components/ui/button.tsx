@@ -7,7 +7,7 @@ import * as React from "react";
 import { Pressable } from "react-native";
 
 const buttonVariants = cva(
-  "group flex flex-row items-center justify-center rounded-md web:ring-offset-background web:transition-colors web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2",
+  "group flex flex-row items-center justify-center rounded-full web:ring-offset-background web:transition-colors web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2",
   {
     variants: {
       variant: {
@@ -25,8 +25,8 @@ const buttonVariants = cva(
         // is laid out in (24px of 48px), which clipped larger text; `items-center`
         // already centres it.
         default: "h-10 px-4 native:h-12 native:px-5",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8 native:h-14",
+        sm: "h-9 rounded-full px-3",
+        lg: "h-11 rounded-full px-8 native:h-14",
         icon: "h-10 w-10",
       },
     },
