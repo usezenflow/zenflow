@@ -29,7 +29,7 @@ export interface SessionConfigParams {
   /**
    * The `SameSite` cookie attribute, configured via `COOKIE_SAMESITE`.
    *
-   * Use `"none"` when the frontend and API are on different registrable
+   * Use `"none"` when the pwa and API are on different registrable
    * domains (cross-site), so the browser sends the cookie on cross-site
    * requests. Browsers reject `SameSite=None` unless `Secure` is also set, so
    * this builder throws if `sameSite === "none"` while `secure === false`.

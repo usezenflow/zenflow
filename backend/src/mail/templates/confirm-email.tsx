@@ -89,7 +89,7 @@ export function ConfirmEmail(p: ConfirmEmailProps) {
                     padding: "22px 12px",
                     textAlign: "center",
                     fontFamily:
-                      "'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+                      "Geist, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
                     fontSize: 38,
                     fontWeight: 800,
                     letterSpacing: 10,

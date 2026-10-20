@@ -168,8 +168,10 @@ describe("NotificationsService", () => {
       expect(calls.map((c) => c[2].jobId)).toEqual([
         "push_n1_fcm",
         "push_n1_apns",
+        "push_n1_web",
         "push_n1_fcm",
         "push_n1_apns",
+        "push_n1_web",
       ]);
       expect(calls[0][1]).toEqual({
         type: "push",
@@ -185,8 +187,8 @@ describe("NotificationsService", () => {
         const done = service.announce("session.new", ROW);
         await jest.advanceTimersByTimeAsync(5_000);
         await expect(done).resolves.toBeUndefined();
-        // 3 attempts x 2 providers
-        expect(queue.enqueueBestEffort).toHaveBeenCalledTimes(6);
+        // 3 attempts x 3 providers
+        expect(queue.enqueueBestEffort).toHaveBeenCalledTimes(9);
       } finally {
         jest.useRealTimers();
       }
@@ -203,7 +205,8 @@ describe("NotificationsService", () => {
         const done = service.announce("session.new", ROW);
         await jest.advanceTimersByTimeAsync(5_000);
         await done;
-        expect(queue.enqueueBestEffort).toHaveBeenCalledTimes(4);
+        // 3 first attempts, then one retry each for fcm and apns.
+        expect(queue.enqueueBestEffort).toHaveBeenCalledTimes(5);
       } finally {
         jest.useRealTimers();
       }
@@ -219,7 +222,7 @@ describe("NotificationsService", () => {
       queue.getJob.mockImplementation((_def: unknown, id: string) =>
         Promise.resolve(id === "push_n1_fcm" ? { id } : undefined),
       );
-      await expect(service.reconcileRecent()).resolves.toBe(3);
+      await expect(service.reconcileRecent()).resolves.toBe(5);
       const ids = (
         queue.enqueueBestEffort.mock.calls as [
           unknown,
@@ -227,7 +230,13 @@ describe("NotificationsService", () => {
           { jobId: string },
         ][]
       ).map((c) => c[2].jobId);
-      expect(ids).toEqual(["push_n1_apns", "push_n2_fcm", "push_n2_apns"]);
+      expect(ids).toEqual([
+        "push_n1_apns",
+        "push_n1_web",
+        "push_n2_fcm",
+        "push_n2_apns",
+        "push_n2_web",
+      ]);
     });
 
     it("pages past the first batch so older rows are still checked", async () => {
@@ -336,6 +345,8 @@ describe("NotificationsService", () => {
         eventEndsAt: null,
         sessionId: null,
         conflictSessionIds: [],
+        slotProposalId: null,
+        offerSlots: [],
       });
     });
   });

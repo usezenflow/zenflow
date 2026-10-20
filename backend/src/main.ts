@@ -53,7 +53,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   app.set("trust proxy", configService.get<number>("TRUST_PROXY_HOPS"));
   app.setGlobalPrefix("api/v1");
-  // Comma-separated list: the web frontend and Expo's web dev server are
+  // Comma-separated list: the web pwa and Expo's web dev server are
   // separate origins. `cors` only echoes a single origin back, so this must be
   // an array for it to match the request and reflect the right one.
   const corsOrigins = (configService.get<string>("CORS_ORIGIN") ?? "")

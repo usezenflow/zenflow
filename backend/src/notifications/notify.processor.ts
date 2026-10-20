@@ -13,8 +13,8 @@ import { ReminderSchedulerService } from "../reminders/reminder-scheduler.servic
  * `push` (one provider per job) -> {@link PushService}, `reminder` ->
  * {@link ReminderSchedulerService.fire}. Each handler throws on a real failure
  * (BullMQ retries with backoff, then dead-letters) and returns normally when
- * there is nothing to send. Push providers run under the `fcm` / `apns`
- * breakers: when one is open the job is parked without using an attempt.
+ * there is nothing to send. Push providers run under the `fcm` / `apns` /
+ * `web` breakers: when one is open the job is parked without using an attempt.
  */
 @Injectable()
 export class NotifyProcessor implements OnModuleInit {
