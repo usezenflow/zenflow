@@ -12,6 +12,7 @@ owns:
   - backend/src/queue/**
   - backend/ops/**
   - backend/env/**
+  - backend/scripts/push-*.sh
   - backend/killswitch
   - backend/src/killswitch/**
   - build_images.sh

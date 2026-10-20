@@ -23,6 +23,9 @@ owns:
   - backend/scripts/send-test-notification.ts
   - backend/src/places/**
   - backend/src/commute/**
+  - backend/src/admin/**
+  - backend/src/client-events/**
+  - backend/src/link-preview/**
   - packages/shared/**
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
