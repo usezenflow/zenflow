@@ -31,7 +31,7 @@ export function AdvancedSection() {
       </button>
 
       {open ? (
-        <>
+        <div className="animate-in fade-in-0 slide-in-from-top-1 duration-200">
           <SettingsCard>
             <SettingsRow
               icon={Clock}
@@ -60,7 +60,7 @@ export function AdvancedSection() {
               </>
             ) : null}
           </SettingsCard>
-        </>
+        </div>
       ) : null}
     </>
   );

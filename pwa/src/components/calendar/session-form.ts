@@ -147,6 +147,10 @@ export function patchFor(
   if (session.type === "TASK") {
     if (names.has("deadline") && form.deadline) patch.deadline = instantAtEnd(form.deadline, tz);
     if (names.has("duration")) patch.durationMinutes = form.duration;
+    // A manual move: the same write a drag makes.
+    if ((names.has("date") || names.has("startTime")) && form.date) {
+      patch.scheduledStartTime = instantAtStart(form.date, form.startTime, tz);
+    }
   } else if ((names.has("date") || names.has("startTime") || names.has("endTime")) && form.date) {
     patch.scheduledStartTime = instantAtStart(form.date, form.startTime, tz);
     patch.durationMinutes = fixedDuration(form.startTime, form.endTime);
