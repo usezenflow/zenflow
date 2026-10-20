@@ -17,7 +17,7 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - One backend image runs as several processes, picked by `ROLE` ([ADR-0011](docs/adr/0011-separate-api-worker-processes.md)):
   - `api`: HTTP only, scales by replicas, no cron.
   - `watcher`: exactly one, the only cron runner. It enqueues and consumes nothing.
-  - `worker-portal`, `worker-lms`, `worker-notify`: one BullMQ queue each.
+  - `worker-portal`, `worker-lms`, `worker-notify`, `worker-scheduler`: one BullMQ queue each.
   - `all` runs everything in one process (local dev, test stack).
 - All placement ranking is delegated to the Bandit service, a stateless Python process called by the API and the watcher.
 - Redis is split by workload: sessions/OTP, rate limits (also the manual-sync lock), kill-switch flags, BullMQ jobs, SSE pub/sub ([ADR-0008](docs/adr/0008-redis-topology-and-kill-switch.md)). The `redis-cache` of ADR-0017 is not deployed.

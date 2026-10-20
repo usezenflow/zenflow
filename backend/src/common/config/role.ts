@@ -8,6 +8,7 @@ import { config } from "dotenv";
  *  - `worker-portal`  consumes every `portal-*` queue.
  *  - `worker-lms`     consumes every `lms-*` queue.
  *  - `worker-notify`  consumes `notify` (push, email, reminder).
+ *  - `worker-scheduler` consumes `prep-plan` (prep plans, sized by bandit).
  *  - `worker`         watcher + every consumer (the pre-queue single worker).
  *  - `all`            everything incl. HTTP (default; local dev and the test stack).
  * Everything except `api` and `all` serves `/health` and nothing else.
@@ -18,6 +19,7 @@ export type Role =
   | "worker-portal"
   | "worker-lms"
   | "worker-notify"
+  | "worker-scheduler"
   | "worker"
   | "all";
 
@@ -27,6 +29,7 @@ const ROLES: readonly Role[] = [
   "worker-portal",
   "worker-lms",
   "worker-notify",
+  "worker-scheduler",
   "worker",
   "all",
 ];
@@ -91,6 +94,8 @@ export function consumesQueue(role: Role, queue: ConsumedQueue): boolean {
       return queue.startsWith("lms-");
     case "worker-notify":
       return queue === "notify";
+    case "worker-scheduler":
+      return queue === "prep-plan";
     default:
       return false;
   }
