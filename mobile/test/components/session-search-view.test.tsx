@@ -139,9 +139,11 @@ describe("SessionSearchView", () => {
       target: { value: "essay" },
     });
 
-    const row = await screen.findByTestId("session-search.row.e1");
     await waitFor(() => expect(calls.some((c) => c.q === "essay")).toBe(true));
-    expect(within(row).getByTestId("session-search.match").textContent).toBe("Essay");
+    const row = await screen.findByTestId("session-search.row.e1");
+    await waitFor(() =>
+      expect(within(row).getByTestId("session-search.match").textContent).toBe("Essay"),
+    );
     expect(row.textContent).toContain("OOP Essay");
   });
 

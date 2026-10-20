@@ -79,6 +79,7 @@ const next = async (title: string) =>
 // The first step is focus; the name step was removed (the DLU name fills it on first sync).
 const TITLES = [
   "When do you focus best?",
+  "Pick some tags",
   "Connect your LMS or portal",
   "Plan your commute",
   "Stay ahead of deadlines",
@@ -103,7 +104,7 @@ describe("OnboardingScreen", () => {
   it("goes back a step and hides Back again on the first step", async () => {
     renderScreen(<OnboardingScreen />);
     fireEvent.click(primary());
-    await next("Connect your LMS or portal");
+    await next("Pick some tags");
     fireEvent.click(screen.getByLabelText("Back"));
     await next("When do you focus best?");
     expect(screen.queryByLabelText("Back")).toBeNull();
@@ -151,12 +152,12 @@ describe("OnboardingScreen", () => {
       expect(isDisabled(primary())).toBe(false);
     });
 
-    it("saves the picked band and moves to the LMS step", async () => {
+    it("saves the picked band and moves to the tags step", async () => {
       await openFocus();
       fireEvent.click(screen.getByTestId("onboarding.focus.AFTERNOON"));
       expect(isDisabled(primary())).toBe(false);
       fireEvent.click(primary());
-      await next("Connect your LMS or portal");
+      await next("Pick some tags");
       expect(patches).toEqual([{ focusBand: "AFTERNOON" }]);
       expect(useUserStore.getState().user?.focusBand).toBe("AFTERNOON");
     });
@@ -164,7 +165,7 @@ describe("OnboardingScreen", () => {
     it("skips without saving a band", async () => {
       await openFocus();
       fireEvent.click(secondary());
-      await next("Connect your LMS or portal");
+      await next("Pick some tags");
       expect(patches).toEqual([]);
     });
 
@@ -176,7 +177,7 @@ describe("OnboardingScreen", () => {
       await openFocus();
       expect(screen.getByTestId("onboarding.focus.EVENING").getAttribute("aria-checked")).toBe("true");
       fireEvent.click(primary());
-      await next("Connect your LMS or portal");
+      await next("Pick some tags");
       expect(patches).toEqual([]);
     });
 
@@ -232,25 +233,19 @@ describe("OnboardingScreen", () => {
   describe("finish", () => {
     async function openSummary() {
       renderScreen(<OnboardingScreen />);
-      fireEvent.click(primary());
-      await next("Connect your LMS or portal");
-      fireEvent.click(secondary());
-      await next("Stay ahead of deadlines");
-      fireEvent.click(secondary());
-      await next("You’re all set");
+      await skipTo("You’re all set");
     }
 
-    it("has no timezone, reminder or tags steps", async () => {
+    it("has no timezone or reminder steps", async () => {
       await openSummary();
       expect(screen.queryByText("Where are you?")).toBeNull();
       expect(screen.queryByText("Default reminder")).toBeNull();
-      expect(screen.queryByText("Pick your tags")).toBeNull();
     });
 
     it("lists skipped steps on the summary and reopens one, returning to the summary", async () => {
       await openSummary();
       const setUp = screen.getAllByText("Set up");
-      expect(setUp.length).toBe(2); // LMS + notifications were skipped
+      expect(setUp.length).toBe(3); // LMS, commute and notifications were skipped
       fireEvent.click(setUp[0]);
       await next("Connect your LMS or portal");
       fireEvent.click(primary());
