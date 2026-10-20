@@ -39,6 +39,17 @@ export function CampusMap({ point, start = null, route = null, walk = null, name
     () => (mapsUrl ? buildCampusMapHtml(first.current, mapsUrl, { pickable, dark }) : null),
     [mapsUrl, pickable, dark],
   );
+  // A `srcDoc` frame gets no basemap tiles in Chromium, so the page loads from a blob URL.
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!html) return;
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    setSrc(url);
+    return () => {
+      URL.revokeObjectURL(url);
+      setSrc(null);
+    };
+  }, [html]);
 
   // The page applies views once it has loaded, and says "ready" when it has.
   const view = useRef<MapView>({ end: point, start, route, walk });
@@ -82,7 +93,7 @@ export function CampusMap({ point, start = null, route = null, walk = null, name
       <iframe
         ref={frame}
         title={t("Map of {place}", { place: name ?? "" })}
-        srcDoc={html}
+        src={src ?? undefined}
         className="h-full w-full border-0"
       />
     </div>
