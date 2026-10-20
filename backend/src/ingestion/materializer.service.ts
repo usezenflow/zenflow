@@ -12,9 +12,6 @@ import { PREP_QUEUE, prepJobId } from "../queue/queues";
 import { QueueService } from "../queue/queue.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { insertFixedSession } from "../sessions/fixed-session-writer";
-import { toSessionSnapshot } from "../sessions/session-mapper";
-import { recordSessionEvent } from "../sessions/session-events";
-import { WITH_TAGS_AND_SERIES } from "../sessions/types/session-row";
 import { TagsService } from "../tags/tags.service";
 import { monthsFrom, resolveSemester } from "./core/semester";
 import { digestNotifications, SyncDigest } from "./core/sync-digest";
@@ -230,24 +227,8 @@ export class MaterializerService {
         if (createdId) {
           runDigest.add(digestItemOf(block, "created", createdId), source);
           await this.enqueuePrepIfDue(userId, block, createdId, now);
-          if (block.type === "ASSIGNMENT" && submittedAtOf(block, now))
-            await this.announceCompleted(userId, createdId, block);
         }
         continue;
-      }
-
-      if (
-        (block as Partial<ParsedLmsItem>).submitted &&
-        !existing.submittedAt
-      ) {
-        const completed = await this.prisma.$transaction(async (tx) => {
-          await tx.session.update({
-            where: { id: existing.id },
-            data: { submittedAt: now },
-          });
-          return this.completeSubmitted(tx, userId, existing.id, now);
-        });
-        if (completed) await this.announceCompleted(userId, existing.id, block);
       }
 
       if (!differsFromUpstream(existing, block)) {
@@ -470,8 +451,7 @@ export class MaterializerService {
     parentSessionId: string,
     now: Date,
   ): Promise<void> {
-    const submitted = (block as Partial<ParsedLmsItem>).submitted === true;
-    if (!prepTargetOf(block, now, submitted)) return;
+    if (!prepTargetOf(block, now)) return;
     await this.queues.enqueueBestEffort(
       PREP_QUEUE,
       { userId, parentSessionId },
@@ -498,108 +478,6 @@ export class MaterializerService {
       },
       data: { deleted: true },
     });
-  }
-
-  /**
-   * A submitted LMS assignment is done: check it off the way the user would,
-   * so it has a `COMPLETE` event. Runs once, when the submission is first
-   * seen, so a later manual un-check sticks. A skipped or
-   * already completed row is left alone.
-   */
-  private async completeSubmitted(
-    tx: Prisma.TransactionClient,
-    userId: string,
-    sessionId: string,
-    now: Date,
-  ): Promise<boolean> {
-    const { count } = await tx.session.updateMany({
-      where: {
-        id: sessionId,
-        userId,
-        type: "ASSIGNMENT",
-        skipped: false,
-        completedAt: null,
-      },
-      data: { completedAt: now },
-    });
-    if (!count) return false;
-    const row = await tx.session.findUniqueOrThrow({
-      where: { id: sessionId },
-      include: WITH_TAGS_AND_SERIES,
-    });
-    await tx.sessionEvent.create({
-      data: {
-        sessionId,
-        userId,
-        eventType: "COMPLETE",
-        newSnapshot: toSessionSnapshot(row),
-      },
-    });
-    recordSessionEvent("COMPLETE");
-    await this.completePreps(tx, userId, sessionId, now);
-    return true;
-  }
-
-  /** The prep plans for a submitted assignment are moot: check them off too. */
-  private async completePreps(
-    tx: Prisma.TransactionClient,
-    userId: string,
-    targetId: string,
-    now: Date,
-  ): Promise<void> {
-    const preps = await tx.session.findMany({
-      where: {
-        userId,
-        prepForSessionId: targetId,
-        deleted: false,
-        skipped: false,
-        completedAt: null,
-      },
-      select: { id: true },
-    });
-    for (const { id } of preps) {
-      await tx.session.update({ where: { id }, data: { completedAt: now } });
-      const row = await tx.session.findUniqueOrThrow({
-        where: { id },
-        include: WITH_TAGS_AND_SERIES,
-      });
-      await tx.sessionEvent.create({
-        data: {
-          sessionId: id,
-          userId,
-          eventType: "COMPLETE",
-          newSnapshot: toSessionSnapshot(row),
-        },
-      });
-      recordSessionEvent("COMPLETE");
-    }
-  }
-
-  /**
-   * After the completion commits: raise the "done" notification (live stream and push). Best-effort, so a failure never
-   * fails the sync.
-   */
-  private async announceCompleted(
-    userId: string,
-    sessionId: string,
-    block: ParsedBlock,
-  ): Promise<void> {
-    try {
-      await this.raise(userId, {
-        sessionId,
-        title: `Assignment done: ${block.title}`,
-        content: "Checked off from LMS.",
-        eventEndsAt: new Date(
-          block.scheduledStartTime.getTime() + block.durationMinutes * 60_000,
-        ),
-        materializeSession: false,
-        eventName: "assignment.completed",
-      });
-    } catch (err) {
-      this.logger.warn(
-        `completion notification failed: ${(err as Error).message}`,
-      );
-    }
   }
 
   private async create(
@@ -634,9 +512,6 @@ export class MaterializerService {
           submittedAt: submittedAtOf(block, now),
         });
         newId = row.id;
-        if (row.submittedAt) {
-          await this.completeSubmitted(tx, userId, row.id, now);
-        }
 
         // Same default reminder as an in-app task (0 = none).
         const owner = await tx.user.findUnique({

@@ -22,16 +22,6 @@ describe("prepTargetOf", () => {
     ).toBeNull();
   });
 
-  it("skips an assignment already submitted on the LMS", () => {
-    expect(
-      prepTargetOf(
-        { type: "ASSIGNMENT", scheduledStartTime: LATER },
-        NOW,
-        true,
-      ),
-    ).toBeNull();
-  });
-
   it("skips an item whose deadline has passed", () => {
     const past = new Date("2026-10-16T00:00:00Z");
     expect(
