@@ -5,6 +5,8 @@ const BACKGROUND = "#fbf3e8";
 const DARK_BACKGROUND = "#161210";
 const PRIMARY = "#ff8e3e";
 const PRIMARY_DARK = "#ff7a24";
+/** The path (ride line and footsteps) on the dark basemap: light enough to read over the brown roads. */
+const DARK_PATH = "#ffc27a";
 
 /**
  * Base URL of the map edge: style, PMTiles and map libraries. It lives on the
@@ -69,7 +71,8 @@ export function buildCampusMapHtml(
     mapsUrl,
     background,
     style: dark ? "style-dark.json" : "style.json",
-    routeCasing: dark ? "#111418" : "#ffffff",
+    routeCasing: dark ? "#0b0907" : "#ffffff",
+    pathColor: dark ? DARK_PATH : PRIMARY,
     markerColor: dark ? PRIMARY_DARK : PRIMARY,
     labels: CAMPUS_PLACES.map((place) => ({ name: place.name, lng: place.lng, lat: place.lat })),
   };
@@ -111,7 +114,7 @@ function footstepImage() {
   canvas.width = 32;
   canvas.height = 32;
   var ctx = canvas.getContext("2d");
-  ctx.fillStyle = config.markerColor;
+  ctx.fillStyle = config.pathColor;
   ctx.setTransform(0.65, 0, 0, 0.65, 5.6, 6);
   ctx.fill(new Path2D("M16,2 C21.5,2 22.5,8 22,12 C21.5,15.5 19.8,17.5 20,22 C20.2,26.5 22.5,28.5 22,33 C21.5,37 18.5,38 16,38 C12.5,38 10.2,36.5 10.2,32 C10.2,27.5 11.8,25.5 11.5,21 C11.2,17 10,15 10,11.5 C10,6.5 12.5,2 16,2 Z"));
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -195,7 +198,7 @@ function show(style) {
       map.addLayer({
         id: "route-glow", type: "line", source: "route",
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": config.markerColor, "line-width": 16, "line-opacity": 0.22, "line-blur": 3 }
+        paint: { "line-color": config.pathColor, "line-width": 16, "line-opacity": 0.22, "line-blur": 3 }
       });
       map.addLayer({
         id: "route-casing", type: "line", source: "route",
@@ -205,7 +208,7 @@ function show(style) {
       map.addLayer({
         id: "route", type: "line", source: "route",
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": config.markerColor, "line-width": 5 }
+        paint: { "line-color": config.pathColor, "line-width": 5 }
       });
     }
   }
