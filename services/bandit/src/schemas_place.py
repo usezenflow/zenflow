@@ -97,7 +97,6 @@ class FlexibleWire(_Req):
     duration_minutes: int = Field(gt=0)
     deadline_ms: int
     start_ms: int
-    completed: bool = False
     series_id: str | None = None
 
 

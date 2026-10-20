@@ -5,7 +5,7 @@ with the user's persisted ``(A, b)``, then a delayed reward through
 ``POST /v1/update`` for the ``selectedArm`` + ``featureVector`` the placement
 returned -- against a simulated user with a hidden preferred band:
 
-* placed in the preferred band -> kept -> ``RETAINED`` (+1);
+* placed in the preferred band -> started -> ``START`` (+1);
 * otherwise the user drags it to the centre of the preferred band on the same
   day -> first ``MOVE``, graded by :func:`drag_distance_reward`.
 
@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 
 from src.api import app
 from src.core.arms import ARM_BANDS
-from src.core.constants import DAY_MS, MS_PER_MINUTE, PREFERENCE_RETAINED_WEIGHT
+from src.core.constants import DAY_MS, MS_PER_MINUTE, PREFERENCE_KEPT_WEIGHT
 from src.core.preference import (
     default_preference_matrix,
     reinforce_preference_cell,
@@ -106,7 +106,7 @@ def simulate(
             reward = drag_distance_reward((moved_to - start) / MS_PER_MINUTE)
         if arm == want:
             matrix = reinforce_preference_cell(
-                matrix, start, "UTC", PREFERENCE_RETAINED_WEIGHT
+                matrix, start, "UTC", PREFERENCE_KEPT_WEIGHT
             )
         else:
             matrix = reinforce_preference_move(matrix, start, moved_to, "UTC", drag)

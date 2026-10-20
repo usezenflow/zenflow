@@ -504,7 +504,6 @@ class _Placer:
                     f.duration_minutes,
                     f.deadline_ms,
                     f.start_ms,
-                    f.completed,
                     f.series_id,
                 )
                 for f in ctx.flexible

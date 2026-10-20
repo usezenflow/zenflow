@@ -19,7 +19,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from src.core.arms import ARM_BANDS
-from src.core.constants import FEATURE_DIM, PREFERENCE_RETAINED_WEIGHT
+from src.core.constants import FEATURE_DIM, PREFERENCE_KEPT_WEIGHT
 from src.core.hybrid import Z_DIM, hybrid_update
 from src.core.preference import (
     decay_matrix,
@@ -45,13 +45,13 @@ class PreferenceMatrix:
     def retained(self, start_ms: int) -> None:
         """Legacy kept-placement rule (``reward="retained"``)."""
         self.matrix = reinforce_preference_cell(
-            self.matrix, start_ms, self.tz, PREFERENCE_RETAINED_WEIGHT
+            self.matrix, start_ms, self.tz, PREFERENCE_KEPT_WEIGHT
         )
 
     def labelled(self, at_ms: int, reward: float) -> None:
         """Kept placement: ``reward`` is the completion reward (0 for a skip)."""
         self.matrix = reinforce_preference_cell(
-            self.matrix, at_ms, self.tz, PREFERENCE_RETAINED_WEIGHT * reward
+            self.matrix, at_ms, self.tz, PREFERENCE_KEPT_WEIGHT * reward
         )
 
     def moved(self, old_ms: int, new_ms: int, drag_minutes: float) -> None:

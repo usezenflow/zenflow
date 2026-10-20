@@ -104,7 +104,6 @@ LECTURE = (at(8), at(10))  # fixed, also covers the frozen window
     [
         (at(9.75), {}, True),  # starts within 2 h of now
         (at(10), {}, False),  # exactly 2 h out: movable
-        (at(10), {"completed": True}, True),
     ],
 )
 def test_frozen_sessions_never_move(
@@ -292,13 +291,7 @@ def _random_body(seed: int) -> dict[str, Any]:
         minutes = rng.choice([30, 60, 90, 120])
         deadline = rng.choice([at(14), at(20), at(12, day=1), WEEK])
         flex.append(
-            fx(
-                f"f{i}",
-                t,
-                minutes,
-                deadline,
-                **({"completed": True} if rng.random() < 0.1 else {}),
-            )
+            fx(f"f{i}", t, minutes, deadline)
         )
         t += minutes * MIN + rng.choice([0, 0, 0, 15]) * MIN
     walls = [(at(8), t0), (t, t + rng.choice([2, 6, 20]) * HOUR)]
@@ -318,7 +311,6 @@ def test_plan_invariants(seed: int) -> None:
     for fid, f in by_id.items():
         if fid not in moved:
             continue
-        assert not f.get("completed", False)
         assert f["startMs"] >= NOW + 2 * HOUR
     if r["outcome"] != "DISPLACED":
         assert r["moves"] == []
