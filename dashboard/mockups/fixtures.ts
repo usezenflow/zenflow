@@ -48,6 +48,7 @@ export interface PolicyQuality {
   policy: Policy;
   proposals: number;
   acceptedUnmodified: number;
+  due: number;
   events: Record<SettledEvent, number>;
   dragMinutes: number;
   reward: number;

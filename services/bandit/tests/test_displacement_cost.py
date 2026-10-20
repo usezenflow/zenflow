@@ -290,9 +290,7 @@ def _random_body(seed: int) -> dict[str, Any]:
     for i in range(rng.randint(3, 7)):
         minutes = rng.choice([30, 60, 90, 120])
         deadline = rng.choice([at(14), at(20), at(12, day=1), WEEK])
-        flex.append(
-            fx(f"f{i}", t, minutes, deadline)
-        )
+        flex.append(fx(f"f{i}", t, minutes, deadline))
         t += minutes * MIN + rng.choice([0, 0, 0, 15]) * MIN
     walls = [(at(8), t0), (t, t + rng.choice([2, 6, 20]) * HOUR)]
     deadline = rng.choice([at(11), at(12), at(14)])

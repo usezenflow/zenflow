@@ -69,7 +69,9 @@ function fakePrisma(found: SessionRow | null) {
     sessionSeries: {
       findFirst: jest.fn().mockResolvedValue({
         skippedFrom: null,
-        sessions: [{ scheduledStartTime: new Date("2026-10-01T07:00:00.000Z") }],
+        sessions: [
+          { scheduledStartTime: new Date("2026-10-01T07:00:00.000Z") },
+        ],
       }),
       update: jest.fn().mockResolvedValue({}),
     },
@@ -345,8 +347,16 @@ describe("SessionSkipService.skipTimetableGroup", () => {
   const section = [
     row({ id: "m-1", scheduleStudyUnitId: "SEC-A", scheduledStartTime: at(1) }),
     row({ id: "m-2", scheduleStudyUnitId: "SEC-A", scheduledStartTime: at(8) }),
-    row({ id: "m-3", scheduleStudyUnitId: "SEC-A", scheduledStartTime: at(15) }),
-    row({ id: "other-1", scheduleStudyUnitId: "SEC-B", scheduledStartTime: at(8) }),
+    row({
+      id: "m-3",
+      scheduleStudyUnitId: "SEC-A",
+      scheduledStartTime: at(15),
+    }),
+    row({
+      id: "other-1",
+      scheduleStudyUnitId: "SEC-B",
+      scheduledStartTime: at(8),
+    }),
   ];
 
   it("skips every meeting in the group, regardless of time, without events", async () => {

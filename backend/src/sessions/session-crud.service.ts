@@ -590,8 +590,7 @@ export class SessionCrudService {
       new Date(candidates[candidates.length - 1].getTime() + 1),
     );
     const next = candidates.find(
-      (c) =>
-        !occurrenceSkip(states, series.id, c, series.skippedFrom).skipped,
+      (c) => !occurrenceSkip(states, series.id, c, series.skippedFrom).skipped,
     );
     if (!next) return null;
     const taken = await this.prisma.session.findFirst({

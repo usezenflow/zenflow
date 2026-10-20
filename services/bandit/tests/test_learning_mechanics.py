@@ -191,4 +191,6 @@ def test_finds_a_new_preferred_band_after_the_student_changes() -> None:
     picks = _run_shifting(bands)
     after = picks[shift_at:]
     first_morning = after.index("MORNING")
-    assert first_morning <= budget, f"MORNING first picked {first_morning} days after the change: {after[:12]}"
+    assert first_morning <= budget, (
+        f"MORNING first picked {first_morning} days after the change: {after[:12]}"
+    )

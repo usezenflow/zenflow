@@ -102,7 +102,9 @@ describe("WeekScreen", () => {
   it("offers to add a session on an empty day", async () => {
     renderScreen(<WeekScreen />);
     fireEvent.click(screen.getByLabelText("Friday, October 16"));
-    await screen.findAllByLabelText("Add a session to this day");
+    // The day loads over the network; CI runs the suite in parallel, so allow
+    // more than the default 1 s before the empty-day prompt must be there.
+    await screen.findAllByLabelText("Add a session to this day", undefined, { timeout: 5000 });
     fireEvent.click(focusedPage(screen.getAllByLabelText("Add a session to this day")));
     expect(router.navigate).toHaveBeenCalledWith({
       pathname: "/",

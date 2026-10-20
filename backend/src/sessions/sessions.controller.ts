@@ -180,7 +180,12 @@ export class SessionsController {
     @Query() query: SkipScopeDto,
     @CurrentUser() user: User,
   ) {
-    const data = await this.sessionsService.setSkip(id, true, user, query.scope);
+    const data = await this.sessionsService.setSkip(
+      id,
+      true,
+      user,
+      query.scope,
+    );
     return { success: true, message: "Session skipped", data };
   }
 
@@ -190,7 +195,12 @@ export class SessionsController {
     @Query() query: SkipScopeDto,
     @CurrentUser() user: User,
   ) {
-    const data = await this.sessionsService.setSkip(id, false, user, query.scope);
+    const data = await this.sessionsService.setSkip(
+      id,
+      false,
+      user,
+      query.scope,
+    );
     return { success: true, message: "Skip undone", data };
   }
 
