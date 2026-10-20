@@ -27,6 +27,7 @@ const MSG: PushMessage = {
     notificationId: "n1",
     eventName: "exam.created",
     sessionId: "s1",
+    slotProposalId: "",
     url: "/calendar?session=s1",
   },
   tone: "default",
