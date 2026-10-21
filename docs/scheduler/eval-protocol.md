@@ -8,6 +8,7 @@ Harness: `services/bandit/evalx/`. Simulated students only. Traits are assumptio
 uv run python -m evalx run --seeds 30 --students 100 --seed-offset 0   # held-out, 3,000 students per world
 uv run python -m evalx sensitivity --seeds 10 --students 100            # tuning seeds 100+
 uv run python -m evalx.figures                                          # F1 to F3
+uv run python -m evalx.diagnose                                         # where each policy places blocks
 ```
 
 Outputs go to `evalx/out/` (ignored): `results.json`, `report.md`, `sensitivity.md`, figures.
