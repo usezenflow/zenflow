@@ -1,7 +1,12 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Prisma, type Notification, type User } from "../../generated/prisma";
+import {
+  Prisma,
+  type Notification,
+  type SessionType,
+  type User,
+} from "../../generated/prisma";
 import { QueueService } from "../queue/queue.service";
 import { NotificationPubSub } from "./notification-pubsub.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -20,6 +25,7 @@ interface Row {
   readAt: Date | null;
   actionTakenAt: Date | null;
   eventEndsAt: Date | null;
+  session?: { type: SessionType } | null;
 }
 
 function makePrismaDouble(rows: Row[]) {
@@ -344,10 +350,25 @@ describe("NotificationsService", () => {
         actionTakenAt: null,
         eventEndsAt: null,
         sessionId: null,
+        sessionType: null,
         conflictSessionIds: [],
         slotProposalId: null,
         offerSlots: [],
       });
+    });
+
+    it("takes the linked session's type", async () => {
+      const { service } = await makeService([
+        row({
+          id: "n1",
+          eventName: "reminder.fired",
+          session: { type: "EXAM" },
+        }),
+      ]);
+
+      const [dto] = (await service.list(USER, {})).notifications;
+
+      expect(dto.sessionType).toBe("EXAM");
     });
   });
 

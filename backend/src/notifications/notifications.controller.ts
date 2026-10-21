@@ -13,10 +13,10 @@ import {
 } from "@nestjs/common";
 import { CookieAuthGuard } from "../auth/guards";
 import { CurrentUser } from "../users/decorators/current-user.decorator";
-import { Notification, type User } from "../../generated/prisma";
+import type { User } from "../../generated/prisma";
 import { ListNotificationsDto } from "./dto/list-notifications.dto";
 import { RaiseDevNotificationDto } from "./dto/raise-dev-notification.dto";
-import { NotificationsService } from "./notifications.service";
+import { NotificationRow, NotificationsService } from "./notifications.service";
 import { ConflictRescheduleService } from "../scheduler/io/conflict-reschedule.service";
 import { NotificationEvent } from "./types";
 import { filter, fromEvent, interval, map, merge, Observable } from "rxjs";
@@ -49,9 +49,9 @@ export class NotificationsController {
       this.notifications.notificationEmitter,
       NotificationEvent.NEW_SESSION,
     ).pipe(
-      filter((data) => (data as Notification).userId === user.id),
+      filter((data) => (data as NotificationRow).userId === user.id),
       map((data) => ({
-        data: this.notifications.toNotificationDto(data as Notification),
+        data: this.notifications.toNotificationDto(data as NotificationRow),
       })),
     );
     // Named `ping` frames keep idle connections open through proxies and edges.
