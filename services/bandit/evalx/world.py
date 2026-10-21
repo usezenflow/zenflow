@@ -10,6 +10,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, replace
 
+from src.core.band_prior import BAND_MINUTES, FocusBand
 from src.core.constants import DAY_MS, MS_PER_MINUTE
 from src.core.slot import local_date_str
 
@@ -29,6 +30,8 @@ class Student:
     # Optional change of routine: from ``shift_at_ms`` the band becomes ``band_after``.
     shift_at_ms: int | None = None
     band_after: tuple[int, int] | None = None
+    # What the product knows: the stated focus band (None when onboarding was skipped).
+    stated: FocusBand | None = None
 
     def with_attention(self, attention: float) -> Student:
         return replace(self, attention=attention)
@@ -48,6 +51,55 @@ ARCHETYPES: dict[str, Student] = {
     "night_owl": Student("night_owl", (20, 24), 0.4, 0.3, 0.3),
     "absent": Student("absent", (9, 17), 0.02, 0.0, 0.05),
 }
+
+
+# The four stated bands in cyclic order with their centre hour (``BAND_MINUTES``).
+STATED_ORDER: tuple[FocusBand, ...] = ("MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT")
+STATED_CENTRE: dict[FocusBand, float] = {
+    "MORNING": 10.0,
+    "AFTERNOON": 14.5,
+    "EVENING": 19.0,
+    "LATE_NIGHT": 23.5,
+}
+
+
+def _cyclic_gap(a: float, b: float) -> float:
+    d = abs(a - b) % 24
+    return min(d, 24 - d)
+
+
+def stated_for(band: tuple[int, int], condition: str) -> FocusBand:
+    """The stated band for a true band: ``correct`` is the nearest stated band by
+    centre, ``wrong`` the farthest."""
+    centre = (band[0] + band[1]) / 2
+    key = lambda s: _cyclic_gap(STATED_CENTRE[s], centre)  # noqa: E731
+    return (
+        min(STATED_ORDER, key=key)
+        if condition == "correct"
+        else max(STATED_ORDER, key=key)
+    )
+
+
+def stated_hours(band: FocusBand) -> list[int]:
+    """Clock hours (0..23) inside a stated band."""
+    return [h for h in range(24) if any(a <= h * 60 < b for a, b in BAND_MINUTES[band])]
+
+
+# What a student does with a proposal: drag it, tap an offer, or ignore both. A mix is
+# the share of each. The paper's lazy-student mix is ``tap_heavy``.
+MIXES: dict[str, tuple[float, float, float]] = {
+    "drag_only": (1.0, 0.0, 0.0),
+    "move_heavy": (0.6, 0.1, 0.3),
+    "tap_heavy": (0.1, 0.6, 0.3),
+    "ignore_heavy": (0.1, 0.2, 0.7),
+}
+HEADLINE_MIX = "tap_heavy"
+
+
+def style_of(mix: str, u: float) -> str:
+    """``drag``, ``tap`` or ``ignore`` for a uniform draw ``u``."""
+    drag, tap, _ = MIXES[mix]
+    return "drag" if u < drag else "tap" if u < drag + tap else "ignore"
 
 
 def open_chance(s: Student, days_to_deadline: float) -> float:
@@ -81,6 +133,10 @@ class Task:
     duration_min: int
     u_open: float
     u_drag: float
+    u_coin: float = 0.5  # pairwise run: which policy is primary
+    u_see: float = 0.5  # pairwise run: whether the offer is seen
+    eps_primary: float = 0.0  # pairwise run: perception noise on each option
+    eps_alt: float = 0.0
 
 
 def make_tasks(
@@ -96,10 +152,100 @@ def make_tasks(
         day = rng.randrange(weeks * 7)
         arrival = base_day_ms + day * DAY_MS + 8 * HOUR_MS
         deadline = arrival + rng.choice([1, 2, 3, 5, 7]) * DAY_MS
-        tasks.append(Task(arrival, deadline, duration_min, rng.random(), rng.random()))
+        tasks.append(
+            Task(
+                arrival,
+                deadline,
+                duration_min,
+                rng.random(),
+                rng.random(),
+                rng.random(),
+                rng.random(),
+                rng.gauss(0, 1),
+                rng.gauss(0, 1),
+            )
+        )
     tasks.sort(key=lambda t: t.arrival_ms)
     return tasks
 
 
 def day_str(ms: int) -> str:
     return local_date_str(ms, "UTC")
+
+
+# Lecture timetable. Every weekday keeps the same bands all period, so crowding is
+# constant. There are no exams, study blocks or assignments.
+SEMESTER_BANDS: dict[str, tuple[int, int]] = {
+    "MORNING": (7 * 60 + 30, 11 * 60 + 15),
+    "AFTERNOON": (13 * 60, 16 * 60 + 30),
+    "NIGHT": (16 * 60 + 45, 20 * 60),
+}
+PERIODS_PER_BAND = 4
+PERIOD_MIN = 50
+WEEKDAYS = 5
+BANDS_PER_DAY_WEIGHTS = {1: 0.2, 2: 0.6, 3: 0.2}
+# Hours no policy may start a block in: the overlap of both quiet windows. The
+# ceiling and a student's own moves are bounded by it, not by one arm's window.
+CEILING_QUIET = (2 * 60, 6 * 60)
+
+
+@dataclass(frozen=True)
+class Calendar:
+    """Busy minutes of each absolute day (day 0 is 1970-01-01, a Thursday)."""
+
+    busy: dict[int, list[tuple[int, int]]]
+
+
+def build_calendar(rng: random.Random, days: int) -> Calendar:
+    names = list(SEMESTER_BANDS)
+    counts = list(BANDS_PER_DAY_WEIGHTS)
+    weights = [BANDS_PER_DAY_WEIGHTS[k] for k in counts]
+    bands_on = {
+        wd: rng.sample(names, rng.choices(counts, weights=weights)[0])
+        for wd in range(WEEKDAYS)
+    }
+    busy: dict[int, list[tuple[int, int]]] = {}
+    for d in range(days):
+        wd = (d + 3) % 7
+        blocks: list[tuple[int, int]] = []
+        for band in bands_on.get(wd, []):
+            start, end = SEMESTER_BANDS[band]
+            stride = (end - start - PERIOD_MIN) // (PERIODS_PER_BAND - 1)
+            blocks += [
+                (start + i * stride, start + i * stride + PERIOD_MIN)
+                for i in range(PERIODS_PER_BAND)
+            ]
+        merged: list[tuple[int, int]] = []
+        for a, b in sorted(blocks):
+            if merged and a <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+            else:
+                merged.append((a, b))
+        busy[d] = merged
+    return Calendar(busy)
+
+
+def busy_minutes(cal: Calendar, midnight_ms: int) -> list[tuple[int, int]]:
+    return cal.busy.get(midnight_ms // DAY_MS, [])
+
+
+def feasible_start(
+    hours: tuple[int, int],
+    busy: list[tuple[int, int]],
+    duration_min: int,
+    window: tuple[int, int] = CEILING_QUIET,
+) -> int | None:
+    """The start minute in ``hours`` nearest its centre whose block avoids busy time
+    and the quiet ``window``; ``None`` when there is none."""
+    centre = (hours[0] + hours[1]) / 2 * 60
+    best: int | None = None
+    for m in range(hours[0] * 60, hours[1] * 60 - duration_min + 1, 15):
+        if any(m < be and m + duration_min > bs for bs, be in busy):
+            continue
+        if any(window[0] <= x % 1440 < window[1] for x in range(m, m + duration_min)):
+            continue
+        if best is None or abs(m + duration_min / 2 - centre) < abs(
+            best + duration_min / 2 - centre
+        ):
+            best = m
+    return best
