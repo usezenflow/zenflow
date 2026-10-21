@@ -1,7 +1,6 @@
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { listIntegrations } from "@/api/integrations";
-import { createTagsBulk, listTags } from "@/api/tags";
 import { updateBasicInfo } from "@/api/users";
 import {
   AlertCircle,
@@ -10,17 +9,10 @@ import {
   ChevronLeft,
   GraduationCap,
   LocateFixed,
-  type LucideIcon,
-  MoonStar,
   Sliders,
-  Sun,
-  Sunrise,
-  Sunset,
-  Tag,
   User,
 } from "@/components/Icons";
 import { ImportedTimetable } from "@/components/onboarding/imported-timetable";
-import { TagPicker } from "@/components/onboarding/tag-picker";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
 import { TravelSection } from "@/components/settings/travel-section";
 import { Button } from "@/components/ui/button";
@@ -31,15 +23,11 @@ import { useMyLocationStop } from "@/hooks/use-my-location-stop";
 import { useNotificationToggle } from "@/hooks/use-notification-toggle";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useUserStore } from "@/hooks/use-user-store";
-import type { FocusBand } from "@zenflow/shared";
 import { homeStop } from "@/lib/home-stop";
-import { DEFAULT_FOCUS_BAND, focusBandOptions } from "@/lib/focus-band";
 import {
   FIRST_STEP,
   type OnboardingStep,
   canGoBack,
-  initialTagSelection,
-  newTagsForBulk,
   nextStep,
   prevStep,
   stepProgress,
@@ -75,22 +63,6 @@ const COPY = {
   },
   get back() {
     return t("Back");
-  },
-  focus: {
-    get title() {
-      return t("When do you focus best?");
-    },
-    get body() {
-      return t("We'll try this part of the day first when we place your sessions.");
-    },
-  },
-  tags: {
-    get title() {
-      return t("Pick some tags");
-    },
-    get body() {
-      return t("Tags group your sessions by subject or kind. Add your own any time.");
-    },
   },
   dlu: {
     get title() {
@@ -191,41 +163,12 @@ const COPY = {
 } as const;
 
 const STEP_ICON: Partial<Record<OnboardingStep, typeof User>> = {
-  focus: Sun,
-  tags: Tag,
   dlu: GraduationCap,
   commute: LocateFixed,
   notifications: Bell,
 };
 
 /** Rounded card whose children are separated by hairlines. */
-/** Glyph and glass tint per focus band, warm at dawn to cool at night. */
-const BAND_VISUAL: Record<
-  FocusBand,
-  { Icon: LucideIcon; tint: string; ink: string }
-> = {
-  MORNING: {
-    Icon: Sunrise,
-    tint: "border-amber-500/40 bg-amber-500/15",
-    ink: "text-amber-600 dark:text-amber-400",
-  },
-  AFTERNOON: {
-    Icon: Sun,
-    tint: "border-orange-500/40 bg-orange-500/15",
-    ink: "text-orange-600 dark:text-orange-400",
-  },
-  EVENING: {
-    Icon: Sunset,
-    tint: "border-rose-500/40 bg-rose-500/15",
-    ink: "text-rose-600 dark:text-rose-400",
-  },
-  LATE_NIGHT: {
-    Icon: MoonStar,
-    tint: "border-indigo-500/40 bg-indigo-500/15",
-    ink: "text-indigo-600 dark:text-indigo-400",
-  },
-};
-
 function Group({ children }: { children: React.ReactNode }) {
   useLanguage();
   const items = (Array.isArray(children) ? children : [children]).flat();
@@ -262,23 +205,6 @@ export default function OnboardingScreen() {
   const [fromSummary, setFromSummary] = useState(false);
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
-  // Morning is preselected so the step is one tap.
-  const [focusBand, setFocusBand] = useState<FocusBand>(
-    user?.focusBand ?? DEFAULT_FOCUS_BAND,
-  );
-
-  const [existingTags, setExistingTags] = useState<string[]>([]);
-  const [tagsSelected, setTagsSelected] = useState<string[]>([]);
-  const [tagsSaved, setTagsSaved] = useState(false);
-  useEffect(() => {
-    listTags()
-      .then((tags) => {
-        const names = tags.map((tag) => tag.name);
-        setExistingTags(names);
-        setTagsSelected(initialTagSelection(names));
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     listIntegrations()
@@ -351,12 +277,6 @@ export default function OnboardingScreen() {
 
   const advance = () => go();
 
-  const saveFocus = () =>
-    run(async () => {
-      if (focusBand === user?.focusBand) return;
-      updateUser(await updateBasicInfo({ focusBand }));
-    });
-
   /**
    * Turn notifications on. "saved" = the preference is on but this device
    * couldn't register (simulator / no FCM) — a quiet success, retried next
@@ -415,29 +335,9 @@ export default function OnboardingScreen() {
     go();
   }
 
-  const saveTags = () =>
-    run(async () => {
-      const names = newTagsForBulk(tagsSelected, existingTags);
-      if (names.length > 0) await createTagsBulk(names);
-      setTagsSaved(true);
-      return undefined;
-    });
-
-  /** Best effort: the picks, or the suggested tags when the step was never saved; never blocks onboarding. */
-  async function seedTags() {
-    if (tagsSaved) return;
-    try {
-      const names = newTagsForBulk(tagsSelected, existingTags);
-      if (names.length > 0) await createTagsBulk(names);
-    } catch {
-      // Not worth blocking the first run on.
-    }
-  }
-
   async function finish() {
     setBusy(true);
     try {
-      await seedTags();
       // Idempotent; the root AuthGate then routes to the app.
       updateUser(await updateBasicInfo({ onboarded: true }));
     } catch {
@@ -479,70 +379,6 @@ export default function OnboardingScreen() {
   let footer: React.ReactNode = null;
 
   switch (step) {
-    case "focus":
-      ({ title, body } = COPY.focus);
-      content = (
-        <Group>
-          {focusBandOptions().map((option) => {
-            const on = focusBand === option.band;
-            const { Icon, tint, ink } = BAND_VISUAL[option.band];
-            return (
-              <Pressable
-                key={option.band}
-                testID={`onboarding.focus.${option.band}`}
-                onPress={() => setFocusBand(option.band)}
-                disabled={busy}
-                role="radio"
-                aria-checked={on}
-                className={cn(
-                  "flex-row items-center gap-3 px-4 py-3",
-                  on && "bg-primary/[0.06]",
-                )}
-              >
-                <View
-                  className={cn(
-                    "h-10 w-10 items-center justify-center rounded-xl border",
-                    tint,
-                  )}
-                >
-                  <Icon size={20} className={ink} />
-                </View>
-                <View className="min-w-0 flex-1">
-                  <Text
-                    className={cn(
-                      "text-[15px]",
-                      on ? "font-semibold" : "font-medium",
-                    )}
-                  >
-                    {option.label}
-                  </Text>
-                  <Text className="mt-0.5 text-[13px] text-muted-foreground">
-                    {option.hours}
-                  </Text>
-                </View>
-                {on && <Check size={18} className="text-primary" />}
-              </Pressable>
-            );
-          })}
-        </Group>
-      );
-      footer = (
-        <>
-          {primary(COPY.continue, saveFocus)}
-          {ghost(COPY.skipForNow, advance)}
-        </>
-      );
-      break;
-    case "tags":
-      ({ title, body } = COPY.tags);
-      content = <TagPicker selected={tagsSelected} onChange={setTagsSelected} />;
-      footer = (
-        <>
-          {primary(COPY.continue, saveTags)}
-          {ghost(COPY.skipForNow, () => void saveTags())}
-        </>
-      );
-      break;
     case "dlu":
       ({ title, body } = COPY.dlu);
       content = (
@@ -726,12 +562,6 @@ export default function OnboardingScreen() {
           v: LANGUAGES.find((l) => l.value === prefs.language)?.label ?? "",
         },
         { k: t("Name"), v: user?.name ?? "" },
-        {
-          k: t("Tags"),
-          v: tagsSelected.length > 0 ? String(tagsSelected.length) : t("Skipped"),
-          skipped: tagsSelected.length === 0,
-          step: "tags",
-        },
         {
           k: t("LMS & portal"),
           v: dluConnected ? t("Connected") : t("Skipped"),

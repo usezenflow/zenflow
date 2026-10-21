@@ -24,7 +24,6 @@ import { type DayStatus, deriveDayStatus } from "@/lib/day-status";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { useNow } from "@/hooks/use-now";
 import { useUserStore } from "@/hooks/use-user-store";
-import { focusBandStartMin } from "@/lib/focus-band";
 import { isPastDeadlineDrop } from "@/lib/overdue";
 import {
   showDisplacedToast,
@@ -119,6 +118,8 @@ import { rememberPlacement } from "@/lib/slot-alternatives";
 
 /** The empty-day "add a task" zone spans two hours from the focus band's start. */
 const EMPTY_ZONE_MINUTES = 120;
+/** Where an empty day opens: the start of the default matrix's late morning hump. */
+const EMPTY_ZONE_START_MIN = 9 * 60;
 
 /** Inset (px) of every block from the day column's edges. */
 const BLOCK_GUTTER = 2;
@@ -272,8 +273,7 @@ export function DayTimeline({
   useLanguage();
   const offline = useOffline();
   const tz = useUserStore((s) => s.user?.timezone) || "UTC";
-  const focusBand = useUserStore((s) => s.user?.focusBand);
-  const emptyZoneStartMin = focusBandStartMin(focusBand);
+  const emptyZoneStartMin = EMPTY_ZONE_START_MIN;
   const { confirm, toast } = useToast();
   // Bumped whenever a drop settles, so a block whose start didn't change
   // (save failed, sheet cancelled) releases its drop pin and snaps back.
