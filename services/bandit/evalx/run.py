@@ -75,7 +75,7 @@ from evalx.world import (  # noqa: E402
 from src.api import update_arm  # noqa: E402
 from src.core import constants as consts  # noqa: E402
 from src.core.arms import TIE_BREAK_ARM_ORDER  # noqa: E402
-from src.core.band_prior import FocusBand  # noqa: E402
+from src.core.band_prior import BAND_MINUTES, FocusBand  # noqa: E402
 from src.core.constants import (  # noqa: E402
     DAY_MS,
     MS_PER_MINUTE,
@@ -119,6 +119,13 @@ ARM_SPEC: dict[str, dict[str, Any]] = {
     "S-deadline": {"policy": "LINUCB", "band": True, "deadline": False},
     "S-tiebreak": {"policy": "LINUCB", "band": True, "tiebreak": False},
     "S-plain": {"policy": "LINUCB", "band": True, "gap": False, "deadline": False},
+    "S-band": {
+        "policy": "LINUCB",
+        "band": True,
+        "gap": False,
+        "deadline": False,
+        "earliest": "band",
+    },
     "S-min": {
         "policy": "LINUCB",
         "band": True,
@@ -170,8 +177,27 @@ class _EarliestOnly:
         return np.lexsort((keys[0], keys[-1]), *args, **kwargs)
 
 
+class _BandThenEarliest(_EarliestOnly):
+    """Like ``_EarliestOnly`` but, among equal scores, prefers starts whose hour is
+    inside the stated band (``band``), then the earlier start."""
+
+    band: FocusBand | None = None
+
+    @staticmethod
+    def lexsort(keys: Any, *args: Any, **kwargs: Any) -> Any:
+        starts, neg_score = keys[0], keys[-1]
+        band = _BandThenEarliest.band
+        if band is None:
+            return np.lexsort((starts, neg_score), *args, **kwargs)
+        minute = (np.asarray(starts) // MS_PER_MINUTE) % 1440
+        inside = np.zeros(len(minute), dtype=bool)
+        for lo, hi in BAND_MINUTES[band]:
+            inside |= (minute >= lo) & (minute < hi)
+        return np.lexsort((starts, ~inside, neg_score), *args, **kwargs)
+
+
 @contextmanager
-def _knobs(spec: dict[str, Any]) -> Iterator[None]:
+def _knobs(spec: dict[str, Any], band: FocusBand | None = None) -> Iterator[None]:
     """Apply one arm's gap, deadline and tie-break settings around its placements."""
     gap = CFG["gap_weight"] if CFG["gap_weight"] is not None else _PRODUCTION["gap"]
     deadline = (
@@ -180,7 +206,10 @@ def _knobs(spec: dict[str, Any]) -> Iterator[None]:
         else _PRODUCTION["deadline"]
     )
     saved_np = best_slot_module.np  # type: ignore[attr-defined]
-    if spec.get("earliest"):
+    if spec.get("earliest") == "band":
+        _BandThenEarliest.band = band
+        best_slot_module.np = _BandThenEarliest()  # type: ignore[attr-defined]
+    elif spec.get("earliest"):
         best_slot_module.np = _EarliestOnly()  # type: ignore[attr-defined]
     saved = (
         consts.LINUCB_GAP_WEIGHT,
@@ -484,7 +513,7 @@ def simulate(
         st = s.at(task.arrival_ms)
         lin = None
         if policy in ("HEURISTIC", "LINUCB"):
-            with _knobs(spec):
+            with _knobs(spec, band):
                 res = _place(task, policy, state, matrix, n, band, cal)
             if res is None:
                 continue
@@ -679,6 +708,9 @@ PAIRS: dict[str, tuple[str, str]] = {
     "Smin_minus_S": ("S-min", "S"),
     "Smin_minus_H0": ("S-min", "H0"),
     "Smin_minus_L0": ("S-min", "L0"),
+    "Sband_minus_H1": ("S-band", "H1"),
+    "Sband_minus_Smin": ("S-band", "S-min"),
+    "Sband_minus_Splain": ("S-band", "S-plain"),
     "Splain_minus_H1": ("S-plain", "H1"),
     "Splain_minus_S": ("S-plain", "S"),
 }

@@ -181,3 +181,18 @@ def test_the_earliest_start_arm_restores_the_ranking() -> None:
     with harness._knobs(harness.ARM_SPEC["S-min"]):
         assert linucb_best_slot.np is not before  # type: ignore[attr-defined]
     assert linucb_best_slot.np is before  # type: ignore[attr-defined]
+
+
+def test_the_band_tie_rule_prefers_stated_band_hours_then_the_earlier_start() -> None:
+    import numpy as np
+
+    shim = harness._BandThenEarliest
+    shim.band = "LATE_NIGHT"
+    hour = 3_600_000
+    starts = np.array([20 * hour, 21 * hour, 22 * hour], dtype=np.int64)
+    neg_score = np.zeros(3)
+    order = shim.lexsort((starts, np.zeros(3), np.zeros(3), neg_score))
+    assert starts[order[0]] == 21 * hour  # 20:00 is outside 21:00 to 02:00
+    shim.band = None
+    order = shim.lexsort((starts, np.zeros(3), np.zeros(3), neg_score))
+    assert starts[order[0]] == 20 * hour  # no stated band: the earlier start
