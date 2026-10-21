@@ -677,6 +677,8 @@ PAIRS: dict[str, tuple[str, str]] = {
     "S_deadline_minus_H1_deadline": ("S-deadline", "H1-deadline"),
     "Smin_minus_H1": ("S-min", "H1"),
     "Smin_minus_S": ("S-min", "S"),
+    "Smin_minus_H0": ("S-min", "H0"),
+    "Smin_minus_L0": ("S-min", "L0"),
     "Splain_minus_H1": ("S-plain", "H1"),
     "Splain_minus_S": ("S-plain", "S"),
 }
