@@ -14,14 +14,36 @@ onboarding, so the heuristic gets the same band.
    terms (free time around the slot, distance to the deadline). It is the version in production
    ([level-up report](./level-up-linucb-v2.md)).
 
-**Terms used below.**
+## Glossary
 
-- *Proposal:* one slot the app places for one task.
-- *Start:* the student starts the session in its slot. The only outcome this eval counts.
-- *Stated band:* the focus band the student picks at onboarding: morning, afternoon, evening or late night.
-- *True band:* the hours the simulated student really starts in. The stated band may match it (correct) or not (wrong).
-- *World:* one kind of simulated student: a true band, a stated band and an attention level.
-- *Pick rate:* of the offers a student taps, the share where they take LinUCB's option.
+Read this first. Every table in the report uses these terms.
+
+**The students**
+
+- **Simulated student:** a program that reacts to placements by fixed rules. There are no real people in this report.
+- **True band:** the hours the student really starts in, for example 17:00 to 21:00.
+- **Stated band:** the answer given at onboarding to "when do you focus best?": morning, afternoon, evening or late night. Both policies use it.
+- **Correct** means the stated band matches the true band (a 17 to 21 student says "evening"). **Wrong** means it does not (the same
+  student says "morning"). Both are tested, because real students may misreport.
+- **Attention** is the chance that the student opens the Zenflow app during a block's time slot. It is not focus. A start is counted
+  when the app is opened in the block, so attention 0.5 means about half of the blocks can start and 0.05 almost none. Within 2 days of a
+  deadline the chance is multiplied by 1.5 (capped at 1).
+- **Drag, tap, ignore** are how a student treats a proposal: move a bad block, answer the "keep or prefer this time?" offer, or do nothing.
+- **World:** one kind of simulated student: a true band, a stated band and an attention level.
+
+**The policies and bounds**
+
+- **H0:** the rule-based policy (the heuristic) with the default favourite-hours table. It stands for a student who skipped onboarding.
+- **H1:** the heuristic started from the stated band. It is the fair rival, because it gets the same information as LinUCB.
+- **L0:** LinUCB with no stated band. **S:** LinUCB with the stated band, as shipped. S-gap, S-deadline and S-tiebreak are S with one part switched off.
+- **Oracle:** the best possible placement for the student (the ceiling). **Rand:** a random placement (the floor).
+
+**The outcomes**
+
+- **Proposal / event:** one slot the app places for one task.
+- **Start:** the student opens the app in a block that lies in their true band. It is the only outcome this eval counts.
+- **Pick rate:** among offers the student answered, the share where they chose LinUCB's time rather than the heuristic's.
+  50% means no preference. "Pick rate, wrong band" is that share in the worlds where the stated band is wrong.
 
 ## 1. The answer in short
 
@@ -43,6 +65,7 @@ Starts per student over 4 weeks (12 tasks), held-out seeds, 600 students per wor
 - **The deadline term costs starts here.** Removing it helps in 11 of 17 worlds and never hurts by more than 0.02. Without it, LinUCB beats H1 in four of the five correct-band worlds.
 - **The pick rate agrees with the start result in most worlds.** LinUCB's option is taken 22% to 29% of the time where it
   loses on starts (evening, night) and 91% where it wins (afternoon). It disagrees in 2 of 5 correct-band worlds.
+- **More students do not change this.** At 3,000 students per world the intervals are 2.2 times narrower and 15 of 17 verdicts are identical (section 5.7).
 - **Limit:** the students are invented. The results show how the policies behave under stated assumptions, not
   that real students will start more. Section 7 lists the limits.
 
@@ -80,23 +103,61 @@ Starts per student over 4 weeks (12 tasks), held-out seeds, 600 students per wor
 
 ## 3. How to read the numbers
 
-- All outcomes are tasks started per student over the 4 weeks, so the ceiling is 12. Oracle reaches about 9 because attention is 0.5 in most worlds.
-- Absolute values have no interval. Differences do. A difference reads `mean [95% CI over students] / [95% CI over seeds]`.
-- **Over students:** resample the 600 students of a world 2,000 times. **Over seeds:** resample the 30 per-seed means
-  2,000 times. The second covers run-to-run spread in the students and the learners.
-- The two policies run on the same students, tasks and random draws, so each difference is paired.
-- **Margin.** LinUCB is *non-inferior* when the lower end of both intervals on S minus H1 is above -0.5 starts. The margin
-  is a judgement about what a student would notice.
-- **Verdict** uses the wider of the two intervals: *better* if both ends are above 0; *worse* if both are below 0 and the
-  lower end passes the margin; *slightly worse* if below 0 within the margin; otherwise *level*.
-- Pick rates are a ratio of sums with a bootstrap by student, since one student's taps are correlated.
-- A 50% pick rate means no preference between the two options.
+### 3.1 The metrics, defined exactly
+
+Every number in this report is one of the six below. "Event" means one task placed for one student.
+
+| Metric | Exact definition | Worked example | Better is |
+| --- | --- | --- | --- |
+| **Starts per student** | For one student and one policy: the number of that student's 12 tasks that end in a started block. A block is started when it lies in the student's true band and the student opens the app in it. The cell is the mean over students. | A student gets 12 tasks. 7 end in a started block, so the score is 7. | higher |
+| **S − H1** (and every other "A − B") | For each student, policy A's score minus policy B's score on the same tasks and the same random draws, then the mean over students. | S scores 6.2 and H1 7.1 on average, so S − H1 is −0.9: LinUCB starts 0.9 fewer of the 12 tasks. | above 0 favours A |
+| **Offered rate** | Events where the two policies propose starts at least 60 minutes apart, divided by all events. Only then does the student see a choice. | 92 of 100 events offered: 92%. | not a quality measure |
+| **Tapped rate** | Offers the student answered, divided by offers shown. Only *tap* students answer (60% of students), and only when they see the offer (chance equal to their attention). | 37 of 100 offers answered: 37%. | not a quality measure |
+| **Pick rate** (LinUCB pick rate) | Among answered offers, the share where the student chose LinUCB's slot rather than the heuristic's. | 37 offers answered, 11 chose LinUCB's slot: 30%. A pick rate of 50% means no preference. | above 50% favours LinUCB |
+| **Start, LinUCB primary** and **Start, heuristic primary** | Among events where that policy was the primary (the one the app applies unless the student taps the other), the share whose applied block was started. | 100 events with LinUCB primary, 52 started: 52%. | higher |
+
+Notes on the definitions:
+
+- **Primary policy** is chosen by a seeded 50/50 coin per event, as in the live test. The applied block is the primary's slot, or the other
+  policy's slot if the student tapped it. "Start by primary" therefore includes the effect of taps.
+- **Pick rate is the stated-preference metric.** It is the simulated version of the classroom labelling session and the live pick rate.
+  Its value depends on the assumed choice model (section 4), so read it as a consistency check on the start results, not as a result.
+- The pick rate is a share of answered offers only. At attention 0.05 few offers are answered (4%), so its interval is wide.
+
+### 3.2 Worlds, and "stated band correct" or "wrong"
+
+- A **world** is one kind of simulated student: a true band, a stated band and an attention level (section 4 lists all 17).
+- The **true band** is the hours the student really starts in. The **stated band** is what the app was told at onboarding. It is one of four:
+  morning (08 to 12), afternoon (12 to 17), evening (17 to 21), late night (21 to 02).
+- **Correct** means the stated band whose centre is nearest the true centre. **Wrong** means the farthest. Example: true band 17 to 21;
+  correct is evening, wrong is morning.
+- A phrase such as "pick rate, wrong band" means the pick rate in the worlds whose stated band is wrong. In the sensitivity table
+  it is the pick rate over the five band worlds with a wrong stated band, taken together.
+
+### 3.3 Intervals and how to read a table cell
+
+A difference reads `mean [95% CI over students] / [95% CI over seeds]`. Example: `+0.47 [+0.41, +0.52] / [+0.40, +0.54]` means S starts
+0.47 more tasks per student than H1; resampling students gives 0.41 to 0.52; resampling the 30 runs gives 0.40 to 0.54.
+
+- **Over students:** resample the 600 students of a world 2,000 times. It shows how much the mean changes with a different draw of students.
+- **Over seeds:** resample the 30 per-seed means 2,000 times. It covers run-to-run spread in the students and the learners.
+- Both policies run on the same students, tasks and draws, so each difference is paired.
+- Pick rates and offer rates use a bootstrap by student, since one student's answers are correlated.
+- Absolute values (a policy's own starts per student) have no interval. Differences do.
+
+### 3.4 Verdict, and why worlds are not averaged
+
+- The margin is 0.5 starts per student (about one task in 24). It is a judgement of what a student would notice.
+- **Verdict** uses the wider of the two intervals. *Better*: both ends above 0. *Worse*: both ends below 0 and the lower end past -0.5.
+  *Slightly worse*: both ends below 0 and the lower end within -0.5. *Level*: the interval includes 0.
+- The 17 worlds are chosen to probe the policies, not sampled from a population, so they are not averaged into one headline.
+  The sensitivity table (section 5.6) is the one place worlds are averaged, and it says so.
 
 ## 4. How we tested
 
-**Run.** Seeds 0 to 29, 20 students per seed, on committed code `f9f5278a`. An earlier run on an uncommitted tree gave
-identical numbers. No constant was tuned; the Oracle and calendar were fixed on seeds 100 to 103, and seeds 100 to 109 give
-the sensitivity runs.
+**Run.** Main run: seeds 0 to 29, 20 students per seed (600 per world), on committed code `7a471847`. Size check: the same 30 seeds with 100 students per
+seed (3,000 per world), on the same bandit code (`f5d7155a`). Sensitivity: seeds 100 to 109, 20 students per seed. No constant was tuned; the Oracle
+and calendar were fixed on seeds 100 to 103.
 
 **Worlds (17).**
 
@@ -146,6 +207,8 @@ below S; with no bias the pick is 50%.
 
 ### 5.1 LinUCB (S) against the heuristic with the same band (H1)
 
+**What this measures.** Metric: starts per student, S minus H1. Compared against: H1, the heuristic started from the same stated band, on the same students, tasks and random draws. Question: does LinUCB place better than a rule-based policy that knows the same thing?
+
 | World | H1 | S | S - H1 | Verdict |
 | --- | --- | --- | --- | --- |
 | 09 to 17, correct | 7.12 | ***7.58*** | +0.47 [+0.41, +0.52] / [+0.40, +0.54] | better |
@@ -171,6 +234,8 @@ differences are small in size even when clear.
 
 ### 5.2 Against the default heuristic (H0) and the controls
 
+**What this measures.** Metric: starts per student, S minus H0, with L0, Oracle and Rand as reference points. Compared against: H0 (default table, no band). Oracle is the ceiling, Rand the floor. Question: how much of LinUCB's gain comes from knowing the band, and where each policy sits between floor and ceiling?
+
 S minus H0 is the value of the band plus the value of LinUCB. S minus H1 above isolates LinUCB.
 
 | World | H0 | L0 | Oracle | Rand | S - H0 |
@@ -190,6 +255,8 @@ S minus H0 is the value of the band plus the value of LinUCB. S minus H1 above i
 - Oracle is the ceiling in every world, which the gates check.
 
 ### 5.3 Every arm, starts per student
+
+**What this measures.** Metric: starts per student for every arm. Compared against: no difference is taken. Read each row against Rand (floor) and Oracle (ceiling). Question: is every policy at least better than random, and how far is the best from the ceiling?
 
 Oracle is the ceiling and Rand the floor. Bold italic is the best of the seven policy arms in a row. S-gap, S-deadline and
 S-tiebreak are S with that part off. Intervals for the differences are in sections 5.1 and 5.4 and in the eval output.
@@ -224,6 +291,8 @@ S-tiebreak are S with that part off. Intervals for the differences are in sectio
 
 ### 5.4 What each part of LinUCB adds
 
+**What this measures.** Metric: starts per student, S minus S with one part switched off (the prior is switched off by comparing S with L0). Compared against: S itself, one part at a time. Question: which part of LinUCB earns its place, and which costs starts?
+
 Starts per student, S minus S without the part. Rows for the five correct-band worlds; the figure includes the wrong-band worlds.
 
 | World | Prior (S - L0) | Gap quality | Deadline term | Tie-break |
@@ -247,7 +316,9 @@ Every world and every interval is in the eval output (`evalx/out/report.md`).
 
 ### 5.5 Pairwise offer
 
-Share of events offered, offers tapped, and how often a tap picks LinUCB's option. Start rates are per event by primary policy.
+**What this measures.** Metric: offered rate, tapped rate, pick rate, and start by primary policy. Compared against: a pick rate of 50% (no preference), and the start rate of the other primary policy. Question: when a student states a choice between the two policies' times, does it agree with the start results?
+
+Definitions are in section 3.1. Rates are over events for "Offered", over offers for "Tapped", and over answered offers for "LinUCB pick rate".
 
 | World | Offered | Tapped | LinUCB pick rate | Start, LinUCB primary | Start, heuristic primary |
 | --- | --- | --- | --- | --- | --- |
@@ -268,26 +339,83 @@ Share of events offered, offers tapped, and how often a tap picks LinUCB's optio
 
 ### 5.6 Sensitivity to the assumptions
 
-Tuning seeds 100 to 109, the five band worlds. S minus H1 for the correct-band worlds and the wrong-band worlds, each averaged. The averages
-depend on which worlds are included; read only the change between rows.
+**What this measures.** Metric: S minus H1 in starts per student, and the pick rate. Compared against: the production row, changing one assumption per row. Question: does the verdict survive different student behaviour, LinUCB settings and heuristic settings?
 
-| Assumption | S - H1, correct band | S - H1, wrong band | Pick rate, correct | Pick rate, wrong |
-| --- | --- | --- | --- | --- |
-| production (10% drag, 60% tap, 30% ignore, alpha 0.15) | +0.99 | +0.15 | 47% | 65% |
-| all students drag | +0.83 | +1.92 | n/a | n/a |
-| 60% drag, 10% tap | +0.91 | +1.24 | 46% | 63% |
-| 10% drag, 20% tap, 70% ignore | +0.99 | +0.15 | 47% | 66% |
-| alpha 0.05 | +1.01 | +0.14 | 49% | 64% |
-| alpha 0.5 | +1.01 | +0.30 | 36% | 70% |
-| gap weight 0 | +0.75 | +0.13 | 47% | 65% |
-| deadline weight 0 | +1.36 | +0.41 | 47% | 65% |
+Each row changes one assumption from the production row. Seeds 100 to 109, 200 students per world (the larger run in 5.7 uses seeds 0 to 29). Intervals are over students.
 
-- In the single-policy arms only drag students act, so starts follow the drag share (the third and fourth rows match production).
-- The mean of the correct-band worlds is carried by one world (afternoon, +6.0). It is not a population effect.
-- Alpha 0.5 lowers the pick rate for LinUCB (36%) with the band right, likely because it explores more.
-- Removing the deadline term raises S minus H1 by 0.37 (correct band) and 0.26 (wrong band).
+- **Correct-band worlds** here are the five band worlds (true bands 09 to 17, 06 to 10, 13 to 17, 17 to 21, 21 to 24) with a correct stated band.
+  **Wrong-band worlds** are the same five with a wrong stated band.
+- **S − H1** is the mean over those five worlds (equal weight), in starts per student.
+- **Pick rate** is the share of answered offers where the student chose LinUCB's slot, over the same five worlds taken together (section 3.1).
+- Averages hide which world drives them. In the production row the correct-band average of +0.99 is carried by one world (afternoon, +6.0), so
+  compare rows with each other and do not read the level.
+
+| Row | What changes | S − H1, correct-band worlds | S − H1, wrong-band worlds | Pick rate, correct-band worlds | Pick rate, wrong-band worlds |
+| --- | --- | --- | --- | --- | --- |
+| production | Production settings: 10% drag, 60% tap, 30% ignore; LinUCB alpha 0.15; heuristic as shipped | +0.99 [+0.90, +1.08] | +0.15 [+0.08, +0.24] | 47% [44, 50] | 65% [64, 67] |
+| mix: drag_only | Every student is a dragger | +0.83 [+0.75, +0.92] | +1.92 [+1.76, +2.08] | n/a (no tappers) | n/a (no tappers) |
+| mix: move_heavy | 60% drag, 10% tap, 30% ignore | +0.91 [+0.82, +1.00] | +1.24 [+1.06, +1.44] | 46% [40, 54] | 63% [59, 66] |
+| mix: ignore_heavy | 10% drag, 20% tap, 70% ignore | +0.99 [+0.90, +1.08] | +0.15 [+0.08, +0.24] | 47% [43, 52] | 66% [64, 68] |
+| alpha 0.05 | LinUCB exploration weight 0.05 (shipped 0.15) | +1.01 [+0.92, +1.11] | +0.14 [+0.07, +0.22] | 49% [46, 51] | 64% [62, 65] |
+| alpha 0.5 | LinUCB exploration weight 0.5 | +1.01 [+0.93, +1.09] | +0.30 [+0.21, +0.39] | 36% [34, 38] | 70% [68, 71] |
+| heuristic rate 0.05 | Heuristic table learning rate 0.05 (shipped 0.2) | +0.99 [+0.90, +1.08] | +0.15 [+0.08, +0.24] | 47% [44, 50] | 65% [64, 67] |
+| heuristic rate 0.5 | Heuristic table learning rate 0.5 | +0.99 [+0.90, +1.08] | +0.15 [+0.08, +0.24] | 47% [44, 50] | 65% [64, 67] |
+| heuristic rate 2 | Heuristic table learning rate 2 | +0.98 [+0.89, +1.07] | +0.13 [+0.06, +0.21] | 47% [44, 50] | 65% [64, 66] |
+| heuristic kept weight 0 | A kept or started slot adds 0 to the table (shipped 0.25) | +0.99 [+0.90, +1.08] | +0.15 [+0.08, +0.24] | 47% [44, 50] | 65% [64, 67] |
+| heuristic kept weight 1 | A kept or started slot adds 1 | +0.99 [+0.90, +1.08] | +0.15 [+0.08, +0.24] | 47% [44, 50] | 65% [64, 67] |
+| heuristic outside 0 | H1 table value outside the stated band 0 (shipped 0.2) | +0.99 [+0.90, +1.08] | +0.15 [+0.08, +0.24] | 47% [44, 50] | 65% [64, 67] |
+| heuristic outside 0.5 | H1 table value outside the stated band 0.5 | +0.99 [+0.90, +1.08] | +0.15 [+0.08, +0.24] | 47% [44, 50] | 65% [64, 67] |
+| heuristic outside 0.8 | H1 table value outside the stated band 0.8 | +0.98 [+0.89, +1.07] | +0.13 [+0.06, +0.21] | 47% [44, 50] | 65% [64, 67] |
+| heuristic outside 1 (flat) | H1 table value outside the band 1.0, the same as inside: the band is ignored | +4.87 [+4.70, +5.04] | -1.96 [-2.08, -1.83] | 87% [86, 89] | 49% [47, 51] |
+| gap weight 0 | LinUCB gap-quality weight 0 (shipped 0.2) | +0.75 [+0.65, +0.86] | +0.13 [+0.07, +0.21] | 47% [44, 50] | 65% [64, 67] |
+| deadline weight 0 | Deadline weight 0 for both policies (shipped 0.2) | +1.36 [+1.26, +1.45] | +0.41 [+0.32, +0.53] | 47% [44, 50] | 65% [64, 67] |
+
+- **Student behaviour.** Starts follow the share of dragging students, because in the single-policy arms only draggers act.
+  With all students dragging, LinUCB's lead over H1 is larger when the band is wrong (+1.92), since it learns from moves faster.
+- **LinUCB settings.** Alpha 0.05 to 0.5 barely moves S − H1. Alpha 0.5 lowers the pick rate to 36% with a correct band.
+- **Deadline weight 0** raises S − H1 by 0.37 (correct band) and 0.26 (wrong band). In the held-out run H1 scores the same with and without the term in every
+  world (section 5.3 and the deadline-off table in the eval output), so the gain is LinUCB's.
+- **Heuristic settings (rows "heuristic ...").** The learning rate (0.05 to 2), the weight of a kept slot (0 to 1) and the table value outside
+  the band (0 to 0.8) change S − H1 by 0.01 or less. We checked the settings are wired: a rate of 5 or a flat table changes the outcome.
+  Over 12 tasks the table moves one cell at a time, and the band's own hours already sit at the 1.0 cap, so moderate settings do not change what it proposes.
+- **Flat table (outside 1).** Ignoring the stated band is the one heuristic setting that matters, and it trades one case for the other:
+  S − H1 becomes +4.87 with a correct band (the heuristic has thrown the band away) and -1.96 with a wrong band (the heuristic no longer follows the wrong hours).
+  No heuristic setting tested beats LinUCB with a correct band and also holds up with a wrong one.
 
 ![Sensitivity](./figures/eval-f3-sensitivity.png)
+
+### 5.7 Does a larger sample change anything?
+
+**What this measures.** Metric: S − H1 in starts per student, and the width of its 95% interval over students. Compared against: the same
+30 seeds with 600 students per world (the main run) and with 3,000 per world (100 students per seed). Question: is the result limited by how many
+students were simulated?
+
+| World | S − H1, 600 students | Width | Verdict | S − H1, 3000 students | Width | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| 09 to 17, correct | +0.47 | 0.11 | better | +0.47 | 0.05 | better |
+| 09 to 17, wrong | +0.34 | 0.19 | better | +0.34 | 0.08 | better |
+| 6 to 10, correct | +0.25 | 0.09 | better | +0.23 | 0.04 | better |
+| 6 to 10, wrong | +0.22 | 0.14 | better | +0.26 | 0.07 | better |
+| 13 to 17, correct | +6.02 | 0.35 | better | +6.05 | 0.16 | better |
+| 13 to 17, wrong | +0.02 | 0.07 | level | +0.03 | 0.03 | better |
+| 17 to 21, correct | -0.90 | 0.24 | worse | -0.96 | 0.11 | worse |
+| 17 to 21, wrong | +0.13 | 0.09 | better | +0.15 | 0.04 | better |
+| 21 to 24, correct | -0.73 | 0.21 | worse | -0.73 | 0.09 | worse |
+| 21 to 24, wrong | +0.15 | 0.11 | better | +0.17 | 0.05 | better |
+| attention 0.05 | -0.10 | 0.07 | slightly worse | -0.11 | 0.03 | slightly worse |
+| attention 0.15 | -0.23 | 0.12 | slightly worse | -0.29 | 0.06 | slightly worse |
+| attention 0.3 | -0.52 | 0.18 | worse | -0.57 | 0.08 | worse |
+| attention 0.6 | -1.09 | 0.27 | worse | -1.16 | 0.12 | worse |
+| attention 0.9 | -1.76 | 0.27 | worse | -1.79 | 0.12 | worse |
+| absent | -0.04 | 0.03 | slightly worse | -0.05 | 0.02 | slightly worse |
+| routine change | -0.44 | 0.17 | worse | -0.42 | 0.08 | slightly worse |
+
+- Width is the upper minus the lower end of the interval over students. It falls from 0.03 to 0.35 at 600 students to 0.02 to 0.16 at 3,000, about 2.2 times narrower.
+- The means move by 0.07 or less.
+- 15 of 17 verdicts are identical. Two change, both at a boundary: the 13 to 17 wrong-band world goes from level to better (+0.02 to +0.03, a difference
+  too small to matter), and the routine-change world goes from worse to slightly worse (-0.44 to -0.42, which sits on the -0.5 margin).
+- Counts at 3,000: better 8, slightly worse 4, worse 5, level 0. At 600: better 7, level 1, slightly worse 3, worse 6.
+- More students narrow the intervals and leave the conclusions as they are. What limits the report is the assumed student, not the sample size.
 
 ## 6. What the results mean
 
@@ -336,4 +464,4 @@ move the pick-model assumptions. The sensitivity run says the start result moves
 - The stated band has four values; true bands are single ranges; worlds are chosen, not a sample of a population.
 - 12 tasks per student over 4 weeks is a short horizon for a learner.
 - The hybrid model is not included.
-- The numbers reproduce from `uv run python -m evalx run --seeds 30 --students 20` on commit `f9f5278a`. Protocol: [eval-protocol.md](./eval-protocol.md).
+- The numbers reproduce from `uv run python -m evalx run --seeds 30 --students 20` on commit `7a471847`. Protocol: [eval-protocol.md](./eval-protocol.md).

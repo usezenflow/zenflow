@@ -5,7 +5,8 @@ Harness: `services/bandit/evalx/`. Simulated students only. Traits are assumptio
 ## Run
 
 ```bash
-uv run python -m evalx run --seeds 30 --students 20 --seed-offset 0   # held-out, once
+uv run python -m evalx run --seeds 30 --students 20 --seed-offset 0   # held-out
+uv run python -m evalx run --seeds 30 --students 100 --out evalx/out/large   # size check
 uv run python -m evalx sensitivity                                      # tuning seeds 100+
 uv run python -m evalx.figures                                          # F1 to F3
 ```
@@ -14,7 +15,8 @@ Outputs go to `evalx/out/` (ignored): `results.json`, `report.md`, `sensitivity.
 
 ## Design
 
-- Arms: H0, H1 (heuristic seeded with the stated band, the fair control), L0, S, S-gap, S-deadline, S-tiebreak, Oracle, Rand, and AB (live protocol: 50/50 primary, both slots, pairwise offer).
+- Arms: H0, H1 (heuristic seeded with the stated band, the fair control), H1-deadline, L0, S, S-gap, S-deadline, S-tiebreak, Oracle, Rand, and AB (live protocol: 50/50 primary, both slots, pairwise offer).
+- Heuristic knobs swept in `sensitivity`: table learning rate, kept-slot weight, table value outside the stated band.
 - Rewards follow ADR-0035 and `backend/src/scheduler/constants.ts`; a test pins them.
 - Worlds: 5 true bands x correct or wrong stated band, an attention sweep, an absent student, a routine change. Lecture timetable, no exams or assignments.
 - Reaction mix (drag, tap, ignore): `tap_heavy` is the headline; the others are in the sensitivity run.
