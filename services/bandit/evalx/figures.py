@@ -124,7 +124,7 @@ def sensitivity(rows: dict[str, Any], out: Path) -> None:
     a.set_yticks(range(len(names)), names)
     a.invert_yaxis()
     a.set_xlabel("Starts per student, S minus H1")
-    b.set_xlabel("Share of taps that pick LinUCB's option")
+    b.set_xlabel("Pick rate: share of answered offers that chose LinUCB's slot")
     a.set_title("Effect on starts", loc="left", fontsize=10)
     b.set_title("Pairwise pick rate", loc="left", fontsize=10)
     for ax in (a, b):
