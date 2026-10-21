@@ -303,7 +303,6 @@ export default {
   Syncing: "Đang đồng bộ",
   Timetable: "Thời khóa biểu",
   Scheduled: "Đã xếp lịch",
-  "Minutes before": "Số phút trước",
   Alternative: "Giờ thay thế",
   Midnight: "00:00",
   min: "phút",

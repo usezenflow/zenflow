@@ -6,24 +6,25 @@ import {
   fixedDuration,
   instantAtStart,
 } from "@/components/calendar/session-form";
+import { ReminderField } from "@/components/calendar/reminder-field";
 import { PlacePicker } from "@/components/places/place-picker";
-import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { TimePicker } from "@/components/ui/time-picker";
 import { durationLabel } from "@/lib/duration-label";
 import { t } from "@/lib/i18n";
+import { localizedReminderLabel } from "@/lib/reminder-label";
 import { cn } from "@/lib/utils";
 import { zonedNow } from "@/utils/tz";
 import {
   SESSION_TONE_CLASSES,
   SESSION_TYPE_META,
   hhmmToMinutes,
-  reminderLabel,
   type SessionTone,
 } from "@zenflow/core";
-import { MAX_REMINDERS_PER_SESSION, type Session } from "@zenflow/shared";
+import type { Session } from "@zenflow/shared";
 import { addDays, endOfMonth, endOfWeek, format, startOfDay } from "date-fns";
 import { format as formatDisplay } from "@/lib/format";
 import { Bell, CalendarClock, Clock, MapPin, Tag, Timer, type LucideIcon } from "lucide-react";
@@ -34,10 +35,6 @@ type Row = "deadline" | "length" | "scheduled" | "when" | "reminder" | "tags";
 
 /** Plan lengths the slider stops at: 15 minutes up to 8 hours. */
 const DURATION_STEPS = Array.from({ length: 32 }, (_, i) => (i + 1) * 15);
-/** Reminder lead times the slider stops at. */
-const REMINDER_STEPS = [5, 10, 15, 30, 60, 120, 240, 480, 1440, 2880, 10080];
-/** Reminders one tap toggles; any other lead time comes from the slider. */
-const QUICK_REMINDERS = [0, 15, 60, 1440];
 
 /** `HH:mm` for minutes from midnight. */
 const clock = (min: number) => {
@@ -111,36 +108,6 @@ function PropertyRow({
   );
 }
 
-/** A tap target sized for a thumb: 40px tall. */
-function Chip({
-  selected,
-  onClick,
-  disabled,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "min-h-10 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:opacity-40",
-        selected
-          ? "border-primary bg-primary/10 text-primary"
-          : "border-border text-muted-foreground enabled:hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 /**
  * A slider over fixed steps. Dragging shows the value; releasing reports it.
  * The thumb sits on the nearest step to `value`.
@@ -177,67 +144,6 @@ function StepSlider({
         }}
         className="py-3"
       />
-    </div>
-  );
-}
-
-/** Quick reminder toggles, any other lead time already set, and a slider to add one more. */
-function ReminderChoices({
-  reminders,
-  onChange,
-}: {
-  reminders: number[];
-  onChange: (next: number[]) => void;
-}) {
-  const [pending, setPending] = useState(60);
-  const full = reminders.length >= MAX_REMINDERS_PER_SESSION;
-  const others = reminders.filter((m) => !(QUICK_REMINDERS as readonly number[]).includes(m));
-  const toggle = (m: number) => {
-    const next = reminders.includes(m)
-      ? reminders.filter((x) => x !== m)
-      : [...reminders, m].sort((a, b) => a - b);
-    onChange(next);
-  };
-  const addable = !full && !reminders.includes(pending);
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {QUICK_REMINDERS.map((m) => (
-          <Chip
-            key={m}
-            selected={reminders.includes(m)}
-            disabled={!reminders.includes(m) && full}
-            onClick={() => toggle(m)}
-          >
-            {t(reminderLabel(m))}
-          </Chip>
-        ))}
-        {others.map((m) => (
-          <Chip key={m} selected onClick={() => toggle(m)}>
-            {t(reminderLabel(m))}
-          </Chip>
-        ))}
-      </div>
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <StepSlider
-            steps={REMINDER_STEPS}
-            value={pending}
-            label={(m) => t(reminderLabel(m))}
-            onCommit={setPending}
-          />
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={!addable}
-          onClick={() => onChange([...reminders, pending].sort((a, b) => a - b))}
-        >
-          {t("Add")}
-        </Button>
-      </div>
     </div>
   );
 }
@@ -320,8 +226,9 @@ export function SessionEditor({
   );
 
   const reminderChoices = (
-    <ReminderChoices
-      reminders={form.reminders}
+    <ReminderField
+      value={form.reminders}
+      disabled={disabled}
       onChange={(reminders) => onChange({ reminders }, ["reminders"], true)}
     />
   );
@@ -399,7 +306,7 @@ export function SessionEditor({
             label={t("Reminder")}
             value={
               form.reminders.length > 0
-                ? form.reminders.map((m) => t(reminderLabel(m))).join(", ")
+                ? form.reminders.map((m) => localizedReminderLabel(m)).join(", ")
                 : t("No reminder")
             }
             open={open === "reminder"}
@@ -460,7 +367,7 @@ export function SessionEditor({
             label={t("Reminder")}
             value={
               form.reminders.length > 0
-                ? form.reminders.map((m) => t(reminderLabel(m))).join(", ")
+                ? form.reminders.map((m) => localizedReminderLabel(m)).join(", ")
                 : t("No reminder")
             }
             open={open === "reminder"}
@@ -520,7 +427,7 @@ export function SessionEditor({
               label={t("Reminder")}
               value={
                 form.reminders.length > 0
-                  ? form.reminders.map((m) => t(reminderLabel(m))).join(", ")
+                  ? form.reminders.map((m) => localizedReminderLabel(m)).join(", ")
                   : t("No reminder")
               }
               open={open === "reminder"}
