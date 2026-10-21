@@ -1,7 +1,8 @@
-"""Figures for the eval report, drawn from results.json and sensitivity.json.
+"""Figures for the eval report, from results, sensitivity and deadline json.
 
 Run:  uv run python -m evalx.figures [--out evalx/out]
-F1 S-band minus H1 by world, F2 every arm by world, F3 sensitivity to the assumptions.
+F1 L minus H by world, F2 every arm by world, F3 sensitivity to the assumptions,
+F4 starts against deadline distance across deadline weights and reach.
 """
 
 from __future__ import annotations
@@ -15,15 +16,32 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 
 SURFACE, INK, MUTED, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e6e5e1"
-COLOURS = {"correct": "#2a78d6", "wrong": "#eb6834", "stale": "#52514e"}
+COLOURS = {
+    "band": "#2a78d6",
+    "weekend": "#1baf7a",
+    "attention": "#eb6834",
+    "other": "#52514e",
+}
 LABELS = {
-    "correct": "Stated band correct",
-    "wrong": "Stated band wrong",
-    "stale": "Routine changed",
+    "band": "True band",
+    "weekend": "Weekend differs",
+    "attention": "Attention sweep",
+    "other": "Absent or routine change",
 }
 DELTA = 0.5
+
+
+def _group(name: str) -> str:
+    if name.startswith("band_"):
+        return "band"
+    if name.startswith("weekend"):
+        return "weekend"
+    if name.startswith("attention"):
+        return "attention"
+    return "other"
 
 
 def _style(ax: Any) -> None:
@@ -39,7 +57,7 @@ def _style(ax: Any) -> None:
 
 def _legend(ax: Any, groups: list[str]) -> None:
     handles = [
-        plt.Line2D([], [], marker="o", color=COLOURS[g], label=LABELS[g], ls="")
+        Line2D([], [], marker="o", color=COLOURS[g], label=LABELS[g], ls="")
         for g in groups
     ]
     ax.legend(handles=handles, frameon=False, fontsize=8, labelcolor=MUTED)
@@ -58,38 +76,41 @@ def _point(ax: Any, y: float, c: dict[str, float], colour: str) -> None:
     ax.plot(c["mean"], y, "o", color=colour, ms=5, mec=SURFACE, mew=1.5)
 
 
+def _names(res: dict[str, Any]) -> list[str]:
+    return [n.replace("_", " ") for n in res["worlds"]]
+
+
 def forest(res: dict[str, Any], out: Path) -> None:
-    names = list(res["worlds"])
-    fig, ax = plt.subplots(figsize=(8, 0.28 * len(names) + 1.2))
-    for i, name in enumerate(names):
-        c = res["worlds"][name]["contrasts"]["Sband_minus_H1"]
-        _point(ax, i, c, COLOURS[name.rsplit("/", 1)[1]])
+    worlds = list(res["worlds"])
+    fig, ax = plt.subplots(figsize=(8, 0.28 * len(worlds) + 1.2))
+    for i, name in enumerate(worlds):
+        c = res["worlds"][name]["contrasts"]["L_minus_H"]
+        _point(ax, i, c, COLOURS[_group(name)])
     ax.axvline(0, color=INK, lw=0.8)
     ax.axvline(-DELTA, color=MUTED, lw=0.8, ls="--")
-    ax.set_yticks(range(len(names)), [n.replace("_", " ") for n in names])
+    ax.set_yticks(range(len(worlds)), _names(res))
     ax.invert_yaxis()
-    ax.set_xlabel("Starts per student, S-band minus H1 (thin: students, thick: seeds)")
+    ax.set_xlabel("Starts per student, L minus H (thin: students, thick: seeds)")
     ax.set_title(
-        "LinUCB against a heuristic with the same band", loc="left", fontsize=10
+        "Matrix seeded LinUCB against the default heuristic", loc="left", fontsize=10
     )
-    ax.text(-DELTA, len(names) - 0.3, "margin", color=MUTED, fontsize=7, ha="center")
+    ax.text(-DELTA, len(worlds) - 0.3, "margin", color=MUTED, fontsize=7, ha="center")
     _style(ax)
-    _legend(ax, ["correct", "wrong", "stale"])
+    _legend(ax, list(LABELS))
     _save(fig, out / "f1-by-world.png")
 
 
 ARM_COLOURS = {
-    "S-band": "#2a78d6",
-    "H1": "#eb6834",
-    "H0": "#1baf7a",
-    "L0": "#e87ba4",
+    "H": "#1baf7a",
+    "L-cold": "#e87ba4",
+    "L": "#2a78d6",
 }
 
 
 def arms(res: dict[str, Any], out: Path) -> None:
-    names = list(res["worlds"])
-    fig, ax = plt.subplots(figsize=(8, 0.28 * len(names) + 1.4))
-    for i, name in enumerate(names):
+    worlds = list(res["worlds"])
+    fig, ax = plt.subplots(figsize=(8, 0.28 * len(worlds) + 1.4))
+    for i, name in enumerate(worlds):
         a = res["worlds"][name]["arms"]
         ax.plot(
             [a["Rand"]["mean"], a["Oracle"]["mean"]], [i, i], color=GRID, lw=6, zorder=1
@@ -98,13 +119,13 @@ def arms(res: dict[str, Any], out: Path) -> None:
             ax.plot(
                 a[arm]["mean"], i, "o", color=colour, ms=5, mec=SURFACE, mew=1, zorder=3
             )
-    ax.set_yticks(range(len(names)), [n.replace("_", " ") for n in names])
+    ax.set_yticks(range(len(worlds)), _names(res))
     ax.invert_yaxis()
     ax.set_xlabel("Starts per student (grey bar: from Rand to Oracle)")
     ax.set_title("Every policy, by world", loc="left", fontsize=10)
     _style(ax)
     handles = [
-        plt.Line2D([], [], marker="o", color=c, label=a, ls="")
+        Line2D([], [], marker="o", color=c, label=a, ls="")
         for a, c in ARM_COLOURS.items()
     ]
     ax.legend(
@@ -115,28 +136,50 @@ def arms(res: dict[str, Any], out: Path) -> None:
 
 def sensitivity(rows: dict[str, Any], out: Path) -> None:
     names = list(rows)
-    fig, (a, b) = plt.subplots(1, 2, figsize=(9, 0.5 * len(names) + 1.2), sharey=True)
+    fig, (a, b) = plt.subplots(1, 2, figsize=(9, 0.4 * len(names) + 1.2), sharey=True)
     for i, name in enumerate(names):
-        for j, group in enumerate(("correct", "wrong")):
-            y = i + (j - 0.5) * 0.3
-            _point(a, y, rows[name][group]["S_minus_H1"], COLOURS[group])
-            p = rows[name][group]["pick_linucb"]
-            if p["rate"] != p["rate"]:
-                continue
-            b.plot([p["ci_lo"], p["ci_hi"]], [y, y], color=COLOURS[group], lw=3)
-            b.plot(p["rate"], y, "o", color=COLOURS[group], ms=5, mec=SURFACE, mew=1.5)
+        _point(a, i, rows[name]["L_minus_H"], COLOURS["band"])
+        p = rows[name]["pick_linucb"]
+        if p["rate"] != p["rate"]:
+            continue
+        b.plot([p["ci_lo"], p["ci_hi"]], [i, i], color=COLOURS["band"], lw=3)
+        b.plot(p["rate"], i, "o", color=COLOURS["band"], ms=5, mec=SURFACE, mew=1.5)
     a.axvline(0, color=INK, lw=0.8)
     b.axvline(0.5, color=INK, lw=0.8)
     a.set_yticks(range(len(names)), names)
     a.invert_yaxis()
-    a.set_xlabel("Starts per student, S-band minus H1")
+    a.set_xlabel("Starts per student, L minus H")
     b.set_xlabel("Pick rate: share of answered offers that chose LinUCB's slot")
     a.set_title("Effect on starts", loc="left", fontsize=10)
     b.set_title("Pairwise pick rate", loc="left", fontsize=10)
     for ax in (a, b):
         _style(ax)
-    _legend(a, ["correct", "wrong"])
     _save(fig, out / "f3-sensitivity.png")
+
+
+def deadline(rows: dict[str, Any], out: Path) -> None:
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    for label, r in rows.items():
+        x, y = 100 * r["L"]["within_24h"], r["L"]["mean"]
+        ax.plot(x, y, "o", color=COLOURS["band"], ms=6, mec=SURFACE, mew=1.5)
+        ax.annotate(
+            label,
+            (x, y),
+            textcoords="offset points",
+            xytext=(5, 4),
+            fontsize=7,
+            color=MUTED,
+        )
+    h0 = next(iter(rows.values()))["H"]["mean"]
+    ax.axhline(h0, color=MUTED, lw=0.8, ls="--")
+    ax.text(ax.get_xlim()[1], h0, "H", color=MUTED, fontsize=7, va="bottom", ha="right")
+    ax.set_xlabel(
+        "Blocks ending within 24 hours of the deadline, % (windows of 3 days or more)"
+    )
+    ax.set_ylabel("L starts per student")
+    ax.set_title("Starts against deadline distance", loc="left", fontsize=10)
+    _style(ax)
+    _save(fig, out / "f4-deadline.png")
 
 
 def main() -> int:
@@ -149,6 +192,9 @@ def main() -> int:
     sens = args.out / "sensitivity.json"
     if sens.exists():
         sensitivity(json.loads(sens.read_text()), args.out)
+    dl = args.out / "deadline.json"
+    if dl.exists():
+        deadline(json.loads(dl.read_text()), args.out)
     return 0
 
 

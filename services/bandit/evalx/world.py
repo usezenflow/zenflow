@@ -10,7 +10,6 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, replace
 
-from src.core.band_prior import BAND_MINUTES, FocusBand
 from src.core.constants import DAY_MS, MS_PER_MINUTE
 from src.core.slot import local_date_str
 
@@ -30,8 +29,20 @@ class Student:
     # Optional change of routine: from ``shift_at_ms`` the band becomes ``band_after``.
     shift_at_ms: int | None = None
     band_after: tuple[int, int] | None = None
-    # What the product knows: the stated focus band (None when onboarding was skipped).
-    stated: FocusBand | None = None
+    # Weekends can differ: a later band and a lower chance to open the app.
+    weekend_band: tuple[int, int] | None = None
+    weekend_attention: float | None = None
+
+    def band_on(self, day: int) -> tuple[int, int]:
+        """The preferred start hours on absolute day ``day``."""
+        if self.weekend_band is not None and is_weekend(day):
+            return self.weekend_band
+        return self.band
+
+    def attention_on(self, day: int) -> float:
+        if self.weekend_attention is not None and is_weekend(day):
+            return self.weekend_attention
+        return self.attention
 
     def with_attention(self, attention: float) -> Student:
         return replace(self, attention=attention)
@@ -45,44 +56,17 @@ class Student:
         return self
 
 
+def is_weekend(day: int) -> bool:
+    """Absolute day 0 is 1970-01-01, a Thursday."""
+    return (day + 3) % 7 >= 5
+
+
 ARCHETYPES: dict[str, Student] = {
     "deadline_viewer": Student("deadline_viewer", (9, 17), 0.15, 1.0, 0.05),
     "planner": Student("planner", (9, 17), 0.7, 0.0, 0.5),
     "night_owl": Student("night_owl", (20, 24), 0.4, 0.3, 0.3),
     "absent": Student("absent", (9, 17), 0.02, 0.0, 0.05),
 }
-
-
-# The four stated bands in cyclic order with their centre hour (``BAND_MINUTES``).
-STATED_ORDER: tuple[FocusBand, ...] = ("MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT")
-STATED_CENTRE: dict[FocusBand, float] = {
-    "MORNING": 10.0,
-    "AFTERNOON": 14.5,
-    "EVENING": 19.0,
-    "LATE_NIGHT": 23.5,
-}
-
-
-def _cyclic_gap(a: float, b: float) -> float:
-    d = abs(a - b) % 24
-    return min(d, 24 - d)
-
-
-def stated_for(band: tuple[int, int], condition: str) -> FocusBand:
-    """The stated band for a true band: ``correct`` is the nearest stated band by
-    centre, ``wrong`` the farthest."""
-    centre = (band[0] + band[1]) / 2
-    key = lambda s: _cyclic_gap(STATED_CENTRE[s], centre)  # noqa: E731
-    return (
-        min(STATED_ORDER, key=key)
-        if condition == "correct"
-        else max(STATED_ORDER, key=key)
-    )
-
-
-def stated_hours(band: FocusBand) -> list[int]:
-    """Clock hours (0..23) inside a stated band."""
-    return [h for h in range(24) if any(a <= h * 60 < b for a, b in BAND_MINUTES[band])]
 
 
 # What a student does with a proposal: drag it, tap an offer, or ignore both. A mix is
@@ -102,10 +86,11 @@ def style_of(mix: str, u: float) -> str:
     return "drag" if u < drag else "tap" if u < drag + tap else "ignore"
 
 
-def open_chance(s: Student, days_to_deadline: float) -> float:
-    """Chance the student opens the app inside the slot."""
+def open_chance(s: Student, days_to_deadline: float, start_ms: int = 0) -> float:
+    """Chance the student opens the app inside the slot starting at ``start_ms``."""
+    attention = s.attention_on(start_ms // DAY_MS)
     close = days_to_deadline <= CLOSE_DAYS
-    p = s.attention * (1 + s.imminence) if close else s.attention
+    p = attention * (1 + s.imminence) if close else attention
     return min(1.0, p)
 
 
@@ -114,13 +99,8 @@ def hour_of(start_ms: int, midnight_ms: int) -> float:
 
 
 def in_band(s: Student, start_ms: int, midnight_ms: int) -> bool:
-    h = hour_of(start_ms, midnight_ms)
-    return s.band[0] <= h < s.band[1]
-
-
-def band_centre_ms(s: Student, midnight_ms: int, duration_min: int) -> int:
-    mid = (s.band[0] + s.band[1]) / 2
-    return midnight_ms + int(mid * 60 - duration_min / 2) * MS_PER_MINUTE
+    lo, hi = s.band_on(midnight_ms // DAY_MS)
+    return lo <= hour_of(start_ms, midnight_ms) < hi
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,8 @@ Run:  uv run python -m evalx.diagnose [--students 200] [--seed 0]
 For each world and policy it places every task of ``students`` students (reaction
 style ``ignore``, so no block is moved) and records the share of blocks that start
 in the student's true band, the mean start hour, and the share that start within
-two days of the deadline. Writes evalx/out/placement-diagnostic.json.
+two days of the deadline, and the mean hours left and share within 24 hours
+(measured from the block's start). Writes evalx/out/placement-diagnostic.json.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from evalx.world import (
     make_tasks,
 )
 
-POLICIES = ("H0", "H1", "L0", "S-band")
+POLICIES = ("H", "L-cold", "L", "L-deadline")
 
 
 def diagnose(students: int, seed: int) -> dict[str, dict[str, float]]:
@@ -75,6 +76,8 @@ def diagnose(students: int, seed: int) -> dict[str, dict[str, float]]:
                     "in_band": float(arr[:, 0].mean()),
                     "mean_hour": float(arr[:, 1].mean()),
                     "within_2d": float((arr[:, 2] <= 2).mean()),
+                    "mean_hours_left": float(arr[:, 2].mean() * 24),
+                    "within_24h": float((arr[:, 2] <= 1).mean()),
                 }
         return out
     finally:
