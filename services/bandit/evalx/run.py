@@ -881,10 +881,13 @@ SENSITIVITY: dict[str, dict[str, Any]] = {
     "alpha 0.5": {"alpha": 0.5},
     "heuristic rate 0.05": {"pref_rate": 0.05},
     "heuristic rate 0.5": {"pref_rate": 0.5},
+    "heuristic rate 2": {"pref_rate": 2.0},
     "heuristic kept weight 0": {"kept_weight": 0.0},
     "heuristic kept weight 1": {"kept_weight": 1.0},
     "heuristic outside 0": {"outside": 0.0},
     "heuristic outside 0.5": {"outside": 0.5},
+    "heuristic outside 0.8": {"outside": 0.8},
+    "heuristic outside 1 (flat)": {"outside": 1.0},
     "gap weight 0": {"gap_weight": 0.0},
     "deadline weight 0": {"deadline_weight": 0.0},
 }
