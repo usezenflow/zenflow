@@ -1,101 +1,87 @@
-"""Stated-focus-band seeds for the simulator: band mapping, heuristic and prior."""
+"""Stated-focus-band seeds: band shares, the LinUCB prior and where it applies."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from src.core.band_prior import BAND_MINUTES, band_for_hour, band_prior
-from src.core.constants import FEATURE_DIM
-from src.core.preference import matrix_index
-from src.simulation.learner import (
-    LinUCBState,
-    PreferenceMatrix,
-    focus_preference_matrix,
+from src.core.arms import ARM_BANDS
+from src.core.band_prior import (
+    BAND_MINUTES,
+    N0,
+    PRIOR_BASE,
+    PRIOR_SLOPE,
+    band_prior,
+    band_share,
+    reference_context,
 )
-from src.simulation.run import variant_kwargs
+from src.core.constants import FEATURE_DIM
+from src.core.init_state import init_state
+from src.core.quiet_hours import quiet_window
+from src.models.schemas import ArmParams
+from src.serialization import hydrate_arms
+
+ARM_SPANS = {name: (start, end) for name, start, end in ARM_BANDS}
+
+
+def _reward(prior: dict[str, ArmParams], arm: str) -> float:
+    """The pseudo-reward a prior arm was seeded with, read back from ``b``."""
+    x = reference_context()
+    return float(prior[arm].b @ x / (N0 * (x @ x)))
 
 
 @pytest.mark.parametrize(
-    ("hour", "band"),
+    ("band", "arm", "share"),
     [
-        (7.0, "MORNING"),
-        (10.0, "MORNING"),
-        (13.0, "AFTERNOON"),
-        (18.5, "EVENING"),
-        (22.0, "LATE_NIGHT"),
-        (1.0, "LATE_NIGHT"),
-        (23.9, "LATE_NIGHT"),
+        ("MORNING", "MORNING", 1.0),
+        ("MORNING", "MIDDAY", 60 / 180),
+        ("AFTERNOON", "MIDDAY", 120 / 180),
+        ("EVENING", "NIGHT", 60 / 240),
     ],
 )
-def test_band_for_hour_picks_the_nearest_band(hour: float, band: str) -> None:
-    assert band_for_hour(hour) == band
+def test_band_share_is_the_fraction_of_the_arm_inside_the_band(
+    band: str, arm: str, share: float
+) -> None:
+    start, end = ARM_SPANS[arm]
+    assert band_share(start, end, band) == pytest.approx(share)  # type: ignore[arg-type]
 
 
-def test_focus_matrix_is_one_on_band_hours_and_zero_elsewhere() -> None:
-    m = focus_preference_matrix("EVENING")
-    for wd in range(1, 8):
-        for hour in range(24):
-            in_band = 17 <= hour < 21
-            assert m[matrix_index(wd, hour)] == (1.0 if in_band else 0.0)
-
-
-def test_late_night_matrix_wraps_past_midnight() -> None:
+def test_late_night_share_counts_the_part_after_midnight() -> None:
+    # LATE_NIGHT covers 00:00 to 02:00 as well as 21:00 to 24:00.
+    start, end = ARM_SPANS["EARLY_MORNING"]
+    assert band_share(start, end, "LATE_NIGHT") == pytest.approx(120 / 480)
     assert BAND_MINUTES["LATE_NIGHT"] == ((21 * 60, 24 * 60), (0, 2 * 60))
-    m = focus_preference_matrix("LATE_NIGHT")
-    assert m[matrix_index(3, 0)] == 1.0
-    assert m[matrix_index(3, 1)] == 1.0
-    assert m[matrix_index(3, 2)] == 0.0
 
 
-def test_heuristic_matrix_only_seeded_when_a_band_is_given() -> None:
-    default = PreferenceMatrix("UTC").matrix
-    seeded = PreferenceMatrix("UTC", "MORNING").matrix
-    assert default[matrix_index(1, 10)] == 1.0
-    assert default[matrix_index(1, 15)] == 0.5
-    assert seeded[matrix_index(1, 15)] == 0.0
-    assert seeded[matrix_index(1, 10)] == 1.0
+def test_prior_rewards_follow_the_band_share() -> None:
+    prior = band_prior("MORNING", FEATURE_DIM, ridge=1.0)
+    assert _reward(prior, "MORNING") == pytest.approx(PRIOR_BASE + PRIOR_SLOPE)
+    assert _reward(prior, "NIGHT") == pytest.approx(PRIOR_BASE)
 
 
-def test_linucb_arm_prior_replaces_the_ridge_start() -> None:
+def test_prior_pseudo_observations_weigh_n0() -> None:
     prior = band_prior("AFTERNOON", FEATURE_DIM, ridge=1.0)
-    state = LinUCBState(0.15, 1.0, arm_prior=prior)
-    arm = next(iter(prior))
-    np.testing.assert_allclose(state.a[arm], prior[arm].A)
-    np.testing.assert_allclose(state.b[arm], prior[arm].b)
-    assert not np.allclose(state.b[arm], 0.0)
-
-
-def test_linucb_without_prior_starts_at_ridge() -> None:
-    state = LinUCBState(0.15, 1.0)
-    for arm in state.a:
-        np.testing.assert_allclose(state.a[arm], np.identity(FEATURE_DIM))
-        np.testing.assert_allclose(state.b[arm], np.zeros(FEATURE_DIM))
-
-
-def test_prior_knobs_reach_the_band_prior() -> None:
-    weak = band_prior("MORNING", FEATURE_DIM, ridge=1.0, n0=1.0, slope=0.35)
-    strong = band_prior("MORNING", FEATURE_DIM, ridge=1.0, n0=6.0, slope=1.0)
-    arm = next(iter(weak))
-    assert np.linalg.norm(strong[arm].A) > np.linalg.norm(weak[arm].A)
-    assert not np.allclose(strong[arm].b, weak[arm].b)
-
-
-def test_variant_kwargs_maps_the_ablation_flags() -> None:
-    import argparse
-
-    ns = argparse.Namespace(
-        focus_prior=True,
-        focus_heuristic=True,
-        prior_n0=None,
-        prior_slope=None,
-        no_gap_quality=True,
-        no_hybrid=False,
-        no_deadline_penalty=True,
+    x = reference_context()
+    np.testing.assert_allclose(
+        prior["MIDDAY"].A, np.identity(FEATURE_DIM) + N0 * np.outer(x, x)
     )
-    assert variant_kwargs(ns) == {
-        "focus_prior": True,
-        "focus_heuristic": True,
-        "gap_weight": 0.0,
-        "deadline_weight": 0.0,
-    }
+
+
+def test_cold_arms_hydrate_from_the_prior_and_warm_arms_keep_state() -> None:
+    state: dict = {}
+    hydrated = hydrate_arms(state, FEATURE_DIM, 1.0, "EVENING")
+    prior = band_prior("EVENING", FEATURE_DIM, 1.0)
+    np.testing.assert_allclose(hydrated["EVENING"].b, prior["EVENING"].b)
+
+
+def test_no_band_means_no_prior() -> None:
+    state = init_state(1.0, None, has_marks=False)
+    for arm in state.arms.values():
+        np.testing.assert_allclose(arm.b, np.zeros(FEATURE_DIM))
+        np.testing.assert_allclose(arm.A, np.identity(FEATURE_DIM))
+
+
+def test_band_drives_the_quiet_window_only_for_late_night() -> None:
+    assert quiet_window(None) == (23 * 60, 6 * 60)
+    assert quiet_window("MORNING") == (23 * 60, 6 * 60)
+    assert quiet_window("LATE_NIGHT") == (2 * 60, 9 * 60)
