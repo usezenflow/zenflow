@@ -31,27 +31,26 @@ describe("default preference-matrix fallback", () => {
     expect(effectivePreferenceMatrix(zeroed)).toBe(zeroed);
   });
 
-  it("populates morning (9-11AM)=1, afternoon (2-4PM)=0.5, evening (7-9PM)=0.2, rest=0", () => {
+  it("has two humps on weekdays with a dip after lunch and nothing in quiet hours", () => {
     const matrix = defaultPreferenceMatrix();
-    for (let wd = 1; wd <= 7; wd++) {
-      expect(matrix[matrixIndex(wd, 8)]).toBe(0); // just before the morning window
-      expect(matrix[matrixIndex(wd, 9)]).toBe(1);
-      expect(matrix[matrixIndex(wd, 10)]).toBe(1);
-      expect(matrix[matrixIndex(wd, 11)]).toBe(0); // just past the morning window
-
-      expect(matrix[matrixIndex(wd, 14)]).toBe(0.5);
-      expect(matrix[matrixIndex(wd, 15)]).toBe(0.5);
-      expect(matrix[matrixIndex(wd, 16)]).toBe(0); // just past the afternoon window
-
-      expect(matrix[matrixIndex(wd, 18)]).toBe(0); // just before the evening window
-      expect(matrix[matrixIndex(wd, 19)]).toBe(0.2);
-      expect(matrix[matrixIndex(wd, 20)]).toBe(0.2);
-      expect(matrix[matrixIndex(wd, 21)]).toBe(0); // just past the evening window
-
-      expect(matrix[matrixIndex(wd, 0)]).toBe(0);
-      expect(matrix[matrixIndex(wd, 12)]).toBe(0);
+    for (let wd = 1; wd <= 5; wd++) {
+      expect(matrix[matrixIndex(wd, 10)]).toBe(0.8); // late morning hump
+      expect(matrix[matrixIndex(wd, 13)]).toBe(0.3); // post-lunch dip
+      expect(matrix[matrixIndex(wd, 20)]).toBe(0.8); // evening hump
+      expect(matrix[matrixIndex(wd, 3)]).toBe(0);
+      expect(matrix[matrixIndex(wd, 23)]).toBe(0);
     }
     expect(matrix).toHaveLength(168);
+  });
+
+  it("makes weekends lazier (0.7x) and one hour later", () => {
+    const matrix = defaultPreferenceMatrix();
+    for (const wd of [6, 7]) {
+      for (let hour = 0; hour < 24; hour++) {
+        const weekday = matrix[matrixIndex(1, (hour + 23) % 24)];
+        expect(matrix[matrixIndex(wd, hour)]).toBeCloseTo(0.7 * weekday, 12);
+      }
+    }
   });
 });
 
@@ -98,7 +97,7 @@ describe("reinforcePreferenceCell", () => {
   });
 
   it("falls back to the cold-start default matrix when the stored matrix is malformed", () => {
-    // Monday 05:00 UTC — outside every cold-start default window (0 by
+    // Monday 05:00 UTC — outside every cold-start default hour (0 by
     // default), so the +delta is directly observable on top of it.
     const mon05 = new Date("2026-06-15T05:30:00.000Z").getTime();
     const idx = matrixIndex(1, 5);

@@ -165,7 +165,6 @@ export class PlacementGateway {
         // Python requires exactly 168 finite floats (else 422); a new user has [].
         preferenceMatrix: wireMatrix(user.preferenceMatrix),
         observationCount,
-        ...(user.focusBand ? { focusBand: user.focusBand } : {}),
       },
       ...(bandit ? { bandit } : {}),
     };

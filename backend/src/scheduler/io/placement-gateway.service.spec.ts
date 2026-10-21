@@ -98,10 +98,10 @@ describe("PlacementGateway.buildRequest", () => {
     // Same as Python schemas_place (len 168, finite) and default_preference_matrix.
     expect(m).toHaveLength(168);
     expect(m.every(Number.isFinite)).toBe(true);
-    for (let wd = 0; wd < 7; wd++) {
-      expect(m[wd * 24 + 9]).toBe(1);
-      expect(m[wd * 24 + 14]).toBe(0.5);
-      expect(m[wd * 24 + 19]).toBe(0.2);
+    for (let wd = 0; wd < 5; wd++) {
+      expect(m[wd * 24 + 10]).toBe(0.8);
+      expect(m[wd * 24 + 13]).toBe(0.3);
+      expect(m[wd * 24 + 20]).toBe(0.8);
       expect(m[wd * 24 + 3]).toBe(0);
     }
   });

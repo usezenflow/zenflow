@@ -23,7 +23,7 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/users/me` | Profile |
-| PATCH | `/users/update/basic-info` | Name, timezone, lang, `defaultReminderMinutes`, `focusBand` (`MORNING`, `AFTERNOON`, `EVENING`, `LATE_NIGHT`; seeds the preference matrix while it is still the default) |
+| PATCH | `/users/update/basic-info` | Name, timezone, lang, `defaultReminderMinutes` |
 | GET | `/users/me/preference-matrix` | 168-float matrix for the Insights heatmap |
 | GET | `/users/me/student` | DLU profile (`StudentResponse`); `profile` is null until the first fetch lands |
 | GET | `/users/me/marks` | Marks grouped by term, newest first; names are clean and `noCredit` flags the portal's red star (`StudentMarksResponse`) |

@@ -10,7 +10,6 @@
  * for a minor-compatible extension the service must recognise.
  */
 import type { SchedulingArm } from "./bandit";
-import type { FocusBand } from "./user";
 
 export const PLACEMENT_CONTRACT_VERSION = 3;
 
@@ -119,8 +118,6 @@ export interface PlaceRequest {
   user: {
     preferenceMatrix: number[];
     observationCount: number;
-    /** Sets the user's quiet hours; omitted when onboarding has not asked. */
-    focusBand?: FocusBand;
   };
   /** Required iff any member can run LINUCB. `[]` = cold prior. */
   bandit?: {
