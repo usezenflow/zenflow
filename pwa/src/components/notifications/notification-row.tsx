@@ -28,7 +28,7 @@ export function NotificationRow({
   onReschedule: () => void;
 }) {
   useLanguage();
-  const { Icon, tint } = notificationVisual(n.eventName);
+  const { Icon, tint } = notificationVisual(n.eventName, n.sessionType);
   const unread = !n.readAt;
   const navigable = Boolean(n.sessionId);
   const relative = formatDistanceToNow(new Date(n.sentAt), {

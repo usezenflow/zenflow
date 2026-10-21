@@ -36,7 +36,7 @@ export function useNotificationsStream(): void {
         const user = useUserStore.getState().user;
         if (!user?.onboardedAt) return;
         playChime(pushToneFor(n.eventName));
-        const { Icon, tint } = notificationVisual(n.eventName);
+        const { Icon, tint } = notificationVisual(n.eventName, n.sessionType);
         const id = toast(n.title, {
           description: n.content,
           icon: Icon,
