@@ -40,7 +40,7 @@ Starts per student over 4 weeks (12 tasks), held-out seeds, 600 students per wor
   1.2 to 4.2 when it is wrong. Without it (L0), LinUCB is behind H1 in four of the five correct-band worlds.
 - **LinUCB loses where the heuristic is already near its best.** At attention 0.9 the heuristic starts 11.25 tasks and
   LinUCB 9.49, about 16% fewer.
-- **The deadline term costs starts here.** Removing it helps in 11 of 17 worlds and never hurts by more than 0.02.
+- **The deadline term costs starts here.** Removing it helps in 11 of 17 worlds and never hurts by more than 0.02. Without it, LinUCB beats H1 in four of the five correct-band worlds.
 - **The pick rate agrees with the start result in most worlds.** LinUCB's option is taken 22% to 29% of the time where it
   loses on starts (evening, night) and 91% where it wins (afternoon). It disagrees in 2 of 5 correct-band worlds.
 - **Limit:** the students are invented. The results show how the policies behave under stated assumptions, not
@@ -189,7 +189,40 @@ S minus H0 is the value of the band plus the value of LinUCB. S minus H1 above i
   LinUCB and H1 alike (section 5.1).
 - Oracle is the ceiling in every world, which the gates check.
 
-### 5.3 What each part of LinUCB adds
+### 5.3 Every arm, starts per student
+
+Oracle is the ceiling and Rand the floor. Bold italic is the best of the seven policy arms in a row. S-gap, S-deadline and
+S-tiebreak are S with that part off. Intervals for the differences are in sections 5.1 and 5.4 and in the eval output.
+
+| World | H0 | H1 | L0 | S | S-gap | S-deadline | S-tiebreak | Oracle | Rand |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 09 to 17, correct | 6.75 | 7.12 | 4.80 | 7.58 | 7.60 | ***7.64*** | 7.58 | 8.97 | 4.71 |
+| 09 to 17, wrong | ***6.75*** | 0.23 | 4.80 | 0.56 | 0.48 | 0.55 | 0.57 | 8.97 | 4.71 |
+| 6 to 10, correct | 5.99 | 5.99 | 3.95 | 6.24 | 6.24 | ***6.79*** | 6.24 | 8.97 | 1.31 |
+| 6 to 10, wrong | ***5.99*** | 0.23 | 3.95 | 0.45 | 0.45 | 1.57 | 0.46 | 8.97 | 1.31 |
+| 13 to 17, correct | 0.90 | 0.17 | 1.31 | 6.18 | 6.01 | ***6.32*** | 6.18 | 7.02 | 2.42 |
+| 13 to 17, wrong | 0.90 | 0.11 | ***1.31*** | 0.12 | 0.12 | 0.13 | 0.12 | 7.02 | 2.42 |
+| 17 to 21, correct | 0.95 | ***7.12*** | 3.31 | 6.22 | 6.41 | 6.27 | 6.22 | 8.97 | 2.40 |
+| 17 to 21, wrong | 0.95 | 0.24 | ***3.31*** | 0.37 | 0.36 | 0.37 | 0.34 | 8.97 | 2.40 |
+| 21 to 24, correct | 0.24 | 7.12 | 4.62 | 6.39 | 5.32 | ***7.56*** | 6.39 | 8.97 | 0.81 |
+| 21 to 24, wrong | 0.24 | 0.24 | ***4.62*** | 0.39 | 0.35 | 0.41 | 0.32 | 8.97 | 0.81 |
+| attention 0.05 | 0.08 | ***0.70*** | 0.13 | 0.60 | 0.65 | 0.61 | 0.60 | 0.87 | 0.22 |
+| attention 0.15 | 0.26 | ***2.11*** | 0.63 | 1.88 | 1.98 | 1.89 | 1.88 | 2.62 | 0.70 |
+| attention 0.3 | 0.55 | ***4.24*** | 1.65 | 3.72 | 3.87 | 3.74 | 3.72 | 5.30 | 1.41 |
+| attention 0.6 | 1.11 | ***8.57*** | 4.31 | 7.48 | 7.76 | 7.52 | 7.48 | 10.80 | 2.88 |
+| attention 0.9 | 1.29 | ***11.25*** | 5.89 | 9.49 | 9.69 | 9.51 | 9.49 | 12.00 | 3.54 |
+| absent | 0.02 | ***0.24*** | 0.04 | 0.20 | 0.21 | 0.20 | 0.20 | 0.24 | 0.07 |
+| routine change | 3.42 | ***3.66*** | 2.63 | 3.22 | 3.41 | 3.54 | 3.23 | 8.97 | 1.88 |
+
+- Below Rand with a correct band: H0 in the afternoon, evening and night worlds, and H1 and L0 in the afternoon world.
+- With a wrong band, H1 and every S variant fall below Rand in every world, since they follow the wrong hours. L0 does not use the band.
+- S-deadline is the best policy arm in four correct-band worlds (09 to 17, 06 to 10, 13 to 17, 21 to 24) and beats H1 in each.
+  H1 stays best in the evening world and in the attention, absent and routine-change worlds.
+- S-gap differs from S by under 0.2 except in the night world (5.32 against 6.39). S-tiebreak differs by under 0.1 everywhere.
+- Only H1 in the absent world matches Oracle (0.24). In the correct-band worlds the best arm is 0.2 to 5.3 starts below it,
+  and the routine-change world is the widest.
+
+### 5.4 What each part of LinUCB adds
 
 Starts per student, S minus S without the part. Rows for the five correct-band worlds; the figure includes the wrong-band worlds.
 
@@ -212,7 +245,7 @@ Every world and every interval is in the eval output (`evalx/out/report.md`).
 
 ![Ablation by world](./figures/eval-f2-ablation.png)
 
-### 5.4 Pairwise offer
+### 5.5 Pairwise offer
 
 Share of events offered, offers tapped, and how often a tap picks LinUCB's option. Start rates are per event by primary policy.
 
@@ -233,7 +266,7 @@ Share of events offered, offers tapped, and how often a tap picks LinUCB's optio
 - Most offers are not tapped. At attention 0.05 only 4% of offers are tapped, so few picks reach LinUCB.
 - With a wrong band both policies are poor, and LinUCB's option is taken 59% to 73% of the time. It is the less bad option.
 
-### 5.5 Sensitivity to the assumptions
+### 5.6 Sensitivity to the assumptions
 
 Tuning seeds 100 to 109, the five band worlds. S minus H1 for the correct-band worlds and the wrong-band worlds, each averaged. The averages
 depend on which worlds are included; read only the change between rows.
