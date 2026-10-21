@@ -51,6 +51,7 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")  # the placer logs every request
 
 import numpy as np  # noqa: E402
 
+import src.core.linucb_best_slot as best_slot_module  # noqa: E402
 import src.place as place_module  # noqa: E402
 from evalx.world import (  # noqa: E402
     ARCHETYPES,
@@ -117,6 +118,14 @@ ARM_SPEC: dict[str, dict[str, Any]] = {
     "S-gap": {"policy": "LINUCB", "band": True, "gap": False},
     "S-deadline": {"policy": "LINUCB", "band": True, "deadline": False},
     "S-tiebreak": {"policy": "LINUCB", "band": True, "tiebreak": False},
+    "S-plain": {"policy": "LINUCB", "band": True, "gap": False, "deadline": False},
+    "S-min": {
+        "policy": "LINUCB",
+        "band": True,
+        "gap": False,
+        "deadline": False,
+        "earliest": True,
+    },
     "Oracle": {"policy": "ORACLE", "band": False},
     "Rand": {"policy": "RAND", "band": False},
 }
@@ -149,6 +158,18 @@ def configure(cfg: dict[str, Any]) -> None:
     CFG.update(cfg)
 
 
+class _EarliestOnly:
+    """numpy for ``linucb_best_slot`` with a ``lexsort`` that ranks by score, then by
+    the earlier start, skipping the band order and the distance from the band centre."""
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(np, name)
+
+    @staticmethod
+    def lexsort(keys: Any, *args: Any, **kwargs: Any) -> Any:
+        return np.lexsort((keys[0], keys[-1]), *args, **kwargs)
+
+
 @contextmanager
 def _knobs(spec: dict[str, Any]) -> Iterator[None]:
     """Apply one arm's gap, deadline and tie-break settings around its placements."""
@@ -158,6 +179,9 @@ def _knobs(spec: dict[str, Any]) -> Iterator[None]:
         if CFG["deadline_weight"] is not None
         else _PRODUCTION["deadline"]
     )
+    saved_np = best_slot_module.np  # type: ignore[attr-defined]
+    if spec.get("earliest"):
+        best_slot_module.np = _EarliestOnly()  # type: ignore[attr-defined]
     saved = (
         consts.LINUCB_GAP_WEIGHT,
         consts.DEADLINE_PENALTY_WEIGHT,
@@ -170,6 +194,7 @@ def _knobs(spec: dict[str, Any]) -> Iterator[None]:
     try:
         yield
     finally:
+        best_slot_module.np = saved_np  # type: ignore[attr-defined]
         (
             consts.LINUCB_GAP_WEIGHT,
             consts.DEADLINE_PENALTY_WEIGHT,
@@ -650,6 +675,10 @@ PAIRS: dict[str, tuple[str, str]] = {
     "deadline": ("S", "S-deadline"),
     "tiebreak": ("S", "S-tiebreak"),
     "S_deadline_minus_H1_deadline": ("S-deadline", "H1-deadline"),
+    "Smin_minus_H1": ("S-min", "H1"),
+    "Smin_minus_S": ("S-min", "S"),
+    "Splain_minus_H1": ("S-plain", "H1"),
+    "Splain_minus_S": ("S-plain", "S"),
 }
 
 
@@ -1123,8 +1152,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "results.json").write_text(json.dumps(res, indent=2) + "\n")
-    (args.out / "report.md").write_text(render(res))
-    print(render(res))
+    if {"H0", "H1", "L0", "S", "Oracle", "Rand", "AB"} <= set(arms):
+        (args.out / "report.md").write_text(render(res))
+        print(render(res))
     return 0
 
 

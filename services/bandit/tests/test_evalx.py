@@ -172,3 +172,12 @@ def test_a_zero_rate_freezes_the_heuristic_table() -> None:
         assert (harness._moved(m, 9 * 3_600_000, 15 * 3_600_000, 120) == m).all()
     finally:
         harness.configure(saved)
+
+
+def test_the_earliest_start_arm_restores_the_ranking() -> None:
+    from src.core import linucb_best_slot
+
+    before = linucb_best_slot.np  # type: ignore[attr-defined]
+    with harness._knobs(harness.ARM_SPEC["S-min"]):
+        assert linucb_best_slot.np is not before  # type: ignore[attr-defined]
+    assert linucb_best_slot.np is before  # type: ignore[attr-defined]
