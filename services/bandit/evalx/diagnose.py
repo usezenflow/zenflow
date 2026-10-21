@@ -29,7 +29,7 @@ from evalx.world import (
     make_tasks,
 )
 
-POLICIES = ("H0", "H1", "L0", "S")
+POLICIES = ("H0", "H1", "L0", "S-band")
 
 
 def diagnose(students: int, seed: int) -> dict[str, dict[str, float]]:

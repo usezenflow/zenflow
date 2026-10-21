@@ -545,7 +545,11 @@ def simulate(
 
 
 def simulate_ab(
-    s: Student, tasks: list[Task], style: str, cal: Calendar
+    s: Student,
+    tasks: list[Task],
+    style: str,
+    cal: Calendar,
+    spec: dict[str, Any] | None = None,
 ) -> dict[str, int]:
     """One student under the live protocol.
 
@@ -558,6 +562,7 @@ def simulate_ab(
       primary heuristic kept            -0.2, and the kept cell is reinforced
       heuristic taken over LinUCB       the MOVE reward by distance
     A START or MOVE on the applied slot rewards LinUCB only when that slot is LinUCB's.
+    ``spec`` is the LinUCB variant to place (an ``ARM_SPEC`` entry); ``None`` ships.
     """
     band = s.stated
     state: dict[str, dict[str, list[float]]] = {a: {"A": [], "b": []} for a in ARM_IDS}
@@ -580,7 +585,8 @@ def simulate_ab(
     for n, task in enumerate(tasks):
         st = s.at(task.arrival_ms)
         primary = "LINUCB" if task.u_coin < 0.5 else "HEURISTIC"
-        res = _place(task, primary, state, matrix, n, band, cal, both=True)
+        with _knobs(spec or {}, band):
+            res = _place(task, primary, state, matrix, n, band, cal, both=True)
         if res is None or not res.get("linucb") or not res.get("heuristic"):
             out["infeasible"] += 1
             continue
@@ -650,8 +656,9 @@ def run_seed(seed: int, students: int, arms: tuple[str, ...]) -> dict[str, Any]:
                 random.Random(f"calendar:{seed}:{idx}"), WEEKS * 7 + 10
             )
             for arm in arms:
-                if arm == "AB":
-                    per[arm].append(simulate_ab(student, tasks, style, cal))
+                if arm in ("AB", "AB-band"):
+                    variant = ARM_SPEC["S-band"] if arm == "AB-band" else None
+                    per[arm].append(simulate_ab(student, tasks, style, cal, variant))
                     continue
                 arm_rng = random.Random(f"rand:{seed}:{idx}:{arm}")
                 row = simulate(student, tasks, arm, style, arm_rng, cal)
@@ -707,6 +714,8 @@ PAIRS: dict[str, tuple[str, str]] = {
     "Smin_minus_H1": ("S-min", "H1"),
     "Smin_minus_S": ("S-min", "S"),
     "Smin_minus_H0": ("S-min", "H0"),
+    "Sband_minus_H0": ("S-band", "H0"),
+    "Sband_minus_L0": ("S-band", "L0"),
     "Smin_minus_L0": ("S-min", "L0"),
     "Sband_minus_H1": ("S-band", "H1"),
     "Sband_minus_Smin": ("S-band", "S-min"),
@@ -768,7 +777,7 @@ def merge(
         done[name] = {}
         for arm in arms:
             rows = [r for p in parts for r in p["worlds"][name][arm]]
-            if arm == "AB":
+            if arm.startswith("AB"):
                 ab[name] = _ab_cols(rows)
             else:
                 done[name][arm] = np.asarray(rows, dtype=float)
@@ -951,8 +960,6 @@ SENSITIVITY: dict[str, dict[str, Any]] = {
     "heuristic outside 0.5": {"outside": 0.5},
     "heuristic outside 0.8": {"outside": 0.8},
     "heuristic outside 1 (flat)": {"outside": 1.0},
-    "gap weight 0": {"gap_weight": 0.0},
-    "deadline weight 0": {"deadline_weight": 0.0},
 }
 
 
@@ -963,7 +970,7 @@ def sensitivity(out: Path, seeds: int, students: int, workers: int) -> dict[str,
         res = run_all(
             seeds,
             students,
-            ("H1", "S", "AB"),
+            ("H1", "S-band", "AB-band"),
             workers,
             out / "sensitivity",
             100,
@@ -972,7 +979,7 @@ def sensitivity(out: Path, seeds: int, students: int, workers: int) -> dict[str,
         pooled = res["pooled"]
         rows[name] = {
             group: {
-                "S_minus_H1": pooled[group]["contrasts"]["S_minus_H1"],
+                "S_minus_H1": pooled[group]["contrasts"]["Sband_minus_H1"],
                 "pick_linucb": pooled[group]["ab"]["pick_linucb"],
             }
             for group in ("correct", "wrong")
