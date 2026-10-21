@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import numpy as np
 import pytest
 
@@ -19,12 +21,13 @@ from src.core.constants import FEATURE_DIM
 from src.core.init_state import init_state
 from src.core.quiet_hours import quiet_window
 from src.models.schemas import ArmParams
+from src.schemas import ArmId
 from src.serialization import hydrate_arms
 
 ARM_SPANS = {name: (start, end) for name, start, end in ARM_BANDS}
 
 
-def _reward(prior: dict[str, ArmParams], arm: str) -> float:
+def _reward(prior: Mapping[ArmId, ArmParams], arm: ArmId) -> float:
     """The pseudo-reward a prior arm was seeded with, read back from ``b``."""
     x = reference_context()
     return float(prior[arm].b @ x / (N0 * (x @ x)))
@@ -68,8 +71,7 @@ def test_prior_pseudo_observations_weigh_n0() -> None:
 
 
 def test_cold_arms_hydrate_from_the_prior_and_warm_arms_keep_state() -> None:
-    state: dict = {}
-    hydrated = hydrate_arms(state, FEATURE_DIM, 1.0, "EVENING")
+    hydrated = hydrate_arms({}, FEATURE_DIM, 1.0, "EVENING")
     prior = band_prior("EVENING", FEATURE_DIM, 1.0)
     np.testing.assert_allclose(hydrated["EVENING"].b, prior["EVENING"].b)
 
