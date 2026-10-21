@@ -49,6 +49,7 @@ export function makeNotification(overrides: Partial<NotificationDto> = {}): Noti
     readAt: null,
     actionTakenAt: null,
     sessionId: null,
+    sessionType: null,
     conflictSessionIds: [],
     slotProposalId: null,
     offerSlots: [],

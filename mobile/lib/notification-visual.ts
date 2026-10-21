@@ -78,7 +78,10 @@ export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
  * notification toast, so both show the same glyph for the same kind.
  * `iconColor` is the inbox's single ink; `accent` adds a dark-scheme pair.
  */
-export function notificationVisual(eventName: string): {
+export function notificationVisual(
+  eventName: string,
+  linkedType: SessionType | null = null,
+): {
   Icon: LucideIcon;
   label: string;
   /** Translucent fill and rim: a glass badge in the category's colour. */
@@ -98,7 +101,8 @@ export function notificationVisual(eventName: string): {
       accent: ink,
     };
   }
-  const sessionType = CATEGORY_SESSION_TYPE[category];
+  const sessionType =
+    category === "REMINDER" ? linkedType : CATEGORY_SESSION_TYPE[category];
   const kindVisual = sessionType ? KIND_VISUAL[notificationEventKind(eventName)] : undefined;
   if (kindVisual) {
     return {
@@ -146,13 +150,16 @@ export function notificationVisual(eventName: string): {
 
 /** `icon` + `accent` for a notification's toast. Tolerates a missing or
  * unrecognized eventName (an older push payload) with the reminder bell. */
-export function notificationToastVisual(eventName: string | undefined): {
+export function notificationToastVisual(
+  eventName: string | undefined,
+  linkedType: SessionType | null = null,
+): {
   icon: LucideIcon;
   accent: ToastAccent;
 } {
   try {
     if (eventName) {
-      const { Icon, accent } = notificationVisual(eventName);
+      const { Icon, accent } = notificationVisual(eventName, linkedType);
       return { icon: Icon, accent };
     }
   } catch {
