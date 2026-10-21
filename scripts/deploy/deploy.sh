@@ -144,7 +144,7 @@ fi
 # .env.<env> holds the non-secret settings under every provider; Vault mode adds its
 # secrets as rendered files under /run.
 compose="docker compose --env-file .env.${env_name} -f compose.${env_name}.yml"
-workers="watcher worker-portal worker-lms worker-notify"
+workers="watcher worker-portal worker-lms worker-notify worker-scheduler"
 mkdir -p state
 active="$(cat state/active 2>/dev/null || true)"
 other() { [ "$1" = blue ] && echo green || echo blue; }

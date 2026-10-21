@@ -28,7 +28,7 @@ function segment(id: string): DaySegment {
   } as DaySegment;
 }
 
-function renderBlock(checkState?: "open" | "done" | "skipped") {
+function renderBlock(skipped: boolean) {
   return renderScreen(
     <SessionBlock
       segment={segment("b1")}
@@ -37,7 +37,7 @@ function renderBlock(checkState?: "open" | "done" | "skipped") {
       grid={GRID}
       leftOffset={0}
       blockWidth={300}
-      checkState={checkState}
+      skipped={skipped}
       titleOnly
     />,
   );
@@ -45,12 +45,12 @@ function renderBlock(checkState?: "open" | "done" | "skipped") {
 
 describe("SessionBlock skip mark", () => {
   it("shows a skip mark on a skipped session", () => {
-    renderBlock("skipped");
+    renderBlock(true);
     expect(screen.getByTestId("skip-mark.b1")).toBeTruthy();
   });
 
   it("shows no skip mark on an open session", () => {
-    renderBlock("open");
+    renderBlock(false);
     expect(screen.queryByTestId("skip-mark.b1")).toBeNull();
   });
 });

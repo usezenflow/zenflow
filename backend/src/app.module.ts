@@ -590,7 +590,7 @@ const jobModules = [
     LinkPreviewModule,
     PlacesModule,
     FilesModule,
-    // Background cron providers (MatrixDecayService, SessionOutcomeService)
+    // Background cron providers (MatrixDecayService)
     // plus HeuristicScheduleService / BanditScheduleService, the single-session
     // placers SessionsService calls on create / deadline-edit. No day repack —
     // an existing session is never moved; see scheduler.module.ts.

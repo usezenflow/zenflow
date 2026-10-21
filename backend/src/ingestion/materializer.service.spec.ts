@@ -34,7 +34,6 @@ interface SessionRow {
   scheduledStartTime: Date | null;
   lastMovedAt: Date | null;
   submittedAt: Date | null;
-  completedAt: Date | null;
   skipped: boolean;
   prepForSessionId: string | null;
   deleted: boolean;
@@ -161,7 +160,6 @@ function makePrismaDouble() {
           scheduledStartTime: (data.scheduledStartTime as Date) ?? null,
           lastMovedAt: null,
           submittedAt: (data.submittedAt as Date | null) ?? null,
-          completedAt: null,
           skipped: false,
           prepForSessionId: null,
           deleted: false,
@@ -187,31 +185,14 @@ function makePrismaDouble() {
       },
       updateMany: (args: {
         where: {
-          id?: string;
-          type?: string;
-          skipped?: boolean;
-          completedAt?: null;
           userId: string;
           source: string;
           deleted: boolean;
           lastMovedAt: null;
           prepForSessionId: { in: string[] };
         };
-        data: { deleted: boolean; completedAt?: Date };
+        data: { deleted: boolean };
       }) => {
-        if (args.where.id !== undefined) {
-          // `completeSubmitted`: check off one open, unskipped assignment.
-          const hit = sessions.filter(
-            (s) =>
-              s.id === args.where.id &&
-              s.userId === args.where.userId &&
-              s.type === args.where.type &&
-              s.skipped === args.where.skipped &&
-              s.completedAt === args.where.completedAt,
-          );
-          hit.forEach((s) => (s.completedAt = args.data.completedAt ?? null));
-          return Promise.resolve({ count: hit.length });
-        }
         const hit = sessions.filter(
           (s) =>
             s.userId === args.where.userId &&
@@ -572,7 +553,6 @@ describe("MaterializerService", () => {
         scheduledStartTime: new Date("2026-09-10T03:00:00.000Z"),
         lastMovedAt: null,
         submittedAt: null,
-        completedAt: null,
         skipped: false,
         prepForSessionId: null,
         deleted: false,
@@ -597,7 +577,7 @@ describe("MaterializerService", () => {
   });
 
   describe("submission", () => {
-    it("does not check off a submitted assignment or raise a done notification", async () => {
+    it("does not raise a done notification for a submitted assignment", async () => {
       const { db, service } = await makeService();
       const FIRST = new Date("2026-09-09T10:00:00.000Z");
 
@@ -608,8 +588,6 @@ describe("MaterializerService", () => {
         FIRST,
       );
 
-      expect(db.sessions[0].completedAt).toBeNull();
-      expect(db.events.some((e) => e.eventType === "COMPLETE")).toBe(false);
       expect(
         db.notifications.some((n) => n.eventName === "assignment.completed"),
       ).toBe(false);

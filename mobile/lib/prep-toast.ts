@@ -106,7 +106,7 @@ export async function offerPrepReschedule(
     prepSessions: [] as Session[],
   }));
   const open = prepSessions.filter(
-    (p) => !p.completedAt && !p.skipped && p.deadline !== newStartISO,
+    (p) => !p.skipped && p.deadline !== newStartISO,
   );
   if (open.length === 0) return;
   toast({

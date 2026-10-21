@@ -48,24 +48,23 @@ import { SeriesService } from "./series.service";
 const NEXT_OCCURRENCE_WINDOW_DAYS = 120;
 const NEXT_OCCURRENCE_SCAN = 8;
 
-type OccurrenceCheckOff = Pick<SharedSession, "completedAt" | "skipped">;
+type OccurrenceSkip = Pick<SharedSession, "skipped">;
 
 const occurrenceStateKey = (seriesId: string, start: Date): string =>
   `${seriesId}|${start.getTime()}`;
 
-/** An occurrence's done or skipped state; a missing row means neither. */
-function occurrenceCheckOff(
-  states: Map<string, OccurrenceCheckOff>,
+/** An occurrence's skipped state; a missing row means not skipped. */
+function occurrenceSkip(
+  states: Map<string, OccurrenceSkip>,
   seriesId: string,
   start: Date,
   skippedFrom: Date | null = null,
-): OccurrenceCheckOff {
+): OccurrenceSkip {
   const state = states.get(occurrenceStateKey(seriesId, start)) ?? {
-    completedAt: null,
     skipped: false,
   };
   const exempt = skippedFrom !== null && start >= skippedFrom;
-  return exempt && !state.completedAt ? { ...state, skipped: true } : state;
+  return exempt && !state.skipped ? { skipped: true } : state;
 }
 
 /**
@@ -391,7 +390,7 @@ export class SessionCrudService {
             ...base,
             id: occurrenceId(row.seriesId, occ),
             scheduledStartTime: occ.toISOString(),
-            ...occurrenceCheckOff(
+            ...occurrenceSkip(
               states,
               row.seriesId,
               occ,
@@ -427,7 +426,7 @@ export class SessionCrudService {
     }[],
     from: Date,
     to: Date,
-  ): Promise<Map<string, OccurrenceCheckOff>> {
+  ): Promise<Map<string, OccurrenceSkip>> {
     const seriesIds = rows
       .filter((r) => r.seriesId && r.series?.rrule)
       .map((r) => r.seriesId as string);
@@ -442,10 +441,7 @@ export class SessionCrudService {
     return new Map(
       found.map((s) => [
         occurrenceStateKey(s.seriesId, s.occurrenceStart),
-        {
-          completedAt: s.completedAt?.toISOString() ?? null,
-          skipped: s.skipped,
-        },
+        { skipped: s.skipped },
       ]),
     );
   }
@@ -517,7 +513,7 @@ export class SessionCrudService {
         ...toSessionDto(rep),
         id,
         scheduledStartTime: occ.startISO,
-        ...occurrenceCheckOff(
+        ...occurrenceSkip(
           states,
           occ.seriesId,
           start,
@@ -594,8 +590,7 @@ export class SessionCrudService {
       new Date(candidates[candidates.length - 1].getTime() + 1),
     );
     const next = candidates.find(
-      (c) =>
-        !occurrenceCheckOff(states, series.id, c, series.skippedFrom).skipped,
+      (c) => !occurrenceSkip(states, series.id, c, series.skippedFrom).skipped,
     );
     if (!next) return null;
     const taken = await this.prisma.session.findFirst({

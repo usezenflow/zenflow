@@ -22,7 +22,7 @@ export const SERIES_GAP_MINUTES = 15;
  * Each accepted/rejected event moves the corresponding hour-bucket cell by
  * `η × delta` rather than a raw `±1`, so a single action nudges the weight
  * instead of spiking it. A slot needs roughly `1/η` consistent signals to
- * accumulate a full ±1 unit — at η=0.1, ten consecutive COMPLETE events in
+ * accumulate a full ±1 unit — at η=0.1, ten consecutive START events in
  * the same bucket converge to +1.0 (the same theoretical ceiling as before,
  * just reached gradually). The existing exponential time-decay in
  * `matrix-decay.ts` (half-life 21 days) erodes stale values on the nightly
@@ -30,9 +30,9 @@ export const SERIES_GAP_MINUTES = 15;
  */
 export const PREFERENCE_LEARNING_RATE = 0.2;
 
-/** Weight of a kept (`RETAINED`) placement on the preference matrix — a soft
- * reward against the graded, up-to-full penalty of a move. */
-export const PREFERENCE_RETAINED_WEIGHT = 0.25;
+/** Weight of a kept placement on the preference matrix: a START, or a kept
+ * pairwise option. A soft reward against the graded, up-to-full penalty of a move. */
+export const PREFERENCE_KEPT_WEIGHT = 0.25;
 
 export const MIN = 60_000;
 
@@ -66,14 +66,12 @@ export const STABILITY_WEIGHT = 0.1;
 export const STABILITY_SATURATION_HOURS = 4;
 
 /**
- * Reward written on the `SessionEvent` for each outcome (ADR-0023, amended by
- * ADR-0025). A user drag/resize of a scheduled TASK is graded by displacement
- * (`MOVE`). An unmoved TASK is positive when started in its slot and a small
- * negative when no start is seen. `CREATE` events carry a neutral 0.
+ * Reward written on the `SessionEvent` (ADR-0035). A user drag/resize of a
+ * scheduled TASK is graded by displacement (`MOVE`). A START inside an unmoved
+ * TASK's slot is positive. `CREATE` events carry a neutral 0.
  */
 export const SESSION_MOVE_REWARD = -1.0;
 export const SESSION_STARTED_REWARD = 1.0;
-export const SESSION_LAPSED_REWARD = -0.25;
 /**
  * Reward for the LinUCB arm when the user picks LinUCB's option in a shown
  * pairwise comparison (`docs/scheduler/ab-testing.md` §3). Below completion:
@@ -92,7 +90,7 @@ export const PAIRWISE_LOSS_REWARD = -0.2;
  * shown option: the same scale as a pairwise win on the matrix.
  */
 export const PAIRWISE_KEEP_PREFERENCE_WEIGHT =
-  PREFERENCE_RETAINED_WEIGHT * PAIRWISE_WIN_REWARD;
+  PREFERENCE_KEPT_WEIGHT * PAIRWISE_WIN_REWARD;
 
 /**
  * Disjoint LinUCB scheduling parameters

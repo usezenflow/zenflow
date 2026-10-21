@@ -312,9 +312,9 @@ def test_preference_rules_are_the_core_functions() -> None:
     m2.retained(new)  # 15:00 starts at 0.5, below the clamp
     np.testing.assert_allclose(
         m2.matrix,
-        reinforce_preference_cell(base, new, TZ, consts.PREFERENCE_RETAINED_WEIGHT),
+        reinforce_preference_cell(base, new, TZ, consts.PREFERENCE_KEPT_WEIGHT),
     )
-    # production constants: eta = 0.2, retained weight 0.25
+    # production constants: eta = 0.2, kept weight 0.25
     i = int(np.argmax(m2.matrix - base))
     assert m2.matrix[i] - base[i] == pytest.approx(0.2 * 0.25)
 

@@ -57,7 +57,7 @@ export class ExperimentService {
   }
 
   /** Writes the `SlotProposal` row, returning its id (`null` on failure) so
-   * the caller can attribute a later `MOVE`/`RETAINED` reward to it. */
+   * the caller can attribute a later `MOVE`/`START` reward to it. */
   async recordProposal(args: RecordProposalArgs): Promise<string | null> {
     try {
       const observationCount = await loadObservationCount(

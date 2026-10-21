@@ -44,3 +44,5 @@ predictable from the client.
 - Changing the roll weights changes outcomes for unhatched eggs.
 - Equip and the abilities' effects are not built. The companion is the
   strongest owned spirit, and abilities show as coming soon.
+
+**Addendum (2026-10-21, ADR-0035):** ADR-0035 removes check-off as a signal. This record was already superseded by ADR-0032.

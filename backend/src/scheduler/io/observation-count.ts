@@ -2,34 +2,15 @@ import { Prisma, SessionEventType } from "../../../generated/prisma";
 import type { PrismaService } from "../../prisma/prisma.service";
 
 /**
- * Events that carry a settled reward (ADR-0023): a graded `MOVE`, a settled
- * `START`, `WRONG_TIME` or `LAPSED` (and legacy `MISSED`), a legacy `RETAINED`,
- * and a `COMPLETE` or `SKIP` whose reward is set. An unsettled check-off
- * (`rewardScore` 0) and `SYSTEM_MOVE` carry no signal.
+ * Events that carry a learning signal (ADR-0035): a graded `MOVE` and a
+ * `START`. `CREATE` and `SYSTEM_MOVE` carry none.
  */
 export function rewardEventWhere(
   userId: string,
 ): Prisma.SessionEventWhereInput {
   return {
     userId,
-    OR: [
-      {
-        eventType: {
-          in: [
-            SessionEventType.MOVE,
-            SessionEventType.MISSED,
-            SessionEventType.LAPSED,
-            SessionEventType.WRONG_TIME,
-            SessionEventType.START,
-            SessionEventType.RETAINED,
-          ],
-        },
-      },
-      {
-        eventType: { in: [SessionEventType.COMPLETE, SessionEventType.SKIP] },
-        rewardScore: { not: 0 },
-      },
-    ],
+    eventType: { in: [SessionEventType.MOVE, SessionEventType.START] },
   };
 }
 

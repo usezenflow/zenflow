@@ -41,12 +41,15 @@ def stability_scores(
 
 
 def deadline_penalty_scores(
-    ends_ms: NDArray[np.int64], deadline_ms: int, weight: float
+    ends_ms: NDArray[np.int64],
+    deadline_ms: int,
+    weight: float,
+    horizon_hours: float = DEADLINE_PENALTY_HORIZON_HOURS,
 ) -> NDArray[np.float64]:
     """``-weight`` for a slot ending at the deadline, fading linearly to 0 at
-    ``DEADLINE_PENALTY_HORIZON_HOURS`` before it."""
+    ``horizon_hours`` before it."""
     left_h = (deadline_ms - ends_ms) / HOUR_MS
-    near = 1.0 - np.maximum(left_h, 0.0) / DEADLINE_PENALTY_HORIZON_HOURS
+    near = 1.0 - np.maximum(left_h, 0.0) / horizon_hours
     return np.asarray(-weight * np.maximum(near, 0.0), dtype=np.float64)
 
 

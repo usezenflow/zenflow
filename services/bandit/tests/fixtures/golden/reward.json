@@ -25,50 +25,6 @@
         -480
       ],
       "expected": -1
-    },
-    {
-      "name": "start-in-slot-settles-positive",
-      "fn": "completionReward",
-      "args": [
-        0,
-        3600000,
-        600000,
-        4500000
-      ],
-      "expected": 1.0
-    },
-    {
-      "name": "start-before-slot-unsettled",
-      "fn": "completionReward",
-      "args": [
-        3600000,
-        7200000,
-        1800000,
-        9000000
-      ],
-      "expected": null
-    },
-    {
-      "name": "no-start-unsettled-before-cutoff",
-      "fn": "completionReward",
-      "args": [
-        0,
-        3600000,
-        null,
-        4500000
-      ],
-      "expected": null
-    },
-    {
-      "name": "no-start-lapsed-at-cutoff",
-      "fn": "completionReward",
-      "args": [
-        0,
-        3600000,
-        null,
-        90000000
-      ],
-      "expected": -0.25
     }
   ]
 }

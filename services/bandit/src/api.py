@@ -31,9 +31,9 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from src.core.band_prior import band_prior
 from src.core.hybrid import Z_DIM, hybrid_update
 from src.core.init_state import init_state
+from src.core.matrix_prior import default_prior
 from src.core.prep import prep_window
 from src.core.slot import utc_offsets_ms
 from src.models.linucb import update
@@ -299,11 +299,7 @@ def update_arm(request: UpdateRequest) -> UpdateResponse:
     started = time.perf_counter()
     d = len(request.x)
     x: np.ndarray = np.asarray(request.x, dtype=np.float64)
-    prior = (
-        band_prior(request.focus_band, d, request.ridge)[request.arm]
-        if request.focus_band
-        else None
-    )
+    prior = default_prior(d, request.ridge).get(request.arm)
     a, b = hydrate(request.state, d, request.ridge, prior)
     if request.z is None:
         new_a, new_b = update(a, b, x, request.reward)
@@ -332,12 +328,12 @@ def update_arm(request: UpdateRequest) -> UpdateResponse:
 
 @app.post("/v1/init", dependencies=[Depends(require_token)])
 def init_student(request: InitRequest) -> InitResponse:
-    """Starting state for a new student: band prior per arm, marks prior on beta."""
+    """Starting state for a new student: matrix prior per arm, marks prior on beta."""
     require_422(
         math.isfinite(request.ridge) and request.ridge > 0.0, "ridge must be > 0"
     )
     has_marks = bool(request.marks) or request.avg_gpa4 is not None
-    state = init_state(request.ridge, request.focus_band, has_marks)
+    state = init_state(request.ridge, has_marks)
     return InitResponse(
         arms={
             arm: ArmState(A=p.A.reshape(-1).tolist(), b=p.b.tolist())

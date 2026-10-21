@@ -13,7 +13,7 @@ export * from "./placement";
 export * from "./prep";
 export * from "./file";
 export * from "./file-limits";
-export * from "./check-off";
+export * from "./skip";
 export * from "./session-start";
 export * from "./client-events";
 export * from "./course-colour";

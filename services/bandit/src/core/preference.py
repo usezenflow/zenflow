@@ -22,12 +22,45 @@ def matrix_index(iso_weekday_num: int, hour: int) -> int:
     return (iso_weekday_num - 1) * PREFERENCE_SLOTS_PER_DAY + hour
 
 
+# Weekday liking by clock hour: a late morning hump, a post-lunch dip, an afternoon
+# shoulder and an evening hump. Hours not listed are 0. Assumed, not measured.
+# Mirrors ``defaultPreferenceMatrix`` in ``backend/src/scheduler/core/preference.ts``.
+_WEEKDAY_HOURLY: dict[int, float] = {
+    6: 0.2,
+    7: 0.2,
+    8: 0.4,
+    9: 0.8,
+    10: 0.8,
+    11: 0.8,
+    12: 0.4,
+    13: 0.3,
+    14: 0.3,
+    15: 0.6,
+    16: 0.6,
+    17: 0.5,
+    18: 0.5,
+    19: 0.8,
+    20: 0.8,
+    21: 0.8,
+    22: 0.4,
+}
+# Weekends are lazier and later: the weekday curve scaled and shifted.
+WEEKEND_SCALE = 0.7
+WEEKEND_SHIFT_HOURS = 1
+
+
 def default_preference_matrix() -> NDArray[np.float64]:
+    """7 x 24 cold-start liking: two humps per weekday, a lazier and later weekend."""
     m = np.zeros(PREFERENCE_MATRIX_LENGTH)
     for wd in range(1, 8):
-        m[matrix_index(wd, 9) : matrix_index(wd, 11)] = 1.0
-        m[matrix_index(wd, 14) : matrix_index(wd, 16)] = 0.5
-        m[matrix_index(wd, 19) : matrix_index(wd, 21)] = 0.2
+        for h in range(24):
+            if wd <= 5:
+                v = _WEEKDAY_HOURLY.get(h, 0.0)
+            else:
+                v = WEEKEND_SCALE * _WEEKDAY_HOURLY.get(
+                    (h - WEEKEND_SHIFT_HOURS) % 24, 0.0
+                )
+            m[matrix_index(wd, h)] = v
     return m
 
 

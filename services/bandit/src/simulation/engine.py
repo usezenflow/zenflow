@@ -376,6 +376,7 @@ class World:
             self.cfg.pref_weight,
             self.cfg.gap_weight,
             self.cfg.deadline_weight,
+            consts.LINUCB_DEADLINE_HORIZON_HOURS,
         )
         if best is None or not math.isfinite(best.score):
             return None

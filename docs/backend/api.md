@@ -23,7 +23,7 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/users/me` | Profile |
-| PATCH | `/users/update/basic-info` | Name, timezone, lang, `defaultReminderMinutes`, `focusBand` (`MORNING`, `AFTERNOON`, `EVENING`, `LATE_NIGHT`; seeds the preference matrix while it is still the default) |
+| PATCH | `/users/update/basic-info` | Name, timezone, lang, `defaultReminderMinutes` |
 | GET | `/users/me/preference-matrix` | 168-float matrix for the Insights heatmap |
 | GET | `/users/me/student` | DLU profile (`StudentResponse`); `profile` is null until the first fetch lands |
 | GET | `/users/me/marks` | Marks grouped by term, newest first; names are clean and `noCredit` flags the portal's red star (`StudentMarksResponse`) |
@@ -56,10 +56,8 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 | POST | `/sessions/undo/:groupId` | Revert every move and create of one undo group. `201` with `{ undoGroupId, restored, removedSessionIds, skippedSessionIds }` |
 | POST | `/sessions/:id/slot-pick` | `{ slotProposalId, chose }`: record a pairwise A/B pick ([ab-testing](../scheduler/ab-testing.md)). An `alternative` pick returns `undoGroupId` |
 | POST | `/sessions/:id/start` | Record that the app is open inside a placed task's slot. One per slot. Returns `{ recorded }` |
-| POST | `/sessions/:id/complete` | Legacy, frozen: mark done. No UI, no reward. Idempotent |
-| DELETE | `/sessions/:id/complete` | Legacy, frozen: undo done |
-| POST | `/sessions/:id/skip` | Legacy, frozen: mark skipped. No UI, no reward. Idempotent |
-| DELETE | `/sessions/:id/skip` | Legacy, frozen: undo skip |
+| POST | `/sessions/:id/skip` | Mark a non-TASK session skipped. Writes no event. TASK returns `400`. Idempotent. Accepts `scope` on an occurrence |
+| DELETE | `/sessions/:id/skip` | Undo a skip. Same rules |
 
 - **Placement reason (#254):** `placementReason` (`PREFERRED_HOUR` | `BEFORE_DEADLINE` | `ONLY_FREE_SLOT` | `NEAR_CLASS` | `MOVED_FOR_DEADLINE` | `BEST_AVAILABLE`, or `null`) says why the scheduler picked the start. It is `null` once the start has moved, or for a fallback placement. See [bandit placement](../bandit/placement.md#reason-codes).
 - **Confirmation:** a create or deadline change whose only plan moves a `CHOSEN` session is not applied.
@@ -74,7 +72,7 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 - **Series split:** `sessionDurations` (one 15-minute multiple per session, length `sessionCount`) sets each session's length; `durationMinutes` is then the first one. A day holds at most 3 sittings of a series, 15 minutes apart.
 - **Search:** every word of `q` must match, ignoring case and accents (including đ); empty `q` lists all. `direction` is `forward` (start at or after) or `backward` (before); each page is ascending.
 - Search returns `{ sessions, nextCursor }`; pass `nextCursor` with the same `direction`. Recurring series add occurrences up to a year past the cursor once stored rows run out. Unscheduled rows are skipped.
-- **Done and skipped:** every `Session` carries `completedAt` and `skipped`. Check-off routes return `SessionCheckOffResponse` (`{ session }`) and accept an occurrence id. The representative row id of a recurring series is a 400.
+- **Skipped:** every `Session` carries `skipped`. Skip routes return `SessionSkipResponse` (`{ session }`) and accept an occurrence id. The representative row id of a recurring series is a 400. Learning signals are START and MOVE only ([ADR-0035](../adr/0035-start-and-move-only-signals.md)).
 - **Reminders:** `POST` and `PATCH` accept `reminders?: number[]` (minutes before start, max 2, not for `DND`). Responses carry `reminders: number[]`.
 - Omitted on create: one at `defaultReminderMinutes` (none if 0). Omitted on `PATCH`: unchanged.
 - Reminders past or under 60 s away are skipped and listed in `skippedReminders`.

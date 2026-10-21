@@ -36,8 +36,8 @@ export class LearningQualityService {
       this.prisma.$queryRaw<
         {
           policy: AdminPolicy;
+          due: number;
           start: number;
-          lapsed: number;
           move: number;
           dragMinutes: number;
           reward: number;
@@ -50,13 +50,16 @@ export class LearningQualityService {
           ORDER BY "sessionId", "timestamp" DESC
         )
         SELECT l."primaryPolicy"::text AS policy,
+               count(DISTINCT l."sessionId") FILTER (
+                 WHERE s."scheduledStartTime" + make_interval(mins => s."durationMinutes") <= now()
+               )::int AS due,
                count(*) FILTER (WHERE e."eventType" = 'START')::int AS start,
-               count(*) FILTER (WHERE e."eventType" = 'LAPSED')::int AS lapsed,
                count(*) FILTER (WHERE e."eventType" = 'MOVE')::int AS move,
                coalesce(avg(abs(e."dragDistanceMinutes")) FILTER (WHERE e."eventType" = 'MOVE'), 0)::float AS "dragMinutes",
-               coalesce(avg(e."rewardScore") FILTER (WHERE e."eventType" IN ('START', 'LAPSED', 'MOVE')), 0)::float AS reward
+               coalesce(avg(e."rewardScore") FILTER (WHERE e."eventType" IN ('START', 'MOVE')), 0)::float AS reward
         FROM latest l
-        JOIN "SessionEvent" e ON e."sessionId" = l."sessionId"
+        JOIN "Session" s ON s.id = l."sessionId"
+        LEFT JOIN "SessionEvent" e ON e."sessionId" = l."sessionId"
         GROUP BY 1`,
       this.prisma.$queryRaw<
         {
@@ -83,9 +86,9 @@ export class LearningQualityService {
         policy,
         proposals: p?.proposals ?? 0,
         acceptedUnmodified: p?.acceptedUnmodified ?? 0,
+        due: e?.due ?? 0,
         events: {
           START: e?.start ?? 0,
-          LAPSED: e?.lapsed ?? 0,
           MOVE: e?.move ?? 0,
         },
         dragMinutes: e?.dragMinutes ?? 0,

@@ -44,7 +44,6 @@ class FlexibleTask:
     duration_minutes: int
     deadline_ms: int
     start_ms: int
-    completed: bool = False
     series_id: str | None = None
 
     @property
@@ -72,12 +71,8 @@ class DisplacementPlan:
 
 
 def is_frozen(f: FlexibleTask, now_ms: int, frozen_ms: int = FROZEN_WINDOW_MS) -> bool:
-    """Started, completed, or starting within ``frozen_ms`` of now."""
-    return (
-        f.completed
-        or f.start_ms < now_ms + frozen_ms
-        or f.start_ms < ceil_to_slot(now_ms)
-    )
+    """Started, or starting within ``frozen_ms`` of now."""
+    return f.start_ms < now_ms + frozen_ms or f.start_ms < ceil_to_slot(now_ms)
 
 
 def is_movable(
@@ -392,7 +387,6 @@ def flexible_from_dicts(raw: Sequence[dict[str, Any]]) -> list[FlexibleTask]:
             f["durationMinutes"],
             f["deadlineMs"],
             f["startMs"],
-            f.get("completed", False),
             f.get("seriesId"),
         )
         for f in raw

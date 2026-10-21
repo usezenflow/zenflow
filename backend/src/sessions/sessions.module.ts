@@ -11,7 +11,7 @@ import { TagsModule } from "../tags/tags.module";
 import { RemindersModule } from "../reminders/reminders.module";
 import { FilesModule } from "../files/files.module";
 import { SchedulerModule } from "../scheduler/scheduler.module";
-import { SessionCheckOffService } from "./session-check-off.service";
+import { SessionSkipService } from "./session-skip.service";
 import { SessionStartService } from "./session-start.service";
 import { PlacementPlanService } from "./placement-plan.service";
 
@@ -31,7 +31,7 @@ import { PlacementPlanService } from "./placement-plan.service";
     SessionUpdateService,
     SlotPickService,
     SessionSearchService,
-    SessionCheckOffService,
+    SessionSkipService,
     SessionStartService,
     PlacementPlanService,
   ],

@@ -24,17 +24,49 @@ export function matrixIndex(isoWeekdayNum: number, hour: number): number {
 }
 
 /**
+ * Weekday liking by clock hour: a late morning hump, a post-lunch dip, an
+ * afternoon shoulder and an evening hump. Hours not listed are 0. Assumed, not
+ * measured. Mirrors `services/bandit/src/core/preference.py`.
+ */
+const WEEKDAY_HOURLY: Readonly<Record<number, number>> = {
+  6: 0.2,
+  7: 0.2,
+  8: 0.4,
+  9: 0.8,
+  10: 0.8,
+  11: 0.8,
+  12: 0.4,
+  13: 0.3,
+  14: 0.3,
+  15: 0.6,
+  16: 0.6,
+  17: 0.5,
+  18: 0.5,
+  19: 0.8,
+  20: 0.8,
+  21: 0.8,
+  22: 0.4,
+};
+/** Weekends are lazier and later: the weekday curve scaled and shifted. */
+const WEEKEND_SCALE = 0.7;
+const WEEKEND_SHIFT_HOURS = 1;
+
+/**
  * Cold-start default population, used whenever a user's stored
  * `preferenceMatrix` is empty/unset (length !== {@link PREFERENCE_MATRIX_LENGTH}):
- * morning 9–11AM → 1 (high), afternoon 2–4PM → 0.5 (medium), evening 7–9PM →
- * 0.2 (low), everything else → 0 (neutral, never negative).
+ * two humps per weekday (09 to 12, 19 to 22), a dip after lunch, and a weekend
+ * that is 0.7x and one hour later. Never negative.
  */
 export function defaultPreferenceMatrix(): number[] {
   const matrix = new Array<number>(PREFERENCE_MATRIX_LENGTH).fill(0);
   for (let wd = 1; wd <= 7; wd++) {
-    for (let hour = 9; hour < 11; hour++) matrix[matrixIndex(wd, hour)] = 1;
-    for (let hour = 14; hour < 16; hour++) matrix[matrixIndex(wd, hour)] = 0.5;
-    for (let hour = 19; hour < 21; hour++) matrix[matrixIndex(wd, hour)] = 0.2;
+    for (let hour = 0; hour < 24; hour++) {
+      matrix[matrixIndex(wd, hour)] =
+        wd <= 5
+          ? (WEEKDAY_HOURLY[hour] ?? 0)
+          : WEEKEND_SCALE *
+            (WEEKDAY_HOURLY[(hour - WEEKEND_SHIFT_HOURS + 24) % 24] ?? 0);
+    }
   }
   return matrix;
 }

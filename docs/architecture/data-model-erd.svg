@@ -339,7 +339,6 @@
   <text x="630" y="619" font-size="10.5" fill="#2B2724">occurrenceStart</text>
   <text x="766" y="619" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
   <text x="884" y="619" text-anchor="end" font-size="9.5" font-weight="700" fill="#2B2724">UK</text>
-  <text x="630" y="637" font-size="10.5" fill="#2B2724">completedAt</text>
   <text x="766" y="637" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
   <text x="630" y="655" font-size="10.5" fill="#2B2724">skipped</text>
   <text x="766" y="655" font-size="10" fill="#2B2724" opacity="0.6">bool</text>
@@ -622,7 +621,6 @@
   <text x="1358" y="619" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
   <text x="1222" y="637" font-size="10.5" fill="#2B2724">anchor</text>
   <text x="1358" y="637" font-size="10" fill="#2B2724" opacity="0.6">enum</text>
-  <text x="1222" y="655" font-size="10.5" fill="#2B2724">completedAt</text>
   <text x="1358" y="655" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>
   <text x="1222" y="673" font-size="10.5" fill="#2B2724">submittedAt</text>
   <text x="1358" y="673" font-size="10" fill="#2B2724" opacity="0.6">timestamp</text>

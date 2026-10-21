@@ -25,9 +25,11 @@ import math
 from typing import Any
 
 import numpy as np
+import pytest
 from numpy.typing import NDArray
 
 from src.core import constants as consts
+from src.core import matrix_prior
 from src.core.arms import seeded_tie_break_order
 from src.core.constants import DAY_MS, FEATURE_DIM, MS_PER_MINUTE
 from src.core.context_vector import build_context_vector
@@ -379,10 +381,12 @@ def test_dense_overlapping_series_threads_siblings_correctly() -> None:
     assert len(set(placed_days)) == len(placed_days)  # never double-booked a day
 
 
-def test_all_cold_arms_matches_oracle() -> None:
+def test_all_cold_arms_matches_oracle(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every arm cold (no A/b) -> all arms tie on the same exploration bonus (the
     batch tensor's arm-score slices, not just the final pick), so the seeded
-    tie-break order plus gap quality pick the band and the exact slot."""
+    tie-break order picks the band and the exact slot. The matrix prior is off, so
+    cold means ridge only."""
+    monkeypatch.setattr(matrix_prior, "PRIOR_MATRIX", None)
     req = make_req(
         members=[member(dur=60), member("t2", dur=60)],
         deadlineMs=NOW + 3 * DAY_MS,

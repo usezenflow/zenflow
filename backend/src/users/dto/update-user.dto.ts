@@ -14,10 +14,8 @@ import {
 import {
   COMMUTE_TRANSPORTS,
   DEFAULT_REMINDER_CHOICES,
-  FOCUS_BANDS,
   LANGS,
   type CommuteTransport,
-  type FocusBand,
   type DefaultReminderChoice,
   type Lang,
   type UpdateUserInput,
@@ -82,9 +80,4 @@ export class UpdateUserDto implements UpdateUserInput {
   @IsBoolean()
   @IsOptional()
   allowNotifications?: boolean;
-
-  /** Onboarding answer; seeds the preference matrix while it is still the default. */
-  @IsIn(FOCUS_BANDS)
-  @IsOptional()
-  focusBand?: FocusBand;
 }

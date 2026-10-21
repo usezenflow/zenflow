@@ -115,7 +115,7 @@ meter
 
 export const schedulerSessionEvents = meter.createCounter(
   "scheduler.session_events",
-  { description: "SessionEvent rows written, by type (CREATE/MOVE/RETAINED)" },
+  { description: "SessionEvent rows written, by type (CREATE/MOVE/START)" },
 );
 export const schedulerMoveDragMinutes = meter.createHistogram(
   "scheduler.session.move_drag_minutes",

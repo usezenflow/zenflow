@@ -174,37 +174,14 @@ export class SessionsController {
     return { success: true, message: "Slot pick recorded", data };
   }
 
-  @Post(":id/complete")
-  async complete(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.sessionsService.setCheckOff(
-      id,
-      "complete",
-      true,
-      user,
-    );
-    return { success: true, message: "Session completed", data };
-  }
-
-  @Delete(":id/complete")
-  async uncomplete(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.sessionsService.setCheckOff(
-      id,
-      "complete",
-      false,
-      user,
-    );
-    return { success: true, message: "Completion undone", data };
-  }
-
   @Post(":id/skip")
   async skip(
     @Param("id") id: string,
     @Query() query: SkipScopeDto,
     @CurrentUser() user: User,
   ) {
-    const data = await this.sessionsService.setCheckOff(
+    const data = await this.sessionsService.setSkip(
       id,
-      "skip",
       true,
       user,
       query.scope,
@@ -218,9 +195,8 @@ export class SessionsController {
     @Query() query: SkipScopeDto,
     @CurrentUser() user: User,
   ) {
-    const data = await this.sessionsService.setCheckOff(
+    const data = await this.sessionsService.setSkip(
       id,
-      "skip",
       false,
       user,
       query.scope,

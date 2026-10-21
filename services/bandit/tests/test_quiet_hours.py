@@ -38,13 +38,3 @@ def test_a_window_inside_the_day_is_one_interval() -> None:
     assert got == [
         (_ms("2026-09-21", 2, 0, "UTC"), _ms("2026-09-21", 9, 0, "UTC")),
     ]
-
-
-def test_late_night_students_are_quiet_from_two_to_nine() -> None:
-    from src.core.quiet_hours import quiet_window
-
-    assert quiet_window("LATE_NIGHT") == (2 * 60, 9 * 60)
-    assert quiet_window("MORNING") == (23 * 60, 6 * 60)
-    assert quiet_window("AFTERNOON") == (23 * 60, 6 * 60)
-    assert quiet_window("EVENING") == (23 * 60, 6 * 60)
-    assert quiet_window(None) == (23 * 60, 6 * 60)

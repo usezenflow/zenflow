@@ -1,6 +1,6 @@
 # ADR-0023: Completion-based reward
 
-**Status:** Accepted; supersedes the `RETAINED` reward of [ADR-0001](0001-linucb-model-design.md) §7 and the `RETAINED` sweep of [ADR-0002](0002-scheduling-simplification.md) §2
+**Status:** superseded by [ADR-0035](0035-start-and-move-only-signals.md); supersedes the `RETAINED` reward of [ADR-0001](0001-linucb-model-design.md) §7 and the `RETAINED` sweep of [ADR-0002](0002-scheduling-simplification.md) §2
 **Date:** 2026-10-15
 **Issue:** #248 (builds on #247 done/skipped state)
 **Amended:** by [ADR-0025](0025-completion-outcomes.md) (2026-10-20): check-off no longer rewards; the app-open `START` decides the outcome

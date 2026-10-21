@@ -81,14 +81,8 @@ export default {
   "Hide password": "Ẩn mật khẩu",
   "Review the learning behaviour Zenflow uses to schedule your sessions, and manage your account.":
     "Xem thói quen học Zenflow dùng để xếp lịch, và quản lý tài khoản của bạn.",
-  "Pick some tags": "Chọn vài tag nha",
-  "Tags group your sessions by subject or kind. Add your own any time.":
-    "Tag giúp gom các buổi học theo môn hoặc loại. Thêm tag riêng bất cứ lúc nào.",
   "Turn them on in your browser settings to get reminders. For now, they stay off.":
     "Bật lại trong cài đặt trình duyệt để nhận nhắc nhở. Lúc này thông báo vẫn tắt.",
-  "Mark done": "Đánh dấu xong",
-  "Mark not done": "Bỏ đánh dấu xong",
-  Unskip: "Hủy bỏ qua",
   Allow: "Cho phép",
   "Allow them in browser settings.": "Cho phép trong cài đặt trình duyệt.",
   "Notifications aren't supported in this browser.":

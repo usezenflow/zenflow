@@ -1,4 +1,4 @@
-"""Hybrid LinUCB v2: shared beta, cross features, marks and band priors, init route."""
+"""Hybrid LinUCB v2: shared beta, cross features, marks and matrix priors."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api import app
-from src.core.band_prior import reference_context
 from src.core.constants import FEATURE_DIM
 from src.core.hybrid import (
     EARLY_ARMS,
@@ -18,6 +17,7 @@ from src.core.hybrid import (
     shared_tensor,
 )
 from src.core.init_state import init_state
+from src.core.matrix_prior import reference_context
 from src.models.linucb import update
 from src.schemas import ARM_IDS
 
@@ -81,20 +81,20 @@ def test_marks_prior_pulls_weak_days_left_negative() -> None:
 
 
 def test_init_state_without_marks_has_zero_shared_beta() -> None:
-    state = init_state(1.0, None, has_marks=False)
+    state = init_state(1.0, has_marks=False)
     assert set(state.arms) == set(ARM_IDS)
     np.testing.assert_allclose(state.shared_b, np.zeros(Z_DIM))
     np.testing.assert_allclose(state.shared_a, np.eye(Z_DIM))
 
 
-def test_init_state_band_prior_favours_the_band_arms() -> None:
-    state = init_state(1.0, "MORNING", has_marks=True)
+def test_init_state_matrix_prior_favours_the_waking_arms() -> None:
+    state = init_state(1.0, has_marks=True)
     x_ref = reference_context()
     score = {
         arm: float(np.linalg.solve(p.A, p.b) @ x_ref) for arm, p in state.arms.items()
     }
-    assert score["MORNING"] > score["NIGHT"]
-    assert score["MORNING"] > score["EVENING"]
+    assert score["MORNING"] > score["EARLY_MORNING"]
+    assert score["EVENING"] > score["EARLY_MORNING"]
 
 
 def test_init_route_returns_every_arm_and_the_shared_block() -> None:
@@ -102,7 +102,6 @@ def test_init_route_returns_every_arm_and_the_shared_block() -> None:
         "/v1/init",
         json={
             "ridge": 1.0,
-            "focusBand": "EVENING",
             "marks": [{"letter": "D", "credits": 4}],
         },
     )

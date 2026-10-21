@@ -19,6 +19,7 @@ describe("getRole", () => {
       "worker-portal",
       "worker-lms",
       "worker-notify",
+      "worker-scheduler",
       "worker",
       "all",
     ]) {
@@ -56,9 +57,16 @@ describe("getRole", () => {
     expect(consumesQueue("worker-lms", "lms-fetch")).toBe(true);
     expect(consumesQueue("worker-notify", "notify")).toBe(true);
     expect(consumesQueue("worker-notify", "portal-fetch")).toBe(false);
+    expect(consumesQueue("worker-scheduler", "prep-plan")).toBe(true);
+    expect(consumesQueue("worker-scheduler", "notify")).toBe(false);
     expect(consumesQueue("watcher", "notify")).toBe(false);
     expect(consumesQueue("api", "notify")).toBe(false);
-    for (const q of ["portal-fetch", "lms-fetch", "notify"] as const) {
+    for (const q of [
+      "portal-fetch",
+      "lms-fetch",
+      "notify",
+      "prep-plan",
+    ] as const) {
       expect(consumesQueue("all", q)).toBe(true);
       expect(consumesQueue("worker", q)).toBe(true);
     }

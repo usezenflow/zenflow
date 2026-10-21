@@ -263,3 +263,5 @@ Replaces d = 22, the "cold arm scores 0" rule and the preference-matrix in-band 
   - A fixed band is found in ≤ 5 placements, then held.
   - A weekday/weekend split is learned by the 3rd weekend.
 - **Deferred until prod data points to them:** hybrid LinUCB, a per-user matrix-seeded prior.
+
+**Addendum (2026-10-21, ADR-0035):** ADR-0035 removes the lapse reward; a placement with no start gives no signal.

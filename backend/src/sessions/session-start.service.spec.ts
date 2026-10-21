@@ -2,6 +2,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import type { User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
+import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { SessionStartService } from "./session-start.service";
 import type { SessionRow } from "./types/session-row";
 
@@ -34,15 +35,21 @@ async function makeService(found: SessionRow | null, existingStart = false) {
       }),
     },
   };
+  const feedback = {
+    applyDelayedReward: jest.fn().mockResolvedValue(undefined),
+    reinforcePreferenceMatrix: jest.fn().mockResolvedValue(undefined),
+  };
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       SessionStartService,
       { provide: PrismaService, useValue: prisma },
+      { provide: SchedulingFeedbackService, useValue: feedback },
     ],
   }).compile();
   return {
     service: module.get(SessionStartService),
     created,
+    feedback,
     findFirst: prisma.session.findFirst,
   };
 }
@@ -60,7 +67,28 @@ describe("SessionStartService.record", () => {
       userId: "user-1",
       eventType: "START",
       occurredAt: inSlot,
+      rewardScore: 1,
     });
+  });
+
+  it("rewards LinUCB and the preference matrix as soon as it is recorded", async () => {
+    const { service, feedback } = await makeService(row());
+
+    await service.record("s-1", user, inSlot);
+
+    expect(feedback.applyDelayedReward).toHaveBeenCalledWith(
+      "user-1",
+      "s-1",
+      2n,
+      1,
+      null,
+    );
+    expect(feedback.reinforcePreferenceMatrix).toHaveBeenCalledWith(
+      "user-1",
+      START.getTime(),
+      "UTC",
+      0.25,
+    );
   });
 
   it("counts the exact start", async () => {
@@ -98,7 +126,7 @@ describe("SessionStartService.record", () => {
     expect(created).toHaveLength(0);
   });
 
-  it("only looks at unmoved, unsettled placed tasks", async () => {
+  it("only looks at unmoved placed tasks", async () => {
     const { service, findFirst } = await makeService(row());
 
     await service.record("s-1", user, inSlot);
@@ -109,7 +137,6 @@ describe("SessionStartService.record", () => {
       type: "TASK",
       source: { in: ["USER", "AUTO"] },
       lastMovedAt: null,
-      retainedAt: null,
     });
   });
 

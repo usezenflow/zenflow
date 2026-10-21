@@ -20,8 +20,7 @@ One request = one placement event: a single `TASK` or one materialized series. A
 
 | Event | Reward |
 | --- | --- |
-| Completed in slot (`COMPLETE`, unmoved) | `+1` |
-| Skipped or missed (`SKIP`, `MISSED`, unmoved) | `-1` |
+| START inside the slot (unmoved) | `+1` |
 | `MOVE` | `-clamp(abs(dragDistanceMinutes) / 240, 0, 1)` |
 | resize-only `MOVE` (`dragDistanceMinutes == 0`) | `0` |
 | `CREATE` | never sent |
@@ -63,7 +62,7 @@ One request = one placement event: a single `TASK` or one materialized series. A
 
 1. First call returns `NEEDS_INFEASIBLE_CONTEXT`.
 2. Second call (with `infeasible`) runs cost-based displacement over the deadline day and +/-1 day ([ADR-0028](../adr/0028-drop-session-anchors.md)).
-   - Never moves: `fixed`, completed, started or starting within 2 h of `nowMs`.
+   - Never moves: `fixed`, started or starting within 2 h of `nowMs`.
    - Move cost: 1, plus hours moved, plus 10 when the local day changes.
    - Every start clear of immovable blocks is tried; the cheapest cascade wins (ties: earlier window, earlier start).
    - Colliding tasks settle in deadline order, each at its cheapest free start up to its own deadline (within `horizonOccupied`), never on a sibling sitting's day.

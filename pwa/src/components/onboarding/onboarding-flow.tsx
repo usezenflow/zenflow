@@ -11,7 +11,7 @@ import { useUserStore } from "@/hooks/use-user-store";
 import { getLanguage, t, useLanguage } from "@/lib/i18n";
 import { errorToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import type { FocusBand, IntegrationStatus } from "@zenflow/shared";
+import type { IntegrationStatus } from "@zenflow/shared";
 import {
   AlertCircle,
   Bell,
@@ -19,10 +19,6 @@ import {
   ChevronLeft,
   GraduationCap,
   LocateFixed,
-  MoonStar,
-  Sun,
-  Sunrise,
-  Sunset,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -30,44 +26,14 @@ import { useNavigate } from "react-router-dom";
 import { CampusConnectStep } from "./campus-connect-step";
 import {
   canGoBack,
-  DEFAULT_FOCUS_BAND,
   FIRST_STEP,
-  focusBandOptions,
   nextStep,
   type OnboardingStep,
   prevStep,
   stepProgress,
 } from "./onboarding-steps";
 
-/** Glyph and tint per focus band, warm at dawn and cool at night. */
-const BAND_VISUAL: Record<
-  FocusBand,
-  { Icon: LucideIcon; tint: string; ink: string }
-> = {
-  MORNING: {
-    Icon: Sunrise,
-    tint: "border-session-conflict/40 bg-session-conflict/15",
-    ink: "text-session-conflict-ink",
-  },
-  AFTERNOON: {
-    Icon: Sun,
-    tint: "border-primary/40 bg-primary/15",
-    ink: "text-primary",
-  },
-  EVENING: {
-    Icon: Sunset,
-    tint: "border-destructive/40 bg-destructive/15",
-    ink: "text-destructive",
-  },
-  LATE_NIGHT: {
-    Icon: MoonStar,
-    tint: "border-indigo-500/40 bg-indigo-500/15",
-    ink: "text-indigo-600 dark:text-indigo-400",
-  },
-};
-
 const STEP_ICON: Partial<Record<OnboardingStep, LucideIcon>> = {
-  focus: Sun,
   campus: GraduationCap,
   commute: LocateFixed,
   notifications: Bell,
@@ -104,9 +70,6 @@ export function OnboardingFlow() {
   const [fromSummary, setFromSummary] = useState(false);
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
-  const [focusBand, setFocusBand] = useState<FocusBand>(
-    user?.focusBand ?? DEFAULT_FOCUS_BAND,
-  );
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const myLocation = useMyLocationStop();
 
@@ -179,12 +142,6 @@ export function OnboardingFlow() {
       setBusy(false);
     }
   }
-
-  const saveFocus = () =>
-    run(async () => {
-      if (focusBand === user?.focusBand) return;
-      setUser(await updateBasicInfo({ focusBand }));
-    });
 
   async function setNotifications(allow: boolean) {
     setBusy(true);
@@ -266,62 +223,6 @@ export function OnboardingFlow() {
   let footer: ReactNode = null;
 
   switch (step) {
-    case "focus": {
-      title = t("When do you focus best?");
-      body = t("We'll try this part of the day first when we place your sessions.");
-      content = (
-        <Group>
-          {focusBandOptions().map((option) => {
-            const on = focusBand === option.band;
-            const { Icon, tint, ink } = BAND_VISUAL[option.band];
-            return (
-              <button
-                key={option.band}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                disabled={busy}
-                onClick={() => setFocusBand(option.band)}
-                className={cn(
-                  "flex w-full items-center gap-3 px-4 py-3 text-left",
-                  on && "bg-primary/[0.06]",
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex size-10 shrink-0 items-center justify-center rounded-xl border",
-                    tint,
-                  )}
-                >
-                  <Icon className={cn("size-5", ink)} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span
-                    className={cn(
-                      "block text-[15px]",
-                      on ? "font-semibold" : "font-medium",
-                    )}
-                  >
-                    {option.label}
-                  </span>
-                  <span className="mt-0.5 block text-[13px] text-muted-foreground">
-                    {option.hours}
-                  </span>
-                </span>
-                {on && <Check className="size-[18px] text-primary" />}
-              </button>
-            );
-          })}
-        </Group>
-      );
-      footer = (
-        <>
-          {primary(t("Continue"), () => void saveFocus())}
-          {ghost(t("Skip for now"), skip)}
-        </>
-      );
-      break;
-    }
     case "campus": {
       title = t("Connect your LMS or portal");
       body = t(

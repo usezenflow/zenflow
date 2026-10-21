@@ -104,7 +104,7 @@ services:
 
   # Queue roles (ADR-0007, ADR-0011). Each serves only GET /health on :5001.
   # `watcher` is the only cron runner (ingestion ticker, reminder sweep,
-  # retained-sessions, matrix decay): exactly one replica. The consumers scale
+  # matrix decay): exactly one replica. The consumers scale
   # independently (`replicas`), except that fetch concurrency is kept low to be
   # polite to DLU.
   # Enqueues work; consumes nothing.
@@ -185,6 +185,29 @@ services:
     restart: unless-stopped
     environment:
       ROLE: worker-notify
+      BANDIT_SERVICE_URL: http://bandit-${ZENFLOW_ACTIVE_COLOUR:-blue}:8000
+      QUEUE_SHUTDOWN_TIMEOUT_MS: "50000"
+    stop_grace_period: 60s
+    deploy:
+      replicas: 1
+    cpus: 1
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/health/live').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Consumes `prep-plan`: sizes and places prep plans through bandit.
+  worker-scheduler:
+    extends:
+      service: api
+    profiles: !reset []
+    container_name: zenflow-worker-scheduler-staging
+    restart: unless-stopped
+    environment:
+      ROLE: worker-scheduler
       BANDIT_SERVICE_URL: http://bandit-${ZENFLOW_ACTIVE_COLOUR:-blue}:8000
       QUEUE_SHUTDOWN_TIMEOUT_MS: "50000"
     stop_grace_period: 60s

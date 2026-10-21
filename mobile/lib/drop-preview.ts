@@ -10,12 +10,9 @@ const FIXED_TYPES: ReadonlySet<SessionType> = new Set([
   "LECTURE",
 ]);
 
-/** A block the scheduler will not move: fixed or already completed. */
-export function isImmovable(block: {
-  type: SessionType;
-  completedAt?: string | null;
-}): boolean {
-  return FIXED_TYPES.has(block.type) || !!block.completedAt;
+/** A block the scheduler will not move: a fixed type. */
+export function isImmovable(block: { type: SessionType }): boolean {
+  return FIXED_TYPES.has(block.type);
 }
 
 /** A block on one day, as minutes from midnight. */

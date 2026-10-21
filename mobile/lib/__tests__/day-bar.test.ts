@@ -24,7 +24,6 @@ function session(
     durationMinutes: minutes,
     deadline: null,
     late: false,
-    completedAt: null,
     placementReason: null,
     skipped: false,
     type,

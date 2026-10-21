@@ -143,22 +143,31 @@ async function main(): Promise<void> {
     console.log("Activity alignment (leave-one-day-out, +-60 min, UTC; shifted baseline)");
     console.table(tables.alignment);
 
+    // Start rate: placed sessions whose slot has passed, and how many of them
+    // have a START (ADR-0035). A session still ahead has no outcome yet.
     tables.outcomes = (await prisma.$queryRaw`
       WITH latest AS (
         SELECT DISTINCT ON ("sessionId") "sessionId", "primaryPolicy"
         FROM "SlotProposal"
         WHERE "sessionId" IS NOT NULL AND "placementSource" = 'PYTHON' AND "timestamp" >= ${since}
         ORDER BY "sessionId", "timestamp" DESC
+      ),
+      due AS (
+        SELECT l."primaryPolicy", l."sessionId"
+        FROM latest l
+        JOIN "Session" s ON s.id = l."sessionId"
+        WHERE s."scheduledStartTime" + make_interval(mins => s."durationMinutes") <= now()
       )
-      SELECT l."primaryPolicy" AS policy,
-             count(DISTINCT l."sessionId")::int AS sessions,
+      SELECT d."primaryPolicy" AS policy,
+             count(DISTINCT d."sessionId")::int AS due,
              count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'START')::int AS started,
-             count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'LAPSED')::int AS lapsed,
-             count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'MOVE')::int AS moved
-      FROM latest l
-      LEFT JOIN "SessionEvent" e ON e."sessionId" = l."sessionId"
+             count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'MOVE')::int AS moved,
+             round((count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'START'))::numeric
+               / nullif(count(DISTINCT d."sessionId"), 0), 3)::float AS "startRate"
+      FROM due d
+      LEFT JOIN "SessionEvent" e ON e."sessionId" = d."sessionId"
       GROUP BY 1 ORDER BY 1`) as Row[];
-    console.log("Session outcomes by primary policy");
+    console.log("Start rate by primary policy (due sessions only)");
     console.table(tables.outcomes);
 
     tables.learning = (await prisma.$queryRaw`

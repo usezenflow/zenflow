@@ -29,7 +29,7 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
 
 ## Displacement and undo (ADR-0028)
 
-- Every flexible `TASK` moves freely unless frozen. Nest sends `completed` (done or skipped) on each flexible item of the infeasible context.
+- Every flexible `TASK` moves freely unless frozen. Nest sends each flexible item of the infeasible context with its id, duration, deadline and start.
 - Every write one request makes shares a `SessionEvent.groupId`. `PlacementPlanService.undo` reverts a group, newest first.
 - The plan store (`PlacementPlan`, `NEEDS_CONFIRMATION`, `confirm`) is unreachable and slated for removal.
 
@@ -53,8 +53,7 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
 
 | Concept | File |
 | --- | --- |
-| Preference matrix, decay, reinforcement | `scheduler/core/preference.ts`, `matrix-decay.ts` |
-| Onboarding focus-band prior | `scheduler/core/focus-band.ts` (written by `users/users.service.ts`) |
+| Preference matrix (default: two humps, lazier later weekend), decay, reinforcement | `scheduler/core/preference.ts`, `matrix-decay.ts` |
 | Fallback slot score, series spread | `scheduler/core/slot-score.ts`, `series-spread.ts` |
 | rrule expansion, occurrence ids | `scheduler/core/recurrence.ts` |
 | Delayed-reward math, conflict detection | `scheduler/core/reward.ts`, `sync-conflicts.ts` |
@@ -66,7 +65,7 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
 | Timeout/retry/breaker HTTP client | `scheduler/io/placement-client.service.ts`, `common/circuit-breaker.ts` |
 | `TASK` series lifecycle | `sessions/series.service.ts` |
 | Plan storage, confirm, undo | `scheduler/io/task-placement.service.ts` (stores), `sessions/placement-plan.service.ts` |
-| Delayed reward (first `MOVE` + outcome settlement) | `scheduler/io/scheduling-feedback.service.ts`, `session-outcome.service.ts` ([ADR-0023](../adr/0023-completion-reward.md)) |
+| Reward (first `MOVE`, `START`) | `scheduler/io/scheduling-feedback.service.ts`, `sessions/session-start.service.ts` ([ADR-0035](../adr/0035-start-and-move-only-signals.md)) |
 | `primaryPolicy` 50/50, pairwise draw, `SlotProposal` write | `experiments/experiment.service.ts` |
 | Fallback tuning constants | `scheduler/constants.ts` |
 | Python's ranking core | `services/bandit/src/core/*` |

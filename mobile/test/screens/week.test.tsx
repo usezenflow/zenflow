@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { configure, fireEvent, screen, waitFor } from "@testing-library/react";
 import { router } from "expo-router";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,7 +48,11 @@ afterEach(() => {
 
 const block = (id: string) => screen.findByTestId(`task-block.${id}`, undefined, { timeout: 3000 });
 
-describe("WeekScreen", () => {
+// The week screen opens sheets and loads days over MSW. CI runs the suite in
+// parallel, so a 1 s wait and a 5 s test budget are too tight for it.
+configure({ asyncUtilTimeout: 5000 });
+
+describe("WeekScreen", { timeout: 20_000 }, () => {
   it("opens on today's week: month title, Monday-first range and a 'today' chip", async () => {
     renderScreen(<WeekScreen />);
     expect(screen.getByText("October 2026")).toBeTruthy();
@@ -102,8 +106,13 @@ describe("WeekScreen", () => {
   it("offers to add a session on an empty day", async () => {
     renderScreen(<WeekScreen />);
     fireEvent.click(screen.getByLabelText("Friday, October 16"));
-    await screen.findAllByLabelText("Add a session to this day");
-    fireEvent.click(focusedPage(screen.getAllByLabelText("Add a session to this day")));
+    await waitFor(() => expect(requests).toContain("day:2026-10-16"));
+    // Find and read the prompt in one poll: the day re-renders while loading,
+    // so a separate find-then-get can see it disappear in between.
+    const prompt = await waitFor(() =>
+      focusedPage(screen.getAllByLabelText("Add a session to this day")),
+    );
+    fireEvent.click(prompt);
     expect(router.navigate).toHaveBeenCalledWith({
       pathname: "/",
       params: { quickAdd: "1" },

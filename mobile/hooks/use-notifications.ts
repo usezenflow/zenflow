@@ -320,7 +320,7 @@ export function useNotificationsSubscription(): void {
         currentToast({
           title: cleanTitle,
           description: n.content,
-          ...notificationToastVisual(n.eventName),
+          ...notificationToastVisual(n.eventName, n.sessionType),
           duration: 8000,
           action: hasConflicts
             ? {

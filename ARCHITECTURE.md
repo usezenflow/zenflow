@@ -17,7 +17,7 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - One backend image runs as several processes, picked by `ROLE` ([ADR-0011](docs/adr/0011-separate-api-worker-processes.md)):
   - `api`: HTTP only, scales by replicas, no cron.
   - `watcher`: exactly one, the only cron runner. It enqueues and consumes nothing.
-  - `worker-portal`, `worker-lms`, `worker-notify`: one BullMQ queue each.
+  - `worker-portal`, `worker-lms`, `worker-notify`, `worker-scheduler`: one BullMQ queue each.
   - `all` runs everything in one process (local dev, test stack).
 - All placement ranking is delegated to the Bandit service, a stateless Python process called by the API and the watcher.
 - Redis is split by workload: sessions/OTP, rate limits (also the manual-sync lock), kill-switch flags, BullMQ jobs, SSE pub/sub ([ADR-0008](docs/adr/0008-redis-topology-and-kill-switch.md)). The `redis-cache` of ADR-0017 is not deployed.
@@ -33,7 +33,7 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - `ExperimentService` holds the only RNG: the 50/50 policy roll and the pairwise draw.
 - A frozen heuristic (`FallbackPlacer`) answers only when the Bandit service is unavailable; the response is marked degraded, never a 503.
 - The Bandit service is the only ranking implementation, reached through `/v1/place` and `/v1/update`.
-- Delayed reward: the first user move (API) and the 30-minute retained sweep (watcher) call `/v1/update` and persist the arm state. A nightly job decays the preference matrix.
+- Reward: the first user move (API) and a START (API) call `/v1/update` and persist the arm state. A nightly job decays the preference matrix.
 
 ## Ingestion and notifications components
 

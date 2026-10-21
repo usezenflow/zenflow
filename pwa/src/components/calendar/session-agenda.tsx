@@ -38,9 +38,6 @@ const PAGE_SIZE = 20;
 
 type Status = "loading" | "ready" | "failed";
 
-/** Done rows are checked off: a session is done once it has a completion time. */
-const isDone = (session: Session) => session.completedAt != null;
-
 function AgendaRow({
   session,
   tz,
@@ -50,8 +47,7 @@ function AgendaRow({
   tz: string;
   term: string;
 }) {
-  const done = isDone(session);
-  const tone = done ? "done" : sessionTone(deriveState(session), session.late);
+  const tone = sessionTone(deriveState(session), session.late);
   const location = session.location?.trim();
   const online = location ? isOnlineLocation(location) : false;
   const LocationIcon = online ? Globe : MapPin;
@@ -65,10 +61,7 @@ function AgendaRow({
           new CustomEvent("zenflow:open-task", { detail: session.id }),
         )
       }
-      className={cn(
-        "flex w-full min-w-0 items-stretch gap-3 rounded-r-xl py-2 pr-2 text-left transition-colors hover:bg-muted/60",
-        done && "opacity-60",
-      )}
+      className="flex w-full min-w-0 items-stretch gap-3 rounded-r-xl py-2 pr-2 text-left transition-colors hover:bg-muted/60"
     >
       <span
         aria-hidden
@@ -82,12 +75,7 @@ function AgendaRow({
           <span>{start}</span>
           <span className="opacity-60">{end}</span>
         </span>
-        <span
-          className={cn(
-            "truncate text-[15px] font-medium",
-            done && "line-through",
-          )}
-        >
+        <span className="truncate text-[15px] font-medium">
           {highlightParts(session.title, term).map((part, i) =>
             part.match ? (
               <mark

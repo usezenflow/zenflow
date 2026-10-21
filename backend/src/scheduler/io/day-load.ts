@@ -207,8 +207,6 @@ export interface ScheduleItem {
   durationMinutes: number;
   /** The row's TASK deadline, if any. */
   deadlineMs: number | null;
-  /** Done or skipped: the placer must not move it. Absent means `false`. */
-  completed?: boolean;
   /** Travel time kept clear on each side in `occupied`. Absent means none. */
   bufferMs?: number;
 }
@@ -262,7 +260,6 @@ export async function loadScheduleItems(
         durationMinutes: true,
         deadline: true,
         type: true,
-        completedAt: true,
         skipped: true,
         commuteMinutes: true,
       },
@@ -301,7 +298,6 @@ export async function loadScheduleItems(
       end: start + o.durationMinutes * 60_000,
       durationMinutes: o.durationMinutes,
       deadlineMs: (o as { deadline?: Date | null }).deadline?.getTime() ?? null,
-      completed: o.completedAt !== null || o.skipped,
       bufferMs: commuteBufferMs(o.commuteMinutes),
     });
   }
@@ -326,7 +322,6 @@ export async function loadScheduleItems(
         end: start + rep.durationMinutes * 60_000,
         durationMinutes: rep.durationMinutes,
         deadlineMs: null,
-        completed: false,
         bufferMs: commuteBufferMs(rep.commuteMinutes),
       });
     }

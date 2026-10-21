@@ -703,7 +703,7 @@
         },
         "linucb": {
           "startMs": 1790002800000,
-          "score": 0.7554455404253981,
+          "score": 0.5554455404253981,
           "selectedArm": "AFTERNOON",
           "featureVector": [
             -0.9,

@@ -14,7 +14,10 @@ import { dateFnsLocale, getLanguage, t } from "@/lib/i18n";
 import { zonedDate } from "@/utils/tz";
 import { sessionTypeIcon } from "@/components/calendar/session-type-badge";
 
-/** Which session type a category put on the calendar. `REMINDER` puts nothing. */
+/** Frosted tile: a blurred, see-through fill under the tint, with a light rim. */
+const GLASS_TILE = "backdrop-blur-md ring-1 ring-inset ring-white/40 dark:ring-white/10 shadow-sm";
+
+/** Which session type a category put on the calendar. `REMINDER` takes its session's type instead. */
 const CATEGORY_TYPE: Record<NotificationCategory, SessionType | null> = {
   ASSIGNMENT: "ASSIGNMENT",
   EXAM: "EXAM",
@@ -42,9 +45,24 @@ const KIND_VISUAL: Partial<Record<NotificationEventKind, { Icon: LucideIcon; tin
 /**
  * Icon + tile tint for a notification, as on mobile: a conflict, marks, done,
  * changed or removed gets its own glyph; the rest take the calendar session
- * block's icon and type accent, and a reminder the bell.
+ * block's icon and type accent. A reminder takes its session's type, or the
+ * bell when it has no session.
  */
-export function notificationVisual(eventName: string): {
+export function notificationVisual(
+  eventName: string,
+  sessionType: SessionType | null = null,
+): {
+  Icon: LucideIcon;
+  tint: string;
+} {
+  const { Icon, tint } = baseVisual(eventName, sessionType);
+  return { Icon, tint: cn(GLASS_TILE, tint) };
+}
+
+function baseVisual(
+  eventName: string,
+  sessionType: SessionType | null,
+): {
   Icon: LucideIcon;
   tint: string;
 } {
@@ -54,7 +72,7 @@ export function notificationVisual(eventName: string): {
       tint: "border-amber-500/50 bg-amber-500/20 text-amber-700 dark:text-amber-400",
     };
   const category = notificationCategory(eventName);
-  const type = CATEGORY_TYPE[category];
+  const type = category === "REMINDER" ? sessionType : CATEGORY_TYPE[category];
   if (type) {
     const kindVisual = KIND_VISUAL[notificationEventKind(eventName)];
     if (kindVisual) return kindVisual;

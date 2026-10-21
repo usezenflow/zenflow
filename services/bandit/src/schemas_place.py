@@ -97,7 +97,6 @@ class FlexibleWire(_Req):
     duration_minutes: int = Field(gt=0)
     deadline_ms: int
     start_ms: int
-    completed: bool = False
     series_id: str | None = None
 
 
@@ -111,7 +110,6 @@ class InfeasibleContext(_Req):
 class UserWire(_Req):
     preference_matrix: list[float]
     observation_count: float = Field(ge=0)
-    focus_band: Literal["MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT"] | None = None
     # Marks profile (level-up plan): letters over credits and the GPA on 4.
     marks: list[MarkWire] = Field(default_factory=list, max_length=200)
     avg_gpa4: float | None = Field(default=None, ge=0, le=4)

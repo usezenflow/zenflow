@@ -137,8 +137,18 @@ function cleanNotificationTitle(title: string): string {
     .trim();
 }
 
+/** Loads the linked session's type with the row, for {@link toNotificationDto}. */
+export const WITH_SESSION_TYPE = {
+  session: { select: { type: true } },
+} as const;
+
+/** A notification row loaded with {@link WITH_SESSION_TYPE}. */
+export type NotificationRow = Notification & {
+  session: { type: SessionType } | null;
+};
+
 /** Row → wire shape: instants become ISO-8601 strings, absences become `null`. */
-function toNotificationDto(row: Notification): NotificationDto {
+function toNotificationDto(row: NotificationRow): NotificationDto {
   return {
     id: row.id,
     eventName: row.eventName,
@@ -149,6 +159,7 @@ function toNotificationDto(row: Notification): NotificationDto {
     actionTakenAt: row.actionTakenAt ? row.actionTakenAt.toISOString() : null,
     eventEndsAt: row.eventEndsAt ? row.eventEndsAt.toISOString() : null,
     sessionId: row.sessionId,
+    sessionType: row.session?.type ?? null,
     conflictSessionIds: row.conflictSessionIds ?? [],
     slotProposalId: row.slotProposalId ?? null,
     offerSlots: (row.offerSlots ?? []).map((d) => d.toISOString()),
@@ -281,7 +292,7 @@ export class NotificationsService {
     }
   }
 
-  toNotificationDto(payload: Notification): NotificationDto {
+  toNotificationDto(payload: NotificationRow): NotificationDto {
     return toNotificationDto(payload);
   }
 
@@ -289,7 +300,7 @@ export class NotificationsService {
     userId: string,
     dto: CreateNotificationInput,
     tx?: Prisma.TransactionClient,
-  ): Promise<Notification> {
+  ): Promise<NotificationRow> {
     const db = tx ?? this.prisma;
     const recipient = await db.user?.findUnique({
       where: { id: userId },
@@ -363,6 +374,7 @@ export class NotificationsService {
         eventEndsAt,
         userId,
       },
+      include: WITH_SESSION_TYPE,
     });
 
     return localizeNotification(newNotification, recipient?.lang);
@@ -468,7 +480,7 @@ export class NotificationsService {
       content: string;
       conflictSessionIds: string[];
     },
-  ): Promise<Notification> {
+  ): Promise<NotificationRow> {
     const recipient = await this.prisma.user?.findUnique({
       where: { id: userId },
       select: { lang: true },
@@ -483,6 +495,7 @@ export class NotificationsService {
         sessionId: null,
         eventEndsAt: null,
       },
+      include: WITH_SESSION_TYPE,
     });
     return localizeNotification(row, recipient?.lang);
   }
@@ -495,6 +508,7 @@ export class NotificationsService {
         userId: user.id,
         eventName: { startsWith: "sync_conflict." },
       },
+      include: WITH_SESSION_TYPE,
     });
     if (!row) {
       throw new NotFoundException(`Cannot find conflict notification ${id}`);
@@ -547,6 +561,7 @@ export class NotificationsService {
         orderBy: { sentAt: "desc" },
         take: dto.limit ?? 20,
         skip: dto.offset ?? 0,
+        include: WITH_SESSION_TYPE,
       }),
       this.prisma.notification.count({
         where: { userId: user.id, readAt: null },
@@ -596,6 +611,7 @@ export class NotificationsService {
       const row = await this.prisma.notification.update({
         where: { id, userId: user.id, [column]: null },
         data: { [column]: new Date() },
+        include: WITH_SESSION_TYPE,
       });
       return toNotificationDto(localizeNotification(row, user.lang));
     } catch (error) {
@@ -604,6 +620,7 @@ export class NotificationsService {
       // two apart with a read rather than reporting a 404 for a repeat call.
       const existing = await this.prisma.notification.findFirst({
         where: { id, userId: user.id },
+        include: WITH_SESSION_TYPE,
       });
       if (!existing) {
         throw new NotFoundException(`Cannot find notification with id ${id}`);

@@ -36,7 +36,7 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `UPLOAD_USER_QUOTA_BYTES` | 157286400 (150 MiB) | Stored bytes per user. Quota x users must fit on disk with Postgres, telemetry and backups. |
 
 | `PORT` | 8000 | |
-| `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` one consumer each, `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |
+| `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` / `worker-scheduler` one consumer each, `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |
 | `NODE_ENV` | `development` | `production` requires `BANDIT_SERVICE_URL` and turns Swagger (`/api`) off. |
 | `SWAGGER_ENABLED` | unset | `true` keeps Swagger on under `NODE_ENV=production` (staging only). |
 

@@ -9,3 +9,6 @@ __pycache__/
 # Simulator (issue #60): result cache and generated reports
 .sim_cache/
 sim_out/
+
+# Offline eval outputs
+evalx/out/

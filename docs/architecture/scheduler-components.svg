@@ -64,7 +64,6 @@
   <text x="782.5" y="972.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">load · save</text>
   <rect x="470" y="1010" width="410" height="134" rx="8" fill="#FFF8E6" stroke="#F0B100" stroke-width="2"/>
   <text x="675" y="1059.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">watcher crons</text>
-  <text x="675" y="1075.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">retained · 30 min</text>
   <text x="675" y="1089.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">decay · 03:00</text>
   <text x="675" y="1103.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">partitions · 02:10</text>
   <rect x="40" y="1080" width="400" height="64" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>

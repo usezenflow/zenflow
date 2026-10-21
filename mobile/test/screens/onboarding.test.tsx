@@ -41,15 +41,10 @@ vi.mock("@/components/settings/dlu-accounts-section", () => ({
 
 const BASIC_INFO = `${API}/users/update/basic-info`;
 
-// Created for a fresh account when onboarding finishes (lib/onboarding.ts initialTagSelection).
-const DEFAULT_TAGS = ["Study", "Exam", "Assignment", "Project"];
-
 let patches: Record<string, unknown>[];
-let bulkBodies: { names: string[] }[];
 
 beforeEach(() => {
   patches = [];
-  bulkBodies = [];
   notif.active = false;
   notif.permissionGranted = false;
   notif.update.mockResolvedValue(true);
@@ -62,12 +57,6 @@ beforeEach(() => {
       patches.push(body);
       return HttpResponse.json({ data: { ...testUser, ...body } });
     }),
-    http.get(`${API}/tags`, () => HttpResponse.json({ data: { tags: [] } })),
-    http.post(`${API}/tags/bulk`, async ({ request }) => {
-      const body = (await request.json()) as { names: string[] };
-      bulkBodies.push(body);
-      return HttpResponse.json({ data: { tags: body.names.map((name) => ({ id: name, name })) } });
-    }),
   );
 });
 
@@ -76,10 +65,8 @@ const secondary = () => screen.getByTestId("onboarding.secondary");
 const next = async (title: string) =>
   waitFor(() => expect(screen.getByText(title)).toBeTruthy());
 
-// The first step is focus; the name step was removed (the DLU name fills it on first sync).
+// The first step is the LMS and portal; the name step was removed (the DLU name fills it on first sync).
 const TITLES = [
-  "When do you focus best?",
-  "Pick some tags",
   "Connect your LMS or portal",
   "Plan your commute",
   "Stay ahead of deadlines",
@@ -95,18 +82,18 @@ async function skipTo(title: string) {
 }
 
 describe("OnboardingScreen", () => {
-  it("starts on the focus step with no back button", () => {
+  it("starts on the LMS step with no back button", () => {
     renderScreen(<OnboardingScreen />);
-    expect(screen.getByText("When do you focus best?")).toBeTruthy();
+    expect(screen.getByText("Connect your LMS or portal")).toBeTruthy();
     expect(screen.queryByLabelText("Back")).toBeNull();
   });
 
   it("goes back a step and hides Back again on the first step", async () => {
     renderScreen(<OnboardingScreen />);
-    fireEvent.click(primary());
-    await next("Pick some tags");
+    fireEvent.click(secondary());
+    await next("Plan your commute");
     fireEvent.click(screen.getByLabelText("Back"));
-    await next("When do you focus best?");
+    await next("Connect your LMS or portal");
     expect(screen.queryByLabelText("Back")).toBeNull();
   });
 
@@ -128,67 +115,6 @@ describe("OnboardingScreen", () => {
     renderScreen(<OnboardingScreen />);
     await skipTo("Connect your LMS or portal");
     await waitFor(() => expect(screen.queryByText("Skip for now")).toBeNull());
-  });
-
-  describe("focus step", () => {
-    async function openFocus() {
-      renderScreen(<OnboardingScreen />);
-      await skipTo("When do you focus best?");
-    }
-
-    const isDisabled = (el: HTMLElement) =>
-      el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true";
-
-    it("offers the four bands with their hours and Morning preselected", async () => {
-      await openFocus();
-      for (const label of ["Morning", "Afternoon", "Evening", "Late night"]) {
-        expect(screen.getByText(label)).toBeTruthy();
-      }
-      expect(screen.getByText("08:00 to 12:00")).toBeTruthy();
-      expect(screen.getByText("21:00 to 02:00")).toBeTruthy();
-      expect(
-        screen.getByTestId("onboarding.focus.MORNING").getAttribute("aria-checked"),
-      ).toBe("true");
-      expect(isDisabled(primary())).toBe(false);
-    });
-
-    it("saves the picked band and moves to the tags step", async () => {
-      await openFocus();
-      fireEvent.click(screen.getByTestId("onboarding.focus.AFTERNOON"));
-      expect(isDisabled(primary())).toBe(false);
-      fireEvent.click(primary());
-      await next("Pick some tags");
-      expect(patches).toEqual([{ focusBand: "AFTERNOON" }]);
-      expect(useUserStore.getState().user?.focusBand).toBe("AFTERNOON");
-    });
-
-    it("skips without saving a band", async () => {
-      await openFocus();
-      fireEvent.click(secondary());
-      await next("Pick some tags");
-      expect(patches).toEqual([]);
-    });
-
-    it("preselects the saved band and does not PATCH when it is unchanged", async () => {
-      useUserStore.setState({
-        user: { ...testUser, onboardedAt: null, focusBand: "EVENING" } as never,
-        loading: false,
-      });
-      await openFocus();
-      expect(screen.getByTestId("onboarding.focus.EVENING").getAttribute("aria-checked")).toBe("true");
-      fireEvent.click(primary());
-      await next("Pick some tags");
-      expect(patches).toEqual([]);
-    });
-
-    it("stays on the step and toasts when the save fails", async () => {
-      server.use(http.patch(BASIC_INFO, () => HttpResponse.json({ message: "no" }, { status: 500 })));
-      await openFocus();
-      fireEvent.click(screen.getByTestId("onboarding.focus.MORNING"));
-      fireEvent.click(primary());
-      await waitFor(() => expect(screen.getByText("Couldn't save")).toBeTruthy());
-      expect(screen.getByText("When do you focus best?")).toBeTruthy();
-    });
   });
 
   describe("notifications step", () => {
@@ -252,27 +178,7 @@ describe("OnboardingScreen", () => {
       await next("You’re all set");
     });
 
-    it("creates the default tags in one bulk call and completes onboarding", async () => {
-      await openSummary();
-      fireEvent.click(screen.getByText("Open my calendar"));
-      await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
-      expect(bulkBodies).toHaveLength(1);
-      expect(bulkBodies[0].names).toEqual(DEFAULT_TAGS);
-    });
-
-    it("keeps tags the user already has and adds no duplicates", async () => {
-      server.use(
-        http.get(`${API}/tags`, () => HttpResponse.json({ data: { tags: [{ id: "1", name: "Study" }] } })),
-      );
-      await openSummary();
-      fireEvent.click(screen.getByText("Open my calendar"));
-      await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
-      // Resuming with a saved suggestion keeps exactly those: nothing new to create.
-      expect(bulkBodies).toEqual([]);
-    });
-
-    it("still completes when the tag setup fails", async () => {
-      server.use(http.get(`${API}/tags`, () => HttpResponse.json({ message: "no" }, { status: 500 })));
+    it("completes onboarding", async () => {
       await openSummary();
       fireEvent.click(screen.getByText("Open my calendar"));
       await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));

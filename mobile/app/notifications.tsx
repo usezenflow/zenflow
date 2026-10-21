@@ -14,6 +14,7 @@ import {
   Trash2,
   X,
 } from "@/components/Icons";
+import { Glass } from "@/components/ui/glass";
 import { GlassButton } from "@/components/ui/glass-button";
 import { Text } from "@/components/ui/text";
 import { rescheduleWithToast } from "@/lib/reschedule-toast";
@@ -467,7 +468,7 @@ function NotificationRowItem({
   useLanguage();
   const offline = useOffline();
   const swipeableRef = useRef<SwipeableMethods>(null);
-  const { Icon, tint, ink } = notificationVisual(n.eventName);
+  const { Icon, tint, ink } = notificationVisual(n.eventName, n.sessionType);
   const { isDarkColorScheme } = useColorScheme();
   const unread = !n.readAt;
   const relative = formatDistanceToNow(new Date(n.sentAt), {
@@ -541,18 +542,16 @@ function NotificationRowItem({
 
           {/* Type icon badge with unread badge */}
           <View className="relative shrink-0">
-            <View
-              className={cn(
-                "h-11 w-11 items-center justify-center rounded-2xl border",
-                tint,
-              )}
-            >
-              <Icon
-                size={21}
-                color={isDarkColorScheme ? ink.dark : ink.light}
-                strokeWidth={2.3}
-              />
-            </View>
+            <Glass radius={16} frosted style={{ width: 44, height: 44 }}>
+              <View className={cn("absolute inset-0 rounded-2xl border", tint)} />
+              <View className="flex-1 items-center justify-center">
+                <Icon
+                  size={21}
+                  color={isDarkColorScheme ? ink.dark : ink.light}
+                  strokeWidth={2.3}
+                />
+              </View>
+            </Glass>
             {unread && (
               <View className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive" />
             )}

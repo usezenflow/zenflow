@@ -1,3 +1,5 @@
+import type { SessionType } from "./task";
+
 /**
  * Notifications raised by the DLU ingestion watchers.
  *
@@ -129,6 +131,11 @@ export interface NotificationDto {
    * wrote — or null for notifications with no session behind them.
    */
   sessionId: string | null;
+  /**
+   * The type of {@link sessionId}'s session, or null without a session. A
+   * reminder takes its icon and colour from this.
+   */
+  sessionType: SessionType | null;
   /**
    * For a `CONFLICT` row (see {@link notificationEventKind}): ids of the
    * user's own flexible tasks that a sync landed on top of ("Reschedule them

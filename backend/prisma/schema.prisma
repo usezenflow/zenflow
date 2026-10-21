@@ -12,14 +12,6 @@ datasource db {
   extensions = [pg_trgm, unaccent]
 }
 
-/// Onboarding answer: when the user focuses best (`@zenflow/shared` FOCUS_BANDS).
-enum FocusBand {
-  MORNING
-  AFTERNOON
-  EVENING
-  LATE_NIGHT
-}
-
 enum Language {
   VI_VN @map("vi-VN")
   EN_US @map("en-US")
@@ -63,9 +55,6 @@ model User {
 
   preferenceMatrix          Float[]   @default([])
   preferenceMatrixDecayedAt DateTime?
-
-  /// Onboarding focus band; null = not asked yet. Seeds `preferenceMatrix` only while it is still the default.
-  focusBand FocusBand?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -272,17 +261,12 @@ model Session {
   userId             String
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Stamped on every user move/resize of a scheduled TASK; the RETAINED sweep
-  // treats `lastMovedAt == null` as "never moved".
-  lastMovedAt DateTime?
+  // Stamped on every user move/resize of a scheduled TASK. `lastMovedAt == null`
+  // means "never moved", which gates the START event.
+  lastMovedAt     DateTime?
   // Set on insert; the daily cap on automatic prep plans counts rows by it.
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  // Settlement stamp of the outcome sweep (ADR-0023): set once an unmoved TASK's
-  // outcome (completed, skipped or missed) is recorded, so a re-run is a no-op.
-  // The name predates ADR-0023; it is not a retained flag.
-  retainedAt  DateTime?
-
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   // Two-consecutive-run confirmation gate for ingested rows (materializer.service.ts).
   // Null means "created but not yet confirmed by a second watcher run" — the
   // item is already on the calendar, but its "new item" notification is held
@@ -300,9 +284,8 @@ model Session {
   // notification. Always null for a user-created (non-ingested) session.
   syncMissedAt    DateTime?
 
-  // Done or skipped (issue #247). Mutually exclusive; both clear on undo.
+  // Skipped from the calendar (non-TASK sessions only). Clears on undo.
   // Unused on a recurring representative: occurrences use SessionOccurrenceState.
-  completedAt DateTime?
   skipped     Boolean   @default(false)
   // First time an LMS calendar showed the assignment without its "add submission"
   // action (ingestion/core/parse-lms.ts). Set once; never cleared.
@@ -389,6 +372,7 @@ model Session {
   reminders     SessionReminder[]
   notifications Notification[]
   slotProposals SlotProposal[]
+  // GET /sessions/search uses the `Session_{title,note,location}_unaccent_idx` expression indexes, which live in migrations only.
 
   @@unique([userId, externalKey])
   @@index([userId, deadline])
@@ -398,8 +382,6 @@ model Session {
   @@index([userId, scheduleStudyUnitId])
   @@index([userId, lmsCourseId])
   @@index([prepForSessionId])
-  // GET /sessions/search uses the `Session_{title,note,location}_unaccent_idx` expression indexes, which live in migrations only.
-  @@index([userId, completedAt])
 }
 
 model SessionSeries {
@@ -420,13 +402,12 @@ model SessionSeries {
   @@index([userId])
 }
 
-/// Done or skipped state of one virtual occurrence of a recurring series (issue #247).
-/// A row exists only while the occurrence is done or skipped.
+/// Skipped state of one virtual occurrence of a recurring series (issue #247).
+/// A row exists only while the occurrence is skipped.
 model SessionOccurrenceState {
-  id              String    @id @default(uuid())
+  id              String   @id @default(uuid())
   occurrenceStart DateTime
-  completedAt     DateTime?
-  skipped         Boolean   @default(false)
+  skipped         Boolean  @default(false)
 
   seriesId String
   series   SessionSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
@@ -437,7 +418,6 @@ model SessionOccurrenceState {
   updatedAt DateTime @updatedAt
 
   @@unique([seriesId, occurrenceStart])
-  @@index([userId, completedAt])
 }
 
 /// A user's own colour pick for one course (issue #238). `courseKey` is
@@ -515,7 +495,7 @@ model SlotProposal {
   appliedStartTime  DateTime?
 
   // The length-`d` LinUCB context vector for the selected day and the arm
-  // behind the chosen slot, kept so a delayed MOVE / RETAINED reward can call
+  // behind the chosen slot, kept so a delayed MOVE / START reward can call
   // `/update` for the right arm (`docs/adr/0001-linucb-model-design.md` §9).
   // Empty / null when the primary policy was the heuristic.
   featureVector   Float[]        @default([])
@@ -568,24 +548,18 @@ enum PlacementReason {
 
 enum SessionEventType {
   CREATE
-  MOVE // user drag or resize of a scheduled TASK (negative signal)
-  RETAINED // legacy: session elapsed without ever being moved (+1); no longer written (ADR-0023)
+  MOVE // user drag or resize of a scheduled TASK (graded negative signal)
   SYSTEM_MOVE // scheduler-initiated move (displacement / conflict reschedule): reward 0, no preference update
-  COMPLETE // user checked the session off; removed on undo. rewardScore +1 once settled in its slot
-  SKIP // user marked the session skipped; removed on undo. rewardScore -1 once settled
-  MISSED // legacy: unmoved session with no check-off by the cutoff (rewardScore -1), ADR-0023; replaced by LAPSED
-  START // unmoved session started inside its slot (rewardScore +1), level-up plan
-  WRONG_TIME // unmoved session checked off before its start (rewardScore 0)
-  LAPSED // unmoved session with no start or check-off by the cutoff (rewardScore -0.25)
+  START // user opened the app inside an unmoved TASK's slot (rewardScore +1)
 }
 
 /// Range-partitioned by month on `occurredAt` (hand-written migration, ADR-0016); children are `SessionEvent_YYYY_MM`.
 model SessionEvent {
   id                  BigInt           @default(autoincrement())
   eventType           SessionEventType
-  oldSnapshot         Json? // { scheduledStartTime, durationMinutes, tags[], type }; null on CREATE/RETAINED
+  oldSnapshot         Json? // { scheduledStartTime, durationMinutes, tags[], type }; null on CREATE/START
   newSnapshot         Json
-  rewardScore         Float            @default(0.0) // CREATE 0 · MOVE graded ≤ 0 · COMPLETE +1 · SKIP / MISSED -1 (ADR-0023)
+  rewardScore         Float            @default(0.0) // CREATE 0 · MOVE graded ≤ 0 · START +1 (ADR-0001, ADR-0035)
   dragDistanceMinutes Int? // signed (new − old start); null unless MOVE — for graded reward later
   policy              SchedulingModel? // attribution once a model is live
   // The `SessionSeries.id` shared by the N sittings placed in one
@@ -599,13 +573,13 @@ model SessionEvent {
   groupId             String?
   occurredAt          DateTime         @default(now())
 
-  // Nullable + SetNull so RETAINED / observation-count history survives a
+  // Nullable + SetNull so START / observation-count history survives a
   // session deletion (needed for cold-start bucketing).
   sessionId String?
   session   Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
-  // The LinUCB SlotProposal this MOVE / RETAINED delivered a delayed reward
-  // for, if any (`docs/adr/0001-linucb-model-design.md` §9).
+  // The LinUCB SlotProposal this MOVE / START delivered a reward for, if any
+  // (`docs/adr/0001-linucb-model-design.md` §9).
   slotProposalId String?
   slotProposal   SlotProposal? @relation(fields: [slotProposalId], references: [id], onDelete: SetNull)
 

@@ -157,7 +157,7 @@ function promSnapshot(w, atMs) {
 }
 
 // Compose service names, not container names: `api-blue` runs a single replica with generated names.
-const WATCHED_SERVICES = ["api-blue", "watcher", "worker-portal", "worker-lms", "worker-notify", "postgres", "bandit-blue", "fake-dlu"];
+const WATCHED_SERVICES = ["api-blue", "watcher", "worker-portal", "worker-lms", "worker-notify", "worker-scheduler", "postgres", "bandit-blue", "fake-dlu"];
 // Running staging containers of the watched services, as { name: service }.
 function watchedContainers() {
   const out = {};

@@ -352,7 +352,7 @@
         "heuristic": null,
         "linucb": {
           "startMs": 1789981200000,
-          "score": 0.5136578549948974,
+          "score": 0.4737230250391782,
           "selectedArm": "MORNING",
           "featureVector": [
             -0.9,

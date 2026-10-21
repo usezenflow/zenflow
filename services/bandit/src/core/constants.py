@@ -8,18 +8,12 @@ DAY_MS = 24 * 60 * MS_PER_MINUTE
 
 MAX_SCAN_DAYS = 60
 PREFERENCE_LEARNING_RATE = 0.2
-PREFERENCE_RETAINED_WEIGHT = 0.25
+PREFERENCE_KEPT_WEIGHT = 0.25
 STABILITY_WEIGHT = 0.1
 STABILITY_SATURATION_HOURS = 4
 MOVE_REWARD_SCALE_MINUTES = 240
-# Completion reward (ADR-0023, amended by ADR-0025). An unmoved placement settles
-# after its end plus the grace when the app was opened inside its slot (STARTED,
-# positive). A placement with no start is LAPSED (small negative), settled at end
-# plus the cutoff.
+# Reward of a START inside an unmoved placement's slot (ADR-0035).
 STARTED_REWARD = 1.0
-LAPSED_REWARD = -0.25
-CHECK_OFF_GRACE_MS = 15 * 60_000
-MISS_CUTOFF_MS = 24 * 60 * 60_000
 MATRIX_HALF_LIFE_DAYS = 21
 
 PREFERENCE_SLOTS_PER_DAY = 24
@@ -52,16 +46,18 @@ ARM_LAYOUT = "arms6-v3"
 # lets a user who keeps moving tasks to 10:00 pull the pick off the band centre.
 # Sits between the stability weights and the LinUCB arm spread.
 LINUCB_PREF_WEIGHT = 1.0
-# LinUCB v2 (level-up plan): the hour inside a band comes from gap quality, not
-# the preference matrix. Weight stays under the arm spread so it orders slots
-# inside a band and never overrides the learned band.
-LINUCB_GAP_WEIGHT = 0.2
+# Gap quality is off: the eval found it helped only a night student, and the
+# stated band that student came from is gone. The hour inside a band falls to
+# the tie order (band centre, then earlier start).
+LINUCB_GAP_WEIGHT = 0.0
 
 # Deadline pressure: a slot ending within DEADLINE_PENALTY_HORIZON_HOURS of the
 # deadline loses up to DEADLINE_PENALTY_WEIGHT (linear). Slot-level only, so it
 # touches neither the feature vector nor the learned arm state.
 DEADLINE_PENALTY_WEIGHT = 0.2
 DEADLINE_PENALTY_HORIZON_HOURS = 24
+# LinUCB looks further out, so a block with days to spare does not hug its deadline.
+LINUCB_DEADLINE_HORIZON_HOURS = 48
 
 # Displacement (issue #62 B).
 MAX_DISPLACED_TASKS = 6

@@ -17,6 +17,7 @@ No worktrees or A/B/C variants: it tests whatever image staging builds. SLOs and
 | bandit | 2 CPU / 3 GB |
 | watcher | 2 CPU / 3 GB |
 | worker-portal, worker-lms | 1 CPU / 2 GB each |
+| worker-scheduler | 1 CPU / 1 GB |
 
 Grafana: <http://localhost:3000> (admin / `GRAFANA_ADMIN_PASSWORD`). Mail UI (Mailpit): <http://localhost:8025>.
 

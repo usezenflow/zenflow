@@ -10,7 +10,6 @@
  * for a minor-compatible extension the service must recognise.
  */
 import type { SchedulingArm } from "./bandit";
-import type { FocusBand } from "./user";
 
 export const PLACEMENT_CONTRACT_VERSION = 3;
 
@@ -82,9 +81,7 @@ export interface PlacementFlexible {
   durationMinutes: number;
   deadlineMs: number;
   startMs: number;
-  /** Completed sessions never move. Started ones and those starting within
-   *  2 h of `nowMs` never move either; Python derives that from `startMs`. */
-  completed?: boolean;
+  /** Started ones and those starting within 2 h of `nowMs` never move; Python derives that from `startMs`. */
   /** Sittings of one series never share a local day after a move. */
   seriesId?: string;
 }
@@ -121,8 +118,6 @@ export interface PlaceRequest {
   user: {
     preferenceMatrix: number[];
     observationCount: number;
-    /** Sets the user's quiet hours; omitted when onboarding has not asked. */
-    focusBand?: FocusBand;
   };
   /** Required iff any member can run LINUCB. `[]` = cold prior. */
   bandit?: {

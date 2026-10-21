@@ -106,7 +106,6 @@ sequenceDiagram
 sequenceDiagram
   participant S as Sessions service
   participant F as Feedback service
-  participant R as Retained sessions job
   participant BA as Bandit service
   Note over S: First manual move of a scheduled task
   S->>S: record move event
@@ -115,9 +114,8 @@ sequenceDiagram
   F->>F: find the proposal that chose an arm
   F->>BA: update arm state
   F->>F: mark proposal as modified
-  Note over R: Runs every 30 minutes
-  R->>R: find sessions that elapsed without a move
-  R->>F: retained reward
+  Note over S: App opened inside a placed block (START)
+  S->>F: start reward
   F->>BA: update arm state
 ```
 
