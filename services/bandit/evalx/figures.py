@@ -1,7 +1,7 @@
 """Figures for the eval report, drawn from results.json and sensitivity.json.
 
 Run:  uv run python -m evalx.figures [--out evalx/out]
-F1 S minus H1 by world, F2 ablation, F3 sensitivity to student behaviour and constants.
+F1 S-band minus H1 by world, F2 every arm by world, F3 sensitivity to the assumptions.
 """
 
 from __future__ import annotations
@@ -62,13 +62,13 @@ def forest(res: dict[str, Any], out: Path) -> None:
     names = list(res["worlds"])
     fig, ax = plt.subplots(figsize=(8, 0.28 * len(names) + 1.2))
     for i, name in enumerate(names):
-        c = res["worlds"][name]["contrasts"]["S_minus_H1"]
+        c = res["worlds"][name]["contrasts"]["Sband_minus_H1"]
         _point(ax, i, c, COLOURS[name.rsplit("/", 1)[1]])
     ax.axvline(0, color=INK, lw=0.8)
     ax.axvline(-DELTA, color=MUTED, lw=0.8, ls="--")
     ax.set_yticks(range(len(names)), [n.replace("_", " ") for n in names])
     ax.invert_yaxis()
-    ax.set_xlabel("Starts per student, S minus H1 (thin: students, thick: seeds)")
+    ax.set_xlabel("Starts per student, S-band minus H1 (thin: students, thick: seeds)")
     ax.set_title(
         "LinUCB against a heuristic with the same band", loc="left", fontsize=10
     )
@@ -78,33 +78,39 @@ def forest(res: dict[str, Any], out: Path) -> None:
     _save(fig, out / "f1-by-world.png")
 
 
-def ablation(res: dict[str, Any], out: Path) -> None:
-    parts = [
-        ("prior", "Band prior"),
-        ("gap", "Gap quality"),
-        ("deadline", "Deadline term"),
-        ("tiebreak", "Seeded tie-break"),
-    ]
-    fig, ax = plt.subplots(figsize=(7, 3.2))
-    for i, (key, _) in enumerate(parts):
-        for name, w in res["worlds"].items():
-            group = name.rsplit("/", 1)[1]
-            if not name.startswith("band_"):
-                continue
-            c = w["contrasts"][key]["mean"]
+ARM_COLOURS = {
+    "S-band": "#2a78d6",
+    "H1": "#eb6834",
+    "H0": "#1baf7a",
+    "L0": "#e87ba4",
+}
+
+
+def arms(res: dict[str, Any], out: Path) -> None:
+    names = list(res["worlds"])
+    fig, ax = plt.subplots(figsize=(8, 0.28 * len(names) + 1.4))
+    for i, name in enumerate(names):
+        a = res["worlds"][name]["arms"]
+        ax.plot(
+            [a["Rand"]["mean"], a["Oracle"]["mean"]], [i, i], color=GRID, lw=6, zorder=1
+        )
+        for arm, colour in ARM_COLOURS.items():
             ax.plot(
-                c, i, "o", color=COLOURS[group], ms=6, mec=SURFACE, mew=1.2, alpha=0.9
+                a[arm]["mean"], i, "o", color=colour, ms=5, mec=SURFACE, mew=1, zorder=3
             )
-    ax.axvline(0, color=INK, lw=0.8)
-    ax.set_yticks(range(len(parts)), [label for _, label in parts])
+    ax.set_yticks(range(len(names)), [n.replace("_", " ") for n in names])
     ax.invert_yaxis()
-    ax.set_xlabel(
-        "Starts per student, S minus S without the part (one dot per band world)"
-    )
-    ax.set_title("What each part of LinUCB adds", loc="left", fontsize=10)
+    ax.set_xlabel("Starts per student (grey bar: from Rand to Oracle)")
+    ax.set_title("Every policy, by world", loc="left", fontsize=10)
     _style(ax)
-    _legend(ax, ["correct", "wrong"])
-    _save(fig, out / "f2-ablation.png")
+    handles = [
+        plt.Line2D([], [], marker="o", color=c, label=a, ls="")
+        for a, c in ARM_COLOURS.items()
+    ]
+    ax.legend(
+        handles=handles, frameon=False, fontsize=8, labelcolor=MUTED, loc="lower right"
+    )
+    _save(fig, out / "f2-arms.png")
 
 
 def sensitivity(rows: dict[str, Any], out: Path) -> None:
@@ -123,7 +129,7 @@ def sensitivity(rows: dict[str, Any], out: Path) -> None:
     b.axvline(0.5, color=INK, lw=0.8)
     a.set_yticks(range(len(names)), names)
     a.invert_yaxis()
-    a.set_xlabel("Starts per student, S minus H1")
+    a.set_xlabel("Starts per student, S-band minus H1")
     b.set_xlabel("Pick rate: share of answered offers that chose LinUCB's slot")
     a.set_title("Effect on starts", loc="left", fontsize=10)
     b.set_title("Pairwise pick rate", loc="left", fontsize=10)
@@ -139,7 +145,7 @@ def main() -> int:
     args = ap.parse_args()
     res = json.loads((args.out / "results.json").read_text())
     forest(res, args.out)
-    ablation(res, args.out)
+    arms(res, args.out)
     sens = args.out / "sensitivity.json"
     if sens.exists():
         sensitivity(json.loads(sens.read_text()), args.out)
