@@ -113,6 +113,7 @@ ARM_SPEC: dict[str, dict[str, Any]] = {
     "H1": {"policy": "HEURISTIC", "band": True},
     "L0": {"policy": "LINUCB", "band": False},
     "S": {"policy": "LINUCB", "band": True},
+    "H1-deadline": {"policy": "HEURISTIC", "band": True, "deadline": False},
     "S-gap": {"policy": "LINUCB", "band": True, "gap": False},
     "S-deadline": {"policy": "LINUCB", "band": True, "deadline": False},
     "S-tiebreak": {"policy": "LINUCB", "band": True, "tiebreak": False},
@@ -131,6 +132,11 @@ CFG: dict[str, Any] = {
     "deadline_weight": None,
     "mix": HEADLINE_MIX,
     "worlds": "all",  # "all" or "bands"
+    # The heuristic's own knobs: table learning rate, weight of a kept slot, and the
+    # table value outside the stated band for H1.
+    "pref_rate": consts.PREFERENCE_LEARNING_RATE,
+    "kept_weight": PREFERENCE_KEPT_WEIGHT,
+    "outside": 0.2,
 }
 _PRODUCTION = {
     "gap": consts.LINUCB_GAP_WEIGHT,
@@ -305,13 +311,25 @@ def _place(
     return r if r["outcome"] == "PLACED" else None
 
 
+def _kept(matrix: Any, start: int) -> Any:
+    """The heuristic's table after the student keeps or starts a slot."""
+    return reinforce_preference_cell(
+        matrix, start, "UTC", CFG["kept_weight"], CFG["pref_rate"]
+    )
+
+
+def _moved(matrix: Any, old: int, new: int, drag: float) -> Any:
+    """The heuristic's table after the student moves a slot."""
+    return reinforce_preference_move(matrix, old, new, "UTC", drag, CFG["pref_rate"])
+
+
 def _band_map(band: FocusBand) -> Any:
     """Heuristic map seeded from a stated band: 1.0 inside it, 0.2 outside."""
     m = default_preference_matrix() * 0.0
     inside = set(stated_hours(band))
     for wd in range(1, 8):
         for h in range(24):
-            m[matrix_index(wd, h)] = 1.0 if h in inside else 0.2
+            m[matrix_index(wd, h)] = 1.0 if h in inside else CFG["outside"]
     return m
 
 
@@ -462,13 +480,11 @@ def simulate(
         done += ok
         if signal == "START":
             starts += 1
-            matrix = reinforce_preference_cell(
-                matrix, start, "UTC", PREFERENCE_KEPT_WEIGHT
-            )
+            matrix = _kept(matrix, start)
         elif signal == "MOVE":
             moves += 1
             drag = abs(new_start - start) / MS_PER_MINUTE
-            matrix = reinforce_preference_move(matrix, start, new_start, "UTC", drag)
+            matrix = _moved(matrix, start, new_start, drag)
         if lin and reward is not None:
             _learn(state, lin["selectedArm"], lin["featureVector"], reward, band)
     return {"done": done, "starts": starts, "moves": moves, "placed": placed}
@@ -532,9 +548,7 @@ def simulate_ab(
                 _learn(state, arm_id, x, PAIRWISE_WIN_REWARD, band)
             elif primary == "HEURISTIC":
                 _learn(state, arm_id, x, PAIRWISE_LOSS_REWARD, band)
-                matrix = reinforce_preference_cell(
-                    matrix, applied, "UTC", PREFERENCE_KEPT_WEIGHT
-                )
+                matrix = _kept(matrix, applied)
             else:
                 drag = abs(hs - ls) / MS_PER_MINUTE
                 _learn(
@@ -544,15 +558,13 @@ def simulate_ab(
                     drag_distance_reward(drag, CFG["move_scale"]),
                     band,
                 )
-                matrix = reinforce_preference_move(matrix, ls, hs, "UTC", drag)
+                matrix = _moved(matrix, ls, hs, drag)
         ok, signal, reward, new_start = react(st, task, applied, style, cal)
         if signal == "START":
-            matrix = reinforce_preference_cell(
-                matrix, applied, "UTC", PREFERENCE_KEPT_WEIGHT
-            )
+            matrix = _kept(matrix, applied)
         elif signal == "MOVE":
             drag = abs(new_start - applied) / MS_PER_MINUTE
-            matrix = reinforce_preference_move(matrix, applied, new_start, "UTC", drag)
+            matrix = _moved(matrix, applied, new_start, drag)
         if signal and applied_policy == "LINUCB" and reward is not None:
             _learn(state, arm_id, x, reward, band)
         out["events"] += 1
@@ -637,6 +649,7 @@ PAIRS: dict[str, tuple[str, str]] = {
     "gap": ("S", "S-gap"),
     "deadline": ("S", "S-deadline"),
     "tiebreak": ("S", "S-tiebreak"),
+    "S_deadline_minus_H1_deadline": ("S-deadline", "H1-deadline"),
 }
 
 
@@ -866,6 +879,12 @@ SENSITIVITY: dict[str, dict[str, Any]] = {
     **{f"mix: {m}": {"mix": m} for m in MIXES if m != HEADLINE_MIX},
     "alpha 0.05": {"alpha": 0.05},
     "alpha 0.5": {"alpha": 0.5},
+    "heuristic rate 0.05": {"pref_rate": 0.05},
+    "heuristic rate 0.5": {"pref_rate": 0.5},
+    "heuristic kept weight 0": {"kept_weight": 0.0},
+    "heuristic kept weight 1": {"kept_weight": 1.0},
+    "heuristic outside 0": {"outside": 0.0},
+    "heuristic outside 0.5": {"outside": 0.5},
     "gap weight 0": {"gap_weight": 0.0},
     "deadline weight 0": {"deadline_weight": 0.0},
 }
@@ -982,6 +1001,20 @@ def render(res: dict[str, Any]) -> str:
         lines.append(
             f"| {name} | {_fmt(c['prior'])} | {_fmt(c['gap'])} "
             f"| {_fmt(c['deadline'])} | {_fmt(c['tiebreak'])} |"
+        )
+    lines += [
+        "",
+        "## Deadline term off on both sides",
+        "",
+        "| World | H1-deadline | S-deadline | S-deadline − H1-deadline | Verdict |",
+        "|---|---|---|---|---|",
+    ]
+    for name, w in res["worlds"].items():
+        a = w["arms"]
+        c = w["contrasts"]["S_deadline_minus_H1_deadline"]
+        lines.append(
+            f"| {name} | {a['H1-deadline']['mean']:.2f} "
+            f"| {a['S-deadline']['mean']:.2f} | {_fmt(c)} | {verdict(c)} |"
         )
     lines += [
         "",

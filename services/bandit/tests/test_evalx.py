@@ -156,3 +156,19 @@ def test_ceiling_and_floor_hold() -> None:
             assert means["Oracle"] + 0.05 >= means[arm], (world, arm, means)
     pooled = {a: np.mean([np.mean(w[a]) for w in by_world.values()]) for a in arms}
     assert pooled["Rand"] < pooled["S"]
+
+
+def test_heuristic_knobs_default_to_production() -> None:
+    assert harness.CFG["pref_rate"] == consts.PREFERENCE_LEARNING_RATE
+    assert harness.CFG["kept_weight"] == consts.PREFERENCE_KEPT_WEIGHT
+
+
+def test_a_zero_rate_freezes_the_heuristic_table() -> None:
+    saved = dict(harness.CFG)
+    try:
+        harness.configure({"pref_rate": 0.0})
+        m = default_preference_matrix()
+        assert (harness._kept(m, 9 * 3_600_000) == m).all()
+        assert (harness._moved(m, 9 * 3_600_000, 15 * 3_600_000, 120) == m).all()
+    finally:
+        harness.configure(saved)
