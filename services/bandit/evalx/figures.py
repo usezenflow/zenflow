@@ -85,15 +85,22 @@ def ablation(res: dict[str, Any], out: Path) -> None:
         ("deadline", "Deadline term"),
         ("tiebreak", "Seeded tie-break"),
     ]
-    fig, ax = plt.subplots(figsize=(7, 3))
+    fig, ax = plt.subplots(figsize=(7, 3.2))
     for i, (key, _) in enumerate(parts):
-        for j, group in enumerate(("correct", "wrong")):
-            c = res["pooled"][group]["contrasts"][key]
-            _point(ax, i + (j - 0.5) * 0.3, c, COLOURS[group])
+        for name, w in res["worlds"].items():
+            group = name.rsplit("/", 1)[1]
+            if not name.startswith("band_"):
+                continue
+            c = w["contrasts"][key]["mean"]
+            ax.plot(
+                c, i, "o", color=COLOURS[group], ms=6, mec=SURFACE, mew=1.2, alpha=0.9
+            )
     ax.axvline(0, color=INK, lw=0.8)
     ax.set_yticks(range(len(parts)), [label for _, label in parts])
     ax.invert_yaxis()
-    ax.set_xlabel("Starts per student, S minus S without the part")
+    ax.set_xlabel(
+        "Starts per student, S minus S without the part (one dot per band world)"
+    )
     ax.set_title("What each part of LinUCB adds", loc="left", fontsize=10)
     _style(ax)
     _legend(ax, ["correct", "wrong"])
