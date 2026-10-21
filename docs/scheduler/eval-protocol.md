@@ -5,9 +5,8 @@ Harness: `services/bandit/evalx/`. Simulated students only. Traits are assumptio
 ## Run
 
 ```bash
-uv run python -m evalx run --seeds 30 --students 20 --seed-offset 0   # held-out
-uv run python -m evalx run --seeds 30 --students 100 --out evalx/out/large   # size check
-uv run python -m evalx sensitivity                                      # tuning seeds 100+
+uv run python -m evalx run --seeds 30 --students 100 --seed-offset 0   # held-out, 3,000 students per world
+uv run python -m evalx sensitivity --seeds 10 --students 100            # tuning seeds 100+
 uv run python -m evalx.figures                                          # F1 to F3
 ```
 
