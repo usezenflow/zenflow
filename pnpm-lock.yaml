@@ -10,6 +10,7 @@ overrides:
   jest-environment-node: 30.4.1
   '@types/react': 19.3.0
   lightningcss: 1.30.1
+  '@types/mjml': 4.7.4
 
 packageExtensionsChecksum: sha256-MiHZ3mgtOUb60KfpkAkui5ad/9eLmcQda0MiZKaTRqA=
 
