@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping
 import numpy as np
 from fastapi import HTTPException
 
-from src.core.band_prior import FocusBand, band_prior
+from src.core.matrix_prior import default_prior
 from src.models.schemas import ArmParams
 from src.schemas import ARM_IDS, ArmId, ArmState
 
@@ -42,9 +42,9 @@ def hydrate(
     """Materialize an arm's ``(A, b)`` numpy arrays, falling back to the ridge prior.
 
     A fully empty state (no ``A`` and no ``b``) is the cold arm
-    (``A = ridge * I, b = 0``), or ``prior`` when one is given (the focus-band
-    prior, level-up plan). A partially empty state (only one of the two
-    missing) is anomalous and fills just that half at the ridge prior.
+    (``A = ridge * I, b = 0``), or ``prior`` when one is given (the matrix prior).
+    A partially empty state (only one of the two missing) is anomalous and fills
+    just that half at the ridge prior.
 
     Parameters
     ----------
@@ -80,7 +80,6 @@ def hydrate_arms(
     state: Mapping[ArmId, ArmState],
     d: int,
     ridge: float,
-    focus_band: FocusBand | None = None,
 ) -> dict[ArmId, ArmParams]:
     """Hydrate every one of the 5 canonical arms into :class:`ArmParams`.
 
@@ -104,7 +103,7 @@ def hydrate_arms(
     dict[ArmId, ArmParams]
     """
     out: dict[ArmId, ArmParams] = {}
-    priors = band_prior(focus_band, d, ridge) if focus_band else {}
+    priors = default_prior(d, ridge)
     for arm in ARM_IDS:
         st = state.get(arm)
         if is_cold(st):

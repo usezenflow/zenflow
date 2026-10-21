@@ -260,8 +260,8 @@ def test_repeated_drags_teach_the_hour_inside_the_band() -> None:
 
 
 def test_default_matrix_keeps_a_cold_pick_in_waking_study_hours() -> None:
-    """With every arm tied (cold start) and the default matrix, the pick is 09:00
-    or later and outside the 11-14 and 16-19 gaps, whatever the seed."""
+    """With every arm tied (cold start) and the default matrix, the pick is a
+    waking hour the matrix likes (08:00 to 22:00), whatever the seed."""
     cold = {a: 0.0 for a, *_ in ARM_BANDS}
     day = MIDNIGHT + DAY_MS
     default = default_preference_matrix()
@@ -277,7 +277,8 @@ def test_default_matrix_keeps_a_cold_pick_in_waking_study_hours() -> None:
         )
         assert pick is not None
         hour = (pick.start_ms - day) / HOUR
-        assert hour >= 9 and not 11 <= hour < 14 and not 16 <= hour < 19
+        assert 8 <= hour < 22
+        assert default[matrix_index(1, int(hour))] > 0
 
 
 @pytest.mark.parametrize(

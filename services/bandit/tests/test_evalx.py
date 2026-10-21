@@ -18,17 +18,18 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-import src.place as place_module
+import src.core.matrix_prior as prior_module
 from evalx import run as harness
 from evalx.world import (
     BANDS_PER_DAY_WEIGHTS,
+    Student,
     build_calendar,
+    is_weekend,
     make_tasks,
-    stated_for,
+    open_chance,
 )
 from src.api import app
 from src.core import constants as consts
-from src.core.arms import TIE_BREAK_ARM_ORDER
 from src.core.preference import default_preference_matrix
 from src.place import place as run_place
 from src.schemas import ARM_IDS
@@ -48,14 +49,13 @@ def _ts_constant(name: str) -> float:
 
 
 @pytest.mark.parametrize("primary", ["HEURISTIC", "LINUCB"])
-@pytest.mark.parametrize("band", [None, "MORNING", "LATE_NIGHT"])
-def test_harness_matches_the_http_placer(primary: str, band: str | None) -> None:
+def test_harness_matches_the_http_placer(primary: str) -> None:
     tasks = make_tasks(random.Random("parity"), 4, 3)[:4]
     state: dict[str, Any] = {a: {"A": [], "b": []} for a in ARM_IDS}
     matrix = default_preference_matrix()
     cal = build_calendar(random.Random("cal"), 4 * 7 + 10)
     for n, task in enumerate(tasks):
-        body = harness.place_body(task, primary, state, matrix, n, band, cal)  # type: ignore[arg-type]
+        body = harness.place_body(task, primary, state, matrix, n, cal)
         resp = client.post("/v1/place", json=body)
         assert resp.status_code == 200, resp.text
         http = resp.json()["results"][0]
@@ -82,35 +82,57 @@ def test_rewards_match_the_backend() -> None:
 
 def test_a_seed_reruns_to_identical_output() -> None:
     harness.configure({"worlds": "bands"})
-    arms = ("H1", "S", "Oracle", "Rand", "AB")
+    arms = ("H", "L", "Oracle", "Rand", "AB")
     assert harness.run_seed(7, 2, arms) == harness.run_seed(7, 2, arms)
 
 
 def test_identical_arms_give_identical_results() -> None:
     """A/A under common random numbers: an arm against itself differs by exactly 0."""
     harness.configure({"worlds": "bands"})
-    student = harness.worlds("bands")["band_evening_17_21/correct"]
+    student = harness.worlds("bands")["band_evening_17_21"]
     tasks = make_tasks(random.Random("aa"), 4, 3)
     cal = build_calendar(random.Random("cal"), 4 * 7 + 10)
-    a = harness.simulate(student, tasks, "S", "drag", random.Random(1), cal)
-    b = harness.simulate(student, tasks, "S", "drag", random.Random(2), cal)
+    a = harness.simulate(student, tasks, "L", "drag", random.Random(1), cal)
+    b = harness.simulate(student, tasks, "L", "drag", random.Random(2), cal)
     assert a == b
 
 
 def test_no_arm_leaks_state_into_the_next_placement() -> None:
-    before = (consts.LINUCB_GAP_WEIGHT, consts.DEADLINE_PENALTY_WEIGHT)
-    with harness._knobs({"gap": False, "deadline": False, "tiebreak": False}):
+    before = (
+        consts.LINUCB_GAP_WEIGHT,
+        consts.DEADLINE_PENALTY_WEIGHT,
+        prior_module.PRIOR_MATRIX,
+    )
+    with harness._knobs({"gap": False, "deadline": False, "prior": "cold"}):
         assert consts.LINUCB_GAP_WEIGHT == 0.0
         assert consts.DEADLINE_PENALTY_WEIGHT == 0.0
-        tie_break = place_module.seeded_tie_break_order  # type: ignore[attr-defined]
-        assert tie_break("x") == TIE_BREAK_ARM_ORDER
-    assert before == (consts.LINUCB_GAP_WEIGHT, consts.DEADLINE_PENALTY_WEIGHT)
+        assert prior_module.PRIOR_MATRIX is None
+    assert before == (
+        consts.LINUCB_GAP_WEIGHT,
+        consts.DEADLINE_PENALTY_WEIGHT,
+        prior_module.PRIOR_MATRIX,
+    )
 
 
-def test_stated_band_follows_the_condition() -> None:
-    assert stated_for((17, 21), "correct") == "EVENING"
-    assert stated_for((6, 10), "correct") == "MORNING"
-    assert stated_for((17, 21), "wrong") == "MORNING"
+def test_the_cold_arm_has_no_prior() -> None:
+    with harness._knobs(harness.ARM_SPEC["L-cold"]):
+        assert prior_module.PRIOR_MATRIX is None
+    assert prior_module.PRIOR_MATRIX is not None
+
+
+def test_arms_share_the_broad_matrix() -> None:
+    assert (harness._table() == prior_module.PRIOR_MATRIX).all()
+
+
+def test_weekend_students_differ_on_weekends_only() -> None:
+    s = Student(
+        "w", (17, 21), 0.5, 0.0, 0.3, weekend_band=(19, 23), weekend_attention=0.2
+    )
+    sat = next(d for d in range(14) if is_weekend(d))
+    mon = next(d for d in range(14) if not is_weekend(d))
+    assert s.band_on(mon) == (17, 21) and s.band_on(sat) == (19, 23)
+    assert open_chance(s, 9, mon * consts.DAY_MS) == 0.5
+    assert open_chance(s, 9, sat * consts.DAY_MS) == 0.2
 
 
 def test_calendar_is_weekday_only_and_stable() -> None:
@@ -141,21 +163,23 @@ def test_keep_bias_favours_the_primary() -> None:
 
 
 def test_ceiling_and_floor_hold() -> None:
-    """Oracle is at least every arm and Rand at most S, pooled over the band worlds."""
+    """Oracle is at least every arm and Rand at most L, pooled over the band worlds."""
     harness.configure({"worlds": "bands"})
-    arms = ("H0", "H1", "L0", "S", "Oracle", "Rand")
+    arms = ("H", "L", "L-cold", "Oracle", "Rand")
     parts = [harness.run_seed(s, 12, arms) for s in range(3)]
     by_world: dict[str, dict[str, list[float]]] = {}
     for p in parts:
         for world, per in p["worlds"].items():
             for arm, rows in per.items():
-                by_world.setdefault(world, {}).setdefault(arm, []).extend(rows)
+                by_world.setdefault(world, {}).setdefault(arm, []).extend(
+                    r[0] for r in rows
+                )
     for world, per in by_world.items():
         means = {a: float(np.mean(v)) for a, v in per.items()}
-        for arm in ("H0", "H1", "L0", "S"):
+        for arm in ("H", "L", "L-cold"):
             assert means["Oracle"] + 0.05 >= means[arm], (world, arm, means)
     pooled = {a: np.mean([np.mean(w[a]) for w in by_world.values()]) for a in arms}
-    assert pooled["Rand"] < pooled["S"]
+    assert pooled["Rand"] < pooled["L"]
 
 
 def test_heuristic_knobs_default_to_production() -> None:
@@ -172,27 +196,3 @@ def test_a_zero_rate_freezes_the_heuristic_table() -> None:
         assert (harness._moved(m, 9 * 3_600_000, 15 * 3_600_000, 120) == m).all()
     finally:
         harness.configure(saved)
-
-
-def test_the_earliest_start_arm_restores_the_ranking() -> None:
-    from src.core import linucb_best_slot
-
-    before = linucb_best_slot.np  # type: ignore[attr-defined]
-    with harness._knobs(harness.ARM_SPEC["S-min"]):
-        assert linucb_best_slot.np is not before  # type: ignore[attr-defined]
-    assert linucb_best_slot.np is before  # type: ignore[attr-defined]
-
-
-def test_the_band_tie_rule_prefers_stated_band_hours_then_the_earlier_start() -> None:
-    import numpy as np
-
-    shim = harness._BandThenEarliest
-    shim.band = "LATE_NIGHT"
-    hour = 3_600_000
-    starts = np.array([20 * hour, 21 * hour, 22 * hour], dtype=np.int64)
-    neg_score = np.zeros(3)
-    order = shim.lexsort((starts, np.zeros(3), np.zeros(3), neg_score))
-    assert starts[order[0]] == 21 * hour  # 20:00 is outside 21:00 to 02:00
-    shim.band = None
-    order = shim.lexsort((starts, np.zeros(3), np.zeros(3), neg_score))
-    assert starts[order[0]] == 20 * hour  # no stated band: the earlier start

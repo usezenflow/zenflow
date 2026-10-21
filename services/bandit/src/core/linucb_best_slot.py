@@ -36,7 +36,12 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .arms import ARM_BANDS, TIE_BREAK_ARM_ORDER, overlap_rate
-from .constants import LINUCB_PREF_WEIGHT, MS_PER_MINUTE, SLOT_MS
+from .constants import (
+    DEADLINE_PENALTY_HORIZON_HOURS,
+    LINUCB_PREF_WEIGHT,
+    MS_PER_MINUTE,
+    SLOT_MS,
+)
 from .gap_quality import gap_quality_scores
 from .slot import Intervals, ceil_to_slot, utc_to_minutes
 from .slot_score import (
@@ -99,6 +104,7 @@ def best_linucb_slot(
     pref_weight: float = LINUCB_PREF_WEIGHT,
     gap_weight: float = 0.0,
     deadline_weight: float = 0.0,
+    deadline_horizon_hours: float = DEADLINE_PENALTY_HORIZON_HOURS,
 ) -> BestLinucbSlot | None:
     tie_rank = {a: i for i, a in enumerate(tie_break_order)}
     rank_by_band = np.array([tie_rank[a] for a in _ARM_NAMES], dtype=np.int64)
@@ -170,7 +176,10 @@ def best_linucb_slot(
             total = total + gap_weight * gaps
         if deadline_weight:
             total = total + deadline_penalty_scores(
-                starts + duration_ms, deadline_ms, deadline_weight
+                starts + duration_ms,
+                deadline_ms,
+                deadline_weight,
+                deadline_horizon_hours,
             )
         if prev_start_ms is not None:
             total = total + proximity_stability_scores(prev_start_ms, starts, next_ms)

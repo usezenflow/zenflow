@@ -43,7 +43,7 @@ from src.core.displacement import (
 )
 from src.core.hybrid import days_left_on, shared_tensor
 from src.core.preference import preference_score_at
-from src.core.quiet_hours import quiet_intervals, quiet_window
+from src.core.quiet_hours import quiet_intervals
 from src.core.reason import (
     PlacementReason,
     count_free_starts,
@@ -167,14 +167,12 @@ class _Placer:
         self.occ: dict[str, Intervals] = {
             d.day_str: [
                 *_ivals(d.occupied),
-                *quiet_intervals(
-                    d.day_str, req.timezone, *quiet_window(req.user.focus_band)
-                ),
+                *quiet_intervals(d.day_str, req.timezone),
             ]
             for d in req.days
         }
         self.heuristic_policy = HeuristicPolicy(self.matrix, self.tz)
-        self.linucb_policy = LinucbPolicy(req.bandit, self.tz, req.user.focus_band)
+        self.linucb_policy = LinucbPolicy(req.bandit, self.tz)
         self.day_cap = consts.MAX_SERIES_PER_DAY
 
     # ---- helpers ---------------------------------------------------------

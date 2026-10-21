@@ -137,15 +137,15 @@ def _hit(log: list[tuple[str, str, float]]) -> list[bool]:
     return [reward == 1.0 for *_, reward in log]
 
 
-# Placements allowed before the preferred band is first hit. Cold arms tie, so
-# gap quality (LINUCB_GAP_WEIGHT) and the seeded tie-break order decide the first
-# picks; the preference matrix no longer influences LinUCB slot selection.
+# Placements allowed before the preferred band is first hit. The matrix prior ranks
+# the arms and the seeded tie-break order breaks ties; the preference matrix does
+# not influence LinUCB slot selection.
 FIRST_HIT_BUDGET = {
     "MORNING": 0,
-    "MIDDAY": 1,
+    "MIDDAY": 3,
     "AFTERNOON": 4,
-    "EVENING": 2,
-    "NIGHT": 3,
+    "EVENING": 1,
+    "NIGHT": 2,
 }
 # Placements after the first hit during which the pick may still flip back while
 # the matrix catches up; afterwards a kept band must keep winning.

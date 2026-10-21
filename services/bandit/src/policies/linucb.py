@@ -9,7 +9,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from src.core import constants as consts
-from src.core.band_prior import FocusBand
 from src.core.hybrid import Z_DIM
 from src.core.linucb_best_slot import LinucbCandidateDay, best_linucb_slot
 from src.core.slot import Intervals
@@ -37,16 +36,11 @@ class LinucbPolicy:
     touches the arm models.
     """
 
-    def __init__(
-        self,
-        bandit: BanditWire | None,
-        timezone: str,
-        focus_band: FocusBand | None = None,
-    ) -> None:
+    def __init__(self, bandit: BanditWire | None, timezone: str) -> None:
         self.tz = timezone
         self.alpha = bandit.alpha if bandit is not None else 0.0
         self._arms = (
-            hydrate_arms(bandit.state, consts.FEATURE_DIM, bandit.ridge, focus_band)
+            hydrate_arms(bandit.state, consts.FEATURE_DIM, bandit.ridge)
             if bandit is not None
             else {}
         )
@@ -140,6 +134,7 @@ class LinucbPolicy:
             tie_break_order,
             gap_weight=consts.LINUCB_GAP_WEIGHT,
             deadline_weight=consts.DEADLINE_PENALTY_WEIGHT,
+            deadline_horizon_hours=consts.LINUCB_DEADLINE_HORIZON_HOURS,
         )
         if best is None or not math.isfinite(best.score):
             return None

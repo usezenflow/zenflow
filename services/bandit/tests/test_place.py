@@ -22,7 +22,7 @@ from src.core.constants import (
 )
 from src.core.linucb_best_slot import best_linucb_slot, days_from_dicts
 from src.core.preference import default_preference_matrix
-from src.core.quiet_hours import quiet_intervals, quiet_window
+from src.core.quiet_hours import quiet_intervals
 from src.core.slot import add_days_str, local_date_str, local_midnight_ms
 from src.models.linucb import score as linucb_score
 from src.schemas import ARM_IDS, ArmState
@@ -153,22 +153,13 @@ def _eight_am_matrix() -> list[float]:
     return [1.0 if h == 8 else 0.0 for _ in range(7) for h in range(24)]
 
 
-def test_quiet_hours_depend_on_the_focus_band() -> None:
-    def start(band: str | None) -> int:
-        user: dict[str, Any] = {
-            "preferenceMatrix": _eight_am_matrix(),
-            "observationCount": 0,
-        }
-        if band is not None:
-            user["focusBand"] = band
-        return ok(make_req(user=user))["results"][0]["startMs"]
-
-    # No band: the 08:00 cell is free, so the plan starts right at now.
-    assert start(None) == NOW
-    # LATE_NIGHT is quiet until 09:00, so the same cell is refused.
-    assert start("LATE_NIGHT") >= NOW + HOUR
-    # A morning student is not quiet at 08:00.
-    assert start("MORNING") == NOW
+def test_quiet_hours_block_the_eight_am_cell_only_before_six() -> None:
+    user: dict[str, Any] = {
+        "preferenceMatrix": _eight_am_matrix(),
+        "observationCount": 0,
+    }
+    # 08:00 is outside the 23:00 to 06:00 quiet window, so the plan starts at now.
+    assert ok(make_req(user=user))["results"][0]["startMs"] == NOW
 
 
 def test_timezone_wall_clock_is_respected() -> None:
@@ -177,7 +168,7 @@ def test_timezone_wall_clock_is_respected() -> None:
     res = ok(make_req(timezone=tz, days=days))
     start = res["results"][0]["startMs"]
     local_h = ((start + 7 * HOUR) % DAY_MS) // HOUR
-    assert local_h in (8, 9, 10, 14, 15, 16)  # preferred local hours
+    assert local_h in (9, 10, 19, 20)  # the best liked local hours from 15:00
     assert start >= NOW
 
 
@@ -259,10 +250,7 @@ def test_in_process_arm_scores_match_the_core() -> None:
     start = r["linucb"]["startMs"]
     day_str = local_date_str(start, "UTC")
     day = next(d for d in body["days"] if d["dayStr"] == day_str)
-    core_occupied = [
-        {"start": s, "end": e}
-        for s, e in quiet_intervals(day_str, "UTC", *quiet_window(None))
-    ]
+    core_occupied = [{"start": s, "end": e} for s, e in quiet_intervals(day_str, "UTC")]
     core = best_linucb_slot(
         days_from_dicts(
             [
@@ -347,16 +335,16 @@ def test_series_with_more_sittings_than_the_day_cap_fits_in_one_day() -> None:
 
 
 def test_series_fixed_occupied_sibling_holds_its_day() -> None:
-    # An existing sibling (a grow) sits on day 0: the new member must land on
-    # another day, not just another time on day 0.
-    existing = (NOW + HOUR, NOW + 2 * HOUR)
+    # Existing siblings (a grow) fill day 0 to the cap: the new member must land
+    # on another day, not just another time on day 0.
+    existing = [(NOW + h * HOUR, NOW + (h + 1) * HOUR) for h in (1, 3, 5)]
     body = make_req(
         members=[member("new")],
-        fixedOccupied=[{"startMs": existing[0], "endMs": existing[1]}],
+        fixedOccupied=[{"startMs": b, "endMs": e} for b, e in existing],
     )
     (r,) = ok(body)["results"]
     assert r["outcome"] == "PLACED"
-    assert local_date_str(r["startMs"], "UTC") != local_date_str(existing[0], "UTC")
+    assert local_date_str(r["startMs"], "UTC") != local_date_str(existing[0][0], "UTC")
 
 
 def test_series_past_deadline_is_pinned_a_gap_apart() -> None:

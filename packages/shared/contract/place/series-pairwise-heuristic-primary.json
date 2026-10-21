@@ -715,7 +715,7 @@
         },
         "linucb": {
           "startMs": 1790002800000,
-          "score": 0.7554455404253981,
+          "score": 0.5554455404253981,
           "selectedArm": "AFTERNOON",
           "featureVector": [
             -0.9,
@@ -752,8 +752,8 @@
           "score": 1.0
         },
         "linucb": {
-          "startMs": 1790089200000,
-          "score": 0.7538376412501469,
+          "startMs": 1790085600000,
+          "score": 0.5246709745834802,
           "selectedArm": "AFTERNOON",
           "featureVector": [
             -0.9,
@@ -791,7 +791,7 @@
         },
         "linucb": {
           "startMs": 1790172000000,
-          "score": 0.6939390017361726,
+          "score": 0.42310566840283925,
           "selectedArm": "AFTERNOON",
           "featureVector": [
             -0.9,

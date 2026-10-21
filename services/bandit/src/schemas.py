@@ -45,8 +45,6 @@ class UpdateRequest(BaseModel):
     x: list[float] = Field(min_length=1)
     reward: float
     state: ArmState
-    # Seeds a cold arm with the band prior (level-up plan). Omitted: plain ridge prior.
-    focus_band: Literal["MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT"] | None = None
     # Hybrid (level-up LinUCB v2): the cross features of this (arm, day) and the
     # shared beta block. Both omitted: the disjoint update only.
     z: list[float] | None = None
@@ -76,7 +74,6 @@ class InitRequest(BaseModel):
     """A new student's starting state (level-up plan, ``POST /v1/init``)."""
 
     ridge: float = Field(gt=0)
-    focus_band: Literal["MORNING", "AFTERNOON", "EVENING", "LATE_NIGHT"] | None = None
     marks: list[MarkWire] = Field(default_factory=list, max_length=200)
     avg_gpa4: float | None = Field(default=None, ge=0, le=4)
 

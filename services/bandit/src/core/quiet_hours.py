@@ -14,19 +14,6 @@ from src.core.slot import _zone, add_days_str
 QUIET_START_MIN = 23 * 60
 QUIET_END_MIN = 6 * 60
 
-# A LATE_NIGHT student's band runs 21:00 to 02:00, so their quiet window starts
-# when it ends and lasts until a normal morning. Other bands sleep 23:00 to 06:00.
-_QUIET_BY_BAND: dict[str, tuple[int, int]] = {
-    "LATE_NIGHT": (2 * 60, 9 * 60),
-}
-
-
-def quiet_window(focus_band: str | None) -> tuple[int, int]:
-    """``(start_min, end_min)`` of quiet hours for a student's focus band."""
-    if focus_band is None:
-        return QUIET_START_MIN, QUIET_END_MIN
-    return _QUIET_BY_BAND.get(focus_band, (QUIET_START_MIN, QUIET_END_MIN))
-
 
 def _local_ms(date_str: str, minute: int, timezone: str) -> int:
     """UTC epoch ms of local ``minute`` past midnight on ``date_str``.
