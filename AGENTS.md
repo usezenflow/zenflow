@@ -52,7 +52,7 @@ pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typech
    applies and persists the result, and owns the only RNG (`ExperimentService.assignPolicy`).
    `backend/src/scheduler/core/*` is the calendar/recurrence/preference-write toolbox
    (`slot.ts`, `horizon.ts`, `recurrence.ts`, `matrix-decay.ts`, `sync-conflicts.ts`, …) plus a
-   **frozen** heuristic fallback (`slot-score.ts`, `preference.ts`, `series-spread.ts`, the
+   **frozen** heuristic fallback (`slot-score.ts`, `preference.ts`, the
    pre-#62 behaviour), used only when Python is unavailable (`FallbackPlacer`, built on
    `HeuristicPlacer`); it stays pure (no I/O, clock, or randomness) and takes `now` as a
    parameter. Do not add ranking logic to Nest. See [docs/backend/scheduler.md](docs/backend/scheduler.md).
@@ -61,7 +61,7 @@ pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typech
    to scoring or placement go in `services/bandit/src/core/*` with pytest coverage and updated
    `packages/shared/contract/place/*.json` fixtures — not a TS↔Python port. The frozen TS
    fallback does not follow this rule: its files (`slot-score.ts`, `preference.ts`,
-   `series-spread.ts`, `sync-conflicts.ts`) change only for bug fixes, and a fix must keep
+   `sync-conflicts.ts`) change only for bug fixes, and a fix must keep
    `backend/test/golden/scheduler-core.golden.json` (regenerate via
    `pnpm --filter backend golden:export`; `golden-fixtures.spec.ts` fails on drift) and
    `services/bandit/tests/test_golden_ts.py` green.
@@ -69,16 +69,14 @@ pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typech
 3. **Durations are always positive multiples of 15** (minutes). Slots are 15-minute;
    `DAILY_HORIZON` = 1440. Don't introduce off-grid times.
 
-4. **Two kinds of series.** A multi-sitting `TASK` (`sessionCount > 1`) is *materialized* — one
-   real `Session` row per sitting, all sharing a `seriesId`, each scheduled independently. A
-   recurring **fixed** session (`DND` / `ASSIGNMENT` / `EXAM` / `LECTURE` with an `rrule`) is
+4. **Recurring series only.** A recurring **fixed** session (`DND` / `ASSIGNMENT` / `EXAM` / `LECTURE` with an `rrule`) is
    *virtual* — one `SessionSeries` holds the `rrule` + `exdates`, one representative `Session`
    row anchors the first occurrence, and `SessionsService.list()` fans it out into occurrences
    whose `id` is `"<seriesId>::<startISO>"`. Editing/deleting such an occurrence id is routed by
    the backend: `PATCH` applies series-wide (time-of-day re-anchors, doesn't drop occurrences);
    `DELETE` on the occurrence id adds it to `exdates` ("this one");
    `DELETE /sessions/series/:id/truncate?from=<ISO>` pulls the rrule `UNTIL` back ("this and
-   following"); `DELETE /sessions/series/:id` drops the whole series.
+   following"); `DELETE /sessions/series/:id` drops the whole series. A `TASK` is always one row.
 
 5. **Timezone wall-clock rule (pwa).** All calendar `Date`s carry the user-tz wall
    clock in their local fields — go through `pwa/src/utils/tz.ts`, never a bare
