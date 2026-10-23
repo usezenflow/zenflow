@@ -63,11 +63,10 @@ export interface Session {
    */
   scheduledStartTime: string | null;
   /**
-   * Set when this session belongs to a series — a recurring fixed session
-   * (`DND` / `ASSIGNMENT` / `EXAM` / `LECTURE`), or a multi-session `TASK`
-   * created with `sessionCount > 1`. For a recurring series this `Session` is
-   * one *virtual occurrence*: its `id` is `"<seriesId>::<startISO>"`, not a
-   * real row id, and edits/deletes on it are routed by the backend.
+   * Set when this session belongs to a recurring fixed series (`DND` /
+   * `ASSIGNMENT` / `EXAM` / `LECTURE`). This `Session` is one *virtual
+   * occurrence*: its `id` is `"<seriesId>::<startISO>"`, not a real row id,
+   * and edits/deletes on it are routed by the backend.
    */
   seriesId: string | null;
   /** The recurrence rule of this session's series, if any (RFC 5545 RRULE, bare — no `DTSTART`). */
@@ -87,10 +86,6 @@ export interface Session {
    * exam. The key a {@link CourseColour} is stored under.
    */
   courseKey: string | null;
-  /** 1-based position within a `TASK` series (`null` outside a session-count series). */
-  sessionIndex: number | null;
-  /** Total session count of this session's `TASK` series (`null` otherwise). */
-  sessionTotal: number | null;
   /** Minutes before start at which the user is reminded (max 2; always `[]` for DND). */
   reminders: number[];
   /**
@@ -230,9 +225,8 @@ export const SLOT_TAKEN_CODE = "SLOT_TAKEN";
 
 /**
  * 409 body when `POST /sessions/:id/slot-pick` with `chose: "alternative"`
- * targets a `TASK` series sitting whose alternative now overlaps another
- * (non-deleted) sitting of the same series (#58). Nothing was moved or
- * recorded — the pick can still be answered later (e.g. `"primary"`).
+ * targets an alternative that now overlaps another session. Nothing was moved
+ * or recorded — the pick can still be answered later (e.g. `"primary"`).
  */
 export interface SlotTakenError {
   success: false;
@@ -402,15 +396,6 @@ export interface UpdateSessionInput {
   durationMinutes?: number;
   /** ISO-8601 deadline (TASK only). Omit to leave unchanged. */
   deadline?: string;
-  /**
-   * New total sitting count for a TASK series (the whole series, not just this
-   * row). Raising it adds sittings placed between now and the deadline;
-   * lowering it removes the highest-indexed (most recently added) sittings —
-   * rejected if any of those has already started. A plain single TASK
-   * (no existing series) with `sessionCount > 1` is promoted into a series.
-   * Ignored for non-TASK types.
-   */
-  sessionCount?: number;
   tags?: string[];
   /**
    * Minutes-before-start reminders (max MAX_REMINDERS_PER_SESSION, each an
@@ -456,10 +441,7 @@ export interface SessionSuggestionsResponse {
 
 /**
  * The heuristic-vs-LinUCB `SlotProposal` this placement recorded, present
- * only for a single (non-series) `TASK` create / deadline-change — a
- * `sessionCount > 1` series response leaves these top-level fields
- * `null`/`false`; its per-sitting proposals ride on each `sessions[]` entry
- * instead ({@link SeriesSittingProposal}, #58).
+ * for a `TASK` create / deadline-change.
  *
  * On most events only one algorithm ran (today's random 50/50) and
  * `alternativeSlot` is `null`. On the `PAIRWISE_SAMPLE_RATE` fraction of
@@ -493,29 +475,10 @@ export interface SlotProposalFields {
 }
 
 /**
- * Per-sitting pairwise fields on a series response entry (#58). A series rolls
- * its policy (and the pairwise sample) once; on a sampled series at most
- * `MAX_SERIES_ALTERNATIVES` (5) sittings — the soonest divergent ones whose
- * alternative doesn't clash with a sibling — carry `divergent: true` and an
- * `alternativeSlot`; every other entry has `divergent: false,
- * alternativeSlot: null`. `slotProposalId` is set whenever that sitting's
- * `SlotProposal` write succeeded, so `POST /sessions/:id/slot-pick` works per
- * sitting.
- */
-export type SeriesSittingProposal = Pick<SlotProposalFields, "slotProposalId" | "primarySlot" | "alternativeSlot" | "divergent">;
-export type SeriesSession = Session & SeriesSittingProposal;
-
-/**
  * Creating a `TASK` places it into its single best empty slot between now and
  * its deadline (`services/bandit/README.md`) — no other session is moved.
- * When `sessionCount > 1` the response also carries every session in
- * `sessions` (index order), with the top-level fields mirroring `sessions[0]`.
- * The shared `seriesId` on those rows groups the sessions' `CREATE` events;
- * reverting the batch = `DELETE /sessions/series/:seriesId`.
  */
 export interface CreateSessionResponse extends Session, SlotProposalFields {
-  /** Present only for a `TASK` series create — all N sessions, `sessionIndex` order. */
-  sessions?: SeriesSession[];
   /**
    * Reminder leads (minutes) not stored for at least one targeted session
    * because their fire time was already past or under a minute away. Omitted
@@ -525,13 +488,10 @@ export interface CreateSessionResponse extends Session, SlotProposalFields {
 }
 
 /**
- * Editing a `TASK`'s deadline re-places just that task (or, for a series
- * member, redistributes the series' still-upcoming sessions across the new
- * `now … deadline` window). No other session is moved.
+ * Editing a `TASK`'s deadline re-places just that task. No other session is
+ * moved.
  */
 export interface UpdateSessionResponse extends Session, SlotProposalFields {
-  /** Present only when a `TASK` series was redistributed — its members in `sessionIndex` order. */
-  sessions?: SeriesSession[];
   /**
    * Set when a deadline change needs the user's go-ahead: the session keeps
    * its current start and nothing else moved. Confirm with
@@ -593,8 +553,6 @@ export interface RemoveSessionResponse {
 /**
  * Result of a series-scoped delete:
  * - `DELETE /sessions/series/:seriesId` — the whole series;
- * - `DELETE /sessions/series/:seriesId/from/:sessionId` — that materialized
- *   `TASK` sitting + every later one (`sessionIndex` order), earlier ones kept;
  * - `DELETE /sessions/series/:seriesId/truncate?from=<ISO>` — a recurring
  *   (rrule) series: pull its `UNTIL` back to just before `from` ("this and all
  *   following"). `removedSessionIds` is empty here (occurrences are virtual);

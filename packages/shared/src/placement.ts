@@ -11,7 +11,7 @@
  */
 import type { SchedulingArm } from "./bandit";
 
-export const PLACEMENT_CONTRACT_VERSION = 3;
+export const PLACEMENT_CONTRACT_VERSION = 4;
 
 export type PlacementPolicy = "HEURISTIC" | "LINUCB";
 
@@ -82,8 +82,6 @@ export interface PlacementFlexible {
   deadlineMs: number;
   startMs: number;
   /** Started ones and those starting within 2 h of `nowMs` never move; Python derives that from `startMs`. */
-  /** Sittings of one series never share a local day after a move. */
-  seriesId?: string;
 }
 
 /** Only sent on the second call of the two-phase infeasible path. */
@@ -106,12 +104,9 @@ export interface PlaceRequest {
   /** IANA. */
   timezone: string;
   deadlineMs: number;
-  /** Load-scope decision owned by Nest (single 30, series 60). */
+  /** Load-scope decision owned by Nest. */
   maxScanDays: number;
-  /** Length 1 = single TASK; >1 = one materialized series. */
-  members: PlacementMember[];
-  /** e.g. a series' already-started sittings. */
-  fixedOccupied: IntervalMs[];
+  member: PlacementMember;
   /** Loaded once for the whole scan range. */
   days: PlacementDay[];
   /** `preferenceMatrix` = 168 floats (7 ISO weekdays x 24 hours, row-major). */
@@ -198,8 +193,7 @@ export interface PlaceResponse {
   requestId: string;
   /** Constants hash -> `SlotProposal.modelVersion`. */
   paramsVersion: string;
-  /** Same order as `request.members`. */
-  results: PlacedMember[];
+  result: PlacedMember;
   timingsMs: {
     decode: number;
     context: number;
@@ -227,4 +221,29 @@ export interface PlaceContractFixture {
   ignore: ("paramsVersion" | "timingsMs")[];
   request: PlaceRequest;
   response: PlaceResponse;
+}
+
+/** `POST /v1/resolve`: repack the flexible sessions that overlap `anchor`. */
+export interface ResolveRequest {
+  contractVersion: number;
+  requestId: string;
+  nowMs: number;
+  timezone: string;
+  horizonEndMs: number;
+  /** The session that stays put. */
+  anchor: IntervalMs;
+  flexible: PlacementFlexible[];
+  fixed: IntervalMs[];
+  horizonOccupied: IntervalMs[];
+  /** 168 floats, as in `PlaceRequest`. */
+  preferenceMatrix: number[];
+}
+
+export interface ResolveResponse {
+  contractVersion: number;
+  requestId: string;
+  outcome: "RESOLVED" | "INFEASIBLE";
+  moves: PlacementMove[];
+  /** Flexible ids placed past their deadline. */
+  lateIds: string[];
 }
