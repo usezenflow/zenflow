@@ -14,7 +14,7 @@ from fastapi import HTTPException
 
 from src.core.matrix_prior import default_prior
 from src.models.schemas import ArmParams
-from src.schemas import ARM_IDS, ArmId, ArmState
+from src.schemas import HOUR_ARM_IDS, ArmId, ArmState
 
 
 def all_finite(values: Iterable[float]) -> bool:
@@ -81,13 +81,10 @@ def hydrate_arms(
     d: int,
     ridge: float,
 ) -> dict[ArmId, ArmParams]:
-    """Hydrate every one of the 5 canonical arms into :class:`ArmParams`.
+    """Hydrate every one of the 24 hour arms into :class:`ArmParams`.
 
-    A cold arm (missing, or no ``A`` and no ``b``) is the ridge prior
-    (``A = ridge * I, b = 0``), so it keeps an exploration bonus -- standard
-    LinUCB optimism. (It used to be pinned at ``0.0``, which let the first
-    rewarded arm win forever: a warm arm's bonus kept it above 0 even after the
-    user moved its placements.)
+    A cold arm (missing, or no ``A`` and no ``b``) is its matrix prior, so the
+    first placement reads the preference matrix instead of a flat model.
 
     Parameters
     ----------
@@ -104,7 +101,7 @@ def hydrate_arms(
     """
     out: dict[ArmId, ArmParams] = {}
     priors = default_prior(d, ridge)
-    for arm in ARM_IDS:
+    for arm in HOUR_ARM_IDS:
         st = state.get(arm)
         if is_cold(st):
             out[arm] = priors.get(arm) or ArmParams.cold(d, ridge)
@@ -113,17 +110,3 @@ def hydrate_arms(
         a, b = hydrate(st, d, ridge)
         out[arm] = ArmParams(a, b)
     return out
-
-
-def hydrate_shared(
-    st: ArmState | None, ridge: float, z_dim: int
-) -> tuple[np.ndarray, np.ndarray]:
-    """``(A, b)`` of the shared ``beta`` block, the ridge prior when there is none.
-
-    Same rule as :func:`hydrate` for an arm: a missing or empty block is cold.
-    """
-    if st is None or (not st.A and not st.b):
-        return ridge * np.identity(z_dim), np.zeros(z_dim)
-    a = np.asarray(st.A, dtype=np.float64).reshape(z_dim, z_dim)
-    b = np.asarray(st.b, dtype=np.float64) if st.b else np.zeros(z_dim)
-    return a, b

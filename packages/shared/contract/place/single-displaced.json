@@ -6,22 +6,19 @@
     "timingsMs"
   ],
   "request": {
-    "contractVersion": 3,
+    "contractVersion": 4,
     "requestId": "00000000-0000-4000-8000-000000000002-2",
     "mode": "PLACE",
     "nowMs": 1789977600000,
     "timezone": "UTC",
     "maxScanDays": 30,
-    "fixedOccupied": [],
     "deadlineMs": 1789992000000,
-    "members": [
-      {
-        "id": "t1",
-        "durationMinutes": 60,
-        "primaryPolicy": "HEURISTIC",
-        "computeBoth": false
-      }
-    ],
+    "member": {
+      "id": "t1",
+      "durationMinutes": 60,
+      "primaryPolicy": "HEURISTIC",
+      "computeBoth": false
+    },
     "days": [
       {
         "dayStr": "2026-09-21",
@@ -254,37 +251,35 @@
     }
   },
   "response": {
-    "contractVersion": 3,
+    "contractVersion": 4,
     "requestId": "00000000-0000-4000-8000-000000000002-2",
-    "paramsVersion": "py-arms6-v3-23695319e1db",
-    "results": [
-      {
-        "id": "t1",
-        "outcome": "DISPLACED",
-        "appliedPolicy": "HEURISTIC",
-        "heuristic": null,
-        "linucb": null,
-        "startMs": 1789984800000,
-        "moves": [
-          {
-            "id": "f2",
-            "fromMs": 1789984800000,
-            "toMs": 1789988400000,
-            "cost": 2.0
-          }
-        ],
-        "late": false,
-        "conflicting": false,
-        "reason": "MOVED_FOR_DEADLINE"
-      }
-    ],
+    "paramsVersion": "py-hours24-v1-8e585a73d322",
+    "result": {
+      "id": "t1",
+      "outcome": "DISPLACED",
+      "appliedPolicy": "HEURISTIC",
+      "heuristic": null,
+      "linucb": null,
+      "startMs": 1789984800000,
+      "moves": [
+        {
+          "id": "f2",
+          "fromMs": 1789984800000,
+          "toMs": 1789988400000,
+          "cost": 2.0
+        }
+      ],
+      "late": false,
+      "conflicting": false,
+      "reason": "MOVED_FOR_DEADLINE"
+    },
     "timingsMs": {
-      "decode": 0.105,
+      "decode": 0.065,
       "context": 0.0,
       "predict": 0.0,
-      "scan": 0.029,
-      "displace": 0.515,
-      "total": 0.804
+      "scan": 0.021,
+      "displace": 0.349,
+      "total": 0.593
     }
   }
 }

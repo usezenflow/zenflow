@@ -6,22 +6,19 @@
     "timingsMs"
   ],
   "request": {
-    "contractVersion": 3,
+    "contractVersion": 4,
     "requestId": "00000000-0000-4000-8000-000000000001",
     "mode": "PLACE",
     "nowMs": 1789977600000,
     "timezone": "UTC",
     "maxScanDays": 30,
-    "fixedOccupied": [],
     "deadlineMs": 1790035200000,
-    "members": [
-      {
-        "id": "t1",
-        "durationMinutes": 60,
-        "primaryPolicy": "HEURISTIC",
-        "computeBoth": false
-      }
-    ],
+    "member": {
+      "id": "t1",
+      "durationMinutes": 60,
+      "primaryPolicy": "HEURISTIC",
+      "computeBoth": false
+    },
     "days": [
       {
         "dayStr": "2026-09-21",
@@ -232,23 +229,21 @@
     }
   },
   "response": {
-    "contractVersion": 3,
+    "contractVersion": 4,
     "requestId": "00000000-0000-4000-8000-000000000001",
     "paramsVersion": "ignored",
-    "results": [
-      {
-        "id": "t1",
-        "outcome": "NEEDS_INFEASIBLE_CONTEXT",
-        "appliedPolicy": "NONE",
-        "heuristic": null,
-        "linucb": null,
-        "moves": [],
-        "late": false,
-        "conflicting": false,
-        "startMs": null,
-        "reason": null
-      }
-    ],
+    "result": {
+      "id": "t1",
+      "outcome": "NEEDS_INFEASIBLE_CONTEXT",
+      "appliedPolicy": "NONE",
+      "heuristic": null,
+      "linucb": null,
+      "moves": [],
+      "late": false,
+      "conflicting": false,
+      "startMs": null,
+      "reason": null
+    },
     "timingsMs": {
       "decode": 0,
       "context": 0,
