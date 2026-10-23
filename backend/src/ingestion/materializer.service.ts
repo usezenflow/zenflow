@@ -106,6 +106,20 @@ function submittedAtOf(block: ParsedBlock, now: Date): Date | null {
   return (block as Partial<ParsedLmsItem>).submitted ? now : null;
 }
 
+/**
+ * The exam fields of a portal exam; all null for every other block. Not part of
+ * `differsFromUpstream`: a format, credits or retake change alone should not
+ * announce an update, and an existing exam picks them up on its next real change.
+ */
+function examFieldsOf(block: ParsedBlock) {
+  const exam = block as Partial<ParsedPortalItem>;
+  return {
+    examFormat: exam.examFormat ?? null,
+    examCredits: exam.examCredits ?? null,
+    examRetake: exam.examRetake ?? null,
+  };
+}
+
 function differsFromUpstream(
   existing: ComparableSession,
   block: ParsedBlock,
@@ -132,6 +146,9 @@ const EXISTING_SESSION_SELECT = {
   title: true,
   note: true,
   location: true,
+  examFormat: true,
+  examCredits: true,
+  examRetake: true,
   durationMinutes: true,
   scheduledStartTime: true,
   deleted: true,
@@ -501,6 +518,7 @@ export class MaterializerService {
           title: block.title,
           note: block.note,
           location: block.location,
+          ...examFieldsOf(block),
           durationMinutes: block.durationMinutes,
           scheduledStartTime: block.scheduledStartTime,
           tagIds,
@@ -571,6 +589,9 @@ export class MaterializerService {
     title: string;
     note: string | null;
     location: string | null;
+    examFormat: string | null;
+    examCredits: number | null;
+    examRetake: boolean | null;
     durationMinutes: number;
     scheduledStartTime: Date | null;
     deleted: boolean;
@@ -622,6 +643,7 @@ export class MaterializerService {
         title: block.title,
         note: block.note,
         location: block.location,
+        ...examFieldsOf(block),
         durationMinutes: block.durationMinutes,
         scheduledStartTime: block.scheduledStartTime,
       },

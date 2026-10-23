@@ -77,6 +77,12 @@ export interface ParsedPortalItem extends ParsedBlock {
    * timetable as cancelled. See `external-key.ts` for when this can be removed.
    */
   legacyExternalKey?: string | null;
+  /** DLU exam format (`HinhThucThi`); set only on an `EXAM`. */
+  examFormat?: string | null;
+  /** Course credits of the exam's course (`Credits`); set only on an `EXAM`. */
+  examCredits?: number | null;
+  /** True for a retake sitting (`LanThi` after "Lần 1"); set only on an `EXAM`. */
+  examRetake?: boolean | null;
 
   /**
    * Meeting day as a `DLU_TZ` wall-clock `'YYYY-MM-DD'`, and the meeting's

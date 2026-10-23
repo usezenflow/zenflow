@@ -79,6 +79,10 @@ export interface PortalExamRow {
   DiaDiem?: string | null;
   /** Exam format, e.g. `"Thi máy"` / `"Tự luận"`. */
   HinhThucThi?: string | null;
+  /** Course credits, as a number: `4`. */
+  Credits?: number | string | null;
+  /** Sitting, `"Lần 1"` for the first attempt, `"Lần 2"` for a retake. */
+  LanThi?: string | null;
 }
 
 /** Everything one week of the timetable yielded. */
@@ -121,6 +125,19 @@ function parseGioThi(value: string | null | undefined): number | null {
 /** Trimmed value, or `null` for absent/blank — the portal uses `""` for both. */
 function orNull(value: string | null | undefined): string | null {
   return value?.trim() || null;
+}
+
+/** `4` or `"4"` → 4; null for absent, blank or non-integer values. */
+function credits(value: number | string | null | undefined): number | null {
+  const text = value?.toString().trim();
+  const count = text ? Number(text) : NaN;
+  return Number.isInteger(count) && count >= 0 ? count : null;
+}
+
+/** `"Lần 1"` → false, `"Lần 2"` → true; null when the sitting is not that shape. */
+function isRetake(value: string | null | undefined): boolean | null {
+  const match = /^Lần\s*(\d+)$/iu.exec(value?.trim() ?? "");
+  return match ? +match[1] > 1 : null;
 }
 
 /**
@@ -325,10 +342,11 @@ export function parseExams(
       scheduledStartTime: minutesToUtc(dateStr, block.startMin, timezone),
       durationMinutes: block.durationMinutes,
       location: orNull(row.PhongThi) ?? orNull(row.DiaDiem),
-      // The exam format (`HinhThucThi`) is deliberately dropped — an ingested
-      // fixed session carries only its room, in `location`, and no note.
       note: null,
       scheduleStudyUnitId: orNull(row.ScheduleStudyUnitID),
+      examFormat: orNull(row.HinhThucThi),
+      examCredits: credits(row.Credits),
+      examRetake: isRetake(row.LanThi),
     });
   }
 
