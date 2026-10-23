@@ -21,8 +21,8 @@ describe("getSeriesKind", () => {
     );
   });
 
-  it("returns 'plan' when seriesId is set but rrule isn't (materialized TASK series)", () => {
-    expect(getSeriesKind(task({ seriesId: "s1", rrule: null }))).toBe("task");
+  it("returns 'recurring' when seriesId is set without an rrule", () => {
+    expect(getSeriesKind(task({ seriesId: "s1", rrule: null }))).toBe("recurring");
   });
 
   it("returns 'timetable' when there's no seriesId but there is a timetableGroupId (portal-ingested lecture)", () => {
@@ -31,11 +31,11 @@ describe("getSeriesKind", () => {
     ).toBe("timetable");
   });
 
-  it("prefers 'recurring'/'plan' over 'timetable' when both seriesId and timetableGroupId are set", () => {
+  it("prefers 'recurring' over 'timetable' when both seriesId and timetableGroupId are set", () => {
     expect(
       getSeriesKind(
         task({ seriesId: "s1", rrule: null, timetableGroupId: "section-1" }),
       ),
-    ).toBe("task");
+    ).toBe("recurring");
   });
 });

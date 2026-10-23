@@ -3,7 +3,6 @@ import { moveUndoable, offerApplyToAll, resolveMoveScope } from "../recurring-sc
 import { UNDO_WINDOW_MS } from "../undo";
 
 const recurring = { seriesId: "ser1", rrule: "FREQ=WEEKLY", timetableGroupId: null };
-const sitting = { seriesId: "ser1", rrule: null, timetableGroupId: null };
 const oneOff = { seriesId: null, rrule: null, timetableGroupId: null };
 const pending = { scheduledStartTime: "2026-10-15T03:00:00.000Z", durationMinutes: 60 };
 
@@ -70,16 +69,6 @@ describe("resolveMoveScope", () => {
     expect(openTaskSheet).not.toHaveBeenCalled();
   });
 
-  it("moves one sitting of a multi-sitting plan alone, with no sheet", () => {
-    const toast = vi.fn();
-    const onResolve = vi.fn();
-    const openTaskSheet = vi.fn();
-    resolveMoveScope(toast as never, asSession(sitting), pending, onResolve, openTaskSheet);
-    expect(onResolve).toHaveBeenCalledWith({ scope: "occurrence", skipConflicting: false });
-    expect(openTaskSheet).not.toHaveBeenCalled();
-    expect(toast).not.toHaveBeenCalled();
-  });
-
   it("holds a recurring move and offers apply to all, with no sheet", () => {
     const toast = vi.fn();
     const onResolve = vi.fn();
@@ -119,7 +108,6 @@ describe("moveUndoable", () => {
   it("is false only for a recurring occurrence moved on its own", () => {
     expect(moveUndoable(recurring, "occurrence")).toBe(false);
     expect(moveUndoable(recurring, "series")).toBe(true);
-    expect(moveUndoable(sitting, "occurrence")).toBe(true);
     expect(moveUndoable(oneOff, undefined)).toBe(true);
   });
 });

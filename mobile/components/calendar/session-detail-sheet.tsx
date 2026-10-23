@@ -379,9 +379,7 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
         scope === "series"
           ? t("Series deleted")
           : scope === "following"
-            ? seriesKind === "task"
-              ? t("This and later sittings removed")
-              : t("This and later occurrences removed")
+            ? t("This and later occurrences removed")
             : t("Session deleted"),
       icon: "trash",
       duration: UNDO_WINDOW_MS,
