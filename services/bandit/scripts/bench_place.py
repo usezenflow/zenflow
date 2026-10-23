@@ -73,11 +73,11 @@ def build(policy: str, both: bool, blocks_per_day: int) -> dict[str, Any]:
         "deadlineMs": NOW + 30 * DAY_MS,
         "maxScanDays": 30,
         "member": {
-                "id": "b",
-                "durationMinutes": 90,
-                "primaryPolicy": policy,
-                "computeBoth": both,
-            },
+            "id": "b",
+            "durationMinutes": 90,
+            "primaryPolicy": policy,
+            "computeBoth": both,
+        },
         "days": days,
         "user": {
             "preferenceMatrix": default_preference_matrix().tolist(),
