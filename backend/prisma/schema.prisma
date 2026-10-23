@@ -87,35 +87,49 @@ model User {
 }
 
 /**
- * Time-of-day arms for the Disjoint LinUCB scheduler
- * (`docs/adr/0001-linucb-model-design.md` §2). Half-open, lower-inclusive
- * local-wall-clock bands: EARLY_MORNING [00:00,08:00), MORNING [08:00,11:00),
- * MIDDAY [11:00,14:00), AFTERNOON [14:00,17:00), EVENING [17:00,20:00),
- * NIGHT [20:00,24:00).
+ * One arm per local start hour for the LinUCB scheduler (L24N). `HOUR_09` is the
+ * arm of a slot starting at 09:00 to 10:00 local time.
  */
 enum SchedulingArm {
-  EARLY_MORNING
-  MORNING
-  MIDDAY
-  AFTERNOON
-  EVENING
-  NIGHT
+  HOUR_00
+  HOUR_01
+  HOUR_02
+  HOUR_03
+  HOUR_04
+  HOUR_05
+  HOUR_06
+  HOUR_07
+  HOUR_08
+  HOUR_09
+  HOUR_10
+  HOUR_11
+  HOUR_12
+  HOUR_13
+  HOUR_14
+  HOUR_15
+  HOUR_16
+  HOUR_17
+  HOUR_18
+  HOUR_19
+  HOUR_20
+  HOUR_21
+  HOUR_22
+  HOUR_23
 }
 
 /**
- * Per-(user, arm) LinUCB state. `A` is the row-major `d·d` design matrix, `b`
- * the length-`d` response vector (`d = 22`, `FEATURE_DIM` in `@zenflow/shared`).
- * The Python bandit service is stateless: the backend loads these, passes them
- * in each `/predict` / `/update` payload and persists what comes back. Rows are
- * lazily created at the ridge prior (`A = λI`, `b = 0`) on first use; `version`
- * is a best-effort optimistic-concurrency guard for the delayed-feedback writer.
+ * Per-(user, hour arm) LinUCB state, one row per local start hour. `A` is the
+ * row-major `d·d` design matrix, `b` the length-`d` response vector
+ * (`d = FEATURE_DIM`, 7, in `@zenflow/shared`). The Python bandit service is
+ * stateless: the backend loads all 24 rows, passes them in each `/v1/update`, and
+ * overwrites all 24 with what comes back. A row with empty `A` and `b` is cold
+ * and starts at its matrix prior.
  */
 model BanditArmState {
   userId    String
   arm       SchedulingArm
   A         Float[]       @default([])
   b         Float[]       @default([])
-  version   Int           @default(0)
   updatedAt DateTime      @updatedAt
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -312,10 +326,6 @@ model Session {
   seriesId String? // for series with rrule, only create a representative session and filter sessions belonging to a series whose rrule covers a particular day range
   series   SessionSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
-  // Denormalized convenience fields for cheap per-row rendering alongside seriesId.
-  sessionIndex Int?
-  sessionTotal Int?
-
   // Stable identity of the upstream DLU item this session mirrors — null for
   // every user-created session. Format is "<source>:<kind>:<upstream id>":
   //
@@ -387,9 +397,8 @@ model Session {
 model SessionSeries {
   id          String      @id @default(uuid())
   createdAt   DateTime    @default(now())
-  type        SessionType @default(DND) // recurring DND/ASSIGNMENT/EXAM/LECTURE (via rrule), or TASK (multi-sitting via sessionCount)
-  deadline    DateTime? // null for a recurring series; the shared deadline for a TASK series
-  rrule       String? // the recurrence rule — set for a recurring series, null for a TASK series
+  type        SessionType @default(DND) // recurring DND/ASSIGNMENT/EXAM/LECTURE (via rrule)
+  rrule       String? // the recurrence rule of the series (RFC 5545 RRULE, bare)
   exdates     String[]    @default([]) // ISO instants of individually-deleted occurrences (rrule series only)
   skippedFrom DateTime? // occurrences starting at or after this are skipped ("skip this and following" / "all"); rrule series only
 
@@ -562,11 +571,6 @@ model SessionEvent {
   rewardScore         Float            @default(0.0) // CREATE 0 · MOVE graded ≤ 0 · START +1 (ADR-0001, ADR-0035)
   dragDistanceMinutes Int? // signed (new − old start); null unless MOVE — for graded reward later
   policy              SchedulingModel? // attribution once a model is live
-  // The `SessionSeries.id` shared by the N sittings placed in one
-  // `sessionCount > 1` create call — groups their CREATE events so the batch
-  // can be reverted (delete the series) as one action. Null for a single-sitting
-  // create. Plain scalar, not a relation: it must survive the series' deletion.
-  seriesId            String?
   // Shared by every row one user action wrote (a drag's MOVE, a cascade's
   // SYSTEM_MOVEs, a confirmed plan). `POST /sessions/undo/:groupId` reverts them
   // together. Null for rows written outside such an action.
@@ -590,7 +594,6 @@ model SessionEvent {
   @@index([userId, occurredAt(sort: Desc)])
   @@index([sessionId])
   @@index([slotProposalId])
-  @@index([seriesId])
   @@index([groupId])
 }
 
