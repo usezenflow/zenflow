@@ -7,6 +7,8 @@ import { CalendarLoadError } from "./load-error";
 import { useViewShortcuts } from "@/hooks/use-view-shortcuts";
 import { recordBlockStarts } from "@/lib/block-start";
 import { DayView } from "./day-view";
+import { TodayCard } from "./today-card";
+import { InsightsPanel } from "./insights-panel";
 import { WeekView } from "./week-view";
 import { MonthView } from "./month-view";
 import { CalendarSidebar, SidebarBody } from "./sidebar";
@@ -52,7 +54,7 @@ import { warmCalendar } from "@/lib/offline/warm-calendar";
 import { t } from "@/lib/i18n";
 import { toast } from "@/lib/notify";
 import { zonedNow } from "@/utils/tz";
-import { addDays, format, isValid } from "date-fns";
+import { addDays, format, isSameDay, isValid } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { useSlideDirection } from "@/hooks/use-slide-direction";
 
@@ -488,6 +490,12 @@ export function CalendarLayout() {
               className="absolute inset-0 overflow-auto overscroll-contain"
               style={{ "--week-cells-height": "64px" } as React.CSSProperties}
             >
+              {viewMode === "day" && isSameDay(date, zonedNow(tz)) && (
+                <div className="flex flex-col gap-4 px-4 pt-4">
+                  <TodayCard />
+                  <InsightsPanel />
+                </div>
+              )}
               {viewMode === "day" && (
                 <div
                   key={daySlide.position}

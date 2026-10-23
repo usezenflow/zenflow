@@ -28,6 +28,8 @@ import { CalendarViewSkeleton } from "@/components/calendar/view-skeleton";
 import { MonthView } from "@/components/calendar/month-view";
 import { SessionSearchView } from "@/components/calendar/session-search-view";
 import { TodayButton } from "@/components/calendar/today-button";
+import { InsightsSection } from "@/components/calendar/insights-section";
+import { TodayCard } from "@/components/calendar/today-card";
 import {
   type CalendarView,
 } from "@/components/calendar/view-switch";
@@ -477,6 +479,13 @@ export default function CalendarScreen() {
             onWeekDragAbort={handleWeekDragAbort}
             dayTypes={dayTypes}
           />
+
+          {isAtToday ? (
+            <View className="gap-3 px-4 pt-3">
+              <TodayCard />
+              <InsightsSection />
+            </View>
+          ) : null}
 
           <View className="flex-1">
             <WeekPager

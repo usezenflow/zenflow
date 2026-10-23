@@ -129,6 +129,11 @@ export async function removeSession(
   return data.data;
 }
 
+/** Record that the user started a session now (`POST /sessions/:id/start`). */
+export async function startSession(id: string): Promise<void> {
+  await api.post(`/sessions/${encodeURIComponent(id)}/start`);
+}
+
 /** Skip one session: it stays on the calendar, marked as skipped. */
 export async function skipSession(id: string): Promise<Session> {
   const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/skip`);
