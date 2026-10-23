@@ -29,6 +29,28 @@ export function showMovedToast(
   });
 }
 
+/** Confirms an auto resolve that moved `count` sessions. `late` names sessions now past their deadline. */
+export function showMovedCountToast(
+  toast: Toast,
+  opts: { count: number; late: number; onUndo?: () => void },
+): void {
+  const action = opts.onUndo
+    ? { label: t("Undo"), onPress: opts.onUndo }
+    : undefined;
+  toast({
+    title:
+      opts.count === 1
+        ? t("Moved 1 session")
+        : t("Moved {count} sessions", { count: opts.count }),
+    description: opts.late
+      ? t("{count} now past deadline", { count: opts.late })
+      : undefined,
+    icon: "calendar-check",
+    duration: opts.onUndo ? UNDO_WINDOW_MS : undefined,
+    action,
+  });
+}
+
 /** Confirms a change of length with the start unchanged: "Duration set to 2 hours". */
 export function showResizedToast(
   toast: Toast,

@@ -5,6 +5,7 @@ import type {
   CreateSessionResponse,
   DeadlineOptionsResponse,
   RemoveSessionResponse,
+  SessionResolveConflictsResponse,
   UndoPlacementResponse,
   RemoveSessionSeriesResponse,
   Session,
@@ -146,25 +147,6 @@ export async function truncateSessionSeries(
 }
 
 /**
- * "Delete this sitting and every later one" for a materialized multi-sitting
- * TASK series — deletes `sessionId` and every session after it in
- * `sessionIndex` order, keeping earlier sittings (and the series row, unless
- * nothing is left). Materialized TASK series only — there's no `sessionId`
- * to anchor on for a recurring (rrule) series, which uses
- * `truncateSessionSeries` instead.
- */
-export async function removeSeriesFrom(
-  seriesId: string,
-  sessionId: string,
-): Promise<RemoveSessionSeriesResponse> {
-  const { data } = await api.delete(
-    `/sessions/series/${seriesId}/from/${sessionId}`,
-  );
-  notifySessionsMutated();
-  return data.data;
-}
-
-/**
  * Apply a plan the scheduler held for confirmation (`NEEDS_CONFIRMATION`).
  * Single use: a 409 `PLACEMENT_STALE` means the plan no longer holds.
  */
@@ -175,6 +157,17 @@ export async function confirmPlacement(
   const { data } = await api.post("/sessions/placement/confirm", body, {
     timeout: SAVE_TIMEOUT_MS,
   });
+  notifySessionsMutated();
+  return data.data;
+}
+
+/** Repacks the sessions that overlap `id`; `id` stays where it is. */
+export async function resolveConflicts(
+  id: string,
+): Promise<SessionResolveConflictsResponse> {
+  const { data } = await api.post(
+    `/sessions/${encodeURIComponent(id)}/resolve-conflicts`,
+  );
   notifySessionsMutated();
   return data.data;
 }

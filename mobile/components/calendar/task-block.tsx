@@ -43,6 +43,7 @@ import Animated, {
   useSharedValue,
   clamp,
   withSpring,
+  cancelAnimation,
   withTiming,
   interpolate,
   runOnJS,
@@ -93,6 +94,8 @@ const COMPACT_TEXT_STYLE = {
  * floating tab bar below) — auto-scroll doesn't need pixel precision. */
 /** Hold time before a block lifts for dragging (also opens the menu on release). */
 const LIFT_HOLD_MS = 350;
+/** Held this long past the lift on a conflicting block, the overlap resolves. */
+const RESOLVE_WIPE_MS = 600;
 const AUTOSCROLL_BAND_TOP = 140;
 const AUTOSCROLL_BAND_BOTTOM = 90;
 
@@ -162,6 +165,8 @@ interface SessionBlockProps {
   onDragStateChange?: (snap: DragSnap | null) => void;
   onDragEnd?: (snap: DragSnap | null) => void;
   onPress?: (taskId: string) => void;
+  /** Held still on a conflicting block: repack the sessions around it. */
+  onResolveConflicts?: (taskId: string) => void;
   /** In the extended-grid timeline, a block whose task runs past midnight is
    * drawn at its TRUE height through the 24:00 line into the dimmed tail —
    * instead of clamping its bottom to midnight (`continues`). */
@@ -217,6 +222,7 @@ function SessionBlockImpl({
   onDragStateChange,
   onDragEnd,
   onPress,
+  onResolveConflicts,
   drawThroughMidnight = false,
   autoScrollDeltaSV,
   dragPreviewMinSV,
@@ -325,6 +331,8 @@ function SessionBlockImpl({
   const liftProgress = useSharedValue(0);
   // 1 → 0 over the entrance animation (see the `flash` effect). 0 at rest.
   const flashProgress = useSharedValue(0);
+  // 0 → 1 while a conflicting block is held still. Completing it resolves the overlap.
+  const wipeProgress = useSharedValue(0);
   const lastSnap = useSharedValue<number | null>(null);
   const lastShift = useSharedValue(0);
   // The block's live vertical offset *snapped to the 15-min grid* while it is
@@ -435,6 +443,15 @@ function SessionBlockImpl({
     return {
       opacity: interpolate(p, [0, 0.12, 1], [0, 0.9, 0]),
       transform: [{ scale: interpolate(p, [0, 1], [0.98, 1.16]) }],
+    };
+  });
+
+  // A translucent band that sweeps across a conflicting block while it is held.
+  const wipeStyle = useAnimatedStyle(() => {
+    const p = wipeProgress.value;
+    return {
+      opacity: p > 0 ? 1 : 0,
+      transform: [{ translateX: -blockWidth * 0.6 + p * blockWidth * 1.6 }],
     };
   });
 
@@ -567,9 +584,16 @@ function SessionBlockImpl({
 
   // The drag is hold-then-drag: a swipe that starts on a block scrolls the
   // day / pages the week right away, and only a finger held still for 350ms
-  // lifts the block. Released without moving, the same hold opens the "Move
-  // to…" sheet (see `onEnd`). Once active this pan owns the touch, so the
-  // pager and scroll view can no longer steal it.
+  // lifts the block. On a conflicting block, holding still keeps going until
+  // the wipe completes and resolves the overlap (see `resolveNow`). Once active
+  // this pan owns the touch, so the pager and scroll view can no longer steal it.
+  const canResolve = layout.conflict && movable && !!onResolveConflicts;
+  const resolveNow = useCallback(() => {
+    wipeProgress.value = 0;
+    Haptics.selectionAsync().catch(() => undefined);
+    onResolveConflicts?.(segment.taskId);
+  }, [onResolveConflicts, segment.taskId, wipeProgress]);
+
   const panGesture = Gesture.Pan()
     .enabled(isInteractive)
     .activateAfterLongPress(LIFT_HOLD_MS)
@@ -580,13 +604,26 @@ function SessionBlockImpl({
         return;
       }
       runOnJS(liftHaptic)();
+      if (canResolve) {
+        wipeProgress.value = withTiming(
+          1,
+          { duration: RESOLVE_WIPE_MS },
+          (finished) => {
+            if (finished) runOnJS(resolveNow)();
+          },
+        );
+      }
     })
     .onUpdate((e) => {
       if (!movable) return;
       const absX = Math.abs(e.translationX);
       const absY = Math.abs(e.translationY);
 
-      if (absX > 6 || absY > 6) movedSV.value = 1;
+      if (absX > 6 || absY > 6) {
+        movedSV.value = 1;
+        cancelAnimation(wipeProgress);
+        wipeProgress.value = 0;
+      }
       translateY.value = e.translationY;
       fingerTYSV.value = e.translationY;
       // Grid scroll that happened under the finger counts toward the move.
@@ -693,6 +730,8 @@ function SessionBlockImpl({
       }
     })
     .onFinalize(() => {
+      cancelAnimation(wipeProgress);
+      wipeProgress.value = 0;
       isDragging.value = 0;
       snapOffsetY.value = 0;
       lastSnap.value = null;
@@ -787,6 +826,17 @@ function SessionBlockImpl({
           style={flashRingStyle}
           className="absolute -inset-[3px] rounded-[17px] border-2 border-primary"
         />
+      )}
+      {canResolve && (
+        <Animated.View
+          pointerEvents="none"
+          className="absolute inset-0 overflow-hidden rounded-[14px]"
+        >
+          <Animated.View
+            style={[wipeStyle, { width: blockWidth * 0.6 }]}
+            className="absolute inset-y-0 left-0 bg-white/35 dark:bg-white/15"
+          />
+        </Animated.View>
       )}
       {beforePx > 0 && (
         <Animated.View

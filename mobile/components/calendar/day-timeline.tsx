@@ -5,7 +5,12 @@ import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { locale } from "@/lib/i18n";
 import { format, formatTitle } from "@/lib/i18n";
-import { listSessions, updateSession } from "@/api/tasks";
+import {
+  listSessions,
+  resolveConflicts,
+  undoPlacement,
+  updateSession,
+} from "@/api/tasks";
 import { undoMove } from "@/lib/move-undo";
 import { dropOnDay } from "@/lib/drop-preview";
 import {
@@ -30,7 +35,7 @@ import {
   showErrorToast,
   showSkippedToast,
 } from "@/lib/task-toasts";
-import { showMovedToast } from "@/lib/move-toast";
+import { showMovedCountToast, showMovedToast } from "@/lib/move-toast";
 import { offerPrepReschedule } from "@/lib/prep-toast";
 import { isSyncedSession } from "@/lib/synced-session";
 import {
@@ -805,6 +810,43 @@ export function DayTimeline({
     router.navigate({ pathname: "/", params: { quickAdd: "1" } } as Href);
   }, [router]);
 
+  // Held still on a conflicting block: repack the sessions around it. The held block stays put.
+  const handleResolveConflicts = useCallback(
+    async (taskId: string) => {
+      try {
+        const res = await resolveConflicts(taskId);
+        if (res.moved.length === 0) {
+          toast({ title: t("Nothing to move"), icon: "calendar-x" });
+          return;
+        }
+        setFlashTarget(taskId);
+        setTimeout(() => setFlashTarget(null), 1300);
+        const groupId = res.undoGroupId;
+        showMovedCountToast(toast, {
+          count: res.moved.length,
+          late: res.lateSessionIds.length,
+          onUndo: groupId
+            ? () =>
+                void undoPlacement(groupId)
+                  .then(() => refetch())
+                  .catch((error) =>
+                    showErrorToast(toast, error, t("Couldn't undo"), "calendar-x"),
+                  )
+            : undefined,
+        });
+        await refetch();
+      } catch (error) {
+        showErrorToast(
+          toast,
+          error,
+          t("Couldn't resolve this overlap"),
+          "calendar-x",
+        );
+      }
+    },
+    [refetch, toast],
+  );
+
   const handleReschedule = useCallback(
     async (taskId: string, startISO: string) => {
       // A drop onto a pinned or fixed session bounces back (ADR-0022).
@@ -898,7 +940,7 @@ export function DayTimeline({
         const session = tasks.find((t) => t.id === taskId);
         const seriesKind = session ? getSeriesKind(session) : "none";
         // A timetable-grouped lecture moves just that meeting — no scope prompt.
-        const needsScope = seriesKind === "recurring" || seriesKind === "task";
+        const needsScope = seriesKind === "recurring";
         if (session && needsScope && onRequestScopedUpdate) {
           onRequestScopedUpdate(
             session,
@@ -1278,6 +1320,7 @@ export function DayTimeline({
                       skipped={skippedIds.has(segment.taskId)}
                       commuteMinutes={commuteBySession.get(segment.taskId)}
                       onReschedule={handleReschedule}
+                      onResolveConflicts={handleResolveConflicts}
                       settleKey={settleKey}
                       onDragStateChange={handleDragStateChange}
                       onPress={onSessionPress}

@@ -45,8 +45,8 @@ interface MakeRoomSheetProps {
   tz: string;
 }
 
-function timeOf(iso: string, tz: string): string {
-  return format(zonedDate(iso, tz), "h:mm a");
+function timeOf(iso: string, tz: string, pattern = "HH:mm"): string {
+  return format(zonedDate(iso, tz), pattern);
 }
 
 function TimelineRow({ row, tz }: { row: RoomRow; tz: string }) {
@@ -68,7 +68,7 @@ function TimelineRow({ row, tz }: { row: RoomRow; tz: string }) {
         </Text>
         <Text className="text-[12px] text-muted-foreground">
           {t("{start} to {end}", {
-            start: timeOf(row.start, tz),
+            start: timeOf(row.start, tz, "EEE d MMM, HH:mm"),
             end: timeOf(end.toISOString(), tz),
           })}
         </Text>

@@ -626,6 +626,12 @@ export default {
   "Or {time}": "Hoặc {time}",
   "Move to {time}": "Chuyển sang {time}",
   "Duration set to {duration}": "Đã đặt thời lượng {duration}",
+  "Moved 1 session": "Đã dời 1 buổi",
+  "Moved {count} sessions": "Đã dời {count} buổi",
+  "{count} now past deadline": "{count} buổi đã quá hạn",
+  "Nothing to move": "Không có gì để dời",
+  "Couldn't resolve this overlap": "Không thể xử lý trùng lịch này",
+  "No layout fits these sessions": "Không có cách xếp nào vừa",
   "Due {when}": "Hạn {when}",
   "{count} sittings of {duration}": "{count} buổi, mỗi buổi {duration}",
   "{count} sittings of {duration} and {rest} of {last}":
