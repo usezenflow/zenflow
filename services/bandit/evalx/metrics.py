@@ -20,7 +20,8 @@ def adherence_rate(started: np.ndarray) -> float:
 
 def deadline_margin_h(end_ms: np.ndarray, deadline_ms: np.ndarray) -> np.ndarray:
     """Hours from the end of each block to its deadline."""
-    return (deadline_ms - end_ms) / HOUR_MS
+    margin: np.ndarray = (deadline_ms - end_ms) / HOUR_MS
+    return margin
 
 
 def last_day_share(margin_h: np.ndarray) -> float:
@@ -55,7 +56,8 @@ def cumulative_regret(oracle: np.ndarray, arm: np.ndarray) -> np.ndarray:
     Both inputs are (students, tasks), paired by student and task index. The
     result has one value per task index.
     """
-    return (oracle - arm).mean(axis=0).cumsum()
+    regret: np.ndarray = (oracle - arm).mean(axis=0).cumsum()
+    return regret
 
 
 def learning_curve(started: np.ndarray, window: int = 30) -> np.ndarray:

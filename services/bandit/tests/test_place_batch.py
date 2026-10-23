@@ -226,9 +226,7 @@ def _old_run(req: PlaceRequest) -> PlacedMember:
     first = local_date_str(placer.next15, placer.tz)
     last = local_date_str(req.deadline_ms - 1, placer.tz)
     days = placer._select_days(first, last)
-    lin = (
-        old_linucb(m, days) if PolicySelector.should_try_linucb(req.mode, m) else None
-    )
+    lin = old_linucb(m, days) if PolicySelector.should_try_linucb(req.mode, m) else None
     heur = (
         placer.heuristic(m, days)
         if PolicySelector.should_try_heuristic(req.mode, m, lin)
@@ -323,5 +321,3 @@ def test_dst_boundary_day_matches_oracle() -> None:
         bandit=bandit(warm_state()),
     )
     _assert_equivalent(req)
-
-

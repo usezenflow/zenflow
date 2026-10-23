@@ -235,14 +235,16 @@ class HourlyArms:
         theta = np.einsum("hij,hj->hi", a_inv, self.b)
         mean = theta @ x
         width = np.sqrt(np.maximum(np.einsum("i,hij,j->h", x, a_inv, x), 0.0))
-        return mean + self.alpha * width
+        scores: NDArray[np.float64] = mean + self.alpha * width
+        return scores
 
     def shared_scores(self, z: NDArray[np.float64]) -> NDArray[np.float64]:
         """Shared-head UCB of each slot feature row ``z`` (n, SLOT_DIM)."""
         a_inv = np.linalg.inv(self.a_shared)
         beta = a_inv @ self.b_shared
         width = np.sqrt(np.maximum(np.einsum("ni,ij,nj->n", z, a_inv, z), 0.0))
-        return z @ beta + self.shared_alpha * width
+        scores: NDArray[np.float64] = z @ beta + self.shared_alpha * width
+        return scores
 
     def update(
         self,
@@ -263,19 +265,26 @@ class HourlyArms:
 
     # --- placement -----------------------------------------------------------
 
-    def _start_design(self, hours: NDArray[np.int64], z: NDArray[np.float64]):
+    def _start_design(
+        self, hours: NDArray[np.int64], z: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
         x = np.zeros((hours.size, self.lr_dim))
         x[:, 0] = 1.0
         x[np.arange(hours.size), 1 + hours] = 1.0
         x[:, 1 + HOURS :] = z
         return x
 
-    def _start_logits(self, hours: NDArray[np.int64], z: NDArray[np.float64]):
+    def _start_logits(
+        self, hours: NDArray[np.int64], z: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
         """One Thompson draw of the start logit for each candidate slot."""
         draw = self.lr_mean + self.rng.standard_normal(self.lr_dim) / np.sqrt(
             self.lr_prec
         )
-        return 1.0 / (1.0 + np.exp(-(self._start_design(hours, z) @ draw)))
+        logits: NDArray[np.float64] = 1.0 / (
+            1.0 + np.exp(-(self._start_design(hours, z) @ draw))
+        )
+        return logits
 
     def observe_label(self, hour: int, z: NDArray[np.float64], started: bool) -> None:
         """Fold one placed block (started or not) into the start model."""

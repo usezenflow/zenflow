@@ -16,7 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from src.core.constants import FEATURE_DIM, MAX_SCAN_DAYS
-from src.core.context_vector import build_context_vector
+from src.core.context_vector import build_context_vector as build_context_vector
 from src.core.preference import default_preference_matrix, matrix_index
 from src.models.schemas import ArmParams
 from src.schemas import HOUR_ARM_IDS, ArmId

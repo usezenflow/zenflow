@@ -28,7 +28,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from src.core import constants as consts
-from src.core.context_vector import build_context_vector
+from src.core.context_vector import build_context_vector as build_context_vector
 from src.core.displacement import (
     DisplacementMove,
     FlexibleTask,

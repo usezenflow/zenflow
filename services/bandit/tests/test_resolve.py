@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from src.core.constants import DAY_MS, HOUR_MS, MS_PER_MINUTE
 from src.core.displacement import FlexibleTask
 from src.resolve import resolve
-from src.schemas_place import IntervalMs, ResolveRequest
+from src.schemas_place import ResolveRequest
 from tests.test_displacement import MIDNIGHT
 
 NOW = MIDNIGHT + 8 * HOUR_MS  # aligned to the 15-minute slot grid
@@ -17,7 +19,7 @@ def _request(
     anchor_start: int,
     anchor_minutes: int,
     flexible: list[FlexibleTask],
-    fixed: list[tuple[int, int]] = (),
+    fixed: Sequence[tuple[int, int]] = (),
 ) -> ResolveRequest:
     anchor_end = anchor_start + anchor_minutes * MS_PER_MINUTE
     return ResolveRequest.model_validate(

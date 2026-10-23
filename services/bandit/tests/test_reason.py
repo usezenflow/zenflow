@@ -55,11 +55,11 @@ def _request(
             "deadlineMs": deadline,
             "maxScanDays": 30,
             "member": {
-                    "id": "t1",
-                    "durationMinutes": dur,
-                    "primaryPolicy": "HEURISTIC",
-                    "computeBoth": False,
-                },
+                "id": "t1",
+                "durationMinutes": dur,
+                "primaryPolicy": "HEURISTIC",
+                "computeBoth": False,
+            },
             "days": [day],
             "user": {"preferenceMatrix": matrix or [0.0] * 168, "observationCount": 0},
         }

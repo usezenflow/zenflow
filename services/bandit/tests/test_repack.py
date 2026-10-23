@@ -8,7 +8,12 @@ import pytest
 import src.core.constants as consts
 import src.place as place_mod
 from src.core.constants import DAY_MS, HOUR_MS, MS_PER_MINUTE
-from src.core.displacement import DisplacementPlan, FlexibleTask, plan_repack
+from src.core.displacement import (
+    DisplacementMove,
+    DisplacementPlan,
+    FlexibleTask,
+    plan_repack,
+)
 from tests.test_displacement import MIDNIGHT, _body, _chill
 from tests.test_place import NOW as PLACE_NOW
 from tests.test_place import ok
@@ -23,7 +28,7 @@ def _task(id_: str, start: int, minutes: int, deadline: int) -> FlexibleTask:
 
 def _layout(
     flexible: list[FlexibleTask],
-    moves: tuple,
+    moves: tuple[DisplacementMove, ...],
     new_id: str,
     new_start: int | None,
     new_minutes: int,

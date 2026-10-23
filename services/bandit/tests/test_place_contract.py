@@ -77,12 +77,12 @@ def _one_day_request(i: dict[str, Any]) -> dict[str, Any]:
         "deadlineMs": fit,
         "maxScanDays": 30,
         "member": {
-                "id": "g",
-                "durationMinutes": i["durationMinutes"],
-                "primaryPolicy": "HEURISTIC",
-                "computeBoth": False,
-                **({"prevStartMs": i["prevStartMs"]} if "prevStartMs" in i else {}),
-            },
+            "id": "g",
+            "durationMinutes": i["durationMinutes"],
+            "primaryPolicy": "HEURISTIC",
+            "computeBoth": False,
+            **({"prevStartMs": i["prevStartMs"]} if "prevStartMs" in i else {}),
+        },
         "days": [
             {
                 "dayStr": local_date_str(start, tz),

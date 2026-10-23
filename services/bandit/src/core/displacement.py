@@ -154,7 +154,9 @@ def cheapest_free_start(
     return int(starts[i]), float(cost[i])
 
 
-def _without(intervals: Intervals, remove: Iterable[tuple[int, int]]) -> Intervals:
+def _without(
+    intervals: Sequence[tuple[int, int]], remove: Iterable[tuple[int, int]]
+) -> Intervals:
     """``intervals`` minus one instance of each ``remove`` item (multiset)."""
     left = Counter(remove)
     out: Intervals = []
@@ -427,7 +429,7 @@ def plan_repack(
     *,
     timezone: str = "UTC",
     pref_matrix: ArrayLike | None = None,
-    horizon_occupied: Intervals = (),
+    horizon_occupied: Sequence[tuple[int, int]] = (),
     frozen_ms: int = FROZEN_WINDOW_MS,
     max_moves: int = REPACK_MAX_MOVES,
     time_budget_s: float = REPACK_TIME_BUDGET_S,
@@ -461,10 +463,11 @@ def plan_repack(
             if not is_movable(f, now_ms, frozen_ms)
         ),
     ]
-    new_task = (
-        []
-        if task_id is None
-        else [
+    new_task: list[_Slate | None] = []
+    if task_id is not None:
+        if task_duration_minutes is None or task_deadline_ms is None:
+            raise ValueError("a new task needs a duration and a deadline")
+        new_task.append(
             _slate(
                 task_id,
                 task_duration_minutes,
@@ -477,8 +480,7 @@ def plan_repack(
                 pref_matrix,
                 per_task,
             )
-        ]
-    )
+        )
     slates = [
         *new_task,
         *(

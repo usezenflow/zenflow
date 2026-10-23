@@ -343,11 +343,11 @@ def place_body(
         "deadlineMs": task.deadline_ms,
         "maxScanDays": 30,
         "member": {
-                "id": "t",
-                "durationMinutes": task.duration_min,
-                "primaryPolicy": primary,
-                "computeBoth": both,
-            },
+            "id": "t",
+            "durationMinutes": task.duration_min,
+            "primaryPolicy": primary,
+            "computeBoth": both,
+        },
         "days": _days(first, last, cal, placed),
         "user": user,
     }
@@ -985,8 +985,9 @@ def run_all(
     }
     if run_cfg["mode"] == "semester":
         from evalx import semester
+        from evalx.academic_calendar import WEEKS as SEMESTER_WEEKS
 
-        results = semester.merge(loaded, arms, {**config, "weeks": semester.WEEKS})
+        results = semester.merge(loaded, arms, {**config, "weeks": SEMESTER_WEEKS})
     else:
         results = merge(loaded, arms, config)
     results["manifest"] = {

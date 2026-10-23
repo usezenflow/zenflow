@@ -38,6 +38,7 @@ from evalx.student_behavior import (
 )
 from evalx.world import HOUR_MS, Calendar, Task, busy_minutes
 from src.core.constants import DAY_MS, MS_PER_MINUTE
+from src.core.preference import default_preference_matrix
 from src.core.reward import drag_distance_reward
 from src.schemas import HOUR_ARM_IDS
 
@@ -200,7 +201,7 @@ def fixed_start(task: Task, cal: Calendar, placed: core.Placed) -> int | None:
     length = task.duration_min * MS_PER_MINUTE
     for day in days:
         for minute in range(FIXED_HOUR * 60, EARLIEST_H * 60 - 1, -15):
-            start = day * DAY_MS + minute * MS_PER_MINUTE
+            start: int = day * DAY_MS + minute * MS_PER_MINUTE
             if start < task.arrival_ms or start + length > task.deadline_ms:
                 continue
             if _clear(start, task.duration_min, cal, placed):
@@ -297,7 +298,7 @@ class Feedback:
             return "START"
         return signal
 
-    def defer(self, n: int, effect: Callable[[], None]) -> None:
+    def defer(self, n: int, effect: Callable[..., None]) -> None:
         if core.CFG["delay"] <= 0:
             effect()
         else:
@@ -331,7 +332,7 @@ def simulate_arm(
     }
     hourly = (
         HourlyArms(
-            core.default_preference_matrix(),
+            default_preference_matrix(),
             core.CFG["alpha"],
             core.CFG["ridge"],
             posterior=bool(spec.get("posterior")),
@@ -358,7 +359,11 @@ def simulate_arm(
     rows: list[dict[str, float | None]] = []
     for n, task in enumerate(sem.tasks):
         feed.flush(n)
-        while next_open < len(opens) and opens[next_open] < task.arrival_ms:
+        while (
+            hourly is not None
+            and next_open < len(opens)
+            and opens[next_open] < task.arrival_ms
+        ):
             hourly.observe_open((opens[next_open] % DAY_MS) // HOUR_MS)
             next_open += 1
         lin = None
@@ -375,6 +380,7 @@ def simulate_arm(
             lin = res.get("linucb") if res.get("appliedPolicy") == "LINUCB" else None
             start: int | None = lin["startMs"] if lin else res["startMs"]
         elif policy == "HOURLY":
+            assert hourly is not None
             body = core.place_body(task, "LINUCB", state, box[0], n, cal, placed=placed)
             fixed, placed_ms = {}, {}
             for d in body["days"]:
@@ -501,8 +507,8 @@ def simulate_ab(
                 box[0] = core._kept(box[0], applied)
             else:
                 drag = abs(hs - ls) / MS_PER_MINUTE
-                reward = drag_distance_reward(drag, core.CFG["move_scale"])
-                core._learn(state, arm_id, x, reward, variant)
+                learn_reward = drag_distance_reward(drag, core.CFG["move_scale"])
+                core._learn(state, arm_id, x, learn_reward, variant)
                 box[0] = core._moved(box[0], ls, hs, drag)
         started, signal, final, p = s.react(task, applied, cal)
         row = _row(task, final, started, p, cal, placed)
@@ -516,7 +522,7 @@ def simulate_ab(
         rows.append(row)
         _occupy(placed, final, task.duration_min)
         heard = feed.seen(n, signal)
-        reward = None
+        reward: float | None = None
         if heard == "START":
             reward = core.START_REWARD
             feed.defer(n, lambda a=final: box.__setitem__(0, core._kept(box[0], a)))
@@ -756,7 +762,7 @@ def merge(
         out["arms"][arm] = entry
     names = [n for n, (x, y) in PAIRS.items() if x in per and y in per]
     labels = [PAIRS[n] for n in names]
-    contrasts = {}
+    contrasts: dict[str, dict[str, Any]] = {}
     for name, (x, y) in zip(names, labels, strict=True):
         diff = per[x]["adherence"] - per[y]["adherence"]
         contrasts[name] = metrics.contrast(diff, seeds, seed=2)
