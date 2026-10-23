@@ -73,38 +73,6 @@ export interface PendingPlacement {
   moves: PlacementMove[];
 }
 
-/** One member of a `TASK` series to place. */
-export interface SeriesMemberInput {
-  id: string;
-  durationMinutes: number;
-}
-
-/**
- * Placement outcome for one series member. `PythonPlacer.placeSeries` never
- * returns a `null` start (members with no real slot get the last resort,
- * flagged `lastResort`); `null` only appears in read-only pre-flight scans.
- */
-export interface SeriesPlacementRow {
-  id: string;
-  scheduledStartTime: Date | null;
-  /** `true` when the frozen TS fallback placed the series (ADR-0003). */
-  degraded?: boolean;
-  /** Why `scheduledStartTime` was chosen (Python); `null`/absent for a fallback. */
-  placementReason?: PlacementReason | null;
-  /** `true` when no real slot existed and the "never unplaced" last resort was applied. */
-  lastResort?: boolean;
-  /** This sitting's `SlotProposal` id; `null`/absent when the write failed or none was recorded. */
-  slotProposalId?: string | null;
-  /**
-   * The other plan's pick for this sitting, set only on the (≤
-   * `MAX_SERIES_ALTERNATIVES`) shown divergent sittings of a pairwise-sampled
-   * series (#58); `null`/absent otherwise.
-   */
-  alternativeSlot?: Date | null;
-  /** `true` iff `alternativeSlot` is set. */
-  divergent?: boolean;
-}
-
 /** The concrete placement LinUCB proposes for one `TASK`. */
 export interface BanditPick {
   scheduledStartTime: Date;

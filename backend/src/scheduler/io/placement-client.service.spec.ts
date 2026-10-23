@@ -14,14 +14,14 @@ import {
 const req = {
   contractVersion: 1,
   requestId: "r1",
-  members: [{ id: "a" }],
+  member: { id: "a" },
 } as unknown as PlaceRequest;
 
 const okBody: PlaceResponse = {
   contractVersion: PLACEMENT_CONTRACT_VERSION,
   requestId: "r1",
   paramsVersion: "p",
-  results: [{ id: "a" } as never],
+  result: { id: "a" } as never,
   timingsMs: {
     decode: 0,
     context: 0,

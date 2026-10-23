@@ -5,6 +5,7 @@ import { BanditArmStateRepository } from "../../bandit/bandit-arm-state.reposito
 import { BanditService } from "../../bandit/bandit.service";
 import { SchedulingFeedbackService } from "./scheduling-feedback.service";
 import { ARM_LAYOUT, BANDIT_MODEL_VERSION } from "../constants";
+import { SCHEDULING_ARMS, type BanditArmStateWire } from "@zenflow/shared";
 
 /**
  * `SchedulingFeedbackService.onFirstMove` — the delayed graded LinUCB penalty
@@ -14,12 +15,24 @@ import { ARM_LAYOUT, BANDIT_MODEL_VERSION } from "../constants";
 
 const X = [0.1, 0.2, 0.3, -1, 0, 0.25, 1]; // length FEATURE_DIM
 
+/** All 24 hour arms, the played hour (`HOUR_09`) set to `hour`. */
+function allArms(
+  hour: BanditArmStateWire = { A: [], b: [] },
+): Record<string, BanditArmStateWire> {
+  return Object.fromEntries(
+    SCHEDULING_ARMS.map((arm) => [
+      arm,
+      arm === "HOUR_09" ? hour : { A: [], b: [] },
+    ]),
+  );
+}
+
 async function makeSvc(over: { proposal?: unknown; updateResult?: unknown }) {
   const slotFindFirst = jest.fn().mockResolvedValue(
     over.proposal === undefined
       ? {
           id: "p1",
-          selectedArm: "MORNING",
+          selectedArm: "HOUR_09",
           featureVector: X,
           modelVersion: `py-${ARM_LAYOUT}-0123456789ab`,
         }
@@ -33,13 +46,15 @@ async function makeSvc(over: { proposal?: unknown; updateResult?: unknown }) {
   const bandit = {
     update: jest
       .fn()
-      .mockResolvedValue(over.updateResult ?? { A: [1], b: [0.5] }),
+      .mockResolvedValue(
+        over.updateResult ?? { arms: allArms({ A: [1], b: [0.5] }) },
+      ),
   };
   const armStates = {
-    loadAll: jest.fn().mockResolvedValue({
-      MORNING: { A: [1, 0, 0, 1], b: [0.5, 0.5], version: 3 },
-    }),
-    save: jest.fn().mockResolvedValue(undefined),
+    loadAll: jest
+      .fn()
+      .mockResolvedValue(allArms({ A: [1, 0, 0, 1], b: [0.5, 0.5] })),
+    replaceAll: jest.fn().mockResolvedValue(undefined),
   };
   const module: TestingModule = await Test.createTestingModule({
     providers: [
@@ -60,11 +75,18 @@ describe("SchedulingFeedbackService.onFirstMove", () => {
     await svc.onFirstMove("u1", "s1", 42n, 120);
 
     // reward = -min(1, 120/240) = -0.5
-    expect(bandit.update).toHaveBeenCalledWith("MORNING", X, -0.5, {
-      A: [1, 0, 0, 1],
-      b: [0.5, 0.5],
-    });
-    expect(armStates.save).toHaveBeenCalledWith("u1", "MORNING", [1], [0.5], 3);
+    expect(bandit.update).toHaveBeenCalledWith(
+      "HOUR_09",
+      X,
+      -0.5,
+      expect.objectContaining({
+        HOUR_09: { A: [1, 0, 0, 1], b: [0.5, 0.5] },
+      }),
+    );
+    expect(armStates.replaceAll).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ HOUR_09: { A: [1], b: [0.5] } }),
+    );
     expect(eventUpdate).toHaveBeenCalledWith({
       where: { id: 42n },
       data: { slotProposalId: "p1", policy: "LINUCB" },
@@ -81,7 +103,7 @@ describe("SchedulingFeedbackService.onFirstMove", () => {
     const { svc, bandit, eventUpdate } = await makeSvc({
       proposal: {
         id: "p1",
-        selectedArm: "MORNING",
+        selectedArm: "HOUR_09",
         featureVector: new Array<number>(22).fill(0),
       },
     });
@@ -100,7 +122,7 @@ describe("SchedulingFeedbackService.onFirstMove", () => {
       const { svc, bandit, eventUpdate } = await makeSvc({
         proposal: {
           id: "p1",
-          selectedArm: "MORNING",
+          selectedArm: "HOUR_09",
           featureVector: X,
           modelVersion,
         },
@@ -115,7 +137,7 @@ describe("SchedulingFeedbackService.onFirstMove", () => {
     const { svc, bandit } = await makeSvc({
       proposal: {
         id: "p1",
-        selectedArm: "MORNING",
+        selectedArm: "HOUR_09",
         featureVector: X,
         modelVersion: BANDIT_MODEL_VERSION,
       },
@@ -146,11 +168,18 @@ describe("SchedulingFeedbackService.onPairwiseWin", () => {
 
     await svc.onPairwiseWin("u1", "p1");
 
-    expect(bandit.update).toHaveBeenCalledWith("MORNING", X, 0.5, {
-      A: [1, 0, 0, 1],
-      b: [0.5, 0.5],
-    });
-    expect(armStates.save).toHaveBeenCalledWith("u1", "MORNING", [1], [0.5], 3);
+    expect(bandit.update).toHaveBeenCalledWith(
+      "HOUR_09",
+      X,
+      0.5,
+      expect.objectContaining({
+        HOUR_09: { A: [1, 0, 0, 1], b: [0.5, 0.5] },
+      }),
+    );
+    expect(armStates.replaceAll).toHaveBeenCalledWith(
+      "u1",
+      expect.objectContaining({ HOUR_09: { A: [1], b: [0.5] } }),
+    );
   });
 
   it("does nothing when the proposal has no model pick", async () => {

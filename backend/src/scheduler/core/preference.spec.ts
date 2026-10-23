@@ -4,6 +4,7 @@ import {
   matrixIndex,
   reinforcePreferenceCell,
   reinforcePreferenceMove,
+  reinforcePreferenceSmooth,
 } from "./preference";
 import {
   MOVE_REWARD_SCALE_MINUTES,
@@ -144,7 +145,16 @@ describe("reinforcePreferenceMove", () => {
 
   it("lowers the old hour and raises the new hour by η·g, g = |dragDistanceReward|", () => {
     // 60 min of a 240-min scale → g = 0.25.
-    const next = reinforcePreferenceMove(ZERO, MON_09, MON_10, TZ, 60);
+    const next = reinforcePreferenceMove(
+      ZERO,
+      MON_09,
+      MON_10,
+      TZ,
+      60,
+      PREFERENCE_LEARNING_RATE,
+      0,
+      0,
+    );
     const g = 60 / MOVE_REWARD_SCALE_MINUTES;
     expect(next[OLD]).toBeCloseTo(-PREFERENCE_LEARNING_RATE * g);
     expect(next[matrixIndex(1, 10)]).toBeCloseTo(PREFERENCE_LEARNING_RATE * g);
@@ -154,13 +164,31 @@ describe("reinforcePreferenceMove", () => {
   });
 
   it("grades by distance: a 6-hour move saturates at a full η", () => {
-    const next = reinforcePreferenceMove(ZERO, MON_09, MON_15, TZ, 360);
+    const next = reinforcePreferenceMove(
+      ZERO,
+      MON_09,
+      MON_15,
+      TZ,
+      360,
+      PREFERENCE_LEARNING_RATE,
+      0,
+      0,
+    );
     expect(next[OLD]).toBeCloseTo(-PREFERENCE_LEARNING_RATE);
     expect(next[matrixIndex(1, 15)]).toBeCloseTo(PREFERENCE_LEARNING_RATE);
   });
 
   it("a negative drag (moved earlier) grades the same as its magnitude", () => {
-    const next = reinforcePreferenceMove(ZERO, MON_10, MON_09, TZ, -60);
+    const next = reinforcePreferenceMove(
+      ZERO,
+      MON_10,
+      MON_09,
+      TZ,
+      -60,
+      PREFERENCE_LEARNING_RATE,
+      0,
+      0,
+    );
     const g = 60 / MOVE_REWARD_SCALE_MINUTES;
     expect(next[matrixIndex(1, 10)]).toBeCloseTo(-PREFERENCE_LEARNING_RATE * g);
     expect(next[OLD]).toBeCloseTo(PREFERENCE_LEARNING_RATE * g);
@@ -181,7 +209,16 @@ describe("reinforcePreferenceMove", () => {
     const seeded = [...ZERO];
     seeded[OLD] = -1;
     seeded[matrixIndex(1, 15)] = 1;
-    const next = reinforcePreferenceMove(seeded, MON_09, MON_15, TZ, 360);
+    const next = reinforcePreferenceMove(
+      seeded,
+      MON_09,
+      MON_15,
+      TZ,
+      360,
+      PREFERENCE_LEARNING_RATE,
+      0,
+      0,
+    );
     expect(next[OLD]).toBe(-1);
     expect(next[matrixIndex(1, 15)]).toBe(1);
   });
@@ -190,5 +227,51 @@ describe("reinforcePreferenceMove", () => {
     const original = [...ZERO];
     reinforcePreferenceMove(original, MON_09, MON_15, TZ, 360);
     expect(original).toEqual(ZERO);
+  });
+});
+
+describe("reinforcePreferenceSmooth (H+K)", () => {
+  const TZ = "UTC";
+  const ZERO = new Array<number>(168).fill(0);
+  const MON_09 = new Date("2026-06-15T09:30:00.000Z").getTime();
+
+  it("moves the centre cell by the full rate and neighbours by the Gaussian", () => {
+    // Python reference: reinforce_preference_smooth(zeros, Mon 09:30, delta=-0.25, sd=0.75, pool=1).
+    const next = reinforcePreferenceSmooth(
+      ZERO,
+      MON_09,
+      TZ,
+      -0.25,
+      0.2,
+      0.75,
+      1,
+    );
+    const centre = -0.2 * 0.25;
+    const nearby = centre * Math.exp(-1 / (2 * 0.75 * 0.75));
+    const far = centre * Math.exp(-4 / (2 * 0.75 * 0.75));
+    expect(next[matrixIndex(1, 9)]).toBeCloseTo(centre);
+    expect(next[matrixIndex(1, 8)]).toBeCloseTo(nearby);
+    expect(next[matrixIndex(1, 10)]).toBeCloseTo(nearby);
+    expect(next[matrixIndex(1, 7)]).toBeCloseTo(far);
+  });
+
+  it("pools the same weekday group and leaves the other group alone", () => {
+    const next = reinforcePreferenceSmooth(
+      ZERO,
+      MON_09,
+      TZ,
+      -0.25,
+      0.2,
+      0.75,
+      1,
+    );
+    expect(next[matrixIndex(2, 9)]).toBeCloseTo(next[matrixIndex(1, 9)]);
+    expect(next[matrixIndex(6, 9)]).toBe(0);
+  });
+
+  it("sd 0 and pool 0 is the single-cell update", () => {
+    expect(
+      reinforcePreferenceSmooth(ZERO, MON_09, TZ, -0.25, 0.2, 0, 0),
+    ).toEqual(reinforcePreferenceCell(ZERO, MON_09, TZ, -0.25, 0.2));
   });
 });

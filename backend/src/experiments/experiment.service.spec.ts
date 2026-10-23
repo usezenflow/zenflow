@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 import { Test, TestingModule } from "@nestjs/testing";
-import { PAIRWISE_SAMPLE_RATE } from "../scheduler/constants";
+import {
+  BANDIT_MODEL_VERSION,
+  PAIRWISE_SAMPLE_RATE,
+} from "../scheduler/constants";
 import { PrismaService } from "../prisma/prisma.service";
 import { ExperimentService } from "./experiment.service";
 
@@ -62,9 +65,9 @@ describe("ExperimentService.recordProposal", () => {
       randomizationSeed: "seed",
       heuristicProposal: HEURISTIC_RESULT,
       proposedStartTime: start,
-      modelProposal: { scheduledStartTime: start, selectedArm: "NIGHT" },
+      modelProposal: { scheduledStartTime: start, selectedArm: "HOUR_21" },
       featureVector: [0.1, 0.2],
-      selectedArm: "NIGHT",
+      selectedArm: "HOUR_21",
       pairwiseShown: false,
       pairwisePositions: null,
     });
@@ -74,12 +77,12 @@ describe("ExperimentService.recordProposal", () => {
     expect(data.event).toBe("CREATE");
     expect(data.primaryPolicy).toBe("LINUCB");
     expect(data.observationCount).toBe(7);
-    expect(data.modelVersion).toBe("linucb-d7-v1");
-    expect(data.selectedArm).toBe("NIGHT");
+    expect(data.modelVersion).toBe(BANDIT_MODEL_VERSION);
+    expect(data.selectedArm).toBe("HOUR_21");
     expect(data.featureVector).toEqual([0.1, 0.2]);
     expect(data.modelProposal).toEqual({
       scheduledStartTime: start.toISOString(),
-      selectedArm: "NIGHT",
+      selectedArm: "HOUR_21",
     });
     expect(data.proposedStartTime).toBe(start);
     expect(data.pairwiseShown).toBe(false);

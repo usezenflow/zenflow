@@ -37,15 +37,14 @@ import { PlacementClient, type PlaceResult } from "./placement-client.service";
 
 export interface GatewayRequestArgs {
   user: User;
-  members: PlacementMember[];
+  member: PlacementMember;
   deadline: Date;
   now: Date;
   mode: "PLACE" | "PREFLIGHT";
-  /** Load-scope decision owned by Nest: single 30, series 60. */
+  /** Load-scope decision owned by Nest. */
   maxScanDays: number;
   /** Rows being (re)placed; excluded from the occupancy load. */
   excludeSessionIds: string[];
-  fixedOccupied?: Interval[];
 }
 
 /** Stored matrix if 168 finite numbers, else the shared cold-start default. */
@@ -92,13 +91,12 @@ export class PlacementGateway {
   }
 
   async buildRequest(args: GatewayRequestArgs): Promise<PlaceRequest> {
-    const { user, members, deadline, now } = args;
+    const { user, member, deadline, now } = args;
     const t0 = Date.now();
     const timezone = user.timezone;
     const next15Ms = ceilToSlot(now.getTime());
     const deadlineMs = deadline.getTime();
-    const maxDuration = Math.max(...members.map((m) => m.durationMinutes));
-    const overhangMs = maxDuration * MS_PER_MINUTE - SLOT_MS;
+    const overhangMs = member.durationMinutes * MS_PER_MINUTE - SLOT_MS;
 
     const bounds: { dayStr: string; dayStartMs: number; dayEndMs: number }[] =
       [];
@@ -117,9 +115,7 @@ export class PlacementGateway {
       }
     }
 
-    const needsBandit = members.some(
-      (m) => m.primaryPolicy === "LINUCB" || m.computeBoth,
-    );
+    const needsBandit = member.primaryPolicy === "LINUCB" || member.computeBoth;
     const [loads, observationCount, armState] = await Promise.all([
       loadDayLoads(this.prisma, {
         userId: user.id,
@@ -154,8 +150,7 @@ export class PlacementGateway {
       timezone,
       deadlineMs,
       maxScanDays: args.maxScanDays,
-      members,
-      fixedOccupied: (args.fixedOccupied ?? []).map(toMs),
+      member,
       days: bounds.map((b, i) => ({
         ...b,
         occupied: loads[i].occupied.map(toMs),
@@ -214,14 +209,12 @@ export class PlacementGateway {
             http: Date.now() - t0,
           };
           phases = carry ? addPhases(carry, own) : own;
-          if (
-            result.response.results[0]?.outcome !== "NEEDS_INFEASIBLE_CONTEXT"
-          ) {
-            // Per-policy view. A series' members share one primary policy; `compute_both` marks the
-            // requests where Python ran the heuristic AND LinUCB (LINUCB-primary, or pairwise-sampled).
+          if (result.response.result.outcome !== "NEEDS_INFEASIBLE_CONTEXT") {
+            // Per-policy view. `compute_both` marks the requests where Python ran
+            // the heuristic AND LinUCB (LINUCB-primary, or pairwise-sampled).
             const attrs = {
-              assigned: req.members[0]?.primaryPolicy ?? "HEURISTIC",
-              compute_both: req.members.some((m) => m.computeBoth),
+              assigned: req.member.primaryPolicy,
+              compute_both: req.member.computeBoth,
               mode: req.mode,
             };
             for (const [phase, ms] of Object.entries(phases)) {
@@ -254,7 +247,7 @@ export class PlacementGateway {
     const { result: first, phases } = await this.placeTimed(req);
     if (
       !first.ok ||
-      first.response.results[0]?.outcome !== "NEEDS_INFEASIBLE_CONTEXT"
+      first.response.result.outcome !== "NEEDS_INFEASIBLE_CONTEXT"
     ) {
       return first;
     }

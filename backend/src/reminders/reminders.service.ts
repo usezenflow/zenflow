@@ -146,8 +146,7 @@ export class RemindersService {
 
   /**
    * Resolve what a `PATCH { reminders }` targets and validate it, *before* the
-   * update runs. A materialized TASK series applies to every sitting; anything
-   * else (incl. a recurring occurrence id -> its representative) to one row.
+   * update runs. A recurring occurrence id targets its representative row.
    */
   async resolveUpdateTargets(
     id: string,
@@ -164,42 +163,9 @@ export class RemindersService {
     if (!row) throw new NotFoundException(`Cannot find session with id ${id}`);
     this.assertValid(row.type, minutes);
 
-    const isTaskSeries = row.seriesId && !row.series?.rrule;
-    const members = isTaskSeries
-      ? await this.prisma.session.findMany({
-          where: { seriesId: row.seriesId, userId: user.id, deleted: false },
-          select: { id: true },
-        })
-      : [{ id: row.id }];
     return {
-      sessionIds: members.map((m) => m.id),
+      sessionIds: [row.id],
       minutes: normalizeReminderMinutes(minutes),
     };
-  }
-
-  /**
-   * After a series grew (new sittings have no reminder rows), copy an existing
-   * sitting's reminders onto members that have none. An explicit "no
-   * reminders" stays empty because the template is then empty too.
-   */
-  async propagateSeries(seriesId: string): Promise<void> {
-    const members = await this.prisma.session.findMany({
-      where: { seriesId, deleted: false },
-      orderBy: { sessionIndex: "asc" },
-      include: { reminders: true },
-    });
-    const template = members.find((m) => m.reminders.length > 0);
-    if (!template) return;
-    const minutes = template.reminders.map((r) => r.remindBeforeMinutes);
-    const bare = members.filter((m) => m.reminders.length === 0);
-    if (bare.length === 0) return;
-    await this.prisma.sessionReminder.createMany({
-      data: bare.flatMap((m) =>
-        minutes.map((remindBeforeMinutes) => ({
-          sessionId: m.id,
-          remindBeforeMinutes,
-        })),
-      ),
-    });
   }
 }

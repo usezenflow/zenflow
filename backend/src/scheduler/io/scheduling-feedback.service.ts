@@ -14,7 +14,7 @@ import {
   PAIRWISE_WIN_REWARD,
 } from "../constants";
 import {
-  reinforcePreferenceCell,
+  reinforcePreferenceSmooth,
   reinforcePreferenceMove,
 } from "../core/preference";
 import { withLockedPreferenceMatrix } from "./preference-matrix-lock";
@@ -210,19 +210,16 @@ export class SchedulingFeedbackService {
     featureVector: number[],
     reward: number,
   ): Promise<boolean> {
-    const state = (await this.armStates.loadAll(userId))[arm];
-    const res = await this.bandit.update(arm, featureVector, reward, {
-      A: state.A,
-      b: state.b,
-    });
+    const arms = await this.armStates.loadAll(userId);
+    const res = await this.bandit.update(arm, featureVector, reward, arms);
     if (!res) return false;
-    await this.armStates.save(userId, arm, res.A, res.b, state.version);
+    await this.armStates.replaceAll(userId, res.arms);
     return true;
   }
 
   /**
-   * Preference-matrix reinforcement (Item 3B3) of one hour cell, used for
-   * `START`. Runs regardless of which policy placed the session (both read
+   * Preference-matrix reinforcement (Item 3B3) of one start, used for `START`:
+   * the hour cell and its H+K kernel neighbours. Runs regardless of which policy placed the session (both read
    * the matrix). Row-locked against the decay cron; never throws.
    */
   async reinforcePreferenceMatrix(
@@ -232,7 +229,7 @@ export class SchedulingFeedbackService {
     delta: number,
   ): Promise<void> {
     await this.writePreferenceMatrix(userId, (matrix) =>
-      reinforcePreferenceCell(matrix, atMs, timezone, delta),
+      reinforcePreferenceSmooth(matrix, atMs, timezone, delta),
     );
   }
 

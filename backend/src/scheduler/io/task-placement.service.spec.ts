@@ -131,20 +131,6 @@ describe("TaskPlacementService.preflightTask", () => {
     expect(python.preflightSingle).not.toHaveBeenCalled();
   });
 
-  it("arithmeticOnly returns before calling Python", async () => {
-    const svc = await makeService();
-    await expect(
-      svc.preflightTask({
-        user,
-        durationMinutes: 60,
-        deadline: task.deadline,
-        now,
-        arithmeticOnly: true,
-      }),
-    ).resolves.toBeUndefined();
-    expect(python.preflightSingle).not.toHaveBeenCalled();
-  });
-
   it("otherwise delegates the pre-flight to Python", async () => {
     python.preflightSingle.mockResolvedValue(undefined);
     const svc = await makeService();

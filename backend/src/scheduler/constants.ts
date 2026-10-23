@@ -10,12 +10,6 @@
  */
 export const MAX_SCAN_DAYS = 60;
 
-/** Max sessions of one `TASK` series allowed to land on a single calendar day (issue #32). */
-export const MAX_SERIES_PER_DAY = 3;
-
-/** Minimum gap between two sessions of one `TASK` series on the same day. */
-export const SERIES_GAP_MINUTES = 15;
-
 /**
  * Per-update step size η for preference-matrix acquisition.
  *
@@ -33,6 +27,12 @@ export const PREFERENCE_LEARNING_RATE = 0.2;
 /** Weight of a kept placement on the preference matrix: a START, or a kept
  * pairwise option. A soft reward against the graded, up-to-full penalty of a move. */
 export const PREFERENCE_KEPT_WEIGHT = 0.25;
+/**
+ * H+K, the heuristic arm: the hour kernel and weekday pooling of a START or MOVE
+ * matrix update. Same values as the Python core (`services/bandit/src/core/`).
+ */
+export const HEURISTIC_KERNEL_SD = 0.75;
+export const HEURISTIC_KERNEL_POOL = 1.0;
 
 export const MIN = 60_000;
 
@@ -110,16 +110,16 @@ export const BANDIT_RIDGE = 1.0;
 export const MOVE_REWARD_SCALE_MINUTES = 240;
 
 /** Stamped on `SlotProposal.modelVersion` for LinUCB proposals. */
-export const BANDIT_MODEL_VERSION = "linucb-d7-v1";
+export const BANDIT_MODEL_VERSION = "linucb-hours24-v1";
 
 /**
- * Layout of the time-of-day arms (their boundaries). Mirrors `ARM_LAYOUT` in
+ * Layout of the hour arms. Mirrors `ARM_LAYOUT` in
  * `services/bandit/src/core/constants.py`, which prefixes the Python
  * `paramsVersion` stored as `SlotProposal.modelVersion`. Bump both when the arm
- * hours change: delayed rewards from proposals made under another layout are
- * dropped, so an old 17:00 `EVENING` proposal cannot reward the new 17:00-20:00 arm.
+ * layout changes: delayed rewards from proposals made under another layout are
+ * dropped.
  */
-export const ARM_LAYOUT = "arms6-v3";
+export const ARM_LAYOUT = "hours24-v1";
 
 /** `true` when a proposal's `modelVersion` was stamped under the current arm layout. */
 export function isCurrentModelVersion(
@@ -150,14 +150,6 @@ const pairwiseFromEnv = Number(process.env.PAIRWISE_SAMPLE_RATE ?? "1");
 export const PAIRWISE_SAMPLE_RATE = Number.isFinite(pairwiseFromEnv)
   ? Math.min(1, Math.max(0, pairwiseFromEnv))
   : 1;
-
-/**
- * Most sittings of one pairwise-sampled `TASK` series that surface an
- * alternative slot (#58): the soonest divergent ones (by `sessionIndex`)
- * whose alternative doesn't overlap a sibling. The rest keep both proposals
- * in `SlotProposal` for offline analysis only (`pairwiseShown = false`).
- */
-export const MAX_SERIES_ALTERNATIVES = 5;
 
 /**
  * Smallest start-time gap (minutes) between the applied slot and the other

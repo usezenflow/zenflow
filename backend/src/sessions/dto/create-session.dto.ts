@@ -15,7 +15,6 @@ import {
   ValidateIf,
 } from "class-validator";
 import { MAX_COMMUTE_MINUTES, TIME_GRANULARITY } from "../../common/constants";
-import { MAX_SCAN_DAYS } from "../../scheduler/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
 import { IsFeasibleTaskWindow } from "../../common/validators/feasible-task-window.decorator";
 import {
@@ -37,13 +36,6 @@ export const SESSION_TYPES: SessionType[] = [
   "LECTURE",
   "DND",
 ];
-
-/**
- * Ceiling on how many sittings a `TASK` series may request (issue #33): one
- * per day of the `MAX_SCAN_DAYS` horizon, well under what the placer can seat
- * at `MAX_SERIES_PER_DAY` a day.
- */
-export const MAX_SESSION_COUNT = MAX_SCAN_DAYS;
 
 /**
  * The 3-tab create form, flattened. `type` discriminates:

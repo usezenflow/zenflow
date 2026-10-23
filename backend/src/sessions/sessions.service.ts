@@ -7,6 +7,7 @@ import type {
   SessionDetailResponse,
   SessionSkipResponse,
   SessionStartResponse,
+  SessionResolveConflictsResponse,
   SessionSuggestionsResponse,
   SessionsListResponse,
   SlotPickResponse,
@@ -26,6 +27,7 @@ import { type SkipScope, SessionSkipService } from "./session-skip.service";
 import { SessionStartService } from "./session-start.service";
 import { NoteFilesService } from "../files/note-files.service";
 import { RemindersService } from "../reminders/reminders.service";
+import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service";
 
 /**
  * Thin facade the controller calls — its methods delegate to the collaborator
@@ -36,6 +38,7 @@ import { RemindersService } from "../reminders/reminders.service";
  *  - {@link SlotPickService}      `POST /sessions/:id/slot-pick`
  *  - {@link SessionSkipService}   `POST|DELETE /sessions/:id/skip`
  *  - {@link SessionStartService}  `POST /sessions/:id/start`
+ *  - {@link ConflictResolveService} `POST /sessions/:id/resolve-conflicts`
  *
  * The wire contract is unchanged — see `sessions.controller.ts`.
  */
@@ -50,6 +53,7 @@ export class SessionsService {
     private readonly sessionStart: SessionStartService,
     private readonly reminders: RemindersService,
     private readonly noteFiles: NoteFilesService,
+    private readonly conflictResolve: ConflictResolveService,
   ) {}
 
   /**
@@ -68,10 +72,11 @@ export class SessionsService {
       user.defaultReminderMinutes,
     );
     const res = await this.crud.create(dto, user);
-    const ids = res.sessions?.length ? res.sessions.map((s) => s.id) : [res.id];
-    const { applied, skipped } = await this.reminders.replace(ids, minutes);
+    const { applied, skipped } = await this.reminders.replace(
+      [res.id],
+      minutes,
+    );
     res.reminders = applied;
-    res.sessions?.forEach((s) => (s.reminders = applied));
     if (skipped.length > 0) res.skippedReminders = skipped;
     return res;
   }
@@ -110,9 +115,6 @@ export class SessionsService {
         target.minutes,
       );
       res.reminders = applied;
-      res.sessions?.forEach((s) => {
-        if (target.sessionIds.includes(s.id)) s.reminders = applied;
-      });
       if (skipped.length > 0) res.skippedReminders = skipped;
     }
     return res;
@@ -123,6 +125,14 @@ export class SessionsService {
       this.crud.remove(id, user),
     );
     return res;
+  }
+
+  /** Repacks the flexible sessions that overlap `id`; `id` itself stays put. */
+  resolveConflicts(
+    id: string,
+    user: User,
+  ): Promise<SessionResolveConflictsResponse> {
+    return this.conflictResolve.resolve(user, id);
   }
 
   async slotPick(
@@ -175,17 +185,6 @@ export class SessionsService {
   ): Promise<RemoveSessionSeriesResponse> {
     const res = await this.noteFiles.releasingUnreferenced(user.id, () =>
       this.series.removeSeries(seriesId, user),
-    );
-    return res;
-  }
-
-  async removeSeriesFrom(
-    seriesId: string,
-    sessionId: string,
-    user: User,
-  ): Promise<RemoveSessionSeriesResponse> {
-    const res = await this.noteFiles.releasingUnreferenced(user.id, () =>
-      this.series.removeFrom(seriesId, sessionId, user),
     );
     return res;
   }

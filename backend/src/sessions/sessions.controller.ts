@@ -164,6 +164,12 @@ export class SessionsController {
     return { success: true, message: "Session updated", data };
   }
 
+  @Post(":id/resolve-conflicts")
+  async resolveConflicts(@Param("id") id: string, @CurrentUser() user: User) {
+    const data = await this.sessionsService.resolveConflicts(id, user);
+    return { success: true, message: "Conflicts resolved", data };
+  }
+
   @Post(":id/slot-pick")
   async slotPick(
     @Param("id") id: string,
@@ -238,24 +244,6 @@ export class SessionsController {
       user,
     );
     return { success: true, message: "Series truncated", data };
-  }
-
-  @Delete("series/:seriesId/from/:sessionId")
-  async removeSeriesFrom(
-    @Param("seriesId") seriesId: string,
-    @Param("sessionId") sessionId: string,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.removeSeriesFrom(
-      seriesId,
-      sessionId,
-      user,
-    );
-    return {
-      success: true,
-      message: `Deleted ${data.removedSessionIds.length} sessions`,
-      data,
-    };
   }
 
   // NOTE: must precede @Delete(":id") so "timetable-group" isn't matched as

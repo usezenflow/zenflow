@@ -27,17 +27,16 @@ const fixtures: PlaceContractFixture[] = readdirSync(DIR)
   );
 
 function prismaFor(f: PlaceContractFixture) {
-  const rows = [
-    ...f.request.days.flatMap((d) => d.occupied),
-    ...f.request.fixedOccupied,
-  ].map((o, i) => ({
-    id: `occ-${i}`,
-    type: "DND",
-    seriesId: null,
-    scheduledStartTime: new Date(o.startMs),
-    durationMinutes: (o.endMs - o.startMs) / 60_000,
-    deadline: null,
-  }));
+  const rows = f.request.days
+    .flatMap((d) => d.occupied)
+    .map((o, i) => ({
+      id: `occ-${i}`,
+      type: "DND",
+      seriesId: null,
+      scheduledStartTime: new Date(o.startMs),
+      durationMinutes: (o.endMs - o.startMs) / 60_000,
+      deadline: null,
+    }));
   return {
     session: { findMany: jest.fn().mockResolvedValue(rows) },
     sessionSeries: { findMany: jest.fn().mockResolvedValue([]) },
@@ -56,7 +55,6 @@ describe("placement contract fixtures", () => {
   it("has the hand-checked fixture set", () => {
     expect(fixtures.map((f) => f.name).sort()).toEqual(
       expect.arrayContaining([
-        "series-two-members-heuristic",
         "single-heuristic-placed",
         "single-infeasible-second-call",
         "single-needs-infeasible-context",
@@ -65,11 +63,9 @@ describe("placement contract fixtures", () => {
   });
 
   it.each(fixtures.map((f) => [f.name, f] as const))(
-    "%s: response is one result per member in order",
+    "%s: response carries the request's task",
     (_name, f) => {
-      expect(f.response.results.map((r) => r.id)).toEqual(
-        f.request.members.map((m) => m.id),
-      );
+      expect(f.response.result.id).toBe(f.request.member.id);
       expect(f.response.contractVersion).toBe(f.request.contractVersion);
     },
   );
@@ -79,7 +75,7 @@ describe("placement contract fixtures", () => {
       .filter(
         (f) =>
           !f.request.infeasible &&
-          f.request.members.every((m) => m.primaryPolicy === "HEURISTIC"),
+          f.request.member.primaryPolicy === "HEURISTIC",
       )
       .map((f) => [f.name, f] as const),
   )(
@@ -97,31 +93,21 @@ describe("placement contract fixtures", () => {
       const user = userOf(f);
       const now = new Date(f.request.nowMs);
       const deadline = new Date(f.request.deadlineMs);
-      const expected = f.response.results;
-
-      const rows = await fallback.placeSeries(
+      const want: PlacedMember = f.response.result;
+      const start = await fallback.placeSingle(
         user.id,
         {
-          members: f.request.members.map((m) => ({
-            id: m.id,
-            durationMinutes: m.durationMinutes,
-          })),
+          id: f.request.member.id,
+          durationMinutes: f.request.member.durationMinutes,
           deadline,
-          fixedOccupied: f.request.fixedOccupied.map((o) => ({
-            start: o.startMs,
-            end: o.endMs,
-          })),
         },
         user.timezone,
         user.preferenceMatrix,
         now,
       );
-      rows.forEach((row, i) => {
-        const want: PlacedMember = expected[i];
-        const wantMs =
-          want.outcome === "PLACED" ? (want.heuristic?.startMs ?? null) : null;
-        expect(row.scheduledStartTime?.getTime() ?? null).toBe(wantMs);
-      });
+      const wantMs =
+        want.outcome === "PLACED" ? (want.heuristic?.startMs ?? null) : null;
+      expect(start?.getTime() ?? null).toBe(wantMs);
     },
   );
 
@@ -142,7 +128,7 @@ describe("placement contract fixtures", () => {
     const gateway = module.get<PlacementGateway>(PlacementGateway);
     const built = await gateway.buildRequest({
       user: userOf(f),
-      members: f.request.members,
+      member: f.request.member,
       deadline: new Date(f.request.deadlineMs),
       now: new Date(f.request.nowMs),
       mode: "PLACE",

@@ -24,31 +24,14 @@ import {
 } from "../../observability/metrics";
 import { recordPhase } from "../../observability/phase-timings";
 import { PrismaService } from "../../prisma/prisma.service";
-import {
-  MAX_SCAN_DAYS,
-  MAX_SERIES_ALTERNATIVES,
-  MIN_ALTERNATIVE_GAP_MINUTES,
-  SCAN_CAP_DAYS,
-} from "../constants";
-import {
-  ceilToSlot,
-  DAY_MS,
-  lastResortStart,
-  MS_PER_MINUTE,
-  type Interval,
-} from "../core/slot";
+import { MIN_ALTERNATIVE_GAP_MINUTES, SCAN_CAP_DAYS } from "../constants";
+import { DAY_MS, lastResortStart, MS_PER_MINUTE } from "../core/slot";
 import { ScheduleInfeasibleException } from "../schedule-infeasible.exception";
-import type {
-  PlaceableTask,
-  PlacementResult,
-  SeriesMemberInput,
-  SeriesPlacementRow,
-} from "../types/placement.types";
+import type { PlaceableTask, PlacementResult } from "../types/placement.types";
 import { DisplacementService, type AppliedMove } from "./displacement.service";
 import { FallbackPlacer } from "./fallback-placer.service";
 import { PlacementGateway } from "./placement-gateway.service";
 import { placementData } from "./placement-write";
-import { selectSeriesAlternatives } from "./series-alternatives";
 import type { DegradedReason } from "./placement-mode";
 
 /** Placeholder id for a pre-flight scan: no `Session` row exists yet. */
@@ -109,7 +92,7 @@ export class PythonPlacer {
     };
     const req = await this.gateway.buildRequest({
       user,
-      members: [this.memberOf(task, "HEURISTIC", false)],
+      member: this.memberOf(task, "HEURISTIC", false),
       deadline,
       now,
       mode: "PREFLIGHT",
@@ -130,54 +113,11 @@ export class PythonPlacer {
       throw new ScheduleInfeasibleException();
     }
     this.noteSource("python");
-    const outcome = res.response.results[0].outcome;
+    const outcome = res.response.result.outcome;
     // A plan that needs confirmation is a feasible placement: the real
     // placement returns it as `needsConfirmation` (nothing is written here).
     if (placed(outcome) || policy || outcome === "NEEDS_CONFIRMATION") return;
     throw new ScheduleInfeasibleException();
-  }
-
-  /** `true` iff every member of a would-be series fits (Python or fallback). */
-  async canPlaceSeries(args: {
-    user: User;
-    durationMinutes: number;
-    sessionCount: number;
-    /** Per-session minutes; defaults to `durationMinutes` each. */
-    durations?: number[];
-    deadline: Date;
-    now: Date;
-  }): Promise<boolean> {
-    const { user, deadline, now } = args;
-    const members: SeriesMemberInput[] = Array.from(
-      { length: args.sessionCount },
-      (_, i) => ({
-        id: `${PREFLIGHT_TASK_ID}-${i}`,
-        durationMinutes: args.durations?.[i] ?? args.durationMinutes,
-      }),
-    );
-    const req = await this.gateway.buildRequest({
-      user,
-      members: members.map((m) => this.memberOf(m, "HEURISTIC", false)),
-      deadline,
-      now,
-      mode: "PREFLIGHT",
-      maxScanDays: MAX_SCAN_DAYS,
-      excludeSessionIds: [],
-    });
-    const res = await this.gateway.place(req);
-    if (res.ok) {
-      this.noteSource("python");
-      return res.response.results.every((r) => r.outcome === "PLACED");
-    }
-    this.noteFallback(res.reason);
-    const rows = await this.fallback.placeSeries(
-      user.id,
-      { members, deadline },
-      user.timezone,
-      user.preferenceMatrix,
-      now,
-    );
-    return rows.every((r) => r.scheduledStartTime !== null);
   }
 
   // ---- single TASK -------------------------------------------------------
@@ -206,7 +146,7 @@ export class PythonPlacer {
     );
     const req = await this.gateway.buildRequest({
       user,
-      members: [member],
+      member,
       deadline: task.deadline,
       now,
       mode: "PLACE",
@@ -239,7 +179,7 @@ export class PythonPlacer {
     }
     this.noteSource("python");
 
-    const r = res.response.results[0];
+    const r = res.response.result;
     if (r.outcome === "NEEDS_CONFIRMATION" && r.startMs !== null) {
       // Nothing is applied: the plan moves a CHOSEN session and must be
       // confirmed first (ADR-0022). Only the caller stores it.
@@ -458,252 +398,16 @@ export class PythonPlacer {
     };
   }
 
-  // ---- series ------------------------------------------------------------
-
-  /**
-   * Place every member of a `TASK` series in one call. Returns one row per
-   * member, never with a `null` start: a member with no real slot gets the
-   * last resort (`lastResort: true`). Persisting the starts is the caller's
-   * job. Degraded => frozen loop, then the same last resort.
-   *
-   * The A/B roll is series-level (#58): ONE `assignPolicy()`, so every member
-   * shares its `primaryPolicy` and `randomizationSeed`, and the whole series
-   * is applied from one plan. On a pairwise-sampled series Python computes a
-   * second full plan with the other policy; the soonest (≤
-   * {@link MAX_SERIES_ALTERNATIVES}) sittings whose other-plan pick differs
-   * and doesn't clash with a sibling are surfaced (`divergent`,
-   * `alternativeSlot`, `pairwiseShown`). Still one `SlotProposal` per member.
-   * `surfaceAlternatives: false` (a caller that never shows the rows) records
-   * every member with `pairwiseShown = false`.
-   */
-  async placeSeries(args: {
-    user: User;
-    members: SeriesMemberInput[];
-    deadline: Date;
-    now: Date;
-    trigger: Trigger;
-    fixedOccupied?: Interval[];
-    surfaceAlternatives?: boolean;
-  }): Promise<SeriesPlacementRow[]> {
-    const { user, members, deadline, now, trigger } = args;
-    const fixedOccupied = args.fixedOccupied ?? [];
-    if (
-      members.length === 0 ||
-      ceilToSlot(now.getTime()) >= deadline.getTime()
-    ) {
-      return this.pinUnplaced(
-        members.map((m) => ({ id: m.id, scheduledStartTime: null })),
-        members,
-        deadline,
-        now,
-        fixedOccupied,
-      );
-    }
-    const assignment = this.experiment.assignPolicy();
-    // A LinUCB primary runs LinUCB regardless of `computeBoth` (Python's
-    // PolicySelector); `computeBoth` only asks for the second full plan.
-    const defs: PlacementMember[] = members.map((m) =>
-      this.memberOf(m, assignment.primaryPolicy, assignment.pairwiseShown),
-    );
-    const req = await this.gateway.buildRequest({
-      user,
-      members: defs,
-      deadline,
-      now,
-      mode: "PLACE",
-      maxScanDays: MAX_SCAN_DAYS,
-      excludeSessionIds: members.map((m) => m.id),
-      fixedOccupied,
-    });
-    const res = await this.gateway.place(req);
-
-    if (!res.ok) {
-      this.noteFallback(res.reason);
-      const rows = await this.fallback.placeSeries(
-        user.id,
-        { members, deadline, fixedOccupied },
-        user.timezone,
-        user.preferenceMatrix,
-        now,
-      );
-      // Degraded: one plan only, never any alternatives.
-      for (const row of rows) {
-        schedulerAppliedPolicy.add(1, {
-          assigned: assignment.primaryPolicy,
-          applied: row.scheduledStartTime ? "HEURISTIC" : "NONE",
-          trigger,
-        });
-      }
-      const ids = await Promise.all(
-        rows.map((row) =>
-          row.scheduledStartTime
-            ? this.recordFallbackProposal(
-                user.id,
-                row.id,
-                trigger,
-                assignment,
-                row.scheduledStartTime,
-                res.reason,
-              )
-            : Promise.resolve(null),
-        ),
-      );
-      return this.pinUnplaced(
-        rows.map((r, i) => ({
-          ...r,
-          degraded: true,
-          slotProposalId: ids[i],
-          alternativeSlot: null,
-          divergent: false,
-        })),
-        members,
-        deadline,
-        now,
-        fixedOccupied,
-      );
-    }
-
-    this.noteSource("python");
-    const results = res.response.results;
-    const rawStarts = members.map((_, i) => {
-      const r = results[i];
-      const lastResort = r.outcome === "ACCEPTED_LAST_RESORT";
-      return r.outcome === "PLACED" || lastResort ? r.startMs : null;
-    });
-    const rows = this.pinUnplaced(
-      members.map((m, i) => ({
-        id: m.id,
-        scheduledStartTime:
-          rawStarts[i] !== null ? new Date(rawStarts[i]) : null,
-        placementReason: rawStarts[i] !== null ? results[i].reason : null,
-        ...(results[i].outcome === "ACCEPTED_LAST_RESORT" &&
-        rawStarts[i] !== null
-          ? { lastResort: true }
-          : {}),
-      })),
-      members,
-      deadline,
-      now,
-      fixedOccupied,
-    );
-
-    // The other plan's pick: only when both plans placed the sitting and the
-    // applied outcome is a real slot (never the last resort).
-    const otherStarts = members.map((_, i) => {
-      const r = results[i];
-      if (r.outcome !== "PLACED" || !r.heuristic || !r.linucb) return null;
-      return assignment.primaryPolicy === SchedulingModel.LINUCB
-        ? r.heuristic.startMs
-        : r.linucb.startMs;
-    });
-    const shown = new Set(
-      assignment.pairwiseShown && args.surfaceAlternatives !== false
-        ? selectSeriesAlternatives(
-            members.map((m, i) => ({
-              durationMinutes: m.durationMinutes,
-              appliedStartMs: (rows[i].scheduledStartTime as Date).getTime(),
-              otherStartMs: otherStarts[i],
-            })),
-            fixedOccupied,
-            MAX_SERIES_ALTERNATIVES,
-          )
-        : [],
-    );
-
-    const out: SeriesPlacementRow[] = [];
-    for (let i = 0; i < members.length; i++) {
-      const r = results[i];
-      const start = rawStarts[i];
-      const linucb = r.linucb;
-      const isShown = shown.has(i);
-      schedulerAppliedPolicy.add(1, {
-        assigned: assignment.primaryPolicy,
-        applied: start !== null ? r.appliedPolicy : "NONE",
-        trigger,
-      });
-      const slotProposalId = await this.experiment.recordProposal({
-        userId: user.id,
-        sessionId: members[i].id,
-        trigger,
-        primaryPolicy: assignment.primaryPolicy,
-        randomizationSeed: assignment.randomizationSeed,
-        heuristicProposal: {
-          scheduledStartTime: r.heuristic
-            ? new Date(r.heuristic.startMs).toISOString()
-            : null,
-        },
-        proposedStartTime: start !== null ? new Date(start) : null,
-        modelProposal: linucb
-          ? {
-              scheduledStartTime: new Date(linucb.startMs),
-              selectedArm: linucb.selectedArm,
-            }
-          : null,
-        featureVector: linucb?.featureVector ?? [],
-        selectedArm: linucb?.selectedArm ?? null,
-        weights: linucb?.weights ?? null,
-        pairwiseShown: isShown,
-        pairwisePositions: isShown
-          ? { primaryPosition: Math.random() < 0.5 ? "first" : "second" }
-          : null,
-        placementSource: PlacementSource.PYTHON,
-        degradedReason: null,
-        modelVersion: res.response.paramsVersion,
-      });
-      const other = otherStarts[i];
-      out.push({
-        ...rows[i],
-        slotProposalId,
-        alternativeSlot: isShown && other !== null ? new Date(other) : null,
-        divergent: isShown,
-      });
-    }
-    return out;
-  }
-
   // ---- helpers -----------------------------------------------------------
 
   /**
    * Give every still-unplaced series row the last resort, back-to-back so
    * pinned sittings never stack on each other or on placed siblings.
    */
-  private pinUnplaced(
-    rows: SeriesPlacementRow[],
-    members: SeriesMemberInput[],
-    deadline: Date,
-    now: Date,
-    fixedOccupied: Interval[],
-  ): SeriesPlacementRow[] {
-    const avoid: Interval[] = [...fixedOccupied];
-    rows.forEach((row, i) => {
-      if (!row.scheduledStartTime) return;
-      const start = row.scheduledStartTime.getTime();
-      avoid.push({
-        start,
-        end: start + members[i].durationMinutes * MS_PER_MINUTE,
-      });
-    });
-    return rows.map((row, i) => {
-      if (row.scheduledStartTime) return row;
-      const dur = members[i].durationMinutes;
-      const start = lastResortStart(
-        dur,
-        now.getTime(),
-        deadline.getTime(),
-        avoid,
-      );
-      avoid.push({ start, end: start + dur * MS_PER_MINUTE });
-      return { ...row, scheduledStartTime: new Date(start), lastResort: true };
-    });
-  }
-
   /**
-   * Single `TASK`: `computeBoth` is true whenever LinUCB is primary or the
-   * event was pairwise-sampled, so the heuristic pick is always recorded as
-   * `SlotProposal.heuristicProposal` exactly like the legacy path did. A
-   * series sets it only when pairwise-sampled — on a series it asks Python
-   * for a second full plan (#58); a LinUCB primary still runs LinUCB either
-   * way (Python `PolicySelector`), falling back to the heuristic per member.
+   * `computeBoth` is true whenever LinUCB is primary or the event was
+   * pairwise-sampled, so the heuristic pick is always recorded as
+   * `SlotProposal.heuristicProposal`.
    */
   private memberOf(
     task: { id: string; durationMinutes: number; prevStartMs?: number },

@@ -162,8 +162,6 @@ export class TaskPlacementService {
     deadline: Date;
     now: Date;
     policy?: InfeasiblePolicy;
-    /** Series member edit: only the `now + duration > deadline` arithmetic guard. */
-    arithmeticOnly?: boolean;
   }): Promise<void> {
     const { user, durationMinutes, deadline, now } = args;
     if (
@@ -174,7 +172,6 @@ export class TaskPlacementService {
         "Won't fit before the deadline\nPick a later deadline.",
       );
     }
-    if (args.arithmeticOnly) return;
     await this.python.preflightSingle({
       user,
       taskId: args.taskId,
