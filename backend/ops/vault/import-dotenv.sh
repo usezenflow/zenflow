@@ -25,7 +25,7 @@ command -v curl >/dev/null && command -v jq >/dev/null || { echo "import-dotenv:
 # non-secret (stays in the env file), or fails with a hint for anything else.
 classify() {
   case "$1" in
-    SESSION_SECRET|FILE_URL_SECRET|MAIL_PASSWORD|PORTAL_API_KEY|DKHP_API_KEY|FCM_SERVICE_ACCOUNT|APNS_KEY|APNS_KEY_ID|APNS_TEAM_ID|VAPID_PRIVATE_KEY) echo api ;;
+    SESSION_SECRET|FILE_URL_SECRET|API_TOKEN_PEPPER|MAIL_PASSWORD|PORTAL_API_KEY|DKHP_API_KEY|FCM_SERVICE_ACCOUNT|APNS_KEY|APNS_KEY_ID|APNS_TEAM_ID|VAPID_PRIVATE_KEY) echo api ;;
     MASTER_LMS_ENCRYPTION_KEY_V[0-9]*|MASTER_PORTAL_ENCRYPTION_KEY_V[0-9]*) echo api ;;
     POSTGRES_PASSWORD) echo "api postgres backup" ;;
     S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY) echo "api minio" ;;
