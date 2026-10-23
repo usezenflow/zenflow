@@ -9,10 +9,18 @@ export interface PushMessage {
   body: string;
   data: PushDataPayload;
   tone: PushTone;
-  /** APNs category (action buttons); `null` for a plain push. */
+  /** Action category (action buttons); `null` for a plain push. */
   category?: string | null;
+  /** Button ids of `category`, in order (`pushActionsFor`). */
+  actions?: readonly string[];
   /** Extra string-map keys merged into the data payload (e.g. a check-in's session ids). */
   extra?: Record<string, string>;
+}
+
+/** `category` and `actions` as string-map keys (FCM data, APNs custom payload); `{}` without buttons. */
+export function actionFields(msg: PushMessage): Record<string, string> {
+  if (!msg.category || !msg.actions?.length) return {};
+  return { category: msg.category, actions: msg.actions.join(",") };
 }
 
 /** A Web Push subscription. `endpoint` is the device's `pushToken`. */

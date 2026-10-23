@@ -185,6 +185,11 @@ export function localizeNotification<
             : `${kind === "Exam" ? "Kỳ thi" : sessionTitle}${kind === "Due" ? " đến hạn lúc " : " bắt đầu lúc "}${rest}`;
       }
     }
+  } else if (row.eventName === "session_end.ask") {
+    content = content.replace(
+      /^Did you get it done\?$/,
+      "Bạn đã làm xong chưa?",
+    );
   } else if (row.eventName.startsWith("sync_conflict.")) {
     const label = (value: string) =>
       value === "your timetable"

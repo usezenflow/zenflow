@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
   type PushDataPayload,
+  pushActionsFor,
   pushCategoryFor,
   pushToneFor,
 } from "@zenflow/shared";
@@ -101,12 +102,14 @@ export class PushService {
       userId,
       (lang) => {
         const local = localizeNotification(row, lang);
+        const category = pushCategoryFor(row.eventName);
         return {
           title: local.title,
           body: local.content,
           data: this.dataFor(row),
           tone: pushToneFor(row.eventName),
-          category: pushCategoryFor(row.eventName),
+          category,
+          actions: pushActionsFor(category),
         };
       },
       opts,

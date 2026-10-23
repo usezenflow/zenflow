@@ -2,7 +2,12 @@ import { Injectable, Logger, type OnApplicationShutdown } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Notification, Provider } from "@parse/node-apn";
 import { pushSoundFile } from "@zenflow/shared";
-import { toStringMap, type PushMessage, type SendResult } from "./types";
+import {
+  actionFields,
+  toStringMap,
+  type PushMessage,
+  type SendResult,
+} from "./types";
 
 /** APNs `reason` values (and the 410 status) that mean the token is dead. */
 const APNS_DEAD_TOKEN_REASONS = new Set<string>([
@@ -64,7 +69,11 @@ export class ApnsSender implements OnApplicationShutdown {
     note.pushType = "alert";
     note.sound = pushSoundFile(msg.tone);
     note.alert = { title: msg.title, body: msg.body };
-    note.payload = { ...toStringMap(msg.data), ...msg.extra };
+    note.payload = {
+      ...toStringMap(msg.data),
+      ...msg.extra,
+      ...actionFields(msg),
+    };
     // node-apn maps `category` onto `aps.category` at runtime; its typings omit the setter.
     if (msg.category) (note as { category?: string }).category = msg.category;
 

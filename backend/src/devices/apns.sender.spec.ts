@@ -101,6 +101,24 @@ describe("ApnsSender", () => {
     });
   });
 
+  it("carries the category and both action ids in the payload of a session-end push", async () => {
+    send.mockResolvedValue({ sent: [{ device: "t1" }], failed: [] });
+    const sender = await make(FULL);
+
+    await sender.send(["t1"], {
+      ...MSG,
+      category: "session_end",
+      actions: ["done", "not_this_time"],
+    });
+
+    const [note] = send.mock.calls[0];
+    expect(note.category).toBe("session_end");
+    expect(note.payload).toMatchObject({
+      category: "session_end",
+      actions: "done,not_this_time",
+    });
+  });
+
   it("sets the category only when the message has one", async () => {
     send.mockResolvedValue({ sent: [{ device: "t1" }], failed: [] });
     const sender = await make(FULL);

@@ -153,6 +153,7 @@ describe("PushService", () => {
         },
         tone: "default",
         category: null,
+        actions: [],
       });
       expect(apns.send).toHaveBeenCalledWith(["i1"], expect.anything());
     });
@@ -171,6 +172,30 @@ describe("PushService", () => {
       expect(apns.send).toHaveBeenCalledWith(
         ["i1"],
         expect.objectContaining({ tone: "urgent", category: "sync_conflict" }),
+      );
+    });
+
+    it("sends a session-end push with the Done and Not this time actions", async () => {
+      const { service, apns } = await make({
+        devices: [{ platform: "IOS", pushToken: "i1", userId: "u1" }],
+      });
+
+      await service.sendToUser("u1", {
+        ...ROW,
+        eventName: "session_end.ask",
+        title: "Essay draft",
+        content: "Did you get it done?",
+        sessionId: "s1",
+      });
+
+      expect(apns.send).toHaveBeenCalledWith(
+        ["i1"],
+        expect.objectContaining({
+          title: "Essay draft",
+          body: "Did you get it done?",
+          category: "session_end",
+          actions: ["done", "not_this_time"],
+        }),
       );
     });
 

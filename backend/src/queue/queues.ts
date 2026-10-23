@@ -64,7 +64,9 @@ export type NotifyJobData =
   /** Native push for one provider of a notification row. */
   | { type: "push"; notificationId: string; provider: PushProvider }
   /** Fire one session reminder; `startsAt` (ISO) is the occurrence it was armed for. */
-  | { type: "reminder"; reminderId: string; startsAt: string };
+  | { type: "reminder"; reminderId: string; startsAt: string }
+  /** Ask whether a placed session got done; `endsAt` (ISO) is the end instant it was armed for. */
+  | { type: "session_end"; sessionId: string; endsAt: string };
 
 export type PushProvider = "fcm" | "apns" | "web";
 

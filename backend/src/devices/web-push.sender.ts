@@ -66,6 +66,7 @@ export class WebPushSender {
       body: msg.body,
       tone: msg.tone,
       category: msg.category ?? null,
+      actions: msg.actions ?? [],
       data: {
         ...toStringMap(msg.data),
         slotProposalId: msg.data.slotProposalId,
