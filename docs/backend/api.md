@@ -44,7 +44,7 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 | GET | `/sessions/search?q=&anchor=&cursor=&direction=&limit=` | Search title, note text, location and tags. Pages by start time from `anchor` (default now) |
 | GET | `/sessions/deadline-options?anchor=` | Six deadline quick-chip instants |
 | GET | `/sessions/:id` | Detail. Occurrence id: `<seriesId>::<startISO>` (URL-encoded) |
-| PATCH | `/sessions/:id` | Metadata, drag, resize, `rrule`, `sessionCount`. `scope` and `skipConflicting` narrow a series change |
+| PATCH | `/sessions/:id` | Metadata, drag, resize, `rrule`. `scope` and `skipConflicting` narrow a recurring-series change |
 | DELETE | `/sessions/:id` | Soft-delete. On an occurrence id, adds to `exdates` |
 | DELETE | `/sessions/series/:seriesId` | Delete the series |
 | DELETE | `/sessions/series/:seriesId/truncate?from=` | Recurring: pull `UNTIL` back ("this and following") |
@@ -69,7 +69,6 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 - **Infeasible deadline:** displacement repacks flexible tasks on the deadline day (EDF, `SYSTEM_MOVE` events, `displacedSessions[]`).
 - If that fails: `409 SCHEDULE_INFEASIBLE` with `options: ["ACCEPT_CONFLICTS","ACCEPT_LATE_DEADLINE"]`. The client retries with `infeasiblePolicy`.
 - Every `Session` carries `late: boolean`.
-- **Series split:** `sessionDurations` (one 15-minute multiple per session, length `sessionCount`) sets each session's length; `durationMinutes` is then the first one. A day holds at most 3 sittings of a series, 15 minutes apart.
 - **Search:** every word of `q` must match, ignoring case and accents (including đ); empty `q` lists all. `direction` is `forward` (start at or after) or `backward` (before); each page is ascending.
 - Search returns `{ sessions, nextCursor }`; pass `nextCursor` with the same `direction`. Recurring series add occurrences up to a year past the cursor once stored rows run out. Unscheduled rows are skipped.
 - **Skipped:** every `Session` carries `skipped`. Skip routes return `SessionSkipResponse` (`{ session }`) and accept an occurrence id. The representative row id of a recurring series is a 400. Learning signals are START and MOVE only ([ADR-0035](../adr/0035-start-and-move-only-signals.md)).
