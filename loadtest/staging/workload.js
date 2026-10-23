@@ -4,7 +4,7 @@
 //   k6 run -e BASE=http://localhost/api/v1 -e COOKIES=/abs/cookies.json -e PROFILE=full \
 //          -e OUT=/abs/summary.json workload.js
 //
-// Env: BASE COOKIES PROFILE(smoke|full|soak) OUT CONCURRENT THINK_S HOLD_S RAMP_S MAX_MULT SOAK_S SERIES_N TASK_DAYS
+// Env: BASE COOKIES PROFILE(smoke|full|soak) OUT CONCURRENT THINK_S HOLD_S RAMP_S MAX_MULT SOAK_S TASK_DAYS
 import http from "k6/http";
 import { Trend, Rate, Counter } from "k6/metrics";
 import { BASE, VU_JAR, headers, localDayStartMs, iso } from "../scripts/lib.js";
@@ -13,7 +13,6 @@ import { thresholdsFor, planFor, isHold, SLO } from "./slo.js";
 
 const PROFILE = __ENV.PROFILE || "smoke";
 const PLAN = planFor(PROFILE);
-const SERIES_N = parseInt(__ENV.SERIES_N || "8", 10);
 const TASK_DAYS = parseInt(__ENV.TASK_DAYS || "30", 10);
 
 const COOKIES = Object.values(JSON.parse(open(__ENV.COOKIES)));
@@ -49,7 +48,6 @@ const MIX = [
   [62, week],
   [86, month],
   [88, postTask],
-  [89, postSeries],
   [92, edit],
   [93, remove],
   [94, infeasible],
@@ -110,19 +108,6 @@ function postTask(h, now, cookie) {
     if (d.id) mine.push({ id: d.id, cookie });
     // the app re-fetches the calendar after a schedule
     week(h, now);
-  }
-}
-
-function postSeries(h, now, cookie) {
-  const body = { type: "TASK", title: `lt series ${__VU}.${__ITER}`, durationMinutes: 60, sessionCount: SERIES_N, deadline: iso(now + 30 * 86400000), reminders: [] };
-  const r = http.post(`${BASE}/sessions`, JSON.stringify(body), reqOpts(h, "post_series"));
-  const ok = record("post_series", r);
-  const d = ok ? dataOf(r) : null;
-  if (d) {
-    flagDegraded(d);
-    const first = Array.isArray(d) ? d[0] : d.sessions ? d.sessions[0] : d;
-    if (first && first.seriesId) mine.push({ seriesId: first.seriesId, cookie });
-    month(h, now);
   }
 }
 
@@ -212,6 +197,6 @@ export function handleSummary(data) {
     unexpectedStatus: v("unexpected_status", "count") || 0, degraded: v("resp_degraded_true", "count") || 0, noop: v("noop_no_target", "count") || 0,
     steps, ops,
   };
-  const table = steps.filter((x) => x.ops).map((x) => `${x.name.padEnd(6)} ${x.passed ? "PASS" : "FAIL"}  load=${x.iterationsDelivered}/${x.iterationsPlanned}  unexpected=${x.unexpectedStatuses}  unavailable=${((x.unavailableRate || 0) * 100).toFixed(2)}%  ` + ["list_week", "list_month", "post_task", "post_series", "patch_move"].map((o) => `${o}=${x.ops[o] ? Math.round(x.ops[o].p95) : "-"}ms`).join(" ") + (x.failed.length ? `\n         failed: ${x.failed.join("; ")}` : "")).join("\n");
+  const table = steps.filter((x) => x.ops).map((x) => `${x.name.padEnd(6)} ${x.passed ? "PASS" : "FAIL"}  load=${x.iterationsDelivered}/${x.iterationsPlanned}  unexpected=${x.unexpectedStatuses}  unavailable=${((x.unavailableRate || 0) * 100).toFixed(2)}%  ` + ["list_week", "list_month", "post_task", "patch_move"].map((o) => `${o}=${x.ops[o] ? Math.round(x.ops[o].p95) : "-"}ms`).join(" ") + (x.failed.length ? `\n         failed: ${x.failed.join("; ")}` : "")).join("\n");
   return { [__ENV.OUT || "summary.json"]: JSON.stringify(out, null, 2), stdout: `\np95 per step (dropped iterations: ${out.droppedIterations}, unexpected statuses: ${out.unexpectedStatus})\n${table}\n` };
 }

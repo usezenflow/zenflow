@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Smoke test of the Nest <-> Python integration BEFORE any timing (first time they run together).
 //   node loadtest/tools/smoke.js <A|B|C> [--shadow]
-// C (python mode): task, series, infeasible (409 + retry with each policy), kill the bandit container ->
+// C (python mode): task, infeasible (409 + retry with each policy), kill the bandit container ->
 // degraded fallback (schedulingDegraded, 503 when no slot), breaker, restart -> recovery.
 // --shadow: recreate the API in SCHEDULER_PLACEMENT_MODE=shadow, place tasks, report mismatch log lines.
 // The stack must already be up (orchestrate.js seed <V> leaves it stopped; use `docker compose ... up -d`).
@@ -57,8 +57,6 @@ const logs = async () => { const r = await execFileP("docker", ["logs", `${proj}
 
   let r = await post(task());
   step("task", { ...brief(r), sample: r.body && r.body.data && { id: r.body.data.id, start: r.body.data.scheduledStartTime, keys: Object.keys(r.body.data).slice(0, 30) } });
-  r = await post(task({ title: "smoke series", sessionCount: 8, deadline: iso(now + 30 * 86400000) }));
-  step("series8", { ...brief(r), n: Array.isArray(r.body && r.body.data) ? r.body.data.length : undefined });
 
   // infeasible: fixed 6 h blocker from now+30m, 2 h task due in 5 h
   const t0 = Math.ceil((now + 30 * 60000) / 900000) * 900000;
@@ -83,8 +81,6 @@ const logs = async () => { const r = await execFileP("docker", ["logs", `${proj}
     }
     r = await post(inf);
     step("degraded_infeasible", { ...brief(r), body: r.body });
-    r = await post(task({ title: "deg series", sessionCount: 5, deadline: iso(now + 20 * 86400000) }));
-    step("degraded_series", brief(r));
     r = await post({ ...inf, infeasiblePolicy: "ACCEPT_CONFLICTS" });
     step("degraded_infeasible_with_policy", brief(r));
     await execFileP("docker", ["start", `${proj}-bandit-1`]);

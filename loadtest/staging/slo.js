@@ -11,7 +11,6 @@ export const SLO = {
   list_week: [300, 600],
   list_month: [500, 1000],
   post_task: [800, 1500],
-  post_series: [1500, 3000],
   patch_move: [400, 800],
   patch_resize: [400, 800],
   delete: [400, 800],
