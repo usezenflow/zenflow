@@ -1,4 +1,5 @@
 import type { FocusCell } from "@zenflow/shared";
+import { EmptyMark } from "@/components/brand/state-marks";
 import { locale, t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -35,9 +36,12 @@ export function FocusMap({ cells }: { cells: FocusCell[] }) {
       </div>
 
       {total < MIN_FOCUS_EVENTS ? (
-        <p className="mt-2 text-[13px] text-muted-foreground">
-          {t("Your focus map fills in as you finish sessions")}
-        </p>
+        <div className="mt-3 flex flex-col items-center gap-2 py-2 text-center">
+          <EmptyMark size={48} />
+          <p className="max-w-[260px] text-[13px] text-muted-foreground">
+            {t("Your focus map fills in as you finish sessions")}
+          </p>
+        </div>
       ) : (
         <div role="img" aria-label={t("Focus map")} className="mt-3 flex flex-col gap-[3px]">
           {WEEKDAYS.map((weekday) => (

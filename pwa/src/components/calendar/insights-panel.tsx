@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { addDays, format } from "date-fns";
+import { ChartNoAxesColumn, ChevronRight } from "lucide-react";
 import type { InsightsResponse } from "@zenflow/shared";
 import { getInsights } from "@/api/me";
+import { EmptyMark, ErrorMark } from "@/components/brand/state-marks";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useUserStore } from "@/hooks/use-user-store";
 import { useConnectivity } from "@/lib/connectivity";
-import { t, useLanguage } from "@/lib/i18n";
+import { locale, t, useLanguage } from "@/lib/i18n";
 import { apiErrorMessage, errorToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { zonedNow } from "@/utils/tz";
@@ -65,21 +67,45 @@ export function InsightsPanel() {
     return () => window.removeEventListener("zenflow:calendar-refresh", refresh);
   }, [load, online]);
 
-  if (failed) return null;
-  if (!insights) {
-    return online ? <Skeleton className="h-9 w-28 rounded-full" /> : null;
+  if (failed) {
+    return (
+      <div className="flex items-center gap-3.5 rounded-2xl border border-border bg-card px-4 py-3.5">
+        <ErrorMark size={40} />
+        <p className="min-w-0 flex-1 text-[14px] text-muted-foreground">{t("Couldn't load insights")}</p>
+        <Button variant="outline" size="sm" onClick={() => void load()}>
+          {t("Try again")}
+        </Button>
+      </div>
+    );
   }
+  if (!insights) {
+    return online ? <Skeleton className="h-[72px] w-full rounded-2xl" /> : null;
+  }
+
+  const plannedHours = (insights.week.recap.plannedMinutes / 60).toLocaleString(locale(), {
+    maximumFractionDigits: 1,
+  });
 
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
+      <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="self-start rounded-full border-border bg-card px-3.5 text-[13px] font-semibold"
+        className="flex w-full items-center gap-3.5 rounded-2xl border border-border bg-card px-4 py-3.5 text-left transition-colors hover:bg-accent"
       >
-        {t("Insights")}
-      </Button>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <ChartNoAxesColumn className="size-5" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold">{t("Insights")}</span>
+          <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
+            {insights.week.recap.plannedMinutes > 0
+              ? t("{hours} h planned this week", { hours: plannedHours })
+              : t("Focus map, recap and prep")}
+          </span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side={isMobile ? "bottom" : "right"}
@@ -88,8 +114,15 @@ export function InsightsPanel() {
             isMobile ? "max-h-[88dvh] rounded-t-2xl" : "w-full sm:max-w-md",
           )}
         >
-          <div className="px-5 pb-2 pt-5">
-            <SheetTitle className="text-[20px] font-bold tracking-tight">{t("Insights")}</SheetTitle>
+          <div className="relative overflow-hidden px-5 pb-4 pt-5">
+            <div
+              aria-hidden
+              className="absolute inset-0 bg-gradient-to-br from-sky-200/70 via-indigo-100/60 to-violet-200/60 dark:from-sky-900/50 dark:via-indigo-900/40 dark:to-violet-900/40"
+            />
+            <div className="relative flex items-center gap-3">
+              <EmptyMark size={44} />
+              <SheetTitle className="text-[20px] font-bold tracking-tight">{t("Insights")}</SheetTitle>
+            </div>
           </div>
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-8">
             <FocusMap cells={insights.focus.focus} />

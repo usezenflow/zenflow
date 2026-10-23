@@ -10,6 +10,7 @@ import {
 } from "@zenflow/core";
 import type { Session, SessionType } from "@zenflow/shared";
 import { listSessions, startSession } from "@/api/tasks";
+import { EmptyMark } from "@/components/brand/state-marks";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/use-now";
 import { useUserStore } from "@/hooks/use-user-store";
@@ -105,9 +106,12 @@ export function TodayCard() {
 
   if (!next) {
     return (
-      <section className="rounded-3xl bg-gradient-to-br from-amber-200/70 via-orange-200/60 to-rose-200/60 p-5 text-stone-800 dark:from-amber-900/40 dark:via-orange-900/30 dark:to-rose-900/30 dark:text-stone-100">
-        <p className="text-sm opacity-80">{t("Today")}</p>
-        <p className="mt-2 text-3xl font-semibold tracking-tight">{t("Nothing left today")}</p>
+      <section className="flex items-center justify-between gap-4 rounded-3xl bg-gradient-to-br from-amber-200/70 via-orange-200/60 to-rose-200/60 p-5 text-stone-800 dark:from-amber-900/40 dark:via-orange-900/30 dark:to-rose-900/30 dark:text-stone-100">
+        <div className="min-w-0">
+          <p className="text-sm opacity-80">{t("Today")}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight">{t("Nothing left today")}</p>
+        </div>
+        <EmptyMark size={64} />
       </section>
     );
   }

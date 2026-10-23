@@ -1,4 +1,5 @@
 import { listIntegrations } from "@/api/integrations";
+import { getApiAccess } from "@/api/me";
 import { updateBasicInfo } from "@/api/users";
 import { TravelSection } from "@/components/settings/travel-section";
 import { useMyLocationStop } from "@/lib/places/use-my-location-stop";
@@ -76,11 +77,21 @@ export function OnboardingFlow() {
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const myLocation = useMyLocationStop();
 
+  const [aiConnected, setAiConnected] = useState(false);
+
   useEffect(() => {
     listIntegrations()
       .then(setIntegrations)
       .catch(() => {});
   }, []);
+
+  // The summary checks for a real assistant call, so it is read on arrival.
+  useEffect(() => {
+    if (step !== "done") return;
+    getApiAccess()
+      .then((access) => setAiConnected(access.tokens.some((token) => token.lastUsedAt !== null)))
+      .catch(() => {});
+  }, [step]);
 
   const campusConnected = integrations.some((i) => i.connected);
   const notificationsOn = user?.allowNotifications === true;
@@ -427,6 +438,12 @@ export function OnboardingFlow() {
           value: notificationsOn ? t("On") : t("Skipped"),
           skipped: !notificationsOn,
           step: "notifications",
+        },
+        {
+          key: t("AI assistant"),
+          value: aiConnected ? t("Connected") : t("Skipped"),
+          skipped: !aiConnected,
+          step: "assistants",
         },
       ];
       content = (

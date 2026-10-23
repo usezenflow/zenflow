@@ -1,5 +1,6 @@
 import { FileText, GraduationCap } from "lucide-react";
 import type { BufferItem, WeeklyRecap } from "@zenflow/shared";
+import { EmptyMark } from "@/components/brand/state-marks";
 import { locale, t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +32,10 @@ export function WeeklyRecapCard({ recap }: { recap: WeeklyRecap }) {
     <section className="rounded-2xl border border-border bg-card p-4">
       <h3 className="text-[15px] font-semibold">{t("This week")}</h3>
       {quiet ? (
-        <p className="mt-2 text-[13px] text-muted-foreground">{t("Nothing planned this week yet")}</p>
+        <div className="mt-3 flex flex-col items-center gap-2 py-2 text-center">
+          <EmptyMark size={48} />
+          <p className="text-[13px] text-muted-foreground">{t("Nothing planned this week yet")}</p>
+        </div>
       ) : (
         <dl className="mt-3 grid grid-cols-2 gap-2">
           <Stat label={t("Planned")} value={hoursLabel(recap.plannedMinutes)} />
@@ -57,7 +61,12 @@ function bufferLabel(days: number | null): string {
 /** Upcoming exams and assignments with their prep status. */
 export function BufferChips({ items }: { items: BufferItem[] }) {
   if (items.length === 0) {
-    return <p className="text-[13px] text-muted-foreground">{t("No upcoming exams or assignments")}</p>;
+    return (
+      <div className="flex flex-col items-center gap-2 py-2 text-center">
+        <EmptyMark size={48} />
+        <p className="text-[13px] text-muted-foreground">{t("No upcoming exams or assignments")}</p>
+      </div>
+    );
   }
 
   return (
