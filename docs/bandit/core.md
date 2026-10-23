@@ -1,20 +1,19 @@
 # Bandit core and model reference
 
-For developers changing `services/bandit/src/core/*`, the LinUCB model or the offline tooling. Entry point: [`services/bandit/README.md`](../../services/bandit/README.md). The maths is in [ADR-0001](../adr/0001-linucb-model-design.md); placement ownership in [ADR-0003](../adr/0003-python-authoritative-placement.md).
+For developers changing `services/bandit/src/core/*`, the LinUCB model or the offline tooling. Entry point: [`services/bandit/README.md`](../../services/bandit/README.md). The model is in [ADR-0037](../adr/0037-hour-arms-and-heuristic-kernel.md); placement ownership is in [ADR-0003](../adr/0003-python-authoritative-placement.md).
 
 ## Model
 
-- **Disjoint LinUCB**: 6 arms, one ridge regression each, scored `θ̂ᵀx + α·√(xᵀA⁻¹x)`.
+- **Hour-arm LinUCB (L24N)**: 24 arms, one ridge regression each, scored `θ̂ᵀx + α·√(xᵀA⁻¹x)`.
   - `A = λI + Σ xxᵀ`, `b = Σ r·x`; `λ = 1.0`, `α = 0.15` (`BANDIT_RIDGE`, `BANDIT_ALPHA` in `backend/src/scheduler/constants.ts`, sent per request).
-  - `A⁻¹` is cached per arm and invalidated on update.
-  - `LinUCB` is arm-agnostic: arms are created lazily by string key at the ridge prior.
-- **Arms** (`SchedulingArm` in `@zenflow/shared`), half-open, lower-inclusive: `EARLY_MORNING [00:00,08:00)`, `MORNING [08:00,11:00)`, `MIDDAY [11:00,14:00)`, `AFTERNOON [14:00,17:00)`, `EVENING [17:00,20:00)`, `NIGHT [20:00,24:00)`. No waking band starts before 08:00 ([ADR-0012](../adr/0012-linucb-time-of-day-arms.md)).
-- **Cold arm** = ridge prior. It scores `α·√(xᵀx/λ)`, not `0`.
-- **No warm start.** A cold arm is the plain ridge prior. All cold arms tie, so the preference term of the slot score (below) puts a new user's first picks at 09:00-11:00 ([ADR-0012](../adr/0012-linucb-time-of-day-arms.md); evidence in [heuristic-vs-linucb-report.md](../scheduler/heuristic-vs-linucb-report.md)).
+- **Arms** (`SchedulingArm` in `@zenflow/shared`): one per local start hour, `HOUR_00` to `HOUR_23`. A slot is scored by the arm of its start hour.
+- **Kernel update**: a reward at hour `h` updates every arm `h'` with `A += w·xxᵀ`, `b += w·r·x`, where `w` is a circular Gaussian of width `KERNEL_SD = 0.75` hours centred on `h` (`src/core/hour_arms.py`).
+- **Unit length**: the context is divided by its L2 length before scoring and before each update.
+- **Cold arm** = the matrix prior for that hour (`src/core/matrix_prior.py`). The matrix is an input only here; the slot score does not read it.
 
 ## Context vector (`d = 7`, `src/core/context_vector.py`)
 
-One vector per candidate day, shared by all 6 arms. The arm is never part of the vector, and the preference matrix is never an input to the arm models (it only enters the slot score below).
+One vector per candidate day, shared by all 24 arms. The arm is never part of the vector.
 
 | # | Feature | Encoding |
 | - | --- | --- |
@@ -28,54 +27,30 @@ One vector per candidate day, shared by all 6 arms. The arm is never part of the
 
 Constants: `MAX_SCAN_DAYS = 60`, `DURATION_DIVISOR = 480`, `WORKLOAD_HOURS_DIVISOR = 12`.
 
-- Fixed divisors keep the vector stateless and reproducible; `is_weekend` is signed so `‖x‖` does not favour weekends.
-- Excluded on purpose: per-weekday one-hots (collinear with the bias), extra per-type workload, tags, session type, semester phase.
-- `d` fixes the width of `BanditArmState.A`/`.b` and `SlotProposal.featureVector` (`FEATURE_DIM` in `@zenflow/shared`). Changing it means resetting arm state and bumping `BANDIT_MODEL_VERSION`.
+- Fixed divisors keep the vector stateless and reproducible.
+- `d` fixes the width of each arm's `A` and `b` and of `SlotProposal.featureVector`. Changing it means resetting arm state and bumping `ARM_LAYOUT`.
 
 ## Scheduler core (`src/core/`)
 
-- Pure numpy: `slot`, `arms`, `context_vector`, `reward`, `series_spread`, `preference`, `slot_score`, `linucb_best_slot`, `displacement`, `sync_conflicts`, `constants`.
+- Pure numpy: `slot`, `context_vector`, `hour_arms`, `matrix_prior`, `preference`, `slot_score`, `linucb_best_slot`, `displacement`, `constants`.
 - No I/O, clock or randomness; instants are epoch-ms ints. The 7x24 matrix is 168 floats.
-- Python is the sole ranking implementation. `linucb_best_slot`, `context_vector`, `arms` and `displacement` have no TS counterpart.
-- A ranking change goes in `src/core/*` with pytest coverage and updated `packages/shared/contract/place/*.json` fixtures, never a TS port.
+- Python is the sole ranking implementation. A ranking change goes in `src/core/*` with pytest coverage and updated `packages/shared/contract/place/*.json` fixtures, never a TS port.
 
 ### `linucb_best_slot`
 
-- Scores every feasible 15-min start on all days as `armTerm + wP * preference + wS * stability`.
-  - `preference` is the user's matrix averaged over the hours the slot covers; `wP = LINUCB_PREF_WEIGHT` (`constants.py`). It picks the hour inside a band, where the arm term is flat, and follows the user's drags (learning rate `PREFERENCE_LEARNING_RATE = 0.2`).
-- A slot ending within `DEADLINE_PENALTY_HORIZON_HOURS` (24h) of the deadline loses up to `DEADLINE_PENALTY_WEIGHT` (0.2), linearly. Applied in both the heuristic and LinUCB scores; no feature, reward or arm-state change.
-- `wS = stability_weight(prevStart, now)`: `1.0` while the old start is <= 24h away, fading linearly to `0.05` at 7 days (`STABILITY_*` in `constants.py`).
-- Exact ties (within 1e-9) break in order:
-  1. seeded band order per request (`seeded_tie_break_order`, `EARLY_MORNING` last);
-  2. distance from the band's centre (only matters when the preference term ties, e.g. a flat matrix);
-  3. the earlier start.
-- The scan is vectorized: per-tz UTC offset chunks (DST, fractional offsets like Asia/Kolkata), a prefix-sum for window scores, a difference-array occupancy mask, and `argmax` on scores rounded to 1e-9.
+- Scores every feasible 15-min start on all days as `hourArm[startHour] + wG·gap + wD·deadline + wS·stability`.
+  - `wG = LINUCB_GAP_WEIGHT`, `wD = DEADLINE_PENALTY_WEIGHT` (`constants.py`). A slot ending within 24 h of the deadline loses up to `wD`, linearly.
+  - `wS = stability_weight(prevStart, now)`: `1.0` while the old start is <= 24h away, fading linearly to `0.05` at 7 days.
+- Exact ties (within 1e-9) go to the earlier start.
+- The scan is vectorized per day, with a prefix-sum for the free-start mask and `argmax` on scores rounded to 1e-9.
 
-### Golden parity (ADR-0003 phase 6)
+### Heuristic kernel (H+K)
 
-`backend/src/scheduler/core/*` keeps only the frozen TS fallback (`slot-score.ts`, `preference.ts`, `series-spread.ts`, `sync-conflicts.ts`), used by `FallbackPlacer` when `/v1/place` is unreachable.
+- START and MOVE matrix updates (`reinforce_preference_smooth`, `reinforce_preference_move`) spread over neighbouring hours with the same kernel (width 0.75) and over the same weekday group (pool 1.0).
+- The frozen TypeScript fallback has the same rule (`backend/src/scheduler/core/preference.ts`, `reinforcePreferenceSmooth`). The two must agree.
 
-- `tests/test_golden_ts.py` runs `backend/test/golden/scheduler-core.golden.json` (`slotPreferenceScore`, `stabilityScore`, `bestFreeSlot`, `findConflictingTaskIds`). Regenerate with `pnpm --filter backend golden:export`.
-- `tests/test_core_parity.py`: hand-checked fixtures in `tests/fixtures/golden/`.
-- `tests/test_core_scan.py`: vectorized vs scalar scans (UTC, Kolkata, both DST transitions).
+### Parity
 
-### Slot-scan benchmark
-
-`uv run python -m scripts.bench_slot_scan`: 1000 placements, 60-day window (5760 slots), 40 occupied intervals, Europe/Paris, seeded, warm tz cache.
-
-| Implementation | Total | Per placement |
-| --- | --- | --- |
-| vectorized `best_free_slot` | 0.17-0.51 s | 0.17-0.51 ms |
-| scalar TS-style loop (extrapolated from 20) | ~38-111 s | ~38-111 ms |
-
-## Offline tooling
-
-- `uv run python -m src.main`: replay-evaluation demo, LinUCB vs random baseline.
-- `PolicyEvaluator` (`src/evaluators/`): unbiased replay estimator (Li et al., 2010, Algorithm 3).
-  - Needs a log from a uniformly random policy; an event is retained when the evaluated policy agrees with the logged arm.
-  - `EvaluationResult` reports `n_matched`, the average payoff, and `exhausted` when the log ran out.
-  - Use it to sweep `α` and confirm the default does not pick `EARLY_MORNING` on flat data.
-- `uv run pytest tests/test_learning.py -s`: prints simulated learning curves.
-- `src/simulation/`: seeded synthetic-student simulator, heuristic vs LinUCB. It validates mechanics, not real-world superiority.
-  - `uv run python -m src.simulation.run` with `--seed`, `--students`, `--events`, `--workers`, `--alpha-sweep`, `--alphas`, `--scenarios`, `--no-cache`.
-  - Scripts in `scripts/`: `bench_simulation.py`, `bench_policies.py`, `run_seeds.py`.
+- `tests/test_hour_arms.py` checks the prior, the kernel update and the hour mapping against the eval reference `evalx/hourly.py`.
+- `tests/test_golden_ts.py` runs `backend/test/golden/scheduler-core.golden.json` for the frozen fallback. Regenerate with `pnpm --filter backend golden:export`.
+- `tests/test_place_batch.py` checks the batched scorer against a per-day oracle.
