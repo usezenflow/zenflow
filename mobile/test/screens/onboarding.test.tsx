@@ -70,6 +70,7 @@ const TITLES = [
   "Connect your LMS or portal",
   "Plan your commute",
   "Stay ahead of deadlines",
+  "Connect an AI assistant",
   "You’re all set",
 ];
 
@@ -126,7 +127,7 @@ describe("OnboardingScreen", () => {
     it("turns notifications on quietly and advances", async () => {
       await openNotifications();
       fireEvent.click(primary());
-      await next("You’re all set");
+      await next("Connect an AI assistant");
       expect(notif.setEnabled).toHaveBeenCalledWith(true, { quiet: true });
     });
 
@@ -142,7 +143,7 @@ describe("OnboardingScreen", () => {
     it("'Not now' turns notifications off and advances", async () => {
       await openNotifications();
       fireEvent.click(screen.getByText("Not now"));
-      await next("You’re all set");
+      await next("Connect an AI assistant");
       expect(notif.setEnabled).toHaveBeenCalledWith(false);
     });
 

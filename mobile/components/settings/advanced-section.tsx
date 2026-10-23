@@ -1,3 +1,4 @@
+import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
 import { ExpandChevron } from "@/components/ui/expand-chevron";
 import { useLanguage } from "@/hooks/use-language";
 import { t } from "@/lib/i18n";
@@ -9,8 +10,8 @@ import { useState } from "react";
 import { Pressable, View } from "react-native";
 
 /**
- * The Me tab's Advanced group: timezone and storage, collapsed by default so
- * the everyday settings lead.
+ * The Me tab's Advanced group: timezone, storage and AI assistants, collapsed
+ * by default so the everyday settings lead.
  */
 export function AdvancedSection() {
   useLanguage();
@@ -36,6 +37,7 @@ export function AdvancedSection() {
           <OfflineLock>
             <StorageSection />
           </OfflineLock>
+          <AiAssistantsSection />
         </>
       ) : null}
     </>

@@ -19,10 +19,12 @@ import {
   ChevronLeft,
   GraduationCap,
   LocateFixed,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
 import { CampusConnectStep } from "./campus-connect-step";
 import {
   canGoBack,
@@ -37,6 +39,7 @@ const STEP_ICON: Partial<Record<OnboardingStep, LucideIcon>> = {
   campus: GraduationCap,
   commute: LocateFixed,
   notifications: Bell,
+  assistants: Sparkles,
 };
 
 function languageLabel(): string {
@@ -380,6 +383,18 @@ export function OnboardingFlow() {
                 setUser(await updateBasicInfo({ allowNotifications: false }));
               }),
             )}
+        </>
+      );
+      break;
+    }
+    case "assistants": {
+      title = t("Connect an AI assistant");
+      body = t("Let an assistant read and plan your calendar. You can also do this later in Settings.");
+      content = <AiAssistantsSection />;
+      footer = (
+        <>
+          {primary(t("Continue"), go)}
+          {ghost(t("Skip for now"), skip)}
         </>
       );
       break;

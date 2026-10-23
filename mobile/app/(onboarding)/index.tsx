@@ -10,9 +10,11 @@ import {
   GraduationCap,
   LocateFixed,
   Sliders,
+  Sparkles,
   User,
 } from "@/components/Icons";
 import { ImportedTimetable } from "@/components/onboarding/imported-timetable";
+import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
 import { TravelSection } from "@/components/settings/travel-section";
 import { Button } from "@/components/ui/button";
@@ -141,6 +143,14 @@ const COPY = {
       return t("Open system settings");
     },
   },
+  assistants: {
+    get title() {
+      return t("Connect an AI assistant");
+    },
+    get body() {
+      return t("Let an assistant read and plan your calendar. You can also do this later in Settings.");
+    },
+  },
   done: {
     get title() {
       return t("You’re all set");
@@ -166,6 +176,7 @@ const STEP_ICON: Partial<Record<OnboardingStep, typeof User>> = {
   dlu: GraduationCap,
   commute: LocateFixed,
   notifications: Bell,
+  assistants: Sparkles,
 };
 
 /** Rounded card whose children are separated by hairlines. */
@@ -546,6 +557,16 @@ export default function OnboardingScreen() {
           )}
           {!notif.active &&
             ghost(COPY.notifications.notNow, blocked ? advance : notNow)}
+        </>
+      );
+      break;
+    case "assistants":
+      ({ title, body } = COPY.assistants);
+      content = <AiAssistantsSection />;
+      footer = (
+        <>
+          {primary(COPY.continue, advance)}
+          {ghost(COPY.skipForNow, advance)}
         </>
       );
       break;

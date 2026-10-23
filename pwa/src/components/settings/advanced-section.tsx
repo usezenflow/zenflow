@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BarChart3, ChevronDown, Clock } from "lucide-react";
+import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
 import { StorageSection } from "@/components/settings/storage-section";
 import { TimezoneSheet } from "@/components/settings/timezone-sheet";
 import { UserPreferencesPanel } from "@/components/settings/preferences";
@@ -8,7 +9,7 @@ import { useUserStore } from "@/hooks/use-user-store";
 import { t, useLanguage } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-/** Advanced group, collapsed by default: timezone, storage and the preference map. */
+/** Advanced group, collapsed by default: timezone, storage, AI assistant access and the preference map. */
 export function AdvancedSection() {
   useLanguage();
   const user = useUserStore((s) => s.user);
@@ -43,6 +44,8 @@ export function AdvancedSection() {
           <TimezoneSheet open={timezoneOpen} onOpenChange={setTimezoneOpen} value={user.timezone} />
 
           <StorageSection />
+
+          <AiAssistantsSection />
 
           <SettingsLabel>{t("Preference map")}</SettingsLabel>
           <SettingsCard>

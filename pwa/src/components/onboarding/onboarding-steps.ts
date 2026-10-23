@@ -8,6 +8,7 @@ export const ONBOARDING_STEPS = [
   "campus",
   "commute",
   "notifications",
+  "assistants",
   "done",
 ] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];

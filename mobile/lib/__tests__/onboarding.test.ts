@@ -39,7 +39,8 @@ describe("step navigation", () => {
   it("walks forward and clamps", () => {
     expect(nextStep("dlu")).toBe("commute");
     expect(nextStep("commute")).toBe("notifications");
-    expect(nextStep("notifications")).toBe("done");
+    expect(nextStep("notifications")).toBe("assistants");
+    expect(nextStep("assistants")).toBe("done");
     expect(nextStep("done")).toBe("done");
   });
   it("walks back and clamps; no back on first/done", () => {
