@@ -76,16 +76,13 @@ def _one_day_request(i: dict[str, Any]) -> dict[str, Any]:
         "timezone": tz,
         "deadlineMs": fit,
         "maxScanDays": 30,
-        "members": [
-            {
-                "id": "g",
-                "durationMinutes": i["durationMinutes"],
-                "primaryPolicy": "HEURISTIC",
-                "computeBoth": False,
-                **({"prevStartMs": i["prevStartMs"]} if "prevStartMs" in i else {}),
-            }
-        ],
-        "fixedOccupied": [],
+        "member": {
+            "id": "g",
+            "durationMinutes": i["durationMinutes"],
+            "primaryPolicy": "HEURISTIC",
+            "computeBoth": False,
+            **({"prevStartMs": i["prevStartMs"]} if "prevStartMs" in i else {}),
+        },
         "days": [
             {
                 "dayStr": local_date_str(start, tz),
@@ -105,7 +102,7 @@ def _one_day_request(i: dict[str, Any]) -> dict[str, Any]:
 def test_golden_best_free_slot_via_place(case: dict[str, Any]) -> None:
     res = client.post("/v1/place", json=_one_day_request(case["input"]))
     assert res.status_code == 200, res.text
-    r = res.json()["results"][0]
+    r = res.json()["result"]
     if case["output"] is None:
         assert r["outcome"] == "NEEDS_INFEASIBLE_CONTEXT"
     else:

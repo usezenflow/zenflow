@@ -24,7 +24,7 @@ function extract(run, st) {
     p50: run.http.p50, p95: run.http.p95, p99: run.http.p99, rps: total / run.durationSec, ipsec: run.iterationsPerSec,
     errRate: cnt ? (100 * errs) / cnt : 0, dropped: run.droppedIterations || 0, degraded: run.responseFlags.degraded,
   };
-  for (const o of ["list_week", "post_task", "patch_move", "patch_resize", "post_series", "infeas_first", "infeas_conflicts", "infeas_late"]) {
+  for (const o of ["list_week", "post_task", "patch_move", "patch_resize", "infeas_first", "infeas_conflicts", "infeas_late"]) {
     if (ops[o]) { m[`${o}_p50`] = ops[o].p50; m[`${o}_p95`] = ops[o].p95; m[`${o}_p99`] = ops[o].p99; m[`${o}_n`] = ops[o].count; for (const [c, n] of Object.entries(ops[o].status)) m[`${o}_st_${c}`] = n; }
   }
   if (st && st.pgTotal) { m.pgPerReq = st.pgTotal.calls / total; m.pgMsPerReq = st.pgTotal.total_ms / total; }
@@ -104,7 +104,6 @@ const headMed = [1, 10, 25, 50].map((v) => [`${v} VUs`, `mix_medium_v${v}`]);
 const lvl10 = ["light", "medium", "heavy"].map((l) => [l, `mix_${l}_v10`]);
 const lvl50 = ["light", "medium", "heavy"].map((l) => [l, `mix_${l}_v50`]);
 const scan = [7, 30, 60].map((d) => [`${d} d`, `scan_${d}d`]);
-const ser = [[3, 30], [8, 30], [12, 30], [20, 60]].map(([n, d]) => [`${n} x / ${d} d`, `series_${n}x_${d}d`]);
 const allHead = [...headMed, ...["light", "heavy"].flatMap((l) => [10, 50].map((v) => [`${l} ${v} VUs`, `mix_${l}_v${v}`]))];
 
 function dockerTable() {
@@ -114,7 +113,7 @@ function dockerTable() {
   return h + "</tbody></table>";
 }
 function phaseTable() {
-  const tags = ["mix_medium_v10", "scan_60d", "series_20x_60d"];
+  const tags = ["mix_medium_v10", "scan_60d"];
   const phs = ["dayload", "http", "scan", "predict", "db_apply"];
   let h = `<table><thead><tr><th>scenario</th><th>variant</th>${phs.map((p) => `<th>${p} ms (mean)</th>`).join("")}</tr></thead><tbody>`;
   for (const t of tags) for (const k of ["B", "C"]) if (cells[k][t]) h += `<tr><td>${t}</td><td>${k}</td>${phs.map((p) => `<td>${cell(S(k, t, "ph_" + p), 1)}</td>`).join("")}</tr>`;
@@ -165,7 +164,7 @@ ${legend}
 <h2>Verdict</h2><div class="card">${verdict}</div>
 <h2>Setup and limits</h2>${spec}
 <h2>Headline: standard mix, medium fixed load</h2>
-<p>Each iteration: list week, create task (30-day scan), move, resize, create 8-sitting series (30 d), delete both. Latency is all requests of the iteration (http_req_duration).</p>
+<p>Each iteration: list week, create task (30-day scan), move, resize, delete. Latency is all requests of the iteration (http_req_duration).</p>
 ${chart("h1", "p95 latency by VUs (medium load)", "ms", headMed, "p95")}
 ${chart("h2", "p50 latency by VUs (medium load)", "ms", headMed, "p50")}
 ${chart("h3", "Throughput by VUs (medium load)", "req/s", headMed, "rps")}
@@ -175,8 +174,6 @@ ${chart("h3", "Throughput by VUs (medium load)", "req/s", headMed, "rps")}
 ${chart("l1", "p95 at 10 VUs", "ms", lvl10, "p95")}${chart("l2", "p95 at 50 VUs", "ms", lvl50, "p95")}
 <h2>Scan window (single task only, 10 VUs, medium load)</h2>
 ${chart("s1", "post_task p95 by deadline horizon", "ms", scan, "post_task_p95")}${table(scan, "post_task_p50")}
-<h2>Series size (series only, 10 VUs, medium load)</h2>
-${chart("r1", "post_series p95 by sittings / horizon", "ms", ser, "post_series_p95")}<p>p50</p>${table(ser, "post_series_p50")}<p>error rate (%)</p>${table(ser, "errRate", 2)}
 <h2>Infeasible path (separate, not in headline numbers)</h2>
 <p>A fixed blocker covers the window; a 2 h task is due in 5 h. AFTER answers 409 SCHEDULE_INFEASIBLE, then accepts a policy. BEFORE has no such path/field: the strict pipe answers 400 to the policy retries, and the first attempt behaves as recorded below. Displacement was not exercised (needs movable flexible tasks inside the window).</p>${infTable()}
 <h2>Ramping arrival rate (open model), medium load</h2>${arrivalTable()}

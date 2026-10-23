@@ -2,7 +2,6 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import type {
   RemoveSessionResponse,
   RemoveSessionSeriesResponse,
-  SeriesSession,
   Session as SharedSession,
 } from "@zenflow/shared";
 import { type User } from "../../generated/prisma";
@@ -18,29 +17,26 @@ import {
   reanchorTimeOfDay,
 } from "../scheduler/core/recurrence";
 import { MAX_SCAN_DAYS } from "../scheduler/constants";
-import { DAY_MS, localDateStr } from "../scheduler/core/slot";
-import { minutesToUtc } from "../common/utils";
-import { SessionRow, WITH_TAGS_AND_SERIES } from "./types/session-row";
-import { toSeriesSessionDto, toSessionDto } from "./session-mapper";
+import { DAY_MS } from "../scheduler/core/slot";
+import { WITH_TAGS_AND_SERIES } from "./types/session-row";
+import { toSessionDto } from "./session-mapper";
 import { createEventData, recordCreateEvent } from "./session-events";
 
 /**
- * Shown when a `TASK` (or series, or a series being grown) has no feasible
- * slot anywhere between now and its deadline — {@link SessionCrudService.create}'s
- * and {@link SeriesService.resizeSessionCount}'s pre-flight checks reject the
- * whole operation with this message before inserting anything, so nothing
- * accumulates half-placed. A `"\n"` splits a short title from its description —
- * the mobile client's `splitToastMessage` renders the two lines separately
- * instead of one long wrapped, bold line.
+ * Shown when a `TASK` has no feasible slot anywhere between now and its
+ * deadline — {@link SessionCrudService.create}'s pre-flight check rejects the
+ * operation with this message before inserting anything. A `"\n"` splits a
+ * short title from its description — the mobile client's `splitToastMessage`
+ * renders the two lines separately instead of one long wrapped, bold line.
  */
 export const NO_FEASIBLE_SLOT_MESSAGE =
   "No open slot before the deadline\nLoosen the deadline or reduce the number of sessions, then try again.";
 
 /**
- * Every `SessionSeries` lifecycle op — the `sessionCount > 1` `TASK` batch, its
- * deadline redistribution, and the four ways to delete part or all of a series
- * (issue #32). `SessionsService` delegates the matching endpoints here; recurring
- * fixed-type series are created in `SessionCrudService` (they need no placement).
+ * Recurring `SessionSeries` lifecycle ops: occurrence exclusions and skips,
+ * detaching or truncating a series, and the "following" update. `SessionsService`
+ * delegates the matching endpoints here; recurring series are created in
+ * `SessionCrudService`.
  */
 @Injectable()
 export class SeriesService {
@@ -213,105 +209,6 @@ export class SeriesService {
   }
 
   /**
-   * A `TASK` series' "this and later sittings" / "all sittings" reschedule
-   * (issue: drag/resize confirmation scopes). Every affected sibling KEEPS
-   * its own calendar date — only its time-of-day (and, if resized, its
-   * duration) changes, so no sitting's date ever shifts. Reuses `removeFrom`'s
-   * sibling-selection shape: `following` = every sitting whose `sessionIndex`
-   * is ≥ the anchor's (falling back to `createdAt` order when `sessionIndex`
-   * is unset), `scopeAll` = every sitting in the series.
-   *
-   * With `skipConflicting`, each candidate landing is checked via
-   * {@link wouldConflict} (excluding every id in this series, since a
-   * materialized TASK series never lands its own sittings on top of each
-   * other) — a sitting whose new landing would overlap something else is left
-   * untouched and its id recorded in `skippedSessionIds`.
-   *
-   * Returns every member (`sessionIndex` order, same shape {@link redistribute}
-   * returns) — untouched/skipped members come back with their prior state.
-   */
-  async updateSiblingTimeOfDay(
-    seriesId: string,
-    anchorSessionId: string,
-    change: { timeOfDayMinutes: number; durationMinutes?: number },
-    scopeAll: boolean,
-    skipConflicting: boolean,
-    user: User,
-  ): Promise<{ sessions: SeriesSession[]; skippedSessionIds: string[] }> {
-    return this.prisma.$transaction(async (tx) => {
-      const members = await tx.session.findMany({
-        where: { seriesId, userId: user.id, deleted: false },
-        include: WITH_TAGS_AND_SERIES,
-        orderBy: [{ sessionIndex: "asc" }, { createdAt: "asc" }],
-      });
-      if (members.length === 0)
-        throw new NotFoundException(`Cannot find series with id ${seriesId}`);
-
-      const anchor = members.find((m) => m.id === anchorSessionId);
-      if (!anchor)
-        throw new NotFoundException(
-          `Session ${anchorSessionId} is not part of series ${seriesId}`,
-        );
-
-      const targets = scopeAll
-        ? members
-        : anchor.sessionIndex != null
-          ? members.filter(
-              (m) =>
-                m.sessionIndex != null &&
-                m.sessionIndex >= (anchor.sessionIndex as number),
-            )
-          : members.filter(
-              (m) => m.createdAt.getTime() >= anchor.createdAt.getTime(),
-            );
-
-      const allMemberIds = members.map((m) => m.id);
-      const skippedSessionIds: string[] = [];
-      const updatedById = new Map<string, SessionRow>();
-
-      for (const sibling of targets) {
-        // No date to keep for a not-yet-placed sitting — nothing to re-anchor.
-        if (!sibling.scheduledStartTime) continue;
-
-        const dayStr = localDateStr(sibling.scheduledStartTime, user.timezone);
-        const newStart = minutesToUtc(
-          dayStr,
-          change.timeOfDayMinutes,
-          user.timezone,
-        );
-        const newDuration = change.durationMinutes ?? sibling.durationMinutes;
-
-        if (skipConflicting) {
-          const conflict = await wouldConflict(tx, {
-            userId: user.id,
-            timezone: user.timezone,
-            start: newStart,
-            durationMinutes: newDuration,
-            excludeSessionIds: allMemberIds,
-            excludeSeriesId: seriesId,
-          });
-          if (conflict) {
-            skippedSessionIds.push(sibling.id);
-            continue;
-          }
-        }
-
-        const row = await tx.session.update({
-          where: { id: sibling.id },
-          data: { scheduledStartTime: newStart, durationMinutes: newDuration },
-          include: WITH_TAGS_AND_SERIES,
-        });
-        updatedById.set(sibling.id, row);
-      }
-
-      const sessions = members.map((m) =>
-        toSeriesSessionDto(updatedById.get(m.id) ?? m),
-      );
-      return { sessions, skippedSessionIds };
-    });
-  }
-
-  /**
    * A recurring fixed series' "this and following" reschedule — no
    * per-occurrence detach primitive exists, so this is the finest granularity
    * a recurring drag/resize can target. Reuses {@link truncateFrom} to cut the
@@ -367,7 +264,7 @@ export class SeriesService {
 
     const created = await this.prisma.$transaction(async (tx) => {
       const series = await tx.sessionSeries.create({
-        data: { type: rep.type, rrule, deadline: null, userId: user.id },
+        data: { type: rep.type, rrule, userId: user.id },
       });
       const s = await tx.session.create({
         data: {
@@ -469,59 +366,6 @@ export class SeriesService {
       const removedSessionIds = series.sessions.map((s) => s.id);
       await tx.sessionSeries.delete({ where: { id: seriesId } });
       return { seriesId, removedSessionIds, seriesGone: true };
-    });
-  }
-
-  /**
-   * Delete one session and every later one in the same series (`sessionIndex`
-   * order, then `createdAt`), keeping the earlier ones and the series row (issue
-   * #32). If nothing remains, the series row goes too.
-   */
-  async removeFrom(
-    seriesId: string,
-    sessionId: string,
-    user: User,
-  ): Promise<RemoveSessionSeriesResponse> {
-    return this.prisma.$transaction(async (tx) => {
-      const series = await tx.sessionSeries.findFirst({
-        where: { id: seriesId, userId: user.id },
-        include: {
-          sessions: {
-            select: { id: true, sessionIndex: true, createdAt: true },
-            orderBy: [{ sessionIndex: "asc" }, { createdAt: "asc" }],
-          },
-        },
-      });
-      if (!series)
-        throw new NotFoundException(`Cannot find series with id ${seriesId}`);
-
-      const anchor = series.sessions.find((s) => s.id === sessionId);
-      if (!anchor)
-        throw new NotFoundException(
-          `Session ${sessionId} is not part of series ${seriesId}`,
-        );
-
-      const doomed =
-        anchor.sessionIndex != null
-          ? series.sessions.filter(
-              (s) =>
-                s.sessionIndex != null &&
-                s.sessionIndex >= (anchor.sessionIndex as number),
-            )
-          : series.sessions.filter(
-              (s) => s.createdAt.getTime() >= anchor.createdAt.getTime(),
-            );
-      const removedSessionIds = doomed.map((s) => s.id);
-
-      await tx.session.deleteMany({
-        where: { id: { in: removedSessionIds }, userId: user.id },
-      });
-
-      const seriesGone = removedSessionIds.length >= series.sessions.length;
-      if (seriesGone) {
-        await tx.sessionSeries.delete({ where: { id: seriesId } });
-      }
-      return { seriesId, removedSessionIds, seriesGone };
     });
   }
 }

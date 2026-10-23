@@ -66,8 +66,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     deleted: false,
     userId: user.id,
     seriesId: null,
-    sessionIndex: null,
-    sessionTotal: null,
     externalKey: null,
     scheduleStudyUnitId: null,
     lmsCourseId: null,
@@ -165,8 +163,6 @@ describe("SessionUpdateService — no scope (regression: byte-for-byte unchanged
       id: "sit-2",
       type: "TASK",
       seriesId: "task-series-1",
-      sessionIndex: 2,
-      sessionTotal: 3,
       scheduledStartTime: new Date("2026-06-11T08:00:00.000Z"),
     });
     const updated = {
@@ -436,186 +432,6 @@ describe("SessionUpdateService — preference-matrix reinforcement (Item 3B3)", 
   });
 });
 
-describe("SessionUpdateService — TASK-series sitting, scope following/series", () => {
-  it("scope 'following' delegates to updateSiblingTimeOfDay with scopeAll=false, short-circuiting the plain PATCH", async () => {
-    const findFirst = jest.fn().mockResolvedValue({
-      seriesId: "task-series-1",
-      scheduledStartTime: new Date("2026-06-11T08:00:00.000Z"),
-      series: { type: "TASK" },
-    });
-    const transaction = jest.fn();
-    const prisma = { session: { findFirst }, $transaction: transaction };
-    const series = fakeSeries();
-    const returnedSessions = [
-      { id: "sit-2", title: "X" },
-      { id: "sit-3", title: "X" },
-    ];
-    series.updateSiblingTimeOfDay.mockResolvedValue({
-      sessions: returnedSessions,
-      skippedSessionIds: [],
-    });
-    const service = await makeService(prisma as never, series);
-
-    const dto: UpdateSessionDto = {
-      scheduledStartTime: "2026-06-11T09:30:00.000Z",
-      durationMinutes: 90,
-      scope: "following",
-    };
-    const result = await service.update("sit-2", dto, user);
-
-    expect(transaction).not.toHaveBeenCalled();
-    expect(series.updateSiblingTimeOfDay).toHaveBeenCalledWith(
-      "task-series-1",
-      "sit-2",
-      { timeOfDayMinutes: 9 * 60 + 30, durationMinutes: 90 },
-      false,
-      false,
-      user,
-    );
-    expect(result.sessions).toBe(returnedSessions);
-    expect(result.id).toBe("sit-2");
-    expect(result.skippedSessionIds).toBeUndefined();
-  });
-
-  it("scope 'series' passes scopeAll=true and skipConflicting=true through", async () => {
-    const findFirst = jest.fn().mockResolvedValue({
-      seriesId: "task-series-1",
-      scheduledStartTime: new Date("2026-06-11T08:00:00.000Z"),
-      series: { type: "TASK" },
-    });
-    const prisma = { session: { findFirst }, $transaction: jest.fn() };
-    const series = fakeSeries();
-    series.updateSiblingTimeOfDay.mockResolvedValue({
-      sessions: [{ id: "sit-2" }],
-      skippedSessionIds: ["sit-3"],
-    });
-    const service = await makeService(prisma as never, series);
-
-    const dto: UpdateSessionDto = {
-      scheduledStartTime: "2026-06-11T09:30:00.000Z",
-      durationMinutes: 90,
-      scope: "series",
-      skipConflicting: true,
-    };
-    const result = await service.update("sit-2", dto, user);
-
-    expect(series.updateSiblingTimeOfDay).toHaveBeenCalledWith(
-      "task-series-1",
-      "sit-2",
-      { timeOfDayMinutes: 9 * 60 + 30, durationMinutes: 90 },
-      true,
-      true,
-      user,
-    );
-    expect(result.skippedSessionIds).toEqual(["sit-3"]);
-  });
-
-  it("a duration-only resize derives time-of-day from the sitting's own current start", async () => {
-    const findFirst = jest.fn().mockResolvedValue({
-      seriesId: "task-series-1",
-      scheduledStartTime: new Date("2026-06-11T14:15:00.000Z"),
-      series: { type: "TASK" },
-    });
-    const prisma = { session: { findFirst }, $transaction: jest.fn() };
-    const series = fakeSeries();
-    series.updateSiblingTimeOfDay.mockResolvedValue({
-      sessions: [],
-      skippedSessionIds: [],
-    });
-    const service = await makeService(prisma as never, series);
-
-    await service.update(
-      "sit-2",
-      { durationMinutes: 120, scope: "following" },
-      user,
-    );
-
-    expect(series.updateSiblingTimeOfDay).toHaveBeenCalledWith(
-      "task-series-1",
-      "sit-2",
-      { timeOfDayMinutes: 14 * 60 + 15, durationMinutes: 120 },
-      false,
-      false,
-      user,
-    );
-  });
-
-  it("scope without a schedule/duration change (metadata-only) does NOT delegate — falls through to the plain PATCH", async () => {
-    const existingForScope = jest.fn().mockResolvedValue({
-      seriesId: "task-series-1",
-      scheduledStartTime: new Date("2026-06-11T08:00:00.000Z"),
-      series: { type: "TASK" },
-    });
-    const existing = session({
-      id: "sit-2",
-      type: "TASK",
-      seriesId: "task-series-1",
-    });
-    const updated = session({ id: "sit-2", type: "TASK", title: "New" });
-    const txFindFirst = jest.fn().mockResolvedValue(existing);
-    const update = jest.fn().mockResolvedValue(updated);
-    const prisma = {
-      session: { findFirst: existingForScope },
-      $transaction: (fn: (t: unknown) => unknown) =>
-        fn({
-          session: { findFirst: txFindFirst, update },
-          sessionEvent: { create: jest.fn() },
-        }),
-    };
-    const series = fakeSeries();
-    const service = await makeService(prisma as never, series);
-
-    const result = await service.update(
-      "sit-2",
-      { title: "New", scope: "following" },
-      user,
-    );
-
-    expect(series.updateSiblingTimeOfDay).not.toHaveBeenCalled();
-    expect(result.title).toBe("New");
-  });
-
-  it("scope 'following' on a session with no series falls through to the plain PATCH", async () => {
-    const existingForScope = jest.fn().mockResolvedValue({
-      seriesId: null,
-      scheduledStartTime: new Date("2026-06-11T08:00:00.000Z"),
-      series: null,
-    });
-    const existing = session({ id: "plain-1", type: "TASK" });
-    const updated = session({
-      id: "plain-1",
-      type: "TASK",
-      scheduledStartTime: new Date("2026-06-11T09:00:00.000Z"),
-    });
-    const txFindFirst = jest.fn().mockResolvedValue(existing);
-    const update = jest.fn().mockResolvedValue(updated);
-    const prisma = {
-      session: { findFirst: existingForScope },
-      $transaction: (fn: (t: unknown) => unknown) =>
-        fn({
-          session: { findFirst: txFindFirst, update },
-          sessionEvent: { create: jest.fn().mockResolvedValue({ id: 1n }) },
-        }),
-    };
-    const series = fakeSeries();
-    const service = await makeService(prisma as never, series);
-
-    await service.update(
-      "plain-1",
-      {
-        scheduledStartTime: "2026-06-11T09:00:00.000Z",
-        scope: "following",
-      },
-      user,
-    );
-
-    expect(series.updateSiblingTimeOfDay).not.toHaveBeenCalled();
-    expect(update).toHaveBeenCalled();
-  });
-});
-
-describe("SessionUpdateService — sessionCount resize/promote", () => {});
-
 describe("SessionUpdateService — recurring occurrence, scope 'following'", () => {
   it("delegates to updateRecurringFollowing, short-circuiting the representative-row reanchor", async () => {
     const findFirst = jest.fn().mockResolvedValue({
@@ -701,7 +517,6 @@ describe("SessionUpdateService — recurring occurrence, scope 'series' (or omit
       id: "lecture-series-1",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       type: "LECTURE",
-      deadline: null,
       rrule,
       exdates: [],
       skippedFrom: null,
@@ -782,7 +597,6 @@ describe("SessionUpdateService — recurring occurrence, scope 'series' (or omit
       id: "lecture-series-1",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       type: "LECTURE",
-      deadline: null,
       rrule: "FREQ=DAILY;COUNT=3",
       exdates: [],
       skippedFrom: null,

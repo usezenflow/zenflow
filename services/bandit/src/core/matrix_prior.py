@@ -12,17 +12,14 @@ cohort prior replaces it.
 
 from __future__ import annotations
 
-from typing import cast
-
 import numpy as np
 from numpy.typing import NDArray
 
-from src.core.arms import ARM_BANDS
 from src.core.constants import FEATURE_DIM, MAX_SCAN_DAYS
-from src.core.context_vector import build_context_vector
+from src.core.context_vector import build_context_vector as build_context_vector
 from src.core.preference import default_preference_matrix, matrix_index
 from src.models.schemas import ArmParams
-from src.schemas import ArmId
+from src.schemas import HOUR_ARM_IDS, ArmId
 
 N0_WEEKDAY = 0.5
 N0_WEEKEND = 0.5
@@ -55,26 +52,32 @@ def arm_share(
 
 
 def reference_context(iso_weekday: int = REFERENCE_ISO_WEEKDAY) -> NDArray[np.float64]:
-    """The ``x`` the pseudo-observations sit at; a mid-horizon day."""
+    """The unit-length ``x`` the pseudo-observations sit at; a mid-horizon day."""
     half = MAX_SCAN_DAYS / 2
-    return build_context_vector(
+    x = build_context_vector(
         remaining_days_until_deadline=half,
         duration_minutes=REFERENCE_DURATION_MINUTES,
         candidate_iso_weekday=iso_weekday,
         candidate_days_from_now=half,
     )
+    norm = float(np.linalg.norm(x))
+    return x / norm if norm > 0 else x
 
 
 def matrix_prior(
     matrix: NDArray[np.float64], d: int, ridge: float
 ) -> dict[ArmId, ArmParams]:
-    """``(A, b)`` for every arm, seeded from ``matrix``."""
+    """``(A, b)`` for every hour arm, seeded from ``matrix``.
+
+    Each arm gets the pseudo-observations of its hour: the share of the matrix over that
+    hour, on weekdays for one reference context and on weekends for the other.
+    """
     contexts = (
         (False, N0_WEEKDAY, reference_context(REFERENCE_ISO_WEEKDAY)),
         (True, N0_WEEKEND, reference_context(REFERENCE_ISO_WEEKEND)),
     )
     prior: dict[ArmId, ArmParams] = {}
-    for arm, start, end in ARM_BANDS:
+    for hour, arm in enumerate(HOUR_ARM_IDS):
         a = ridge * np.eye(d)
         b = np.zeros(d)
         for weekend, n0, x in contexts:
@@ -82,10 +85,11 @@ def matrix_prior(
                 raise ValueError(
                     f"reference context has {x.size} features, expected {d}"
                 )
-            reward = PRIOR_BASE + PRIOR_SLOPE * arm_share(matrix, weekend, start, end)
+            share = arm_share(matrix, weekend, hour * 60, (hour + 1) * 60)
+            reward = PRIOR_BASE + PRIOR_SLOPE * share
             a = a + n0 * np.outer(x, x)
             b = b + n0 * reward * x
-        prior[cast(ArmId, arm)] = ArmParams(A=a, b=b)
+        prior[arm] = ArmParams(A=a, b=b)
     return prior
 
 

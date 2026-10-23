@@ -42,6 +42,13 @@ function openSession(taskId: string) {
   );
 }
 
+/** Notify the layout to repack the sessions that overlap this one. */
+function requestResolve(sessionId: string) {
+  window.dispatchEvent(
+    new CustomEvent("zenflow:resolve-conflicts", { detail: sessionId }),
+  );
+}
+
 /** Notify the layout to persist an edge-resize for this block's task. */
 function requestResize(
   taskId: string,
@@ -57,6 +64,8 @@ function requestResize(
 
 // Touch: how far a finger may drift before a press counts as a drag, not a tap.
 const TAP_MOVE_TOLERANCE = 8;
+/** Hold a conflicting block this long to resolve the overlap. Matches the wipe. */
+const RESOLVE_HOLD_MS = 900;
 
 const HATCH_PX = 5;
 /** A travel zone is never thinner than this, so a short trip still shows. */
@@ -313,11 +322,35 @@ export function ScheduledBlockItem({
   // A fixed block never moves; a drag attempt gets one toast per press.
   const refused = useRef(false);
 
+  // Holding a conflicting block resolves its overlap. Any drift or drag cancels it.
+  const [holding, setHolding] = useState(false);
+  const holdTimer = useRef<number | null>(null);
+  const cancelHold = () => {
+    if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    setHolding(false);
+  };
+  useEffect(() => {
+    if (isDragging) cancelHold();
+  }, [isDragging]);
+  useEffect(() => () => {
+    if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
+  }, []);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     listeners?.onPointerDown?.(e); // keep dnd-kit's drag tracking intact
     moved.current = false;
     refused.current = false;
     pressOrigin.current = { x: e.clientX, y: e.clientY };
+    if (layout.conflict && isInteractive) {
+      setHolding(true);
+      holdTimer.current = window.setTimeout(() => {
+        holdTimer.current = null;
+        setHolding(false);
+        moved.current = true;
+        requestResolve(block.id);
+      }, RESOLVE_HOLD_MS);
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -326,6 +359,7 @@ export function ScheduledBlockItem({
     const dy = e.clientY - pressOrigin.current.y;
     if (Math.hypot(dx, dy) > TAP_MOVE_TOLERANCE) {
       moved.current = true;
+      cancelHold();
       if (block.type !== "TASK" && !refused.current) {
         refused.current = true;
         toast.info(t("Only plans can be moved"));
@@ -335,6 +369,7 @@ export function ScheduledBlockItem({
 
   const endPress = () => {
     pressOrigin.current = null;
+    cancelHold();
   };
 
   const handleClick = () => {
@@ -519,6 +554,12 @@ export function ScheduledBlockItem({
           style={{ borderColor: hexAlpha(SESSION_TONES[tone].base, 0.55) }}
           onAnimationEnd={isHighlighted ? clearHighlight : undefined}
         >
+          {holding && (
+            <span
+              aria-hidden
+              className="animate-block-wipe pointer-events-none absolute inset-0"
+            />
+          )}
           <span
             aria-hidden
             className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[3px] rounded-full"

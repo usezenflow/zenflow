@@ -5,6 +5,8 @@ import {
   PLACEMENT_CONTRACT_VERSION,
   type PlaceRequest,
   type PlaceResponse,
+  type ResolveRequest,
+  type ResolveResponse,
 } from "@zenflow/shared";
 import {
   banditClientDuration,
@@ -118,6 +120,36 @@ export class PlacementClient {
       : { ok: false, reason: outcome.reason };
   }
 
+  /**
+   * Repacks the flexible sessions around an anchor (`POST /v1/resolve`). One
+   * attempt, no retry or breaker: a failure just means no auto-resolve.
+   */
+  async resolve(req: ResolveRequest): Promise<ResolveResponse | null> {
+    if (!this.baseUrl) return null;
+    if (!(await this.killSwitch.isEnabled("bandit"))) return null;
+    try {
+      const res = await this.deps.fetch(`${this.baseUrl}/v1/resolve`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
+        },
+        body: JSON.stringify(req),
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      if (!res.ok) {
+        this.logger.warn(`resolve ${req.requestId} failed: ${res.status}`);
+        return null;
+      }
+      return (await res.json()) as ResolveResponse;
+    } catch (err) {
+      this.logger.warn(
+        `resolve ${req.requestId} errored: ${(err as Error).name}`,
+      );
+      return null;
+    }
+  }
+
   private publishBreaker(): void {
     const s = this.breaker.state;
     schedulerBreakerState.record(
@@ -207,8 +239,8 @@ export class PlacementClient {
     const valid =
       body !== null &&
       body.contractVersion === PLACEMENT_CONTRACT_VERSION &&
-      Array.isArray(body.results) &&
-      body.results.length === req.members.length;
+      body.result !== undefined &&
+      body.result !== null;
     if (!valid) {
       this.logger.error(`place ${req.requestId}: invalid response body`);
       return {

@@ -1,12 +1,11 @@
 // Placement-path workload. One user per VU (users seeded by seed.js).
 // Env: BASE MAIL LEVEL VUS MODE(constant|ramp|arrival|steady) DURATION VARIANT OUT COOKIES
-//      OPS(mix|task|series|infeasible) TASK_DAYS SERIES_N SERIES_DAYS RAMP("rate:dur,rate:dur,...") NUSERS
+//      OPS(mix|task|infeasible) TASK_DAYS RAMP("rate:dur,rate:dur,...") NUSERS
 //
 // Iteration shapes (closed loop, no think time unless MODE=arrival):
-//   mix        list_week, post_task(deadline TASK_DAYS), patch_move, patch_resize, post_series(SERIES_N sittings,
-//              deadline SERIES_DAYS), delete task + series        (headline workload)
+//   mix        list_week, post_task(deadline TASK_DAYS), patch_move, patch_resize, delete
+//              (headline workload)
 //   task       list_week, post_task, patch_move, patch_resize, delete           (scan-window scenarios)
-//   series     post_series, delete                                              (series-size scenarios)
 //   infeasible blocker (fixed, untimed) -> post_task with a deadline that cannot be met:
 //              infeas_first (AFTER: 409), infeas_conflicts / infeas_late (retry with infeasiblePolicy;
 //              BEFORE has no such field, so the strict pipe answers 400). Reported separately, never headline.
@@ -23,8 +22,6 @@ const DURATION = __ENV.DURATION || "60s";
 const VARIANT = __ENV.VARIANT || "unknown";
 const OPSMODE = __ENV.OPS || "mix";
 const TASK_DAYS = parseInt(__ENV.TASK_DAYS || "30", 10);
-const SERIES_N = parseInt(__ENV.SERIES_N || "8", 10);
-const SERIES_DAYS = parseInt(__ENV.SERIES_DAYS || "30", 10);
 const RAMP = (__ENV.RAMP || "2:15s,4:15s,6:15s,8:15s").split(",").map((x) => {
   const [r, d] = x.split(":");
   return { target: parseInt(r, 10), duration: d };
@@ -37,7 +34,7 @@ try {
   /* fall back to OTP login in setup() */
 }
 
-const OPS = ["list_week", "post_task", "patch_move", "patch_resize", "post_series", "delete", "blocker", "infeas_first", "infeas_conflicts", "infeas_late"];
+const OPS = ["list_week", "post_task", "patch_move", "patch_resize", "delete", "blocker", "infeas_first", "infeas_conflicts", "infeas_late"];
 const CLASSES = ["ok", "s409", "s503", "s4xx", "s5xx", "s0"];
 const PHASES = ["dayload", "http", "scan", "predict", "db_apply"];
 const T = {}, C = {}, PH = {};
@@ -147,24 +144,8 @@ export default function (data) {
       timed("patch_resize", r, true);
       inspect(r);
     }
-    let seriesId = null;
-    if (OPSMODE === "mix") seriesId = postSeries(h, now, it);
     if (taskId) del(`/sessions/${taskId}`);
-    if (seriesId) del(`/sessions/series/${seriesId}`);
-  } else if (OPSMODE === "series") {
-    const seriesId = postSeries(h, now, it);
-    if (seriesId) del(`/sessions/series/${seriesId}`);
   }
-}
-
-function postSeries(h, now, it) {
-  const r = http.post(`${BASE}/sessions`, JSON.stringify({ type: "TASK", title: `lt series ${it}`, durationMinutes: 60, sessionCount: SERIES_N, deadline: iso(now + SERIES_DAYS * 86400000), reminders: [] }), { ...h, tags: { name: "post_series" } });
-  timed("post_series", r, true);
-  inspect(r);
-  if (r.status !== 200 && r.status !== 201) return null;
-  const d = r.json("data");
-  const first = Array.isArray(d) ? d[0] : d.sessions ? d.sessions[0] : d;
-  return first && first.seriesId;
 }
 
 function infeasible(h, now, del) {
@@ -213,7 +194,7 @@ export function handleSummary(data) {
     if (m[`ph_${p}`] && v(`ph_${p}`, "avg") !== undefined) phases[p] = { avg: v(`ph_${p}`, "avg"), p50: v(`ph_${p}`, "med"), p95: v(`ph_${p}`, "p(95)"), max: v(`ph_${p}`, "max") };
   }
   const out = {
-    variant: VARIANT, mode: MODE, ops_mode: OPSMODE, level: LEVEL, vus: VUS, taskDays: TASK_DAYS, seriesN: SERIES_N, seriesDays: SERIES_DAYS, durationSec: dur,
+    variant: VARIANT, mode: MODE, ops_mode: OPSMODE, level: LEVEL, vus: VUS, taskDays: TASK_DAYS, durationSec: dur,
     http: { reqs: v("http_reqs", "count"), rps: v("http_reqs", "rate"), p50: v("http_req_duration", "med"), p95: v("http_req_duration", "p(95)"), p99: v("http_req_duration", "p(99)"), max: v("http_req_duration", "max") },
     iterations: v("iterations", "count"), iterationsPerSec: v("iterations", "rate"), droppedIterations: v("dropped_iterations", "count") || 0,
     vusMax: v("vus_max", "max"),

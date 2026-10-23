@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { PLACEMENT_CONTRACT_VERSION } from "@zenflow/shared";
+import { PLACEMENT_CONTRACT_VERSION, SCHEDULING_ARMS } from "@zenflow/shared";
 import type { PlaceResponse } from "@zenflow/shared";
 import type { User } from "../../../generated/prisma";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -22,7 +22,7 @@ const respond = (outcome: string): PlaceResponse =>
     contractVersion: 1,
     requestId: "r",
     paramsVersion: "pv",
-    results: [{ id: "t1", outcome }],
+    result: { id: "t1", outcome },
     timingsMs: {
       decode: 1,
       context: 1,
@@ -42,16 +42,7 @@ async function make(place: jest.Mock) {
   const loadAll = jest
     .fn()
     .mockResolvedValue(
-      Object.fromEntries(
-        [
-          "EARLY_MORNING",
-          "MORNING",
-          "MIDDAY",
-          "AFTERNOON",
-          "EVENING",
-          "NIGHT",
-        ].map((a) => [a, { A: [], b: [], version: 0 }]),
-      ),
+      Object.fromEntries(SCHEDULING_ARMS.map((a) => [a, { A: [], b: [] }])),
     );
   const module: TestingModule = await Test.createTestingModule({
     providers: [
@@ -92,7 +83,7 @@ describe("PlacementGateway.buildRequest", () => {
     const req = await gw.buildRequest({
       ...base,
       user: { ...user, preferenceMatrix: matrix },
-      members: [member()],
+      member: member(),
     });
     const m = req.user.preferenceMatrix;
     // Same as Python schemas_place (len 168, finite) and default_preference_matrix.
@@ -112,14 +103,14 @@ describe("PlacementGateway.buildRequest", () => {
     const req = await gw.buildRequest({
       ...base,
       user: { ...user, preferenceMatrix: own },
-      members: [member()],
+      member: member(),
     });
     expect(req.user.preferenceMatrix).toEqual(own);
   });
 
   it("buckets days, sends the observation count, and omits bandit state for heuristic-only", async () => {
     const { gw, loadAll } = await make(jest.fn());
-    const req = await gw.buildRequest({ ...base, members: [member()] });
+    const req = await gw.buildRequest({ ...base, member: member() });
     expect(req.contractVersion).toBe(PLACEMENT_CONTRACT_VERSION);
     expect(req.days.map((d) => d.dayStr)).toEqual(["2026-06-08"]);
     expect(req.user.observationCount).toBe(7);
@@ -132,18 +123,11 @@ describe("PlacementGateway.buildRequest", () => {
     const { gw, loadAll } = await make(jest.fn());
     const req = await gw.buildRequest({
       ...base,
-      members: [member({ primaryPolicy: "LINUCB", computeBoth: true })],
+      member: member({ primaryPolicy: "LINUCB", computeBoth: true }),
     });
     expect(loadAll).toHaveBeenCalledWith("u1");
     expect(Object.keys(req.bandit?.state ?? {}).sort()).toEqual(
-      [
-        "AFTERNOON",
-        "EARLY_MORNING",
-        "EVENING",
-        "MIDDAY",
-        "MORNING",
-        "NIGHT",
-      ].sort(),
+      [...SCHEDULING_ARMS].sort(),
     );
     expect(req.bandit?.alpha).toBeGreaterThan(0);
   });
@@ -155,13 +139,13 @@ describe("PlacementGateway.buildRequest", () => {
       ...base,
       deadline: far,
       maxScanDays: 5,
-      members: [member()],
+      member: member(),
     });
     expect(long.days).toHaveLength(5);
     const past = await gw.buildRequest({
       ...base,
       deadline: new Date(now.getTime() - 1),
-      members: [member()],
+      member: member(),
     });
     expect(past.days).toEqual([]);
   });
@@ -171,7 +155,7 @@ describe("PlacementGateway.placeSingleTwoPhase", () => {
   const req = {
     requestId: "r",
     nowMs: now.getTime(),
-    members: [member()],
+    member: member(),
   } as never;
 
   it("one call when Python places", async () => {
@@ -207,7 +191,7 @@ describe("PlacementGateway.placeSingleTwoPhase", () => {
     expect(second.requestId).toBe("r-2");
     expect(second.infeasible.policy).toBe("ACCEPT_LATE_DEADLINE");
     expect(second.infeasible.flexible).toEqual([]);
-    expect(res.ok && res.response.results[0].outcome).toBe("DISPLACED");
+    expect(res.ok && res.response.result.outcome).toBe("DISPLACED");
   });
 
   it("a failed first call is returned as-is (no infeasible-context load)", async () => {
@@ -225,7 +209,7 @@ describe("PlacementGateway per-policy latency histogram", () => {
     requestId: "r",
     nowMs: now.getTime(),
     mode: "PLACE",
-    members: [member({ primaryPolicy: "LINUCB", computeBoth: true })],
+    member: member({ primaryPolicy: "LINUCB", computeBoth: true }),
   } as never;
 
   const totalsRecorded = (record: jest.SpyInstance) =>

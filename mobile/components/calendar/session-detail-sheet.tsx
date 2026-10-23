@@ -2,7 +2,6 @@ import {
   confirmPlacement,
   createSession,
   getSessionDetails,
-  removeSeriesFrom,
   removeSession,
   removeSessionSeries,
   truncateSessionSeries,
@@ -359,8 +358,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
           await removeSessionSeries(target.seriesId);
         } else if (scope === "following" && target.seriesId && seriesKind === "recurring" && target.scheduledStartTime) {
           await truncateSessionSeries(target.seriesId, target.scheduledStartTime);
-        } else if (scope === "following" && target.seriesId && seriesKind === "task") {
-          await removeSeriesFrom(target.seriesId, target.id);
         } else {
           await removeSession(target.id);
         }
@@ -382,9 +379,7 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
         scope === "series"
           ? t("Series deleted")
           : scope === "following"
-            ? seriesKind === "task"
-              ? t("This and later sittings removed")
-              : t("This and later occurrences removed")
+            ? t("This and later occurrences removed")
             : t("Session deleted"),
       icon: "trash",
       duration: UNDO_WINDOW_MS,
@@ -599,7 +594,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
       </BottomSheet>
       <DeleteRecurringSheet
         ref={deleteScopeSheet}
-        kind={session && getSeriesKind(session) === "task" ? "task" : "recurring"}
         onChoose={runDelete}
       />
       <MakeRoomSheet ref={makeRoom} tz={tz} />

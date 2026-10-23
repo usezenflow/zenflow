@@ -28,7 +28,7 @@ export type DeleteRecurringScope = "occurrence" | "following" | "series";
  * opens for a non-series session) — governs copy only, not behavior; the
  * caller still owns which API calls each scope maps to.
  */
-export type DeleteRecurringSheetKind = "recurring" | "task" | "skip";
+export type DeleteRecurringSheetKind = "recurring" | "skip";
 
 export interface DeleteRecurringSheetHandle {
   /** Open the chooser for the occurrence/sitting starting on `occurrenceDate`. */
@@ -104,31 +104,6 @@ const COPY: Record<
         Icon: CalendarDays,
         label: "All occurrences",
         hint: () => t("Skip the whole course."),
-      },
-    ],
-  },
-  task: {
-    title: "Delete session",
-    tappedLabel: "This sitting",
-    options: [
-      {
-        scope: "occurrence",
-        Icon: Trash2,
-        label: "This sitting",
-        hint: (d) => t("Only {date} is removed.", { date: d }),
-      },
-      {
-        scope: "following",
-        Icon: CalendarRange,
-        label: "This and all later sittings",
-        hint: (d) => t("Sittings from {date} onward are removed.", { date: d }),
-      },
-      {
-        scope: "series",
-        Icon: CalendarDays,
-        label: "All sittings",
-        hint: () => t("Delete the entire plan and all its sittings."),
-        destructive: true,
       },
     ],
   },

@@ -15,6 +15,7 @@ export * from "./file";
 export * from "./file-limits";
 export * from "./skip";
 export * from "./session-start";
+export * from "./session-resolve";
 export * from "./client-events";
 export * from "./course-colour";
 export * from "./student";

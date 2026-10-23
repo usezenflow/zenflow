@@ -12,6 +12,7 @@ import type {
   SessionsListResponse,
   SessionStartResponse,
   SlotPickRequest,
+  SessionResolveConflictsResponse,
   SlotPickResponse,
   UpdateSessionInput,
   UndoPlacementResponse,
@@ -151,6 +152,12 @@ export async function skipTimetableGroupFrom(sessionId: string): Promise<void> {
 export async function confirmPlacement(planId: string): Promise<ConfirmPlacementResponse> {
   const body: ConfirmPlacementRequest = { planId };
   const { data } = await api.post("/sessions/placement/confirm", body);
+  return data.data;
+}
+
+/** Repacks the sessions that overlap `id`; `id` stays where it is. */
+export async function resolveConflicts(id: string): Promise<SessionResolveConflictsResponse> {
+  const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/resolve-conflicts`);
   return data.data;
 }
 

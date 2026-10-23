@@ -53,11 +53,8 @@ Reminder presets: At start, 15 min, 30 min, 1 hour, 2 hours, 1 day, 2 days, 3 da
 A pairwise-sampled placement returns a second candidate slot. Model identity is never shown.
 
 - **Single `TASK`** create or deadline change with `divergent: true` opens `slot-pick-dialog.tsx` (keep or switch).
-- **Series** create or redistribute never blocks; every sitting is already scheduled.
-  - If any `sessions[i].divergent` is set, a dismissible toast ("N sittings have an alternative") opens `series-alternatives-dialog.tsx`.
-  - It lists up to 5 divergent sittings, soonest first, as primary/alternative radio-card pairs with date and time.
 - Picking an alternative calls `POST /sessions/:id/slot-pick` (`chose: "alternative"`), fires `zenflow:calendar-refresh`, and locks the row.
-- `409` (now overlaps a sibling) marks the row "No longer available". Closing without picking keeps every sitting as scheduled.
+- `409` (now overlaps another session) marks the row "No longer available". Closing without picking keeps the scheduled slot.
 
 ## Calendar
 

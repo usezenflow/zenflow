@@ -32,8 +32,6 @@ function session(overrides: Partial<Session>): Session {
     rrule: null,
     timetableGroupId: null,
     courseKey: null,
-    sessionIndex: null,
-    sessionTotal: null,
     createdAt: "2026-09-01T00:00:00.000Z",
     updatedAt: "2026-09-01T00:00:00.000Z",
     ...overrides,
@@ -64,9 +62,9 @@ describe("sessionTypesByDay", () => {
   it("dedupes multiple sessions of the same type on the same day", () => {
     const result = sessionTypesByDay(
       [
-        session({ id: "a", type: "TASK", sessionIndex: 1, sessionTotal: 3 }),
-        session({ id: "b", type: "TASK", sessionIndex: 2, sessionTotal: 3 }),
-        session({ id: "c", type: "TASK", sessionIndex: 3, sessionTotal: 3 }),
+        session({ id: "a", type: "TASK" }),
+        session({ id: "b", type: "TASK" }),
+        session({ id: "c", type: "TASK" }),
       ],
       TZ,
     );

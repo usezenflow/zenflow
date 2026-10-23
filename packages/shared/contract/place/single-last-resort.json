@@ -6,22 +6,19 @@
     "timingsMs"
   ],
   "request": {
-    "contractVersion": 3,
+    "contractVersion": 4,
     "requestId": "00000000-0000-4000-8000-000000000002-2",
     "mode": "PLACE",
     "nowMs": 1789977600000,
     "timezone": "UTC",
     "maxScanDays": 30,
-    "fixedOccupied": [],
     "deadlineMs": 1789984800000,
-    "members": [
-      {
-        "id": "t1",
-        "durationMinutes": 60,
-        "primaryPolicy": "HEURISTIC",
-        "computeBoth": false
-      }
-    ],
+    "member": {
+      "id": "t1",
+      "durationMinutes": 60,
+      "primaryPolicy": "HEURISTIC",
+      "computeBoth": false
+    },
     "days": [
       {
         "dayStr": "2026-09-21",
@@ -247,30 +244,28 @@
     }
   },
   "response": {
-    "contractVersion": 3,
+    "contractVersion": 4,
     "requestId": "00000000-0000-4000-8000-000000000002-2",
-    "paramsVersion": "py-arms6-v3-23695319e1db",
-    "results": [
-      {
-        "id": "t1",
-        "outcome": "ACCEPTED_LAST_RESORT",
-        "appliedPolicy": "HEURISTIC",
-        "heuristic": null,
-        "linucb": null,
-        "startMs": 1789977600000,
-        "moves": [],
-        "late": false,
-        "conflicting": true,
-        "reason": "BEST_AVAILABLE"
-      }
-    ],
+    "paramsVersion": "py-hours24-v1-8e585a73d322",
+    "result": {
+      "id": "t1",
+      "outcome": "ACCEPTED_LAST_RESORT",
+      "appliedPolicy": "HEURISTIC",
+      "heuristic": null,
+      "linucb": null,
+      "startMs": 1789977600000,
+      "moves": [],
+      "late": false,
+      "conflicting": true,
+      "reason": "BEST_AVAILABLE"
+    },
     "timingsMs": {
-      "decode": 0.061,
+      "decode": 0.056,
       "context": 0.0,
       "predict": 0.0,
-      "scan": 0.013,
-      "displace": 0.082,
-      "total": 0.232
+      "scan": 0.018,
+      "displace": 0.102,
+      "total": 0.242
     }
   }
 }

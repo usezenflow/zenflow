@@ -117,6 +117,7 @@ class Task:
     u_see: float = 0.5  # pairwise run: whether the offer is seen
     eps_primary: float = 0.0  # pairwise run: perception noise on each option
     eps_alt: float = 0.0
+    kind: str = "TASK"  # TASK, ASSIGNMENT or EXAM; semester tasks only
 
 
 def make_tasks(

@@ -1,13 +1,15 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { SCHEDULING_ARMS, type SchedulingArm } from "@zenflow/shared";
+import {
+  type BanditArmStateWire,
+  SCHEDULING_ARMS,
+  type SchedulingArm,
+} from "@zenflow/shared";
 import { PrismaService } from "../prisma/prisma.service";
-import type { LoadedArmState } from "./bandit.types";
 
 /**
- * Load / persist per-(user, arm) LinUCB `(A, b)` for the stateless Python
- * bandit service. `save` is best-effort optimistic-concurrency: a concurrent
- * writer that bumped `version` first simply wins and this call is a no-op
- * (logged, never thrown) — a lost bandit update is acceptable.
+ * Load / overwrite the 24 hour arms of a user's LinUCB state for the stateless
+ * Python bandit service. A reward changes every arm (the kernel spreads it), so
+ * the whole state is read and written together.
  */
 @Injectable()
 export class BanditArmStateRepository {
@@ -15,60 +17,44 @@ export class BanditArmStateRepository {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** All 5 arms for a user; arms with no row yet come back as the cold prior. */
+  /** All 24 hour arms for a user. An arm with no row yet comes back cold (empty `A`, `b`). */
   async loadAll(
     userId: string,
-  ): Promise<Record<SchedulingArm, LoadedArmState>> {
+  ): Promise<Record<SchedulingArm, BanditArmStateWire>> {
     const rows = await this.prisma.banditArmState.findMany({
       where: { userId },
     });
     const byArm = new Map(rows.map((r) => [r.arm, r]));
 
-    const out = {} as Record<SchedulingArm, LoadedArmState>;
+    const out = {} as Record<SchedulingArm, BanditArmStateWire>;
     for (const arm of SCHEDULING_ARMS) {
       const row = byArm.get(arm);
-      out[arm] = row
-        ? { A: row.A, b: row.b, version: row.version }
-        : { A: [], b: [], version: 0 };
+      out[arm] = row ? { A: row.A, b: row.b } : { A: [], b: [] };
     }
     return out;
   }
 
   /**
-   * Persist a new `(A, b)` for one arm. Guards on `prevVersion` so a stale
-   * update can't clobber a newer one; on a version mismatch (or first-write
-   * race) it logs and returns without throwing.
+   * Overwrite all 24 hour arms for a user, in one transaction. Best-effort: a
+   * failure is logged and the previous state stays.
    */
-  async save(
+  async replaceAll(
     userId: string,
-    arm: SchedulingArm,
-    A: number[],
-    b: number[],
-    prevVersion: number,
+    arms: Record<SchedulingArm, BanditArmStateWire>,
   ): Promise<void> {
     try {
-      const updated = await this.prisma.banditArmState.updateMany({
-        where: { userId, arm, version: prevVersion },
-        data: { A, b, version: prevVersion + 1 },
-      });
-      if (updated.count > 0) return;
-
-      // No row matched the guard: either the row doesn't exist yet
-      // (prevVersion 0) or another writer moved ahead. Try to create; a
-      // unique-constraint failure means we lost the race — accept it.
-      if (prevVersion === 0) {
-        await this.prisma.banditArmState.create({
-          data: { userId, arm, A, b, version: 1 },
-        });
-        return;
-      }
-
-      this.logger.warn(
-        `bandit state save skipped for user=${userId} arm=${arm}: version moved past ${prevVersion}`,
+      await this.prisma.$transaction(
+        SCHEDULING_ARMS.map((arm) =>
+          this.prisma.banditArmState.upsert({
+            where: { userId_arm: { userId, arm } },
+            create: { userId, arm, A: arms[arm].A, b: arms[arm].b },
+            update: { A: arms[arm].A, b: arms[arm].b },
+          }),
+        ),
       );
     } catch (err) {
       this.logger.warn(
-        `bandit state save failed for user=${userId} arm=${arm}: ${(err as Error).message}`,
+        `bandit state save failed for user=${userId}: ${(err as Error).message}`,
       );
     }
   }

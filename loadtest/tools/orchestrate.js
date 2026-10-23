@@ -36,15 +36,13 @@ const VARIANTS = {
 const PASS_ORDER = { 1: ["A", "B", "C"], 2: ["C", "B", "A"], 3: ["B", "C", "A"] };
 
 // ---- scenario matrix -------------------------------------------------------------------------------------
-const MIX = { ops: "mix", taskDays: 30, seriesN: 8, seriesDays: 30 };
+const MIX = { ops: "mix", taskDays: 30 };
 const SCENARIOS = [
-  // headline: standard mix (single task with a 30-day scan + 8-sitting series), fixed-load level x closed-loop VUs
+  // headline: standard mix (single task with a 30-day scan), fixed-load level x closed-loop VUs
   ...[1, 10, 25, 50].map((v) => ({ tag: `mix_medium_v${v}`, family: "headline", level: "medium", vus: v, ...MIX })),
   ...["light", "heavy"].flatMap((l) => [10, 50].map((v) => ({ tag: `mix_${l}_v${v}`, family: "headline", level: l, vus: v, ...MIX }))),
   // scan window (single task only): deadline 7 / 30 / 60 days out
   ...[7, 30, 60].map((d) => ({ tag: `scan_${d}d`, family: "scan", level: "medium", vus: 10, ops: "task", taskDays: d })),
-  // series size (series only): 3 (reference), 8, 12 sittings over 30 days, 20 sittings over 60 days
-  ...[[3, 30], [8, 30], [12, 30], [20, 60]].map(([n, d]) => ({ tag: `series_${n}x_${d}d`, family: "series", level: "medium", vus: 10, ops: "series", seriesN: n, seriesDays: d })),
   // infeasible path: own family, never merged into headline numbers
   { tag: "infeasible_medium_v10", family: "infeasible", level: "medium", vus: 10, ops: "infeasible" },
   // 5-minute steady state (drift check, runs before the arrival scenario, which may leave a backlog); pass 1 only to stay inside the time budget
@@ -281,7 +279,7 @@ async function runScenario(V, pass, sc, attempt) {
   const durSec = sc.mode === "arrival" ? sc.ramp.split(",").reduce((s, x) => s + parseInt(x.split(":")[1], 10), 0) : parseInt((sc.dur || "60s"), 10);
   const env = {
     BASE, MAIL, LEVEL: sc.level, VUS: String(sc.vus), MODE: sc.mode || "constant", DURATION: sc.dur || "60s", VARIANT: V, OPS: sc.ops,
-    TASK_DAYS: String(sc.taskDays || 30), SERIES_N: String(sc.seriesN || 8), SERIES_DAYS: String(sc.seriesDays || 30), COOKIES: path.join(RESULTS, V, `cookies-${sc.level}.json`),
+    TASK_DAYS: String(sc.taskDays || 30), COOKIES: path.join(RESULTS, V, `cookies-${sc.level}.json`),
     OUT: path.join(dir, `${tag}.json`), ...(sc.ramp ? { RAMP: sc.ramp } : {}),
   };
   const args = [];

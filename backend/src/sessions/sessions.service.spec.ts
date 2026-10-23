@@ -9,6 +9,7 @@ import { ScheduleInfeasibleException } from "../scheduler/schedule-infeasible.ex
 import { SessionsService } from "./sessions.service";
 import { SessionSkipService } from "./session-skip.service";
 import { SessionStartService } from "./session-start.service";
+import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service";
 import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
 import { SessionUpdateService } from "./session-update.service";
@@ -77,8 +78,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     deleted: false,
     userId: user.id,
     seriesId: null,
-    sessionIndex: null,
-    sessionTotal: null,
     externalKey: null,
     scheduleStudyUnitId: null,
     lmsCourseId: null,
@@ -184,6 +183,7 @@ async function makeService(
       { provide: RemindersService, useValue: fakeReminders() },
       { provide: SessionSkipService, useValue: {} },
       { provide: SessionStartService, useValue: {} },
+      { provide: ConflictResolveService, useValue: {} },
       {
         provide: NoteFilesService,
         useValue: {
@@ -366,8 +366,6 @@ describe("SessionsService.create", () => {
       rrule: null,
       timetableGroupId: null,
       courseKey: null,
-      sessionIndex: null,
-      sessionTotal: null,
       late: false,
       displacedSessions: [],
       skipped: false,
@@ -489,7 +487,6 @@ describe("SessionsService.create", () => {
       id: "series-1",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       type: "DND",
-      deadline: null,
       rrule: "FREQ=WEEKLY;BYDAY=MO",
       exdates: [],
       skippedFrom: null,
@@ -542,7 +539,6 @@ describe("SessionsService.create", () => {
       id: "series-2",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       type: "LECTURE",
-      deadline: null,
       rrule: "FREQ=WEEKLY;BYDAY=MO,WE",
       exdates: [],
       skippedFrom: null,
@@ -622,7 +618,6 @@ describe("SessionsService.list", () => {
       id: "series-1",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       type: "DND",
-      deadline: null,
       rrule: "FREQ=DAILY",
       exdates: [],
       skippedFrom: null,
@@ -665,7 +660,6 @@ describe("SessionsService.list", () => {
       id: "series-1",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       type: "LECTURE",
-      deadline: null,
       rrule: "FREQ=DAILY",
       exdates: [],
       skippedFrom: null,
@@ -809,7 +803,6 @@ describe("SessionsService.list", () => {
       id: "series-sleep",
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       type: "DND",
-      deadline: null,
       rrule: "FREQ=DAILY",
       exdates: [],
       skippedFrom: null,
@@ -1241,7 +1234,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     expect(tagsService.resolveTagIds).not.toHaveBeenCalled();
     expect(placement.placeOnDeadlineChange).not.toHaveBeenCalled();
     expect(result.title).toBe("New title");
-    expect(result.sessions).toBeUndefined();
   });
 
   it("dragging a scheduled TASK writes a MOVE event with drag distance and stamps lastMovedAt", async () => {
@@ -1396,14 +1388,13 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
       fakeSchedulingFeedback(),
     );
 
-    const result = await service.update(
+    await service.update(
       "session-1",
       { deadline: sameDeadline.toISOString() },
       user,
     );
 
     expect(placement.placeOnDeadlineChange).not.toHaveBeenCalled();
-    expect(result.sessions).toBeUndefined();
   });
 
   it("throws NotFoundException when the session doesn't belong to the user", async () => {
@@ -1671,68 +1662,6 @@ describe("SessionsService.truncateSeriesFrom", () => {
   });
 });
 
-describe("SessionsService.removeSeriesFrom", () => {
-  const members = [
-    { id: "s-1", sessionIndex: 1, createdAt: new Date("2026-01-01T00:00:00Z") },
-    { id: "s-2", sessionIndex: 2, createdAt: new Date("2026-01-01T00:01:00Z") },
-    { id: "s-3", sessionIndex: 3, createdAt: new Date("2026-01-01T00:02:00Z") },
-  ];
-
-  async function buildService(deleteMany: jest.Mock, seriesDelete: jest.Mock) {
-    const prisma = prismaWithTx({
-      sessionSeries: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: "series-1",
-          userId: user.id,
-          sessions: members,
-        }),
-        delete: seriesDelete,
-      },
-      session: { deleteMany },
-    });
-    return makeService(prisma, fakeTagsService());
-  }
-
-  it("deletes the named session and every later one, keeps the earlier ones", async () => {
-    const deleteMany = jest.fn().mockResolvedValue({ count: 2 });
-    const seriesDelete = jest.fn().mockResolvedValue({});
-    const service = await buildService(deleteMany, seriesDelete);
-
-    const result = await service.removeSeriesFrom("series-1", "s-2", user);
-
-    expect(deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: ["s-2", "s-3"] }, userId: user.id },
-    });
-    expect(seriesDelete).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      seriesId: "series-1",
-      removedSessionIds: ["s-2", "s-3"],
-      seriesGone: false,
-    });
-  });
-
-  it("removes the series row too when the first session is the anchor", async () => {
-    const deleteMany = jest.fn().mockResolvedValue({ count: 3 });
-    const seriesDelete = jest.fn().mockResolvedValue({});
-    const service = await buildService(deleteMany, seriesDelete);
-
-    const result = await service.removeSeriesFrom("series-1", "s-1", user);
-
-    expect(deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: ["s-1", "s-2", "s-3"] }, userId: user.id },
-    });
-    expect(seriesDelete).toHaveBeenCalledWith({ where: { id: "series-1" } });
-    expect(result.seriesGone).toBe(true);
-  });
-
-  it("throws NotFoundException when the session is not part of the series", async () => {
-    const service = await buildService(jest.fn(), jest.fn());
-    await expect(
-      service.removeSeriesFrom("series-1", "not-mine", user),
-    ).rejects.toBeInstanceOf(NotFoundException);
-  });
-});
-
 describe("SessionsService.update — deadline edit feasibility guard (#62 E)", () => {
   async function setup(existing: SessionRow) {
     const findFirst = jest.fn().mockResolvedValue(existing);
@@ -1768,7 +1697,6 @@ describe("SessionsService.update — deadline edit feasibility guard (#62 E)", (
         taskId: "t1",
         durationMinutes: 60,
         policy: "ACCEPT_LATE_DEADLINE",
-        arithmeticOnly: false,
       }),
     );
     expect(placement.placeOnDeadlineChange).toHaveBeenCalledWith(
@@ -1787,21 +1715,5 @@ describe("SessionsService.update — deadline edit feasibility guard (#62 E)", (
       service.update("t1", { deadline: "2026-06-11T00:00:00.000Z" }, user),
     ).rejects.toMatchObject({ status: 409 });
     expect(update).not.toHaveBeenCalled();
-  });
-
-  it("a series member only gets the arithmetic guard", async () => {
-    const { service, placement } = await setup(
-      session({
-        id: "s1",
-        seriesId: "series-1",
-        deadline: new Date("2026-06-10T12:00:00.000Z"),
-      }),
-    );
-    await service
-      .update("s1", { deadline: "2026-06-12T00:00:00.000Z" }, user)
-      .catch(() => undefined);
-    expect(placement.preflightTask).toHaveBeenCalledWith(
-      expect.objectContaining({ arithmeticOnly: true }),
-    );
   });
 });

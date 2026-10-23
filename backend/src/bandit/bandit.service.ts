@@ -4,6 +4,7 @@ import type {
   BanditArmStateWire,
   BanditUpdateRequest,
   BanditUpdateResponse,
+  SchedulingArm,
 } from "@zenflow/shared";
 import { BANDIT_RIDGE } from "../scheduler/constants";
 import { banditClientDuration } from "../observability/metrics";
@@ -36,14 +37,14 @@ export class BanditService {
   }
 
   /**
-   * Fold one `(x, reward)` observation into `arm`'s state and return the new
-   * `(A, b)`. Returns `null` on any failure.
+   * Fold one `(x, reward)` observation, made at hour arm `arm`, into all 24 arms
+   * and return them. Returns `null` on any failure.
    */
   async update(
-    arm: string,
+    arm: SchedulingArm,
     x: number[],
     reward: number,
-    state: BanditArmStateWire,
+    arms: Record<SchedulingArm, BanditArmStateWire>,
   ): Promise<BanditUpdateResponse | null> {
     if (!this.baseUrl) return null;
 
@@ -52,7 +53,7 @@ export class BanditService {
       arm,
       x,
       reward,
-      state,
+      arms,
     };
 
     return this.post<BanditUpdateResponse>("/v1/update", body);

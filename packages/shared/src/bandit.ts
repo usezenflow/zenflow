@@ -6,14 +6,32 @@
  * (`BanditArmState`). See `docs/adr/0001-linucb-model-design.md`.
  */
 
-/** The six canonical time-of-day arms (`docs/adr/0001-linucb-model-design.md` §2). */
+/** The 24 hour arms: one per local start hour (`HOUR_00` is 00:00 to 01:00). */
 export const SCHEDULING_ARMS = [
-  "EARLY_MORNING",
-  "MORNING",
-  "MIDDAY",
-  "AFTERNOON",
-  "EVENING",
-  "NIGHT",
+  "HOUR_00",
+  "HOUR_01",
+  "HOUR_02",
+  "HOUR_03",
+  "HOUR_04",
+  "HOUR_05",
+  "HOUR_06",
+  "HOUR_07",
+  "HOUR_08",
+  "HOUR_09",
+  "HOUR_10",
+  "HOUR_11",
+  "HOUR_12",
+  "HOUR_13",
+  "HOUR_14",
+  "HOUR_15",
+  "HOUR_16",
+  "HOUR_17",
+  "HOUR_18",
+  "HOUR_19",
+  "HOUR_20",
+  "HOUR_21",
+  "HOUR_22",
+  "HOUR_23",
 ] as const;
 
 export type SchedulingArm = (typeof SCHEDULING_ARMS)[number];
@@ -35,18 +53,19 @@ export interface BanditArmStateWire {
   b: number[];
 }
 
-/** `POST /v1/update` request body. */
+/** `POST /v1/update` request body. A reward for one hour arm, kernel-spread over all 24. */
 export interface BanditUpdateRequest {
   ridge: number;
-  arm: string;
+  /** The hour arm of the slot the reward is for. */
+  arm: SchedulingArm;
   /** The context vector the proposal was scored with; length {@link FEATURE_DIM}. */
   x: number[];
   reward: number;
-  state: BanditArmStateWire;
+  /** All 24 hour arms of the current state. */
+  arms: Record<SchedulingArm, BanditArmStateWire>;
 }
 
-/** `POST /v1/update` response — the new `(A, b)` after folding in the reward. */
+/** `POST /v1/update` response: all 24 hour arms after folding in the reward. */
 export interface BanditUpdateResponse {
-  A: number[];
-  b: number[];
+  arms: Record<SchedulingArm, BanditArmStateWire>;
 }

@@ -12,15 +12,15 @@ Arms (``ARM_SPEC``)
   L            LinUCB seeded from the same matrix, as shipped
   L-cold       LinUCB with no prior
   L-deadline   L with the deadline term off
-  L-gap        L with the old gap term (weight 0.2) back on
-  L-gap-only   gap term on, deadline term off
+  L-nogap      L with the gap term off
+  L-nogap-deadline  gap and deadline terms both off
   Oracle       the best in-band slot in the window (ceiling)
   Rand         a random day and hour in the task's window (floor)
   AB           the live protocol: 50/50 primary per event, both slots computed, a
                pairwise offer, the student may tap (see ``simulate_ab``)
 
 L - L-cold is the value of the prior, L - L-deadline the value of the deadline term
-and L-gap - L the value of the gap term. Every arm also reports the hours between a
+and L - L-nogap the value of the gap term. Every arm also reports the hours between a
 block's end and its deadline.
 
 Run:  uv run python -m evalx run --seeds 100 --students 100 --workers 8
@@ -52,6 +52,8 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")  # the placer logs every request
 import numpy as np  # noqa: E402
 
 import src.core.matrix_prior as prior_module  # noqa: E402
+import src.core.slot_score as slot_score  # noqa: E402
+import src.place as place_module  # noqa: E402
 from evalx.world import (  # noqa: E402
     ARCHETYPES,
     HEADLINE_MIX,
@@ -78,12 +80,12 @@ from src.core.constants import (  # noqa: E402
 )
 from src.core.preference import (  # noqa: E402
     default_preference_matrix,
-    reinforce_preference_cell,
     reinforce_preference_move,
+    reinforce_preference_smooth,
 )
 from src.core.reward import drag_distance_reward  # noqa: E402
 from src.place import place as run_place  # noqa: E402
-from src.schemas import ARM_IDS, UpdateRequest  # noqa: E402
+from src.schemas import HOUR_ARM_IDS, UpdateRequest  # noqa: E402
 from src.schemas_place import PLACEMENT_CONTRACT_VERSION, PlaceRequest  # noqa: E402
 
 ALPHA = 0.15  # BANDIT_ALPHA, backend/src/scheduler/constants.ts
@@ -111,8 +113,8 @@ ARM_SPEC: dict[str, dict[str, Any]] = {
     "L": {"policy": "LINUCB"},
     "L-cold": {"policy": "LINUCB", "prior": "cold"},
     "L-deadline": {"policy": "LINUCB", "deadline": False},
-    "L-gap": {"policy": "LINUCB", "gap_weight": 0.2},
-    "L-gap-only": {"policy": "LINUCB", "gap_weight": 0.2, "deadline": False},
+    "L-nogap": {"policy": "LINUCB", "gap_weight": 0.0},
+    "L-nogap-deadline": {"policy": "LINUCB", "gap_weight": 0.0, "deadline": False},
     "Oracle": {"policy": "ORACLE"},
     "Rand": {"policy": "RAND"},
 }
@@ -129,15 +131,40 @@ CFG: dict[str, Any] = {
     "deadline_horizon": None,  # LinUCB penalty reach in hours; None ships
     "n0": None,  # (weekday, weekend) pseudo-observations of the prior; None ships
     "mix": HEADLINE_MIX,
+    "mode": "semester",  # "semester" (sampled students) or "bands" (fixed worlds)
+    "drag": 0.0,  # semester: share of students who move a poorly timed block
+    "imminence": 1.0,  # semester: scale on how much students start near a deadline
     "worlds": "all",  # "all" or "bands"
+    # Reality knobs (semester). The defaults are the headline student and signal.
+    "timing": 1.0,  # how much the hour matters to a student, 1 to 0
+    "detect": 1.0,  # chance a real start reaches the learner
+    "false_start": 0.0,  # chance a non-start is logged as a start
+    "delay": 0,  # tasks between a start and its reward
+    "tap_scale": 1.0,  # scale on the chance a student answers an offer
+    "drift": None,  # {"kind": "step" or "walk", "hours": n}: the peak hour moves
+    "discount": 1.0,  # L forgets: evidence kept per update of the played arm
+    "shape": None,  # None, "bimodal" or "weekday": a start curve L was not built for
+    "chrono": "shipped",  # chronotype mix: shipped, uniform, lark heavy, owl heavy
+    "attention_scale": 1.0,  # scale on every student's willingness to start
+    "opens_shift": 0.0,  # hours the app-open curve is shifted from the start curve
+    "opens_uninformative": False,  # opens drawn uniformly over the day
     # The heuristic's own knobs: table learning rate and weight of a kept slot.
     "pref_rate": consts.PREFERENCE_LEARNING_RATE,
+    "kernel_sd": 0.75,  # arms marked "kernel": hour kernel width (production)
+    "kernel_pool": 1.0,  # arms marked "kernel": same-group weekdays (production)
     "kept_weight": PREFERENCE_KEPT_WEIGHT,
 }
 _PRODUCTION = {
     "gap": consts.LINUCB_GAP_WEIGHT,
     "deadline": consts.DEADLINE_PENALTY_WEIGHT,
 }
+
+
+def _bias_only(**_: Any) -> Any:
+    """The context of a non-contextual bandit: 0 everywhere, 1 for the bias."""
+    x = np.zeros(consts.FEATURE_DIM)
+    x[-1] = 1.0
+    return x
 
 
 def configure(cfg: dict[str, Any]) -> None:
@@ -162,11 +189,23 @@ def _knobs(spec: dict[str, Any]) -> Iterator[None]:
         prior_module.N0_WEEKEND,
         consts.LINUCB_DEADLINE_HORIZON_HOURS,
     )
+    saved_horizon = slot_score.deadline_penalty_scores.__defaults__
+    saved_ctx = (place_module.build_context_vector, prior_module.build_context_vector)
+    if spec.get("context") == "none":  # a bandit that sees only the bias
+        place_module.build_context_vector = _bias_only
+        prior_module.build_context_vector = _bias_only
     if CFG["deadline_horizon"] is not None:
         consts.LINUCB_DEADLINE_HORIZON_HOURS = CFG["deadline_horizon"]
+    if "deadline_horizon" in spec:  # LinUCB's reach for this arm
+        consts.LINUCB_DEADLINE_HORIZON_HOURS = spec["deadline_horizon"]
+    if "heuristic_horizon" in spec:  # the heuristic's reach, a default argument
+        slot_score.deadline_penalty_scores.__defaults__ = (
+            float(spec["heuristic_horizon"]),
+        )
     if CFG["n0"] is not None:
         prior_module.N0_WEEKDAY, prior_module.N0_WEEKEND = CFG["n0"]
     consts.LINUCB_GAP_WEIGHT = spec.get("gap_weight", gap)
+    deadline = spec.get("deadline_weight", deadline)  # this arm's own weight
     consts.DEADLINE_PENALTY_WEIGHT = deadline if spec.get("deadline", True) else 0.0
     if spec.get("prior") == "cold":
         prior_module.PRIOR_MATRIX = None
@@ -181,6 +220,8 @@ def _knobs(spec: dict[str, Any]) -> Iterator[None]:
             prior_module.N0_WEEKEND,
             consts.LINUCB_DEADLINE_HORIZON_HOURS,
         ) = saved
+        slot_score.deadline_penalty_scores.__defaults__ = saved_horizon
+        place_module.build_context_vector, prior_module.build_context_vector = saved_ctx
 
 
 # --- Worlds -------------------------------------------------------------------
@@ -240,16 +281,29 @@ def worlds(kind: str = "all") -> dict[str, Student]:
 # --- Placement ----------------------------------------------------------------
 
 
-def _days(first_ms: int, last_ms: int, cal: Calendar) -> list[dict[str, Any]]:
+Placed = dict[int, list[tuple[int, int]]]
+
+
+def _days(
+    first_ms: int, last_ms: int, cal: Calendar, placed: Placed | None = None
+) -> list[dict[str, Any]]:
+    """The day windows of one request. ``placed`` are blocks already on the calendar
+    (day to minute intervals): they occupy time and count as TASK workload."""
     out = []
     ms = first_ms
     while ms <= last_ms:
         busy = busy_minutes(cal, ms)
+        mine = (placed or {}).get(ms // DAY_MS, [])
         workload = {**ZERO_WORKLOAD}
         workload["LECTURE"] = {
             "hours": sum(b - a for a, b in busy) / 60,
             "count": len(busy),
         }
+        if mine:
+            workload["TASK"] = {
+                "hours": sum(b - a for a, b in mine) / 60,
+                "count": len(mine),
+            }
         out.append(
             {
                 "dayStr": day_str(ms),
@@ -257,7 +311,7 @@ def _days(first_ms: int, last_ms: int, cal: Calendar) -> list[dict[str, Any]]:
                 "dayEndMs": ms + DAY_MS,
                 "occupied": [
                     {"startMs": ms + a * MS_PER_MINUTE, "endMs": ms + b * MS_PER_MINUTE}
-                    for a, b in busy
+                    for a, b in sorted([*busy, *mine])
                 ],
                 "workloadByType": workload,
             }
@@ -274,6 +328,7 @@ def place_body(
     n: int,
     cal: Calendar,
     both: bool = False,
+    placed: Placed | None = None,
 ) -> dict[str, Any]:
     """The ``/v1/place`` request the harness sends for one task."""
     first = (task.arrival_ms // DAY_MS) * DAY_MS
@@ -287,16 +342,13 @@ def place_body(
         "timezone": "UTC",
         "deadlineMs": task.deadline_ms,
         "maxScanDays": 30,
-        "members": [
-            {
-                "id": "t",
-                "durationMinutes": task.duration_min,
-                "primaryPolicy": primary,
-                "computeBoth": both,
-            }
-        ],
-        "fixedOccupied": [],
-        "days": _days(first, last, cal),
+        "member": {
+            "id": "t",
+            "durationMinutes": task.duration_min,
+            "primaryPolicy": primary,
+            "computeBoth": both,
+        },
+        "days": _days(first, last, cal, placed),
         "user": user,
     }
     if primary == "LINUCB" or both:
@@ -312,24 +364,39 @@ def _place(
     n: int,
     cal: Calendar,
     both: bool = False,
+    placed: Placed | None = None,
 ) -> dict[str, Any] | None:
     """One placement through the production placer, in-process."""
-    body = place_body(task, primary, state, matrix, n, cal, both)
+    body = place_body(task, primary, state, matrix, n, cal, both, placed)
     res = run_place(PlaceRequest.model_validate(body), 0.0).model_dump(by_alias=True)
-    r = res["results"][0]
+    r = res["result"]
     return r if r["outcome"] == "PLACED" else None
 
 
-def _kept(matrix: Any, start: int) -> Any:
+NO_KERNEL = (0.0, 0.0)
+
+
+def kernel_of(spec: dict[str, Any]) -> tuple[float, float]:
+    """``(sd, pool)`` of the matrix update for an arm: the swept kernel or none."""
+    if not spec.get("kernel"):
+        return NO_KERNEL
+    return float(CFG["kernel_sd"]), float(CFG["kernel_pool"])
+
+
+def _kept(matrix: Any, start: int, kern: tuple[float, float] = NO_KERNEL) -> Any:
     """The heuristic's table after the student keeps or starts a slot."""
-    return reinforce_preference_cell(
-        matrix, start, "UTC", CFG["kept_weight"], CFG["pref_rate"]
+    return reinforce_preference_smooth(
+        matrix, start, "UTC", CFG["kept_weight"], CFG["pref_rate"], *kern
     )
 
 
-def _moved(matrix: Any, old: int, new: int, drag: float) -> Any:
+def _moved(
+    matrix: Any, old: int, new: int, drag: float, kern: tuple[float, float] = NO_KERNEL
+) -> Any:
     """The heuristic's table after the student moves a slot."""
-    return reinforce_preference_move(matrix, old, new, "UTC", drag, CFG["pref_rate"])
+    return reinforce_preference_move(
+        matrix, old, new, "UTC", drag, CFG["pref_rate"], *kern
+    )
 
 
 def _learn(
@@ -339,7 +406,10 @@ def _learn(
     reward: float,
     spec: dict[str, Any],
 ) -> None:
-    with _knobs(spec):  # a cold arm hydrates from the arm's own prior
+    """One production update: the reward for ``arm_id``, spread over 24 hour arms."""
+    if CFG["discount"] < 1.0:
+        _forget(state, CFG["discount"])
+    with _knobs(spec):  # a cold arm hydrates from its own matrix prior
         upd = update_arm(
             UpdateRequest.model_validate(
                 {
@@ -347,11 +417,30 @@ def _learn(
                     "arm": arm_id,
                     "x": x,
                     "reward": reward,
-                    "state": state[arm_id],
+                    "arms": state,
                 }
             )
         )
-    state[arm_id] = {"A": upd.A, "b": upd.b}
+    for arm, st in upd.arms.items():
+        state[arm] = {"A": st.A, "b": st.b}
+
+
+def _forget(state: dict[str, Any], gamma: float) -> None:
+    """Shrink every warm arm's evidence by ``gamma`` toward ``ridge * I``.
+
+    Applied to all 24 arms before an update, since the kernel moves all of them. The
+    prior pseudo-observations fade with the rest. Cold arms have no evidence to shrink.
+    """
+    ridge = CFG["ridge"]
+    for arm, st in state.items():
+        if not st["A"]:
+            continue
+        a = np.asarray(st["A"]).reshape(-1, int(np.sqrt(len(st["A"]))))
+        eye = ridge * np.eye(a.shape[0])
+        state[arm] = {
+            "A": (eye + gamma * (a - eye)).reshape(-1).tolist(),
+            "b": (gamma * np.asarray(st["b"])).tolist(),
+        }
 
 
 # --- Student reaction ----------------------------------------------------------
@@ -460,8 +549,11 @@ def simulate(
     """
     spec = ARM_SPEC[arm]
     policy = spec["policy"]
-    state: dict[str, dict[str, list[float]]] = {a: {"A": [], "b": []} for a in ARM_IDS}
+    state: dict[str, dict[str, list[float]]] = {
+        a: {"A": [], "b": []} for a in HOUR_ARM_IDS
+    }
     matrix = _table()
+    kern = kernel_of(spec)
     done = starts = moves = placed = close = long_placed = 0
     slack = 0.0
     for n, task in enumerate(tasks):
@@ -496,11 +588,11 @@ def simulate(
         done += ok
         if signal == "START":
             starts += 1
-            matrix = _kept(matrix, start)
+            matrix = _kept(matrix, start, kern)
         elif signal == "MOVE":
             moves += 1
             drag = abs(new_start - start) / MS_PER_MINUTE
-            matrix = _moved(matrix, start, new_start, drag)
+            matrix = _moved(matrix, start, new_start, drag, kern)
         if lin and reward is not None:
             _learn(state, lin["selectedArm"], lin["featureVector"], reward, spec)
     return {
@@ -534,7 +626,10 @@ def simulate_ab(
     ``spec`` is the LinUCB variant to place (an ``ARM_SPEC`` entry); ``None`` ships.
     """
     variant = spec or {}
-    state: dict[str, dict[str, list[float]]] = {a: {"A": [], "b": []} for a in ARM_IDS}
+    kern = kernel_of(variant)
+    state: dict[str, dict[str, list[float]]] = {
+        a: {"A": [], "b": []} for a in HOUR_ARM_IDS
+    }
     matrix = _table()
     out = {
         k: 0
@@ -577,7 +672,7 @@ def simulate_ab(
                 _learn(state, arm_id, x, PAIRWISE_WIN_REWARD, variant)
             elif primary == "HEURISTIC":
                 _learn(state, arm_id, x, PAIRWISE_LOSS_REWARD, variant)
-                matrix = _kept(matrix, applied)
+                matrix = _kept(matrix, applied, kern)
             else:
                 drag = abs(hs - ls) / MS_PER_MINUTE
                 _learn(
@@ -587,13 +682,13 @@ def simulate_ab(
                     drag_distance_reward(drag, CFG["move_scale"]),
                     variant,
                 )
-                matrix = _moved(matrix, ls, hs, drag)
+                matrix = _moved(matrix, ls, hs, drag, kern)
         ok, signal, reward, new_start = react(st, task, applied, style, cal)
         if signal == "START":
-            matrix = _kept(matrix, applied)
+            matrix = _kept(matrix, applied, kern)
         elif signal == "MOVE":
             drag = abs(new_start - applied) / MS_PER_MINUTE
-            matrix = _moved(matrix, applied, new_start, drag)
+            matrix = _moved(matrix, applied, new_start, drag, kern)
         if signal and applied_policy == "LINUCB" and reward is not None:
             _learn(state, arm_id, x, reward, variant)
         out["events"] += 1
@@ -613,6 +708,10 @@ def run_seed(seed: int, students: int, arms: tuple[str, ...]) -> dict[str, Any]:
     Every draw depends only on the seed, student index and arm, so a rerun
     reproduces the part byte for byte.
     """
+    if CFG["mode"] == "semester":
+        from evalx import semester
+
+        return semester.run_seed(seed, students, arms)
     out: dict[str, Any] = {"seed": seed, "worlds": {}}
     for name, student in worlds(CFG["worlds"]).items():
         per: dict[str, list[Any]] = {a: [] for a in arms}
@@ -675,8 +774,8 @@ PAIRS: dict[str, tuple[str, str]] = {
     "prior": ("L", "L-cold"),
     "deadline": ("L", "L-deadline"),
     "deadline_H": ("H", "H-deadline"),
-    "gap": ("L-gap", "L"),
-    "gap_only": ("L-gap-only", "L-deadline"),
+    "gap": ("L", "L-nogap"),
+    "gap_only": ("L-deadline", "L-nogap-deadline"),
 }
 
 
@@ -884,7 +983,13 @@ def run_all(
         "delta": DELTA,
         "cfg": run_cfg,
     }
-    results = merge(loaded, arms, config)
+    if run_cfg["mode"] == "semester":
+        from evalx import semester
+        from evalx.academic_calendar import WEEKS as SEMESTER_WEEKS
+
+        results = semester.merge(loaded, arms, {**config, "weeks": SEMESTER_WEEKS})
+    else:
+        results = merge(loaded, arms, config)
     results["manifest"] = {
         "code_sha": _code_sha(),
         "config_hash": digest,
@@ -908,7 +1013,7 @@ SENSITIVITY: dict[str, dict[str, Any]] = {
     "heuristic kept weight 0": {"kept_weight": 0.0},
     "heuristic kept weight 1": {"kept_weight": 1.0},
     "prior strength 0.5 and 0.5 (ships)": {},
-    "gap weight 0.2 (old)": {"gap_weight": 0.2},
+    "gap term off": {"gap_weight": 0.0},
     "deadline term off": {"deadline_weight": 0.0},
     "deadline reach 24h (old)": {"deadline_horizon": 24},
     "prior strength 1 and 0.5": {"n0": (1.0, 0.5)},
@@ -942,7 +1047,7 @@ def sensitivity(out: Path, seeds: int, students: int, workers: int) -> dict[str,
             workers,
             out / "sensitivity",
             100,
-            {**cfg, "worlds": "bands"},
+            {**cfg, "mode": "bands", "worlds": "bands"},
         )
         pooled = res["pooled"]["all"]
         worlds_ = res["worlds"].values()
@@ -975,6 +1080,7 @@ def deadline_sweep(
             {
                 "deadline_weight": weight,
                 "deadline_horizon": horizon,
+                "mode": "bands",
                 "worlds": "bands",
             },
         )
@@ -1063,7 +1169,7 @@ def render(res: dict[str, Any]) -> str:
         "",
         "## What each part adds",
         "",
-        "| World | Prior (L − L-cold) | Gap term (L-gap − L) "
+        "| World | Prior (L − L-cold) | Gap term (L − L-nogap) "
         "| Deadline term (L − L-deadline) |",
         "|---|---|---|---|",
     ]
@@ -1085,7 +1191,7 @@ def render(res: dict[str, Any]) -> str:
         "|---|---|---|---|",
     ]
     for name, w in res["worlds"].items():
-        for arm in ("H", "L", "L-deadline", "L-gap", "L-gap-only"):
+        for arm in ("H", "L", "L-deadline", "L-nogap", "L-nogap-deadline"):
             a = w["arms"][arm]
             lines.append(
                 f"| {name} | {arm} | {a['slack_h']:.1f} "
@@ -1172,23 +1278,107 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--seeds", type=int, default=100)
     run.add_argument("--students", type=int, default=100)
     run.add_argument("--workers", type=int, default=8)
-    run.add_argument("--arms", default=",".join(ARMS))
+    run.add_argument("--arms", default="", help="default: the mode's headline arms")
+    run.add_argument(
+        "--ablations",
+        action="store_true",
+        help="semester: add the deadline and gap arms",
+    )
     run.add_argument("--out", type=Path, default=Path(__file__).parent / "out")
     run.add_argument("--seed-offset", type=int, default=0)
     run.add_argument("--config", default="{}")
+    sub_bands = argparse.ArgumentParser(add_help=False)
+    sub_bands.add_argument(
+        "--bands", action="store_true", help="the fixed band worlds, not the semester"
+    )
     sens = sub.add_parser(
-        "sensitivity", help="reaction mixes, alpha and component weights"
+        "sensitivity",
+        help="student traits, alpha and component weights",
+        parents=[sub_bands],
     )
     sens.add_argument("--seeds", type=int, default=10)
     sens.add_argument("--students", type=int, default=20)
     sens.add_argument("--workers", type=int, default=8)
     sens.add_argument("--out", type=Path, default=Path(__file__).parent / "out")
-    dl = sub.add_parser("deadline", help="starts and distance by deadline weight")
+    heur = sub.add_parser(
+        "heuristic", help="the heuristic's own deadline reach and weight"
+    )
+    heur.add_argument("--seeds", type=int, default=10)
+    heur.add_argument("--students", type=int, default=50)
+    heur.add_argument("--workers", type=int, default=8)
+    heur.add_argument("--out", type=Path, default=Path(__file__).parent / "out")
+    mis = sub.add_parser("misspec", help="start curves the learner was not built for")
+    mis.add_argument("--seeds", type=int, default=10)
+    mis.add_argument("--students", type=int, default=50)
+    mis.add_argument("--workers", type=int, default=8)
+    mis.add_argument("--out", type=Path, default=Path(__file__).parent / "out")
+    real = sub.add_parser(
+        "reality", help="less generous students, signals and routines"
+    )
+    real.add_argument("--seeds", type=int, default=10)
+    real.add_argument("--students", type=int, default=50)
+    real.add_argument("--workers", type=int, default=8)
+    real.add_argument("--out", type=Path, default=Path(__file__).parent / "out")
+    real.add_argument("--seed-offset", type=int, default=100)
+    dl = sub.add_parser(
+        "deadline",
+        help="adherence and distance by deadline weight",
+        parents=[sub_bands],
+    )
     dl.add_argument("--seeds", type=int, default=10)
     dl.add_argument("--students", type=int, default=100)
     dl.add_argument("--workers", type=int, default=8)
     dl.add_argument("--out", type=Path, default=Path(__file__).parent / "out")
     args = ap.parse_args(argv)
+
+    if args.cmd == "misspec":
+        from evalx import semester
+
+        args.out.mkdir(parents=True, exist_ok=True)
+        rows = semester.misspec_sweep(args.out, args.seeds, args.students, args.workers)
+        text = semester.render_misspec(rows)
+        (args.out / "misspec.md").write_text(text)
+        print(text)
+        return 0
+
+    if args.cmd == "reality":
+        from evalx import semester
+
+        args.out.mkdir(parents=True, exist_ok=True)
+        rows = semester.reality_sweep(
+            args.out, args.seeds, args.students, args.workers, args.seed_offset
+        )
+        text = semester.render_reality(rows, args.seed_offset)
+        (args.out / "reality.md").write_text(text)
+        print(text)
+        return 0
+
+    if args.cmd == "heuristic":
+        from evalx import semester
+
+        args.out.mkdir(parents=True, exist_ok=True)
+        rows = semester.heuristic_sweep(
+            args.out, args.seeds, args.students, args.workers
+        )
+        text = semester.render_heuristic(rows)
+        (args.out / "heuristic.md").write_text(text)
+        print(text)
+        return 0
+
+    if args.cmd in ("deadline", "sensitivity") and not args.bands:
+        from evalx import semester
+
+        args.out.mkdir(parents=True, exist_ok=True)
+        run_sweep, show = (
+            (semester.deadline_sweep, semester.render_deadline)
+            if args.cmd == "deadline"
+            else (semester.sensitivity, semester.render_sensitivity)
+        )
+        rows = run_sweep(args.out, args.seeds, args.students, args.workers)
+        text = show(rows)
+        (args.out / f"{args.cmd}.md").write_text(text)
+        print(text)
+        return 0
 
     if args.cmd == "deadline":
         args.out.mkdir(parents=True, exist_ok=True)
@@ -1207,6 +1397,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     arms = tuple(a.strip() for a in args.arms.split(",") if a.strip())
+    if args.cmd == "run" and not arms:
+        cfg = json.loads(args.config)
+        if cfg.get("mode", CFG["mode"]) == "semester":
+            from evalx import semester
+
+            arms = semester.SEMESTER_ARMS + (
+                semester.ABLATIONS if args.ablations else ()
+            )
+        else:
+            arms = ARMS
     if args.cmd == "seed":
         configure(json.loads(args.config))
         part = run_seed(args.seed, args.students, arms)
@@ -1225,7 +1425,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "results.json").write_text(json.dumps(res, indent=2) + "\n")
-    if set(ARMS) <= set(arms):
+    if "arms" in res:
+        from evalx import report_generator
+
+        text = report_generator.render(res)
+        (args.out / "report.md").write_text(text)
+        (args.out / "tables.tex").write_text(report_generator.render_latex(res))
+        print(text)
+    elif set(ARMS) <= set(arms):
         (args.out / "report.md").write_text(render(res))
         print(render(res))
     return 0

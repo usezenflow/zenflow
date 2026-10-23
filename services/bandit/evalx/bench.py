@@ -1,7 +1,7 @@
 """Time per inference and per learning step, on the production code path.
 
 Run:  uv run python -m evalx.bench [--students 20] [--seed 0]
-Plays simulated students serially through the single-policy arms and times each
+Plays sampled semester students serially through the single-policy arms and times each
 ``run_place`` call (inference: validate, build features, score every arm, scan
 slots) and each ``update_arm`` call (learning: hydrate, rank-one update).
 In-process, one thread, no HTTP and no database. Writes evalx/out/bench.json.
@@ -19,14 +19,16 @@ from pathlib import Path
 import numpy as np
 
 from evalx import run as harness
-from evalx.world import build_calendar, make_tasks
+from evalx.academic_calendar import build_semester
+from evalx.semester import simulate_arm
+from evalx.student_behavior import sample_student
 
 ARMS = ("H", "L")
 
 
 def bench(students: int, seed: int) -> dict[str, dict[str, dict[str, float]]]:
     """Per arm: milliseconds per ``place`` and per ``update`` call."""
-    harness.configure({"worlds": "bands"})
+    harness.configure({"mode": "semester"})
     times: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     current = {"arm": ""}
     place, learn = harness.run_place, harness.update_arm
@@ -48,17 +50,10 @@ def bench(students: int, seed: int) -> dict[str, dict[str, dict[str, float]]]:
     try:
         for arm in ARMS:
             current["arm"] = arm
-            for student in harness.worlds("bands").values():
-                for i in range(students):
-                    tasks = make_tasks(
-                        random.Random(f"tasks:{seed}:{i}"),
-                        harness.WEEKS,
-                        harness.TASKS_PER_WEEK,
-                    )
-                    cal = build_calendar(
-                        random.Random(f"calendar:{seed}:{i}"), harness.WEEKS * 7 + 10
-                    )
-                    harness.simulate(student, tasks, arm, "drag", random.Random(1), cal)
+            for i in range(students):
+                student = sample_student(random.Random(f"student:{seed}:{i}"), i)
+                sem = build_semester(random.Random(f"semester:{seed}:{i}"))
+                simulate_arm(student, sem, arm, random.Random(1))
     finally:
         harness.run_place = place
         harness.update_arm = learn

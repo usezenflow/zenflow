@@ -405,7 +405,7 @@ export default function CalendarScreen() {
       // A drop names the one it moves: a series member moves alone, no prompt.
       const kind = getSeriesKind(session);
       const run = () =>
-        void commit(kind === "recurring" || kind === "task" ? "occurrence" : undefined);
+        void commit(kind === "recurring" ? "occurrence" : undefined);
       if (isPastDeadlineDrop(startISO, session.deadline ?? null)) {
         confirm(t("Past the deadline?"), {
           description: t("This session will start past its due time."),

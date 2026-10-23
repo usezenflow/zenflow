@@ -36,11 +36,11 @@ const member = (over: Partial<PlacedMember> = {}): PlacedMember => ({
   ...over,
 });
 
-const response = (results: PlacedMember[]): PlaceResponse => ({
+const response = (result: PlacedMember): PlaceResponse => ({
   contractVersion: 1,
   requestId: "r",
   paramsVersion: "pv-1",
-  results,
+  result,
   timingsMs: {
     decode: 0,
     context: 0,
@@ -107,16 +107,16 @@ async function make(opts: {
   return { placer, prisma, gateway, fallback, experiment, displacement };
 }
 
-const ok = (results: PlacedMember[]) => ({
+const ok = (result: PlacedMember) => ({
   ok: true as const,
-  response: response(results),
+  response: response(result),
 });
 const down = (reason: string) => ({ ok: false as const, reason });
 
 describe("PythonPlacer.placeSingle (python answers)", () => {
   it("stores Python's reason with the start it was chosen for (#254)", async () => {
     const { placer, prisma } = await make({
-      place: ok([member({ outcome: "PLACED", reason: "PREFERRED_HOUR" })]),
+      place: ok(member({ outcome: "PLACED", reason: "PREFERRED_HOUR" })),
     });
     const res = await placer.placeSingle(user, task, "create", now);
     expect(res.placementReason).toBe("PREFERRED_HOUR");
@@ -132,7 +132,7 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
 
   it("writes Python's start and records a PYTHON proposal stamped with paramsVersion", async () => {
     const { placer, prisma, experiment } = await make({
-      place: ok([member()]),
+      place: ok(member()),
     });
     const res = await placer.placeSingle(user, task, "create", now);
     expect(res.scheduledStartTime?.getTime()).toBe(START);
@@ -171,7 +171,7 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
       heuristic: null,
     });
     const { placer, prisma, displacement, experiment } = await make({
-      place: ok([asked]),
+      place: ok(asked),
     });
     const res = await placer.placeSingle(user, task, "deadline-change", now);
     expect(res.scheduledStartTime).toBeNull();
@@ -190,7 +190,7 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
       cost: 1,
     };
     const moved = member({ outcome: "DISPLACED", moves: [move] });
-    const { placer, displacement } = await make({ place: ok([moved]) });
+    const { placer, displacement } = await make({ place: ok(moved) });
     const res = await placer.placeSingle(user, task, "create", now);
     expect(displacement.applyMoves).toHaveBeenCalledWith(
       "u1",
@@ -209,13 +209,13 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
       linucb: {
         startMs: lin,
         score: 2,
-        selectedArm: "MORNING",
+        selectedArm: "HOUR_09",
         featureVector: [0.1],
         weights: { wL: 1, wS: 0 },
       },
     });
     const { placer, experiment } = await make({
-      place: ok([r]),
+      place: ok(r),
       assign: { primaryPolicy: "LINUCB", pairwiseShown: true },
     });
     const res = await placer.placeSingle(user, task, "create", now);
@@ -224,7 +224,7 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
     expect(res.alternativeSlot?.getTime()).toBe(START);
     expect(experiment.recordProposal).toHaveBeenCalledWith(
       expect.objectContaining({
-        selectedArm: "MORNING",
+        selectedArm: "HOUR_09",
         featureVector: [0.1],
         weights: { wL: 1, wS: 0 },
         pairwiseShown: true,
@@ -240,13 +240,13 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
       linucb: {
         startMs: lin,
         score: 2,
-        selectedArm: "MORNING",
+        selectedArm: "HOUR_09",
         featureVector: [0.1],
         weights: { wL: 1, wS: 0 },
       },
     });
     const { placer, experiment } = await make({
-      place: ok([r]),
+      place: ok(r),
       assign: { primaryPolicy: "LINUCB", pairwiseShown: true },
     });
     const res = await placer.placeSingle(user, task, "create", now);
@@ -266,7 +266,7 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
       heuristic: null,
       conflicting: true,
     });
-    const { placer, prisma } = await make({ place: ok([r]) });
+    const { placer, prisma } = await make({ place: ok(r) });
     const res = await placer.placeSingle(user, task, "create", now);
     expect(res.scheduledStartTime?.getTime()).toBe(START);
     expect(res.lastResort).toBe(true);
@@ -287,7 +287,7 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
       heuristic: null,
       appliedPolicy: "NONE",
     });
-    const { placer, prisma } = await make({ place: ok([r]) });
+    const { placer, prisma } = await make({ place: ok(r) });
     const res = await placer.placeSingle(user, task, "create", now);
     expect(res.scheduledStartTime).toEqual(PINNED);
     expect(res.lastResort).toBe(true);
@@ -303,7 +303,7 @@ describe("PythonPlacer.placeSingle (python answers)", () => {
 
   it("allowLastResort=false: a last-resort answer writes nothing (the task keeps its start)", async () => {
     const r = member({ outcome: "ACCEPTED_LAST_RESORT", heuristic: null });
-    const { placer, prisma } = await make({ place: ok([r]) });
+    const { placer, prisma } = await make({ place: ok(r) });
     const res = await placer.placeSingle(
       user,
       task,
@@ -443,13 +443,13 @@ describe("PythonPlacer.preflightSingle", () => {
 
   it("passes when Python can place, displace or accept", async () => {
     for (const outcome of ["PLACED", "DISPLACED", "ACCEPTED_LATE"] as const) {
-      const { placer } = await make({ place: ok([member({ outcome })]) });
+      const { placer } = await make({ place: ok(member({ outcome })) });
       await expect(placer.preflightSingle(args)).resolves.toBeUndefined();
     }
   });
 
   it("INFEASIBLE without a policy => 409; with a policy => allowed", async () => {
-    const infeasible = ok([member({ outcome: "INFEASIBLE", startMs: null })]);
+    const infeasible = ok(member({ outcome: "INFEASIBLE", startMs: null }));
     await expect(
       (await make({ place: infeasible })).placer.preflightSingle(args),
     ).rejects.toBeInstanceOf(ScheduleInfeasibleException);
@@ -489,351 +489,5 @@ describe("PythonPlacer.preflightSingle", () => {
         policy: "ACCEPT_LATE_DEADLINE",
       }),
     ).resolves.toBeUndefined();
-  });
-});
-
-describe("PythonPlacer series", () => {
-  const members = [
-    { id: "a", durationMinutes: 60 },
-    { id: "b", durationMinutes: 60 },
-  ];
-  const seriesArgs = {
-    user,
-    members,
-    deadline,
-    now,
-    trigger: "create" as const,
-  };
-
-  it("python: one row per member, a proposal per member", async () => {
-    const results = [
-      member({ id: "a", startMs: START }),
-      member({ id: "b", startMs: START + 86_400_000 }),
-    ];
-    const { placer, experiment, gateway } = await make({ place: ok(results) });
-    const rows = await placer.placeSeries(seriesArgs);
-    expect(gateway.place).toHaveBeenCalledTimes(1);
-    expect(rows.map((r) => r.scheduledStartTime?.getTime())).toEqual([
-      START,
-      START + 86_400_000,
-    ]);
-    expect(experiment.recordProposal).toHaveBeenCalledTimes(2);
-  });
-
-  it("python: ACCEPTED_LAST_RESORT members keep the start Python picked, flagged", async () => {
-    const results = [
-      member({ id: "a" }),
-      member({
-        id: "b",
-        outcome: "ACCEPTED_LAST_RESORT",
-        startMs: START + 7_200_000,
-      }),
-    ];
-    const { placer } = await make({ place: ok(results) });
-    const rows = await placer.placeSeries(seriesArgs);
-    expect(rows[1]).toEqual({
-      id: "b",
-      scheduledStartTime: new Date(START + 7_200_000),
-      lastResort: true,
-      placementReason: null,
-      slotProposalId: "sp1",
-      alternativeSlot: null,
-      divergent: false,
-    });
-    expect(rows[0].lastResort).toBeUndefined();
-  });
-
-  it("python: a member without a start is never null, pinned by the deadline", async () => {
-    const results = [
-      member({ id: "a" }),
-      member({
-        id: "b",
-        outcome: "NEEDS_INFEASIBLE_CONTEXT",
-        startMs: null,
-      }),
-    ];
-    const { placer } = await make({ place: ok(results) });
-    const rows = await placer.placeSeries(seriesArgs);
-    expect(rows[1]).toMatchObject({
-      scheduledStartTime: PINNED,
-      lastResort: true,
-    });
-  });
-
-  it("deadline already passed: sittings pinned back-to-back from the next slot, no Python call", async () => {
-    const { placer, gateway } = await make({});
-    const rows = await placer.placeSeries({
-      ...seriesArgs,
-      deadline: new Date(now.getTime() - 3_600_000),
-      now: new Date(now.getTime() + 1),
-    });
-    expect(gateway.place).not.toHaveBeenCalled();
-    expect(rows.map((r) => r.scheduledStartTime?.toISOString())).toEqual([
-      "2026-06-08T00:15:00.000Z",
-      "2026-06-08T01:15:00.000Z",
-    ]);
-    expect(rows.every((r) => r.lastResort)).toBe(true);
-  });
-
-  it("degraded: all members placed => rows flagged degraded + TS_FALLBACK proposals", async () => {
-    const { placer, experiment } = await make({
-      place: down("timeout"),
-      fallbackSeries: [
-        { id: "a", scheduledStartTime: new Date(START) },
-        { id: "b", scheduledStartTime: new Date(START + 86_400_000) },
-      ],
-    });
-    const rows = await placer.placeSeries(seriesArgs);
-    expect(rows.every((r) => r.degraded)).toBe(true);
-    expect(experiment.recordProposal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        placementSource: "TS_FALLBACK",
-        degradedReason: "timeout",
-      }),
-    );
-  });
-
-  it("degraded: a member without a slot gets the last resort (never null, never a 503)", async () => {
-    const { placer, experiment } = await make({
-      place: down("breaker_open"),
-      fallbackSeries: [
-        { id: "a", scheduledStartTime: new Date(START) },
-        { id: "b", scheduledStartTime: null },
-      ],
-    });
-    const rows = await placer.placeSeries(seriesArgs);
-    expect(rows.map((r) => r.scheduledStartTime)).toEqual([
-      new Date(START),
-      PINNED,
-    ]);
-    expect(rows[1]).toMatchObject({ degraded: true, lastResort: true });
-    expect(experiment.recordProposal).toHaveBeenCalledTimes(1);
-  });
-
-  describe("series-level pairwise roll (#58)", () => {
-    const HOUR = 3_600_000;
-    const DAY = 86_400_000;
-    const ids = ["m0", "m1", "m2", "m3", "m4", "m5", "m6"];
-    const many = ids.map((id) => ({ id, durationMinutes: 60 }));
-    const linucbAt = (startMs: number): PlacedMember["linucb"] => ({
-      startMs,
-      score: 1,
-      selectedArm: "NEUTRAL" as never,
-      featureVector: [1],
-      weights: { wL: 1, wS: 0 },
-    });
-    /** Sitting i applied (heuristic plan) at START + i days; LinUCB plan 2h later. */
-    const divergentResults = (n: number): PlacedMember[] =>
-      ids.slice(0, n).map((id, i) =>
-        member({
-          id,
-          startMs: START + i * DAY,
-          heuristic: { startMs: START + i * DAY, score: 1 },
-          linucb: linucbAt(START + i * DAY + 2 * HOUR),
-        }),
-      );
-    const args = (n: number) => ({
-      ...seriesArgs,
-      members: many.slice(0, n),
-      deadline: new Date(START + 10 * DAY),
-    });
-    type Proposal = {
-      primaryPolicy: string;
-      randomizationSeed: string;
-      pairwiseShown: boolean;
-      pairwisePositions: unknown;
-    };
-    const proposals = (experiment: {
-      recordProposal: jest.Mock<Promise<string>, [Proposal]>;
-    }) => experiment.recordProposal.mock.calls.map(([c]) => c);
-    type ReqMember = { primaryPolicy: string; computeBoth: boolean };
-    const reqMembers = (gateway: {
-      buildRequest: jest.Mock<Promise<unknown>, [{ members: ReqMember[] }]>;
-    }): ReqMember[] => gateway.buildRequest.mock.calls[0][0].members;
-
-    it("rolls assignPolicy ONCE and stamps every member with it", async () => {
-      const { placer, experiment, gateway } = await make({
-        place: ok(divergentResults(3)),
-        assign: { primaryPolicy: "LINUCB", pairwiseShown: false },
-      });
-      await placer.placeSeries(args(3));
-      expect(experiment.assignPolicy).toHaveBeenCalledTimes(1);
-      const defs = reqMembers(gateway);
-      expect(defs).toHaveLength(3);
-      for (const m of defs) {
-        expect(m).toMatchObject({
-          primaryPolicy: "LINUCB",
-          computeBoth: false,
-        });
-      }
-      const calls = proposals(experiment);
-      expect(calls).toHaveLength(3);
-      expect(calls.every((c) => c.primaryPolicy === "LINUCB")).toBe(true);
-      expect(calls.every((c) => c.randomizationSeed === "seed")).toBe(true);
-    });
-
-    it("non-sampled series: no alternatives, pairwiseShown false", async () => {
-      const { placer, experiment } = await make({
-        place: ok(divergentResults(3)),
-      });
-      const rows = await placer.placeSeries(args(3));
-      expect(
-        rows.every((r) => r.divergent === false && r.alternativeSlot === null),
-      ).toBe(true);
-      expect(rows.every((r) => r.slotProposalId === "sp1")).toBe(true);
-      for (const c of proposals(experiment)) {
-        expect(c).toMatchObject({
-          pairwiseShown: false,
-          pairwisePositions: null,
-        });
-      }
-    });
-
-    it("sampled: computeBoth on every member; at most 5 alternatives, soonest first", async () => {
-      const { placer, experiment, gateway } = await make({
-        place: ok(divergentResults(7)),
-        assign: { pairwiseShown: true },
-      });
-      const rows = await placer.placeSeries(args(7));
-      expect(reqMembers(gateway).every((m) => m.computeBoth)).toBe(true);
-      expect(rows.map((r) => r.divergent)).toEqual([
-        true,
-        true,
-        true,
-        true,
-        true,
-        false,
-        false,
-      ]);
-      expect(rows[0].alternativeSlot).toEqual(new Date(START + 2 * HOUR));
-      expect(rows[5].alternativeSlot).toBeNull();
-      const calls = proposals(experiment);
-      expect(calls.map((c) => c.pairwiseShown)).toEqual([
-        true,
-        true,
-        true,
-        true,
-        true,
-        false,
-        false,
-      ]);
-      expect(["first", "second"]).toContain(
-        (calls[0].pairwisePositions as { primaryPosition: string })
-          .primaryPosition,
-      );
-      expect(calls[6].pairwisePositions).toBeNull();
-    });
-
-    it("LinUCB primary: the alternative is the heuristic plan's pick", async () => {
-      const results = divergentResults(2).map((r) => ({
-        ...r,
-        appliedPolicy: "LINUCB" as const,
-        startMs: r.linucb?.startMs ?? null,
-      }));
-      const { placer } = await make({
-        place: ok(results),
-        assign: { primaryPolicy: "LINUCB", pairwiseShown: true },
-      });
-      const rows = await placer.placeSeries(args(2));
-      expect(rows[0].scheduledStartTime).toEqual(new Date(START + 2 * HOUR));
-      expect(rows[0].alternativeSlot).toEqual(new Date(START));
-      expect(rows[1].alternativeSlot).toEqual(new Date(START + DAY));
-    });
-
-    it("drops alternatives that overlap another applied sitting or fixedOccupied", async () => {
-      const results = divergentResults(3);
-      // m0's alternative runs into m1's applied slot (the 23:45-past-midnight case).
-      results[0].linucb = linucbAt(START + DAY - 15 * 60_000);
-      const { placer } = await make({
-        place: ok(results),
-        assign: { pairwiseShown: true },
-      });
-      const rows = await placer.placeSeries({
-        ...args(3),
-        // m2's alternative (START + 2d + 2h) clashes with a started sitting.
-        fixedOccupied: [
-          {
-            start: START + 2 * DAY + 2 * HOUR + 30 * 60_000,
-            end: START + 2 * DAY + 4 * HOUR,
-          },
-        ],
-      });
-      expect(rows.map((r) => r.divergent)).toEqual([false, true, false]);
-      expect(rows[0].alternativeSlot).toBeNull();
-    });
-
-    it("no alternative for a last-resort sitting, a missing plan pick, or an equal pick", async () => {
-      const results = divergentResults(4);
-      results[0] = { ...results[0], outcome: "ACCEPTED_LAST_RESORT" };
-      results[1] = { ...results[1], linucb: null };
-      results[2] = { ...results[2], linucb: linucbAt(START + 2 * DAY) };
-      const { placer } = await make({
-        place: ok(results),
-        assign: { pairwiseShown: true },
-      });
-      const rows = await placer.placeSeries(args(4));
-      expect(rows.map((r) => r.divergent)).toEqual([false, false, false, true]);
-    });
-
-    it("surfaceAlternatives: false records nothing as shown", async () => {
-      const { placer, experiment } = await make({
-        place: ok(divergentResults(2)),
-        assign: { pairwiseShown: true },
-      });
-      const rows = await placer.placeSeries({
-        ...args(2),
-        surfaceAlternatives: false,
-      });
-      expect(rows.some((r) => r.divergent)).toBe(false);
-      expect(proposals(experiment).every((c) => !c.pairwiseShown)).toBe(true);
-    });
-
-    it("degraded sampled series: one assignment, no alternatives", async () => {
-      const { placer, experiment } = await make({
-        place: down("timeout"),
-        assign: { pairwiseShown: true },
-        fallbackSeries: [
-          { id: "m0", scheduledStartTime: new Date(START) },
-          { id: "m1", scheduledStartTime: new Date(START + DAY) },
-        ],
-      });
-      const rows = await placer.placeSeries(args(2));
-      expect(experiment.assignPolicy).toHaveBeenCalledTimes(1);
-      expect(rows).toEqual([
-        expect.objectContaining({
-          slotProposalId: "sp1",
-          alternativeSlot: null,
-          divergent: false,
-          degraded: true,
-        }),
-        expect.objectContaining({ alternativeSlot: null, divergent: false }),
-      ]);
-    });
-  });
-
-  it("canPlaceSeries: python true only when every member is PLACED; degraded miss => false", async () => {
-    const good = ok([member({ id: "a" }), member({ id: "b" })]);
-    const bad = ok([
-      member({ id: "a" }),
-      member({ id: "b", outcome: "NEEDS_INFEASIBLE_CONTEXT", startMs: null }),
-    ]);
-    const a = { user, durationMinutes: 60, sessionCount: 2, deadline, now };
-    expect(await (await make({ place: good })).placer.canPlaceSeries(a)).toBe(
-      true,
-    );
-    expect(await (await make({ place: bad })).placer.canPlaceSeries(a)).toBe(
-      false,
-    );
-    await expect(
-      (
-        await make({
-          place: down("timeout"),
-          fallbackSeries: [
-            { id: "x", scheduledStartTime: new Date(START) },
-            { id: "y", scheduledStartTime: null },
-          ],
-        })
-      ).placer.canPlaceSeries(a),
-    ).resolves.toBe(false);
   });
 });

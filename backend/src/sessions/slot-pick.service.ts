@@ -6,17 +6,12 @@ import type {
 } from "@zenflow/shared";
 import { SchedulingModel, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
-import { MS_PER_MINUTE, overlapsAny } from "../scheduler/core/slot";
-import {
-  PAIRWISE_KEEP_PREFERENCE_WEIGHT,
-  SERIES_GAP_MINUTES,
-} from "../scheduler/constants";
+import { PAIRWISE_KEEP_PREFERENCE_WEIGHT } from "../scheduler/constants";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { WITH_TAGS_AND_SERIES } from "./types/session-row";
 import { toSessionDto } from "./session-mapper";
 import { moveEventData, recordUserMove } from "./session-events";
 import { SlotPickDto } from "./dto/slot-pick.dto";
-import { SlotTakenException } from "./slot-taken.exception";
 import { schedulerSlotPicks } from "../observability/metrics";
 
 /** The session after an alternative was applied, with its undo group (absent when it was already there). */
@@ -192,53 +187,7 @@ export class SlotPickService {
   ): Promise<AppliedAlternative | null> {
     const altStart = alternativeStartOf(proposal);
     if (!altStart) return null;
-    await this.assertNoSiblingClash(sessionId, altStart, user);
     return this.moveSessionTo(sessionId, altStart, user);
-  }
-
-  /**
-   * A series sitting's alternative came from an independent plan, and its
-   * siblings may have moved since (#58): refuse (409 `SLOT_TAKEN`, nothing
-   * recorded) when it would come within the series gap of another live sitting.
-   */
-  private async assertNoSiblingClash(
-    sessionId: string,
-    altStart: Date,
-    user: User,
-  ): Promise<void> {
-    const session = await this.prisma.session.findFirst({
-      where: { id: sessionId, userId: user.id, deleted: false },
-      select: { seriesId: true, durationMinutes: true },
-    });
-    if (!session?.seriesId) return;
-    const siblings = await this.prisma.session.findMany({
-      where: {
-        seriesId: session.seriesId,
-        userId: user.id,
-        deleted: false,
-        id: { not: sessionId },
-        scheduledStartTime: { not: null },
-      },
-      select: { scheduledStartTime: true, durationMinutes: true },
-    });
-    const start = altStart.getTime();
-    const gap = SERIES_GAP_MINUTES * MS_PER_MINUTE;
-    const occupied = siblings.map((s) => {
-      const from = (s.scheduledStartTime as Date).getTime();
-      return {
-        start: from - gap,
-        end: from + s.durationMinutes * MS_PER_MINUTE + gap,
-      };
-    });
-    if (
-      overlapsAny(
-        occupied,
-        start,
-        start + session.durationMinutes * MS_PER_MINUTE,
-      )
-    ) {
-      throw new SlotTakenException();
-    }
   }
 
   /** Applies the pick as an ordinary `MOVE` — same drag-distance grading and

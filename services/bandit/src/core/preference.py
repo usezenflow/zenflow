@@ -95,6 +95,49 @@ def reinforce_preference_cell(
     return nxt
 
 
+def kernel_hour_weights(sd: float, centre: int) -> NDArray[np.float64]:
+    """Circular Gaussian weight of every hour from ``centre``, 1 at the centre."""
+    hours = np.arange(PREFERENCE_SLOTS_PER_DAY)
+    if sd <= 0:
+        return np.asarray(hours == centre, dtype=np.float64)
+    dh = (hours - centre + PREFERENCE_SLOTS_PER_DAY // 2) % PREFERENCE_SLOTS_PER_DAY
+    dh = dh - PREFERENCE_SLOTS_PER_DAY // 2
+    return np.exp(-(dh**2) / (2 * sd**2))
+
+
+def reinforce_preference_smooth(
+    matrix: ArrayLike,
+    at_ms: int,
+    timezone: str,
+    delta: float,
+    rate: float = PREFERENCE_LEARNING_RATE,
+    sd: float = 0.0,
+    pool: float = 0.0,
+) -> NDArray[np.float64]:
+    """:func:`reinforce_preference_cell` spread over neighbouring hours and days.
+
+    The centre cell moves by ``rate * delta`` as before. Hours near it move by the
+    circular Gaussian of width ``sd`` hours. Each other day of the same group (Mon to
+    Fri, or Sat and Sun) moves by ``pool`` times that. ``sd=0, pool=0`` is the cell
+    update.
+    """
+    if sd <= 0 and pool <= 0:
+        return reinforce_preference_cell(matrix, at_ms, timezone, delta, rate)
+    nxt = effective_preference_matrix(matrix).copy()
+    wd = iso_weekday(local_date_str(at_ms, timezone))
+    kern = kernel_hour_weights(sd, utc_to_minutes(at_ms, timezone) // 60)
+    for other in range(1, 8):
+        if other == wd:
+            share = 1.0
+        elif pool > 0 and (other <= 5) == (wd <= 5):
+            share = pool
+        else:
+            continue
+        idx = [matrix_index(other, h) for h in range(PREFERENCE_SLOTS_PER_DAY)]
+        nxt[idx] = np.clip(nxt[idx] + rate * delta * share * kern, -1.0, 1.0)
+    return nxt
+
+
 def reinforce_preference_move(
     matrix: ArrayLike,
     old_start_ms: int,
@@ -102,6 +145,8 @@ def reinforce_preference_move(
     timezone: str,
     drag_distance_minutes: float,
     rate: float = PREFERENCE_LEARNING_RATE,
+    sd: float = 0.0,
+    pool: float = 0.0,
 ) -> NDArray[np.float64]:
     grade = -drag_distance_reward(drag_distance_minutes)
     same = cell_index_at(old_start_ms, timezone) == cell_index_at(
@@ -109,8 +154,12 @@ def reinforce_preference_move(
     )
     if grade == 0 or same:
         return effective_preference_matrix(matrix).copy()
-    lowered = reinforce_preference_cell(matrix, old_start_ms, timezone, -grade, rate)
-    return reinforce_preference_cell(lowered, new_start_ms, timezone, grade, rate)
+    lowered = reinforce_preference_smooth(
+        matrix, old_start_ms, timezone, -grade, rate, sd, pool
+    )
+    return reinforce_preference_smooth(
+        lowered, new_start_ms, timezone, grade, rate, sd, pool
+    )
 
 
 def decay_matrix(

@@ -1,7 +1,7 @@
 """Cost-based displacement (issue #250).
 
 Edge cases: frozen by time, cascade chains, cross-day cost, deadlines,
-multi-sitting series, ties and determinism, and no feasible plan.
+ties and determinism, and no feasible plan.
 """
 
 from __future__ import annotations
@@ -79,13 +79,13 @@ def body(
         requestId="displacement-2",
         days=make_days(3, occupied=_split_by_day(occ, 3)),
         deadlineMs=deadline,
-        members=[member(dur=dur)],
+        member=member(dur=dur),
         infeasible=ctx,
     )
 
 
 def result(b: dict[str, Any]) -> dict[str, Any]:
-    out: dict[str, Any] = ok(b)["results"][0]
+    out: dict[str, Any] = ok(b)["result"]
     return out
 
 
@@ -209,28 +209,6 @@ def test_overdue_participant_is_stuck() -> None:
     assert r["moves"] == []
 
 
-# ---- multi-sitting series ---------------------------------------------------
-
-
-@pytest.mark.parametrize(("series", "lands"), [(None, 1), ("s", 2)])
-def test_sitting_never_lands_on_a_sibling_day(series: str | None, lands: int) -> None:
-    """S1 (today 10-11) must move; day+1 is free but holds sibling S2."""
-    extra = {} if series is None else {"seriesId": series}
-    flex = [fx("s1", at(10), **extra), fx("s2", at(10, day=1), **extra)]
-    r = result(body(flex, [LECTURE, (at(11), at(0, day=1))], at(11)))
-    assert r["outcome"] == "DISPLACED"
-    assert [(m["id"], m["toMs"]) for m in r["moves"]] == [("s1", at(0, day=lands))]
-
-
-def test_series_request_is_never_displaced() -> None:
-    flex = [fx("a", at(10), minutes=120)]
-    b = body(flex, [LECTURE, (at(12), at(0, day=3))], at(12))
-    b["members"] = [member("m1"), member("m2")]
-    out = ok(b)["results"]
-    assert {r["outcome"] for r in out} == {"ACCEPTED_LAST_RESORT"}
-    assert all(r["moves"] == [] for r in out)
-
-
 # ---- ties and determinism ---------------------------------------------------
 
 
@@ -314,7 +292,7 @@ def test_plan_invariants(seed: int) -> None:
         assert r["moves"] == []
         return
 
-    dur = b["members"][0]["durationMinutes"] * MIN
+    dur = b["member"]["durationMinutes"] * MIN
     assert ceil_to_slot(NOW) <= r["startMs"] and r["startMs"] + dur <= b["deadlineMs"]
     placed = [(r["startMs"], r["startMs"] + dur)]
     for m in r["moves"]:

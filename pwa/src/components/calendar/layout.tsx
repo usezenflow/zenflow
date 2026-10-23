@@ -28,12 +28,13 @@ import { useWeekDayBars } from "@/hooks/use-week-day-types";
 import { usePlanOffers } from "@/components/notifications/use-plan-offers";
 import { filterHidden, useHiddenVersion } from "@/lib/hidden-sessions";
 import { getPlacementPlan } from "@/lib/make-room";
-import { showMovedToast, showResizedToast } from "@/lib/move-toast";
+import { showMovedCountToast, showMovedToast, showResizedToast } from "@/lib/move-toast";
+import { useHighlightStore } from "@/hooks/use-highlight-store";
 import { undoMove } from "@/lib/move-undo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CalendarCheck } from "lucide-react";
-import { listSessions, updateSession } from "@/api/tasks";
+import { listSessions, resolveConflicts, undoPlacement, updateSession } from "@/api/tasks";
 import { tasksToBlocks } from "@zenflow/core";
 import { zonedDate } from "@/utils/tz";
 import { isAxiosError } from "axios";
@@ -49,6 +50,7 @@ import { useConnectivity } from "@/lib/connectivity";
 import { cacheKey, readCalendar, writeCalendar } from "@/lib/offline/cache";
 import { warmCalendar } from "@/lib/offline/warm-calendar";
 import { t } from "@/lib/i18n";
+import { toast } from "@/lib/notify";
 import { zonedNow } from "@/utils/tz";
 import { addDays, format, isValid } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
@@ -249,6 +251,47 @@ export function CalendarLayout() {
     window.addEventListener("zenflow:open-task", handler as EventListener);
     return () =>
       window.removeEventListener("zenflow:open-task", handler as EventListener);
+  }, []);
+
+  // Holding a conflicting block repacks the sessions around it. The held block stays put.
+  useEffect(() => {
+    const handler = (e: Event | CustomEvent) => {
+      const sessionId = (e as CustomEvent<string>).detail;
+      resolveConflicts(sessionId)
+        .then((res) => {
+          if (res.moved.length === 0) {
+            toast.info(t("Nothing to move"));
+            return;
+          }
+          window.dispatchEvent(
+            new CustomEvent("zenflow:task-updated", { detail: sessionId }),
+          );
+          useHighlightStore.getState().setHighlight(sessionId);
+          const groupId = res.undoGroupId;
+          showMovedCountToast({
+            count: res.moved.length,
+            late: res.lateSessionIds.length,
+            onUndo: groupId
+              ? () =>
+                  void undoPlacement(groupId)
+                    .then(() => refetch())
+                    .catch(() => errorToast(t("Couldn't undo")))
+              : undefined,
+          });
+          void refetch();
+        })
+        .catch((error) =>
+          errorToast(
+            isAxiosError(error) && error.response?.status === 409
+              ? t("No layout fits these sessions")
+              : t("Couldn't resolve this overlap"),
+          ),
+        );
+    };
+    window.addEventListener("zenflow:resolve-conflicts", handler as EventListener);
+    return () =>
+      window.removeEventListener("zenflow:resolve-conflicts", handler as EventListener);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

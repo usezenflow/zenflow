@@ -279,7 +279,6 @@ export class SessionCrudService {
         data: {
           type: dto.type,
           rrule: dto.rrule as string,
-          deadline: null,
           userId: user.id,
         },
       });

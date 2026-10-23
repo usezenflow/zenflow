@@ -4,7 +4,6 @@ import { SlotPickService } from "./slot-pick.service";
 import { PAIRWISE_KEEP_PREFERENCE_WEIGHT } from "../scheduler/constants";
 import { PrismaService } from "../prisma/prisma.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
-import { SLOT_TAKEN_MESSAGE, SlotTakenException } from "./slot-taken.exception";
 
 const user = {
   id: "user-1",
@@ -31,8 +30,6 @@ function row(overrides: Record<string, unknown> = {}) {
     lastMovedAt: null,
     userId: user.id,
     seriesId: null,
-    sessionIndex: null,
-    sessionTotal: null,
     externalKey: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -244,99 +241,5 @@ describe("SlotPickService — pairwise reward for LinUCB", () => {
       user,
     );
     expect(schedulingFeedback.onPairwiseWin).not.toHaveBeenCalled();
-  });
-});
-
-describe("SlotPickService — series sibling clash (#58)", () => {
-  const seriesRow = () => row({ seriesId: "series-1", sessionIndex: 1 });
-
-  it("409 SLOT_TAKEN when the alternative overlaps a live sibling; nothing moved or recorded", async () => {
-    const { service, prisma, tx } = await makeService(seriesRow(), [
-      // 10:30-11:30 overlaps the 10:00-11:00 alternative
-      {
-        scheduledStartTime: new Date("2026-06-11T10:30:00.000Z"),
-        durationMinutes: 60,
-      },
-    ]);
-
-    const err = await service
-      .recordPick(
-        "task-1",
-        { slotProposalId: "prop-1", chose: "alternative" },
-        user,
-      )
-      .catch((e: unknown) => e);
-
-    expect(err).toBeInstanceOf(SlotTakenException);
-    expect((err as SlotTakenException).getStatus()).toBe(409);
-    expect((err as SlotTakenException).getResponse()).toEqual({
-      success: false,
-      statusCode: 409,
-      message: SLOT_TAKEN_MESSAGE,
-      code: "SLOT_TAKEN",
-    });
-    const [query] = prisma.session.findMany.mock.calls[0] as [
-      { where: Record<string, unknown> },
-    ];
-    expect(query.where).toMatchObject({
-      seriesId: "series-1",
-      deleted: false,
-      id: { not: "task-1" },
-    });
-    expect(tx.session.update).not.toHaveBeenCalled();
-    expect(tx.sessionEvent.create).not.toHaveBeenCalled();
-    expect(prisma.slotProposal.update).not.toHaveBeenCalled();
-  });
-
-  it("applies the alternative when siblings sit exactly the series gap away", async () => {
-    const { service, tx, prisma } = await makeService(seriesRow(), [
-      {
-        scheduledStartTime: new Date("2026-06-11T11:15:00.000Z"),
-        durationMinutes: 60,
-      },
-      {
-        scheduledStartTime: new Date("2026-06-11T08:45:00.000Z"),
-        durationMinutes: 60,
-      },
-    ]);
-
-    const res = await service.recordPick(
-      "task-1",
-      { slotProposalId: "prop-1", chose: "alternative" },
-      user,
-    );
-
-    expect(res.chosenByUser).toBe("alternative");
-    expect(tx.session.update).toHaveBeenCalled();
-    expect(prisma.slotProposal.update).toHaveBeenCalledWith({
-      where: { id: "prop-1" },
-      data: { chosenByUser: SchedulingModel.LINUCB },
-    });
-  });
-
-  it("409 SLOT_TAKEN when a sibling ends inside the series gap", async () => {
-    const { service } = await makeService(seriesRow(), [
-      {
-        scheduledStartTime: new Date("2026-06-11T09:00:00.000Z"),
-        durationMinutes: 60,
-      },
-    ]);
-    await expect(
-      service.recordPick(
-        "task-1",
-        { slotProposalId: "prop-1", chose: "alternative" },
-        user,
-      ),
-    ).rejects.toBeInstanceOf(SlotTakenException);
-  });
-
-  it("a non-series session never queries siblings", async () => {
-    const { service, prisma } = await makeService(row());
-    await service.recordPick(
-      "task-1",
-      { slotProposalId: "prop-1", chose: "alternative" },
-      user,
-    );
-    expect(prisma.session.findMany).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@ files like any golden update (a change means ranking behaviour changed).
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from src.api import app  # noqa: E402
 from src.core.constants import FEATURE_DIM  # noqa: E402
+from src.schemas import HOUR_ARM_IDS  # noqa: E402
 from src.schemas_place import PLACEMENT_CONTRACT_VERSION  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[3] / "packages/shared/contract/place"
@@ -29,7 +31,7 @@ H = 3_600_000
 DAY = 24 * H
 TYPES = ("LECTURE", "ASSIGNMENT", "EXAM", "TASK", "DND")
 ZERO = {t: {"hours": 0, "count": 0} for t in TYPES}
-ARMS = ("EARLY_MORNING", "MORNING", "MIDDAY", "AFTERNOON", "EVENING", "NIGHT")
+ARMS = HOUR_ARM_IDS
 REQ_ID = "00000000-0000-4000-8000-000000000002"
 
 
@@ -71,9 +73,8 @@ def base(**kw: Any) -> dict[str, Any]:
         "nowMs": NOW,
         "timezone": "UTC",
         "maxScanDays": 30,
-        "fixedOccupied": [],
         "deadlineMs": NOW + 3 * DAY,
-        "members": [member("LINUCB")],
+        "member": member("LINUCB"),
         "days": [day(i) for i in range(4)],
         "user": {"preferenceMatrix": matrix(), "observationCount": 0},
     }
@@ -89,7 +90,8 @@ def warm_state() -> dict[str, Any]:
         for i in range(FEATURE_DIM):
             a[i * FEATURE_DIM + i] = 2.0 + 0.1 * i
         b = [0.0] * FEATURE_DIM
-        b[-1] = [0.0, 0.2, 0.7, 0.9, 0.6, -0.3][k]
+        # A bump over the day: strongest around 09:00 to 11:00, weakest overnight.
+        b[-1] = round(0.9 * math.exp(-((k - 10) ** 2) / 8) - 0.3, 3)
         out[arm] = {"A": a, "b": b}
     return out
 
@@ -116,7 +118,7 @@ def blocked(policy: str | None) -> dict[str, Any]:
         requestId=REQ_ID + "-2",
         deadlineMs=NOW + 2 * H,
         days=[day(0, [(NOW - H, NOW + DAY)])],
-        members=[member("HEURISTIC")],
+        member=member("HEURISTIC"),
         infeasible={"policy": policy, **ctx} if policy else ctx,
     )
 
@@ -124,9 +126,8 @@ def blocked(policy: str | None) -> dict[str, Any]:
 CASES: list[tuple[str, str, dict[str, Any]]] = [
     (
         "single-linucb-cold-bandit",
-        "One 60 min task, LINUCB primary, all five arms cold (ridge prior: every "
-        "arm scores the same exploration bonus). The seeded tie-break order picks "
-        "the band and the task is centred in it; the preference matrix is ignored.",
+        "One 60 min task, LINUCB primary, 24 hour arms cold: each starts at its "
+        "matrix prior, so the matrix shapes the pick. Earlier start wins exact ties.",
         base(bandit={"alpha": 0.15, "ridge": 1.0, "state": cold_state()}),
     ),
     (
@@ -135,7 +136,7 @@ CASES: list[tuple[str, str, dict[str, Any]]] = [
         "from the matrix, LinUCB from the arms alone); primary is LINUCB so "
         "startMs follows it.",
         base(
-            members=[member("LINUCB", both=True)],
+            member=member("LINUCB", both=True),
             user={"preferenceMatrix": matrix(), "observationCount": 100},
             bandit={"alpha": 0.15, "ridge": 1.0, "state": warm_state()},
         ),
@@ -149,7 +150,7 @@ CASES: list[tuple[str, str, dict[str, Any]]] = [
             requestId=REQ_ID + "-2",
             deadlineMs=NOW + 4 * H,
             days=[day(0, [(NOW, NOW + 2 * H), (NOW + 2 * H, NOW + 4 * H)])],
-            members=[member("HEURISTIC")],
+            member=member("HEURISTIC"),
             infeasible={"flexible": FLEX, "fixed": [], "horizonOccupied": []},
         ),
     ),
@@ -172,48 +173,6 @@ CASES: list[tuple[str, str, dict[str, Any]]] = [
         "(ACCEPTED_LAST_RESORT, conflicting=true). PREFLIGHT would answer "
         "INFEASIBLE (see single-infeasible-second-call).",
         blocked(None),
-    ),
-    (
-        "series-last-resort-past-deadline",
-        "Two 60 min sittings whose deadline has already passed: nothing is "
-        "scanned; PLACE pins them back-to-back from the next slot "
-        "(ACCEPTED_LAST_RESORT, late=true).",
-        base(
-            deadlineMs=NOW - H,
-            maxScanDays=60,
-            members=[
-                {**member("HEURISTIC"), "id": "a"},
-                {**member("HEURISTIC"), "id": "b"},
-            ],
-        ),
-    ),
-    (
-        "series-pairwise-heuristic-primary",
-        "Pairwise-sampled series (#58): three 60 min sittings, every member "
-        "HEURISTIC primary with computeBoth. Python builds two complete plans "
-        "over one batch, each with its own sibling ledger: `heuristic` is the "
-        "sitting's pick in the all-heuristic plan (applied, so startMs follows "
-        "it), `linucb` its pick in the independent all-LinUCB plan.",
-        base(
-            requestId=REQ_ID + "-3",
-            members=[
-                {**member("HEURISTIC", both=True), "id": f"s{i}"} for i in range(3)
-            ],
-            user={"preferenceMatrix": matrix(), "observationCount": 100},
-            bandit={"alpha": 0.15, "ridge": 1.0, "state": warm_state()},
-        ),
-    ),
-    (
-        "series-pairwise-linucb-primary",
-        "Same sampled series with LINUCB primary: startMs / appliedPolicy follow "
-        "the all-LinUCB plan; `heuristic` is still each sitting's pick in the "
-        "independent all-heuristic plan.",
-        base(
-            requestId=REQ_ID + "-3",
-            members=[{**member("LINUCB", both=True), "id": f"s{i}"} for i in range(3)],
-            user={"preferenceMatrix": matrix(), "observationCount": 100},
-            bandit={"alpha": 0.15, "ridge": 1.0, "state": warm_state()},
-        ),
     ),
 ]
 

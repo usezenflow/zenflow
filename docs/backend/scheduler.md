@@ -37,7 +37,6 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
 
 - **Slot scoring** (`core/slot-score.ts`, fallback only): overlap-weighted preference sum. `bestFreeSlot` picks the top free slot. LinUCB scoring is Python's (`services/bandit/src/core/linucb_best_slot.py`).
 - **Displacement and sync conflicts:** EDF repack and the infeasible fallbacks are Python's. Nest applies the response (`scheduler/io/displacement.service.ts`) and raises per-source conflict notifications (`ingestion/sync-conflicts.service.ts`).
-- **Series bounded window** (`core/series-spread.ts`, frozen, ported to Python): splits a series' day span into N non-overlapping buckets; tail buckets absorb the remainder days.
 
 ## Session reminders
 
@@ -54,7 +53,7 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
 | Concept | File |
 | --- | --- |
 | Preference matrix (default: two humps, lazier later weekend), decay, reinforcement | `scheduler/core/preference.ts`, `matrix-decay.ts` |
-| Fallback slot score, series spread | `scheduler/core/slot-score.ts`, `series-spread.ts` |
+| Fallback slot score | `scheduler/core/slot-score.ts` |
 | rrule expansion, occurrence ids | `scheduler/core/recurrence.ts` |
 | Delayed-reward math, conflict detection | `scheduler/core/reward.ts`, `sync-conflicts.ts` |
 | One day's occupancy and workload (only occupancy query). Widens each session by its `commuteMinutes` on both sides ([ADR-0029](../adr/0029-commute-buffer.md)) | `scheduler/io/day-load.ts` |

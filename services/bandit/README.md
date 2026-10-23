@@ -4,7 +4,7 @@ For developers. A small Python (FastAPI + numpy) service that owns all slot plac
 
 - Hosts the LinUCB model (disjoint arms plus a shared `beta`) and the heuristic policy; the backend calls it over internal HTTP (`BANDIT_SERVICE_URL`).
 - Authoritative for placement ([ADR-0003](../../docs/adr/0003-python-authoritative-placement.md)); fail-open: Nest falls back to the frozen TS heuristic on any error, timeout or empty pick.
-- Stateless: the backend owns per-student `(A, b)` (`BanditArmState`) and sends all 6 arms' state with each request.
+- Stateless: the backend owns per-student `(A, b)` (`BanditArmState`) and sends all 24 hour arms' state with each request.
 - Reproducible: no clock, no module-global RNG; tie-breaks use a seeded order.
 
 ## Run
@@ -49,7 +49,7 @@ uv run python -m src.main                         # offline demo: LinUCB vs rand
 | `POST /v1/prep/size` | Prep length and window from the marks profile |
 
 - Errors: `422` validation or `CONTRACT_VERSION`, `413` body over 2 MB, `401` bad token.
-- Detail (scan window, series, displacement, last resort, latency): [docs/bandit/placement.md](../../docs/bandit/placement.md).
+- Detail (scan window, displacement, last resort, latency): [docs/bandit/placement.md](../../docs/bandit/placement.md).
 
 ## Contract fixtures
 
@@ -64,6 +64,7 @@ uv run python -m src.main                         # offline demo: LinUCB vs rand
 - Model, rewards, hyperparameters (`λ = 1.0`, `α = 0.15`): [ADR-0001](../../docs/adr/0001-linucb-model-design.md).
 - Context vector (`d = 7`), arms, tie-breaks, benchmarks: [docs/bandit/core.md](../../docs/bandit/core.md).
 - Arm to timestamp mapping: [docs/scheduler/reranking.md](../../docs/scheduler/reranking.md).
+- Offline semester eval (`evalx/`): [protocol](../../docs/scheduler/eval-protocol.md), [report](../../docs/scheduler/offline-eval-report.md).
 - A/B experiment: [docs/scheduler/ab-testing.md](../../docs/scheduler/ab-testing.md); results: [heuristic-vs-linucb-report.md](../../docs/scheduler/heuristic-vs-linucb-report.md).
 
 ## Layout
@@ -74,7 +75,7 @@ services/bandit/
 ├── scripts/              # bench_place, bench_slot_scan, gen_place_fixtures, simulation benches
 ├── src/
 │   ├── api.py            # FastAPI app, routes, bearer auth, request-id
-│   ├── place.py          # /v1/place orchestration: series ledger, (M,N,D) batch, displacement, fallbacks
+│   ├── place.py          # /v1/place orchestration: (M,N,D) batch, displacement, fallbacks
 │   ├── schemas_place.py  # /v1/place wire models
 │   ├── schemas.py        # /v1/update models, ArmId / ARM_IDS
 │   ├── serialization.py  # numpy glue and 422 guards

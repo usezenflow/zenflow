@@ -12,20 +12,18 @@ from fastapi.testclient import TestClient
 from src.api import app
 from src.core import constants as consts
 from src.core import displacement
-from src.core.arms import seeded_tie_break_order
 from src.core.constants import (
     DAY_MS,
     FEATURE_DIM,
     INFEASIBLE_HORIZON_DAYS,
     MS_PER_MINUTE,
-    SERIES_GAP_MINUTES,
 )
 from src.core.linucb_best_slot import best_linucb_slot, days_from_dicts
 from src.core.preference import default_preference_matrix
 from src.core.quiet_hours import quiet_intervals
 from src.core.slot import add_days_str, local_date_str, local_midnight_ms
 from src.models.linucb import score as linucb_score
-from src.schemas import ARM_IDS, ArmState
+from src.schemas import HOUR_ARM_IDS, ArmState
 from src.schemas_place import PLACEMENT_CONTRACT_VERSION
 from src.serialization import hydrate_arms
 
@@ -90,8 +88,7 @@ def make_req(**kw: Any) -> dict[str, Any]:
         "timezone": "UTC",
         "deadlineMs": NOW + 5 * DAY_MS,
         "maxScanDays": 30,
-        "members": [member()],
-        "fixedOccupied": [],
+        "member": member(),
         "days": make_days(6),
         "user": {
             "preferenceMatrix": default_preference_matrix().tolist(),
@@ -105,7 +102,7 @@ def make_req(**kw: Any) -> dict[str, Any]:
 def warm_state(seed: int = 3) -> dict[str, dict[str, list[float]]]:
     rng = np.random.default_rng(seed)
     state: dict[str, dict[str, list[float]]] = {}
-    for arm in ARM_IDS:
+    for arm in HOUR_ARM_IDS:
         x = rng.normal(size=(40, FEATURE_DIM))
         a = np.eye(FEATURE_DIM) + x.T @ x / 10
         b = rng.normal(size=FEATURE_DIM) * 0.5
@@ -129,7 +126,7 @@ def ok(body: dict[str, Any]) -> dict[str, Any]:
 
 def test_single_heuristic_prefers_the_default_morning_hour() -> None:
     res = ok(make_req())
-    r = res["results"][0]
+    r = res["result"]
     assert r["outcome"] == "PLACED" and r["appliedPolicy"] == "HEURISTIC"
     assert r["linucb"] is None and r["moves"] == []
     assert r["startMs"] == r["heuristic"]["startMs"]
@@ -159,14 +156,14 @@ def test_quiet_hours_block_the_eight_am_cell_only_before_six() -> None:
         "observationCount": 0,
     }
     # 08:00 is outside the 23:00 to 06:00 quiet window, so the plan starts at now.
-    assert ok(make_req(user=user))["results"][0]["startMs"] == NOW
+    assert ok(make_req(user=user))["result"]["startMs"] == NOW
 
 
 def test_timezone_wall_clock_is_respected() -> None:
     tz = "Asia/Ho_Chi_Minh"  # UTC+7: 'now' is 15:00 local
     days = make_days(6, tz)
     res = ok(make_req(timezone=tz, days=days))
-    start = res["results"][0]["startMs"]
+    start = res["result"]["startMs"]
     local_h = ((start + 7 * HOUR) % DAY_MS) // HOUR
     assert local_h in (9, 10, 19, 20)  # the best liked local hours from 15:00
     assert start >= NOW
@@ -176,11 +173,11 @@ def test_preflight_runs_heuristic_only() -> None:
     res = ok(
         make_req(
             mode="PREFLIGHT",
-            members=[member(policy="LINUCB", both=True)],
+            member=member(policy="LINUCB", both=True),
             bandit={"alpha": 0.15, "ridge": 1.0, "state": warm_state()},
         )
     )
-    r = res["results"][0]
+    r = res["result"]
     assert r["appliedPolicy"] == "HEURISTIC" and r["linucb"] is None
     assert r["heuristic"] is not None
 
@@ -194,8 +191,8 @@ def _bandit(state: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def test_linucb_primary_cold_has_pick_and_no_heuristic() -> None:
-    res = ok(make_req(members=[member(policy="LINUCB")], bandit=_bandit()))
-    r = res["results"][0]
+    res = ok(make_req(member=member(policy="LINUCB"), bandit=_bandit()))
+    r = res["result"]
     assert r["appliedPolicy"] == "LINUCB" and r["heuristic"] is None
     lin = r["linucb"]
     assert len(lin["featureVector"]) == FEATURE_DIM
@@ -205,23 +202,23 @@ def test_linucb_primary_cold_has_pick_and_no_heuristic() -> None:
 
 def test_compute_both_returns_both_picks_and_primary_decides_start() -> None:
     body = make_req(
-        members=[member(policy="HEURISTIC", both=True)],
+        member=member(policy="HEURISTIC", both=True),
         bandit=_bandit(warm_state()),
         user={
             "preferenceMatrix": default_preference_matrix().tolist(),
             "observationCount": 100,
         },
     )
-    r = ok(body)["results"][0]
+    r = ok(body)["result"]
     assert r["heuristic"] and r["linucb"]
     assert r["startMs"] == r["heuristic"]["startMs"]
-    body["members"][0]["primaryPolicy"] = "LINUCB"
-    r2 = ok(body)["results"][0]
+    body["member"]["primaryPolicy"] = "LINUCB"
+    r2 = ok(body)["result"]
     assert r2["startMs"] == r2["linucb"]["startMs"] and r2["appliedPolicy"] == "LINUCB"
 
 
 def test_linucb_without_bandit_state_falls_back_to_heuristic() -> None:
-    r = ok(make_req(members=[member(policy="LINUCB")]))["results"][0]
+    r = ok(make_req(member=member(policy="LINUCB")))["result"]
     assert r["appliedPolicy"] == "HEURISTIC" and r["linucb"] is None
     assert r["heuristic"] is not None and r["outcome"] == "PLACED"
 
@@ -231,16 +228,18 @@ def test_in_process_arm_scores_match_the_core() -> None:
     computed directly from the model core for the same context vector."""
     state = warm_state()
     body = make_req(
-        members=[member(policy="LINUCB", dur=90)],
+        member=member(policy="LINUCB", dur=90),
         bandit=_bandit(state),
         user={
             "preferenceMatrix": default_preference_matrix().tolist(),
             "observationCount": 25,
         },
     )
-    r = ok(body)["results"][0]
+    r = ok(body)["result"]
     vec = r["linucb"]["featureVector"]
-    arms = hydrate_arms({a: ArmState(**state[a]) for a in ARM_IDS}, FEATURE_DIM, 1.0)
+    arms = hydrate_arms(
+        {a: ArmState(**state[a]) for a in HOUR_ARM_IDS}, FEATURE_DIM, 1.0
+    )
     pred = {
         a: float(linucb_score(p.A, p.b, np.asarray(vec), 0.15)) for a, p in arms.items()
     }
@@ -260,7 +259,7 @@ def test_in_process_arm_scores_match_the_core() -> None:
                     "dayEndMs": day["dayEndMs"],
                     "occupied": core_occupied,
                     "vector": vec,
-                    "armScores": pred,
+                    "armScores": [pred[a] for a in HOUR_ARM_IDS],
                 }
             ]
         ),
@@ -269,95 +268,12 @@ def test_in_process_arm_scores_match_the_core() -> None:
         NOW,
         body["deadlineMs"],
         None,
-        None,
-        seeded_tie_break_order(f"{body['requestId']}|t1"),
-        None,
-        0.0,
-        consts.LINUCB_GAP_WEIGHT,
+        gap_weight=consts.LINUCB_GAP_WEIGHT,
     )
     assert core is not None
-    assert core.start_ms == start and core.arm == r["linucb"]["selectedArm"]
+    assert core.start_ms == start
+    assert HOUR_ARM_IDS[core.hour] == r["linucb"]["selectedArm"]
     assert core.score == pytest.approx(r["linucb"]["score"], abs=1e-9)
-
-
-# ---- series -------------------------------------------------------------
-
-
-def test_series_spreads_members_over_distinct_windows_without_overlap() -> None:
-    members = [member(f"s{i}", 120) for i in range(4)]
-    body = make_req(
-        members=members,
-        deadlineMs=NOW + 8 * DAY_MS,
-        days=make_days(9),
-        maxScanDays=60,
-    )
-    res = ok(body)["results"]
-    starts = [r["startMs"] for r in res]
-    assert all(s is not None for s in starts)
-    days = [local_date_str(s, "UTC") for s in starts]
-    assert len(set(days)) == 4  # MAX_SERIES_PER_DAY = 1
-    assert starts == sorted(starts)
-    for a, b in zip(starts, starts[1:], strict=False):
-        assert b - a >= 2 * HOUR
-
-
-def test_series_member_without_a_window_slot_spills_to_the_whole_range() -> None:
-    # 2 members, deadline one day ahead, the second window's day is fully blocked.
-    days = make_days(2, occupied={1: [(NOW + 16 * HOUR, NOW + 2 * DAY_MS)]})
-    body = make_req(
-        members=[member("a"), member("b")],
-        deadlineMs=NOW + 2 * DAY_MS - 8 * HOUR,
-        days=days,
-        maxScanDays=60,
-    )
-    a, b = ok(body)["results"]
-    assert a["outcome"] == "PLACED"
-    # The second sitting falls back to the free first day, clear of its sibling.
-    assert b["outcome"] == "PLACED" and b["startMs"] is not None
-    assert b["startMs"] + HOUR <= body["deadlineMs"]
-    gap = SERIES_GAP_MINUTES * MS_PER_MINUTE
-    assert (
-        b["startMs"] >= a["startMs"] + HOUR + gap
-        or b["startMs"] + HOUR + gap <= a["startMs"]
-    )
-
-
-def test_series_with_more_sittings_than_the_day_cap_fits_in_one_day() -> None:
-    members = [member(f"s{i}", 15) for i in range(6)]
-    body = make_req(
-        members=members,
-        deadlineMs=NOW + 12 * HOUR,
-        days=make_days(1),
-        maxScanDays=60,
-    )
-    res = ok(body)["results"]
-    assert [r["outcome"] for r in res] == ["PLACED"] * 6
-
-
-def test_series_fixed_occupied_sibling_holds_its_day() -> None:
-    # Existing siblings (a grow) fill day 0 to the cap: the new member must land
-    # on another day, not just another time on day 0.
-    existing = [(NOW + h * HOUR, NOW + (h + 1) * HOUR) for h in (1, 3, 5)]
-    body = make_req(
-        members=[member("new")],
-        fixedOccupied=[{"startMs": b, "endMs": e} for b, e in existing],
-    )
-    (r,) = ok(body)["results"]
-    assert r["outcome"] == "PLACED"
-    assert local_date_str(r["startMs"], "UTC") != local_date_str(existing[0][0], "UTC")
-
-
-def test_series_past_deadline_is_pinned_a_gap_apart() -> None:
-    body = make_req(
-        members=[member("a"), member("b")], deadlineMs=NOW - HOUR, maxScanDays=60
-    )
-    res = ok(body)["results"]
-    assert [r["outcome"] for r in res] == ["ACCEPTED_LAST_RESORT"] * 2
-    assert [r["startMs"] for r in res] == [NOW, NOW + HOUR + 15 * 60_000]
-    assert all(r["late"] for r in res)
-
-    body["mode"] = "PREFLIGHT"
-    assert [r["outcome"] for r in ok(body)["results"]] == ["INFEASIBLE"] * 2
 
 
 # ---- infeasible / displacement -----------------------------------------
@@ -388,12 +304,12 @@ def _packed_day() -> tuple[dict[str, Any], list[dict[str, Any]]]:
 
 def test_two_phase_displacement_matches_core_planner() -> None:
     body, flex = _packed_day()
-    first = ok(body)["results"][0]
+    first = ok(body)["result"]
     assert first["outcome"] == "NEEDS_INFEASIBLE_CONTEXT" and first["startMs"] is None
 
     body["requestId"] = "test-1-2"
     body["infeasible"] = {"flexible": flex, "fixed": [], "horizonOccupied": []}
-    r = ok(body)["results"][0]
+    r = ok(body)["result"]
     assert r["outcome"] == "DISPLACED" and r["moves"]
 
     day_start = body["days"][0]["dayStartMs"]
@@ -427,18 +343,18 @@ def test_infeasible_without_policy_and_with_each_policy() -> None:
     )
     # No policy: PREFLIGHT reports the miss; PLACE (the row exists) falls back
     # to the least-conflict start before the deadline.
-    assert ok({**body, "mode": "PREFLIGHT"})["results"][0]["outcome"] == "INFEASIBLE"
-    r = ok(body)["results"][0]
+    assert ok({**body, "mode": "PREFLIGHT"})["result"]["outcome"] == "INFEASIBLE"
+    r = ok(body)["result"]
     assert r["outcome"] == "ACCEPTED_LAST_RESORT" and r["conflicting"] is True
     assert NOW <= r["startMs"] <= NOW + HOUR and r["late"] is False
 
     body["infeasible"]["policy"] = "ACCEPT_CONFLICTS"
-    r = ok(body)["results"][0]
+    r = ok(body)["result"]
     assert r["outcome"] == "ACCEPTED_CONFLICTS" and r["conflicting"] is True
     assert NOW <= r["startMs"] <= NOW + HOUR
 
     body["infeasible"]["policy"] = "ACCEPT_LATE_DEADLINE"
-    r = ok(body)["results"][0]
+    r = ok(body)["result"]
     assert r["outcome"] == "ACCEPTED_LATE" and r["late"] is True
     assert r["startMs"] + HOUR > body["deadlineMs"]
     assert r["startMs"] >= blocked[1]  # conflict-free
@@ -457,7 +373,7 @@ def _too_close(horizon_blocked_until: int) -> dict[str, Any]:
 
 def test_last_resort_goes_late_to_the_first_free_slot() -> None:
     body = _too_close(NOW + 3 * HOUR)
-    r = ok(body)["results"][0]
+    r = ok(body)["result"]
     assert r["outcome"] == "ACCEPTED_LAST_RESORT"
     assert r["startMs"] == NOW + 3 * HOUR
     assert r["late"] is True and r["conflicting"] is False
@@ -465,7 +381,7 @@ def test_last_resort_goes_late_to_the_first_free_slot() -> None:
 
 def test_last_resort_pins_when_the_whole_horizon_is_full() -> None:
     horizon_end = NOW + (INFEASIBLE_HORIZON_DAYS + 2) * DAY_MS
-    r = ok(_too_close(horizon_end))["results"][0]
+    r = ok(_too_close(horizon_end))["result"]
     assert r["outcome"] == "ACCEPTED_LAST_RESORT"
     assert r["startMs"] == NOW  # max(next slot, deadline - duration)
     assert r["late"] is True and r["conflicting"] is True
@@ -484,20 +400,12 @@ def test_last_resort_pin_is_on_grid_and_clears_avoided_intervals() -> None:
     )
 
 
-def test_series_members_are_never_displaced() -> None:
-    body, flex = _packed_day()
-    body["members"] = [member("a", 60), member("b", 60)]
-    body["infeasible"] = {"flexible": flex, "fixed": [], "horizonOccupied": []}
-    body["maxScanDays"] = 60
-    assert all(r["moves"] == [] for r in ok(body)["results"])
-
-
 # ---- determinism, errors, auth -----------------------------------------
 
 
 def test_deterministic() -> None:
     body = make_req(
-        members=[member("a", policy="LINUCB", both=True), member("b")],
+        member=member("a", policy="LINUCB", both=True),
         bandit=_bandit(warm_state()),
         deadlineMs=NOW + 4 * DAY_MS,
         maxScanDays=60,
@@ -519,7 +427,7 @@ def test_contract_version_mismatch_is_422_with_code() -> None:
     "mutate",
     [
         lambda b: b.update(unknownField=1),
-        lambda b: b["members"][0].update(durationMinutes=50),
+        lambda b: b["member"].update(durationMinutes=50),
         lambda b: b["user"].update(preferenceMatrix=[0.0] * 10),
         lambda b: b.update(timezone="Mars/Olympus"),
         lambda b: b.update(members=[]),
@@ -578,11 +486,11 @@ def test_update_open_without_token() -> None:
         "/v1/update",
         json={
             "ridge": 1.0,
-            "arm": "MORNING",
-            "x": [0.0] * FEATURE_DIM,
+            "arm": "HOUR_09",
+            "x": [1.0] + [0.0] * (FEATURE_DIM - 1),
             "reward": 1.0,
-            "state": {"A": [], "b": []},
+            "arms": {arm: {"A": [], "b": []} for arm in HOUR_ARM_IDS},
         },
     )
     assert r.status_code == 200
-    assert len(r.json()["A"]) == FEATURE_DIM * FEATURE_DIM
+    assert len(r.json()["arms"]["HOUR_09"]["A"]) == FEATURE_DIM * FEATURE_DIM

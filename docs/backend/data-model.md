@@ -27,5 +27,5 @@ For: developers changing the schema or reading Session data. Source of truth: [`
 - `syncConfirmedAt` / `syncMissedAt` implement the two-run confirm/miss gate for ingested rows.
 - `skipped` is the skipped state of a non-TASK session. Skipping writes no event. A recurring occurrence keeps its state in `SessionOccurrenceState` instead of being materialized, so series-wide edits still reach it.
 - Indexes: `[userId, deadline]`, `[userId, scheduledStartTime]`, `[userId, seriesId, createdAt asc]`, `[userId, scheduleStudyUnitId]`, unique `[userId, externalKey]`.
-- `POST /sessions` creates one row, or for a `TASK` with `sessionCount > 1` a series of N rows sharing a `seriesId`.
+- `POST /sessions` creates one row. A recurring fixed session creates one `SessionSeries` plus a representative row.
 - See invariant 4 in [AGENTS.md](../../AGENTS.md) and [ADR-0002](../adr/0002-scheduling-simplification.md) section 2.4.

@@ -33,7 +33,6 @@ class HeuristicPolicy:
         member: PlacementMember,
         days: list[PlacementDay],
         occupied_by_day: dict[str, Intervals],
-        extra: Intervals,
         now_ms: int,
         deadline_ms: int,
     ) -> HeuristicPick | None:
@@ -46,7 +45,7 @@ class HeuristicPolicy:
             window_start = max(now_ms, d.day_start_ms)
             slot = best_free_slot(
                 member.duration_minutes,
-                [*occupied_by_day[d.day_str], *extra],
+                occupied_by_day[d.day_str],
                 window_start,
                 start_ceil,
                 self.matrix,

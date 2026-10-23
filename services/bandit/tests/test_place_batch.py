@@ -1,21 +1,14 @@
 """Output-equivalence tests for `_Placer._build_batch`'s (M, N, D) tensor path.
 
-`_Placer` used to rebuild each member's LinUCB context vectors / arm scores
-from scratch per distinct `duration_minutes` (`_vectors`/`_arm_scores`, keyed
-by duration only, cached across the request). It now builds one batched
-`(M, N, D)` tensor up front (`_build_batch`, `M` = member count including
-`M=1` for a lone task, `N` = max candidate-day count across members, padded
-with a validity mask) and scores all 5 arms against it in one broadcast call
-per arm.
+`_Placer` builds one batched `(1, N, D)` tensor of the task's candidate-day
+context vectors (`_build_batch`) and scores all 6 arms against it in one
+broadcast call per arm.
 
-`_old_run` below is a reconstruction of the pre-batch sequential algorithm
-(the deleted `_vectors`/`_arm_scores` + per-member `linucb()`/`place_member()`
-loop), built only out of pieces of `_Placer` that this change left untouched
-(`_select_days`, `heuristic()`, `_no_slot`, `linucb_policy.best_slot`). Every
-test below asserts the new batched `_Placer.run()` reproduces it exactly,
-field for field, across the scenarios called out in the design doc: a single
-task (`M=1`), a disjoint-window series, a dense/overlapping-window series, an
-all-cold-arm request, and a DST-boundary candidate day.
+`_old_run` below reconstructs the pre-batch algorithm (per-duration vector and
+arm-score caches, called from a per-task `linucb()`), built only out of pieces
+of `_Placer` that the batching left untouched. Every test below asserts the
+batched `_Placer.run()` reproduces it exactly, field for field, across a single
+task, an all-cold-arm request, and a DST-boundary candidate day.
 """
 
 from __future__ import annotations
@@ -30,12 +23,10 @@ from numpy.typing import NDArray
 
 from src.core import constants as consts
 from src.core import matrix_prior
-from src.core.arms import seeded_tie_break_order
 from src.core.constants import DAY_MS, FEATURE_DIM, MS_PER_MINUTE
 from src.core.context_vector import build_context_vector
-from src.core.hybrid import days_left_on, shared_tensor
+from src.core.hour_arms import unit_length
 from src.core.preference import default_preference_matrix
-from src.core.series_spread import series_day_windows
 from src.core.slot import (
     add_days_str,
     day_diff_str,
@@ -44,13 +35,12 @@ from src.core.slot import (
     local_midnight_ms,
 )
 from src.models.linucb import score as linucb_score
-from src.place import _ivals, _Ledger, _Placer, _Timer
+from src.place import _Placer, _Timer
 from src.policies.selector import PolicySelector
-from src.schemas import ARM_IDS, ArmId
+from src.schemas import HOUR_ARM_IDS, ArmId
 from src.schemas_place import (
     PLACEMENT_CONTRACT_VERSION,
     PlacedMember,
-    PlacementDay,
     PlaceRequest,
 )
 
@@ -106,8 +96,7 @@ def make_req(**kw: Any) -> PlaceRequest:
         "timezone": "UTC",
         "deadlineMs": NOW + 5 * DAY_MS,
         "maxScanDays": 30,
-        "members": [member()],
-        "fixedOccupied": [],
+        "member": member(),
         "days": make_days(6),
         "user": {
             "preferenceMatrix": default_preference_matrix().tolist(),
@@ -121,7 +110,7 @@ def make_req(**kw: Any) -> PlaceRequest:
 def warm_state(seed: int = 3) -> dict[str, dict[str, list[float]]]:
     rng = np.random.default_rng(seed)
     state: dict[str, dict[str, list[float]]] = {}
-    for arm in ARM_IDS:
+    for arm in HOUR_ARM_IDS:
         x = rng.normal(size=(40, FEATURE_DIM))
         a = np.eye(FEATURE_DIM) + x.T @ x / 10
         b = rng.normal(size=FEATURE_DIM) * 0.5
@@ -130,7 +119,7 @@ def warm_state(seed: int = 3) -> dict[str, dict[str, list[float]]]:
 
 
 def cold_state() -> dict[str, dict[str, list[float]]]:
-    return {a: {"A": [], "b": []} for a in ARM_IDS}
+    return {a: {"A": [], "b": []} for a in HOUR_ARM_IDS}
 
 
 def bandit(
@@ -142,7 +131,7 @@ def bandit(
 # ---- oracle: the pre-batch sequential algorithm, reconstructed -----------
 
 
-def _old_run(req: PlaceRequest) -> list[PlacedMember]:
+def _old_run(req: PlaceRequest) -> PlacedMember:
     """Reference reimplementation of `_Placer.run()` *before* B.2/B.3's
     batching: `_vectors`/`_arm_scores` cached by `duration_minutes` only,
     rebuilt from scratch per distinct duration, called from inside a
@@ -152,7 +141,7 @@ def _old_run(req: PlaceRequest) -> list[PlacedMember]:
     """
     placer = _Placer(req, _Timer())
     vec_cache: dict[int, dict[str, NDArray[np.float64]]] = {}
-    score_cache: dict[int, dict[str, dict[ArmId, float]]] = {}
+    score_cache: dict[int, dict[str, list[float]]] = {}
 
     def vectors(duration: int) -> dict[str, NDArray[np.float64]]:
         hit = vec_cache.get(duration)
@@ -165,17 +154,22 @@ def _old_run(req: PlaceRequest) -> list[PlacedMember]:
                 k: {"hours": v.hours, "count": v.count}
                 for k, v in d.workload_by_type.items()
             }
-            vecs[d.day_str] = build_context_vector(
-                remaining_days_until_deadline=remaining,
-                duration_minutes=duration,
-                candidate_iso_weekday=iso_weekday(d.day_str),
-                candidate_days_from_now=max(0, day_diff_str(placer.today, d.day_str)),
-                workload_by_type=wl,
+            vecs[d.day_str] = unit_length(
+                build_context_vector(
+                    remaining_days_until_deadline=remaining,
+                    duration_minutes=duration,
+                    candidate_iso_weekday=iso_weekday(d.day_str),
+                    candidate_days_from_now=max(
+                        0, day_diff_str(placer.today, d.day_str)
+                    ),
+                    workload_by_type=wl,
+                )
             )
+
         vec_cache[duration] = vecs
         return vecs
 
-    def arm_scores(duration: int) -> dict[str, dict[ArmId, float]]:
+    def arm_scores(duration: int) -> dict[str, list[float]]:
         hit = score_cache.get(duration)
         if hit is not None:
             return hit
@@ -183,29 +177,19 @@ def _old_run(req: PlaceRequest) -> list[PlacedMember]:
         keys = list(vecs)
         x = np.stack([vecs[k] for k in keys]) if keys else np.empty((0, FEATURE_DIM))
         per_arm: dict[ArmId, NDArray[np.float64]] = {}
-        for arm in ARM_IDS:
+        for arm in HOUR_ARM_IDS:
             params = placer.linucb_policy._arms[arm]
             per_arm[arm] = np.asarray(
                 linucb_score(params.A, params.b, x, placer.linucb_policy.alpha),
                 dtype=np.float64,
             )
-        out: dict[str, dict[ArmId, float]] = {
-            k: {a: float(per_arm[a][i]) for a in ARM_IDS} for i, k in enumerate(keys)
+        out: dict[str, list[float]] = {
+            k: [float(per_arm[a][i]) for a in HOUR_ARM_IDS] for i, k in enumerate(keys)
         }
         score_cache[duration] = out
         return out
 
-    def day_crosses(m: Any, d: PlacementDay) -> NDArray[np.float64]:
-        """Per-day hybrid cross features, one day at a time (the pre-batch way)."""
-        lecture = d.workload_by_type.get("LECTURE")
-        return shared_tensor(
-            req.user.weak,
-            [m.plan_kind],
-            np.array([[days_left_on(req.deadline_ms, d.day_start_ms)]]),
-            np.array([[lecture.hours if lecture is not None else 0.0]]),
-        )[0, 0]
-
-    def old_linucb(m: Any, days: Any, extra: Any) -> Any:
+    def old_linucb(m: Any, days: Any) -> Any:
         if not placer.linucb_policy.enabled or not days:
             return None
         try:
@@ -213,119 +197,67 @@ def _old_run(req: PlaceRequest) -> list[PlacedMember]:
         except np.linalg.LinAlgError:
             return None
         vecs = vectors(m.duration_minutes)
-        crosses = {d.day_str: day_crosses(m, d) for d in days}
         return placer.linucb_policy.best_slot(
             m,
             days,
             placer.occ,
             vecs,
             scores,
-            extra,
             placer.next15,
             req.deadline_ms,
-            seeded_tie_break_order(f"{req.request_id}|{m.id}"),
-            crosses,
         )
 
-    def old_place_member(
-        m: Any, first: str, last: str, ledger: _Ledger
-    ) -> PlacedMember:
-        base = PlacedMember(
-            id=m.id,
-            outcome="INFEASIBLE",
-            applied_policy="NONE",
-            heuristic=None,
-            linucb=None,
-            start_ms=None,
-            moves=[],
-            late=False,
-            conflicting=False,
-            reason=None,
-        )
-        dur_ms = m.duration_minutes * consts.MS_PER_MINUTE
-        if placer.next15 + dur_ms > req.deadline_ms:
-            return placer._no_slot(m, base, ledger)
-        days = placer._select_days(first, last, ledger)
-        extra = list(ledger.siblings)
-        lin = (
-            old_linucb(m, days, extra)
-            if PolicySelector.should_try_linucb(req.mode, m)
-            else None
-        )
-        heur = (
-            placer.heuristic(m, days, extra)
-            if PolicySelector.should_try_heuristic(req.mode, m, lin)
-            else None
-        )
-        decision = PolicySelector.resolve(req.mode, m, heur, lin)
-        if decision is None:
-            return placer._no_slot(m, base, ledger)
-        policy, start_ms = decision
-        return base.model_copy(
-            update={
-                "outcome": "PLACED",
-                "applied_policy": policy,
-                "heuristic": heur,
-                "linucb": lin,
-                "start_ms": start_ms,
-            }
-        )
-
-    ledger = _Ledger(siblings=_ivals(req.fixed_occupied))
-    members = req.members
-    if len(members) == 1:
-        first = local_date_str(placer.next15, placer.tz)
-        last = local_date_str(req.deadline_ms - 1, placer.tz)
-        return [old_place_member(members[0], first, last, ledger)]
-
-    if placer.next15 >= req.deadline_ms:
-        return [
-            PlacedMember(
-                id=m.id,
-                outcome="INFEASIBLE",
-                applied_policy="NONE",
-                heuristic=None,
-                linucb=None,
-                start_ms=None,
-                moves=[],
-                late=False,
-                conflicting=False,
-                reason=None,
-            )
-            for m in members
-        ]
-    span = min(
-        math.floor((req.deadline_ms - placer.next15) / consts.DAY_MS),
-        consts.MAX_SCAN_DAYS - 1,
+    m = req.member
+    base = PlacedMember(
+        id=m.id,
+        outcome="INFEASIBLE",
+        applied_policy="NONE",
+        heuristic=None,
+        linucb=None,
+        start_ms=None,
+        moves=[],
+        late=False,
+        conflicting=False,
+        reason=None,
     )
-    windows = series_day_windows(span, len(members))
-    start_day = local_date_str(placer.next15, placer.tz)
-    results: list[PlacedMember] = []
-    for m, (lo, hi) in zip(members, windows, strict=True):
-        r = old_place_member(
-            m, add_days_str(start_day, lo), add_days_str(start_day, hi), ledger
-        )
-        results.append(r)
-        if r.start_ms is not None:
-            ledger.siblings.append(
-                (r.start_ms, r.start_ms + m.duration_minutes * consts.MS_PER_MINUTE)
-            )
-            day = local_date_str(r.start_ms, placer.tz)
-            ledger.count_by_day[day] = ledger.count_by_day.get(day, 0) + 1
-    return results
+    dur_ms = m.duration_minutes * consts.MS_PER_MINUTE
+    if placer.next15 + dur_ms > req.deadline_ms:
+        return placer._no_slot(m, base)
+    first = local_date_str(placer.next15, placer.tz)
+    last = local_date_str(req.deadline_ms - 1, placer.tz)
+    days = placer._select_days(first, last)
+    lin = old_linucb(m, days) if PolicySelector.should_try_linucb(req.mode, m) else None
+    heur = (
+        placer.heuristic(m, days)
+        if PolicySelector.should_try_heuristic(req.mode, m, lin)
+        else None
+    )
+    decision = PolicySelector.resolve(req.mode, m, heur, lin)
+    if decision is None:
+        return placer._no_slot(m, base)
+    policy, start_ms = decision
+    return base.model_copy(
+        update={
+            "outcome": "PLACED",
+            "applied_policy": policy,
+            "heuristic": heur,
+            "linucb": lin,
+            "start_ms": start_ms,
+        }
+    )
 
 
-def _assert_equivalent(req: PlaceRequest) -> list[PlacedMember]:
-    new_results = _Placer(req, _Timer()).run()
-    old_results = _old_run(req)
-    assert len(new_results) == len(old_results)
-    for new, old in zip(new_results, old_results, strict=True):
-        # The oracle predates the reason code (#254); check it separately.
-        assert new.model_dump(exclude={"reason"}) == old.model_dump(
-            exclude={"reason"}
-        ), (new.id, new, old)
-        assert (new.reason is None) == (new.start_ms is None), new.id
-    return new_results
+def _assert_equivalent(req: PlaceRequest) -> PlacedMember:
+    new = _Placer(req, _Timer()).run()
+    old = _old_run(req)
+    # The oracle predates the reason code (#254); check it separately.
+    assert new.model_dump(exclude={"reason"}) == old.model_dump(exclude={"reason"}), (
+        new.id,
+        new,
+        old,
+    )
+    assert (new.reason is None) == (new.start_ms is None), new.id
+    return new
 
 
 # ---- scenarios -------------------------------------------------------------
@@ -334,51 +266,10 @@ def _assert_equivalent(req: PlaceRequest) -> list[PlacedMember]:
 def test_single_task_m1_matches_oracle() -> None:
     """M = 1: the lone-task path goes through the same batched `_build_batch`
     with no special-casing, not a hand-rolled fast path."""
-    req = make_req(members=[member(dur=90)], bandit=bandit(warm_state()))
-    results = _assert_equivalent(req)
-    assert results[0].outcome == "PLACED"
-    assert results[0].linucb is not None
-
-
-def test_disjoint_window_series_matches_oracle() -> None:
-    """Members' windows don't overlap -> each gets its own distinct N (no
-    day ever gets capped by a sibling), exercising the (M, N) padding mask
-    when per-member day-list lengths differ."""
-    members = [member(f"s{i}", dur=120) for i in range(4)]
-    req = make_req(
-        members=members,
-        deadlineMs=NOW + 8 * DAY_MS,
-        days=make_days(9),
-        maxScanDays=60,
-        bandit=bandit(warm_state()),
-    )
-    results = _assert_equivalent(req)
-    assert all(r.outcome == "PLACED" for r in results)
-    days = [local_date_str(r.start_ms, "UTC") for r in results]  # type: ignore[arg-type]
-    assert len(set(days)) == 4  # MAX_SERIES_PER_DAY = 1, spread across days
-
-
-def test_dense_overlapping_series_threads_siblings_correctly() -> None:
-    """A short deadline forces every member's window onto the same handful
-    of days -- the MAX_SERIES_PER_DAY cap kicks in as members are placed,
-    shrinking later members' live-selected day count below what the batch's
-    upfront (uncapped) day list predicted. This is exactly the case the
-    `place_member` subset assert (B.4) guards, and the case where each
-    member's row in the (M, N) tensor legitimately differs in valid-day
-    count."""
-    members = [member(f"d{i}", dur=60) for i in range(3)]
-    req = make_req(
-        members=members,
-        deadlineMs=NOW + 2 * DAY_MS,
-        days=make_days(3),
-        maxScanDays=60,
-        bandit=bandit(warm_state()),
-    )
-    results = _assert_equivalent(req)
-    placed_days = [
-        local_date_str(r.start_ms, "UTC") for r in results if r.start_ms is not None
-    ]
-    assert len(set(placed_days)) == len(placed_days)  # never double-booked a day
+    req = make_req(member=member(dur=90), bandit=bandit(warm_state()))
+    result = _assert_equivalent(req)
+    assert result.outcome == "PLACED"
+    assert result.linucb is not None
 
 
 def test_all_cold_arms_matches_oracle(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -388,29 +279,26 @@ def test_all_cold_arms_matches_oracle(monkeypatch: pytest.MonkeyPatch) -> None:
     cold means ridge only."""
     monkeypatch.setattr(matrix_prior, "PRIOR_MATRIX", None)
     req = make_req(
-        members=[member(dur=60), member("t2", dur=60)],
+        member=member(dur=60),
         deadlineMs=NOW + 3 * DAY_MS,
         days=make_days(4),
         maxScanDays=60,
         bandit=bandit(cold_state()),
     )
-    results = _assert_equivalent(req)
-    assert any(r.linucb is not None for r in results)
+    result = _assert_equivalent(req)
+    assert result.linucb is not None
 
     placer = _Placer(req, _Timer())
-    ledger = _Ledger(siblings=[])
     first = local_date_str(placer.next15, placer.tz)
     last = local_date_str(req.deadline_ms - 1, placer.tz)
-    windows_days = [(first, last), (first, last)]
-    batch = placer._build_batch(req.members, windows_days, ledger)
+    batch = placer._build_batch([req.member], [(first, last)])
     first_arr = next(iter(batch.arm_scores.values()))
     assert (first_arr[batch.valid] > 0.0).all()
     scores = {a: arr[batch.valid] for a, arr in batch.arm_scores.items()}
     for arm_scores in scores.values():
-        np.testing.assert_allclose(arm_scores, scores["MORNING"])
-    for r in results:
-        assert r.start_ms is not None
-        assert r.applied_policy == "LINUCB"
+        np.testing.assert_allclose(arm_scores, scores[HOUR_ARM_IDS[0]])
+    assert result.start_ms is not None
+    assert result.applied_policy == "LINUCB"
 
 
 def test_dst_boundary_day_matches_oracle() -> None:
@@ -426,44 +314,10 @@ def test_dst_boundary_day_matches_oracle() -> None:
     req = make_req(
         nowMs=now,
         timezone=tz,
-        members=[member(dur=90), member("t2", dur=45)],
+        member=member(dur=90),
         deadlineMs=now + 4 * DAY_MS,
         days=days,
         maxScanDays=60,
         bandit=bandit(warm_state()),
     )
     _assert_equivalent(req)
-
-
-def test_build_batch_pads_and_masks_shorter_members() -> None:
-    """Direct check on `_build_batch`'s tensor shape/masking contract: `N`
-    is the max day-count across members, shorter members are padded with an
-    invalid (masked) tail, and arm scores are exactly 0 on padding."""
-    from src.core.slot import local_date_str as _lds
-
-    req = make_req(
-        members=[member("long", dur=60), member("short", dur=60)],
-        deadlineMs=NOW + 6 * DAY_MS,
-        days=make_days(7),
-        maxScanDays=60,
-        bandit=bandit(warm_state()),
-    )
-    placer = _Placer(req, _Timer())
-    first_long = _lds(placer.next15, placer.tz)
-    last_long = _lds(req.deadline_ms - 1, placer.tz)
-    # Give "short" a narrower window than "long" so N is set by "long" and
-    # "short"'s row is padded.
-    windows_days = [(first_long, last_long), (first_long, add_days_str(first_long, 1))]
-    ledger = _Ledger(siblings=[])
-    batch = placer._build_batch(req.members, windows_days, ledger)
-
-    m, n, d = batch.vectors.shape
-    assert m == 2
-    assert d == FEATURE_DIM
-    n_short = len(batch.per_member_days[1])
-    n_long = len(batch.per_member_days[0])
-    assert n == max(n_long, n_short) and n_short < n_long
-    assert batch.valid[1, :n_short].all()
-    assert not batch.valid[1, n_short:].any()
-    for arr in batch.arm_scores.values():
-        assert (arr[~batch.valid] == 0.0).all()

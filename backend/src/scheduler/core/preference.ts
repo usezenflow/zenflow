@@ -3,7 +3,11 @@ import {
   PREFERENCE_SLOTS_PER_DAY,
 } from "@zenflow/shared";
 import { clamp, utcToMinutes } from "../../common/utils";
-import { PREFERENCE_LEARNING_RATE } from "../constants";
+import {
+  HEURISTIC_KERNEL_POOL,
+  HEURISTIC_KERNEL_SD,
+  PREFERENCE_LEARNING_RATE,
+} from "../constants";
 import { dragDistanceReward } from "./reward";
 import { isoWeekday, localDateStr } from "./slot";
 
@@ -116,9 +120,65 @@ export function reinforcePreferenceCell(
 }
 
 /**
+ * Circular Gaussian weight of each of the 24 hours from `centre`, 1 at the centre.
+ * `sd <= 0` leaves the centre hour alone. Mirrors `kernel_hour_weights` in
+ * `services/bandit/src/core/preference.py`.
+ */
+export function kernelHourWeights(sd: number, centre: number): number[] {
+  return Array.from({ length: PREFERENCE_SLOTS_PER_DAY }, (_, hour) => {
+    if (sd <= 0) return hour === centre ? 1 : 0;
+    const dh = ((((hour - centre + 12) % 24) + 24) % 24) - 12;
+    return Math.exp(-(dh * dh) / (2 * sd * sd));
+  });
+}
+
+/**
+ * {@link reinforcePreferenceCell} spread over neighbouring hours and days (H+K).
+ * The centre cell moves by `rate · delta`. Hours near it move by the circular
+ * Gaussian of width `sd` hours. Each other day of the same group (Mon to Fri, or
+ * Sat and Sun) moves by `pool` times that. `sd = 0, pool = 0` is the cell update.
+ * Returns a NEW array.
+ */
+export function reinforcePreferenceSmooth(
+  matrix: number[],
+  atMs: number,
+  timezone: string,
+  delta: number,
+  rate: number = PREFERENCE_LEARNING_RATE,
+  sd: number = HEURISTIC_KERNEL_SD,
+  pool: number = HEURISTIC_KERNEL_POOL,
+): number[] {
+  if (sd <= 0 && pool <= 0) {
+    return reinforcePreferenceCell(matrix, atMs, timezone, delta, rate);
+  }
+  const next = [...effectivePreferenceMatrix(matrix)];
+  const wd = isoWeekday(localDateStr(new Date(atMs), timezone));
+  const kern = kernelHourWeights(
+    sd,
+    Math.floor(utcToMinutes(new Date(atMs), timezone) / 60),
+  );
+  for (let other = 1; other <= 7; other++) {
+    let share: number;
+    if (other === wd) share = 1;
+    else if (pool > 0 && other <= 5 === wd <= 5) share = pool;
+    else continue;
+    for (let hour = 0; hour < PREFERENCE_SLOTS_PER_DAY; hour++) {
+      const idx = matrixIndex(other, hour);
+      next[idx] = clamp(
+        next[idx] + rate * delta * share * (kern[hour] ?? 0),
+        -1,
+        1,
+      );
+    }
+  }
+  return next;
+}
+
+/**
  * First move of a placed session: lowers the old hour and raises the new hour
- * by `η·g`, `g = -dragDistanceReward(drag)` in `[0, 1]`. No-op for a zero-distance
- * move or one inside a single hour bucket. Returns a NEW array.
+ * by `η·g`, `g = -dragDistanceReward(drag)` in `[0, 1]`, both spread by the H+K
+ * kernel. No-op for a zero-distance move or one inside a single hour bucket.
+ * Returns a NEW array.
  */
 export function reinforcePreferenceMove(
   matrix: number[],
@@ -127,18 +187,30 @@ export function reinforcePreferenceMove(
   timezone: string,
   dragDistanceMinutes: number,
   rate: number = PREFERENCE_LEARNING_RATE,
+  sd: number = HEURISTIC_KERNEL_SD,
+  pool: number = HEURISTIC_KERNEL_POOL,
 ): number[] {
   const grade = -dragDistanceReward(dragDistanceMinutes);
   const sameCell =
     cellIndexAt(oldStartMs, timezone) === cellIndexAt(newStartMs, timezone);
   if (grade === 0 || sameCell) return [...effectivePreferenceMatrix(matrix)];
 
-  const lowered = reinforcePreferenceCell(
+  const lowered = reinforcePreferenceSmooth(
     matrix,
     oldStartMs,
     timezone,
     -grade,
     rate,
+    sd,
+    pool,
   );
-  return reinforcePreferenceCell(lowered, newStartMs, timezone, grade, rate);
+  return reinforcePreferenceSmooth(
+    lowered,
+    newStartMs,
+    timezone,
+    grade,
+    rate,
+    sd,
+    pool,
+  );
 }

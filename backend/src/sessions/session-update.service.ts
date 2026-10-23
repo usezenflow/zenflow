@@ -20,7 +20,6 @@ import {
 } from "../scheduler/core/recurrence";
 import { MAX_SCAN_DAYS } from "../scheduler/constants";
 import { DAY_MS } from "../scheduler/core/slot";
-import { utcToMinutes } from "../common/utils";
 import { UpdateSessionDto } from "./dto/update-session.dto";
 import { SessionRow, WITH_TAGS_AND_SERIES } from "./types/session-row";
 import {
@@ -78,9 +77,8 @@ interface FieldDiffResult {
  *
  * Reads top-to-bottom as the sequence of things a PATCH can mean: a recurring
  * "this and following" split, a recurring occurrence re-anchor, a materialized
- * series' sibling reschedule, the plain field diff (+ recurrence lifecycle +
- * MOVE telemetry), session-count resize/promote, deadline redistribution,
- * then conflict pruning — each step short-circuits with its own response when
+ * the plain field diff (+ recurrence lifecycle + MOVE telemetry), deadline
+ * re-placement, then conflict pruning — each step short-circuits with its own response when
  * it applies; the rest fall through to the plain-diff response at the end.
  */
 @Injectable()
@@ -117,11 +115,6 @@ export class SessionUpdateService {
       id = await this.resolveOccurrenceTarget(id, occ, dto, user);
       const shiftedRepStart =
         occ && dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : null;
-
-      const siblingScope = occ
-        ? null
-        : await this.handleMaterializedSiblingScope(id, dto, user);
-      if (siblingScope) return siblingScope;
 
       if (!occ) await this.guardDeadlineEdit(id, dto, user, now);
 
@@ -192,10 +185,9 @@ export class SessionUpdateService {
 
   /**
    * Pre-flight for a TASK deadline edit, BEFORE the field-diff transaction
-   * writes anything (issue #62 E): rejects `now + duration > deadline` (400);
-   * for a standalone TASK also runs the same slot / repack / accept-policy
-   * check a create does (409 `SCHEDULE_INFEASIBLE`). A series member only gets
-   * the arithmetic guard — its siblings' own slots make a dry-run ambiguous.
+   * writes anything (issue #62 E): rejects `now + duration > deadline` (400),
+   * and runs the same slot / repack / accept-policy check a create does (409
+   * `SCHEDULE_INFEASIBLE`).
    */
   private async guardDeadlineEdit(
     id: string,
@@ -209,7 +201,6 @@ export class SessionUpdateService {
       select: {
         type: true,
         durationMinutes: true,
-        seriesId: true,
         deadline: true,
       },
     });
@@ -225,7 +216,6 @@ export class SessionUpdateService {
       deadline,
       now,
       policy: dto.infeasiblePolicy,
-      arithmeticOnly: existing.seriesId !== null,
     });
   }
 
@@ -345,70 +335,6 @@ export class SessionUpdateService {
       ).toISOString();
     }
     return rep.id;
-  }
-
-  /**
-   * A real row belonging to a materialized `TASK` series ("this and later
-   * sittings" / "all sittings") reschedules every affected sibling's
-   * time-of-day (never its date) instead of just this one row. `null` when
-   * this PATCH isn't that (not scoped, not a reschedule, or not a `TASK`
-   * series member).
-   */
-  private async handleMaterializedSiblingScope(
-    id: string,
-    dto: UpdateSessionDto,
-    user: User,
-  ): Promise<UpdateSessionResponse | null> {
-    if (
-      !(
-        (dto.scope === "following" || dto.scope === "series") &&
-        isRescheduleChange(dto)
-      )
-    ) {
-      return null;
-    }
-
-    const existingForScope = await this.prisma.session.findFirst({
-      where: { id, userId: user.id, deleted: false },
-      select: {
-        seriesId: true,
-        scheduledStartTime: true,
-        series: { select: { type: true } },
-      },
-    });
-    if (
-      !existingForScope?.seriesId ||
-      existingForScope.series?.type !== "TASK"
-    ) {
-      return null;
-    }
-
-    const anchorStart = dto.scheduledStartTime
-      ? new Date(dto.scheduledStartTime)
-      : existingForScope.scheduledStartTime;
-    if (!anchorStart) return null;
-
-    const { sessions, skippedSessionIds } =
-      await this.series.updateSiblingTimeOfDay(
-        existingForScope.seriesId,
-        id,
-        {
-          timeOfDayMinutes: utcToMinutes(anchorStart, user.timezone),
-          durationMinutes: dto.durationMinutes,
-        },
-        dto.scope === "series",
-        dto.skipConflicting ?? false,
-        user,
-      );
-    const rep = sessions.find((s) => s.id === id) ?? sessions[0];
-    return {
-      ...rep,
-      ...NO_SLOT_PROPOSAL,
-      sessions,
-      skippedSessionIds: skippedSessionIds.length
-        ? skippedSessionIds
-        : undefined,
-    };
   }
 
   /** The plain field diff + (for fixed types) the whole-series recurrence
@@ -606,7 +532,6 @@ export class SessionUpdateService {
         data: {
           type: existing.type,
           rrule: dto.rrule,
-          deadline: null,
           userId: user.id,
         },
       });
@@ -640,10 +565,9 @@ export class SessionUpdateService {
   }
 
   /**
-   * A deadline change re-places just the affected TASK — a standalone task
-   * into its new best empty slot, or a whole series redistributed across the
-   * new window. No other session is ever moved. `null` when this PATCH isn't
-   * a deadline change on a `TASK`.
+   * A deadline change re-places just the affected TASK into its new best empty
+   * slot. No other session is ever moved. `null` when this PATCH isn't a
+   * deadline change on a `TASK`.
    */
   private async handleDeadlineRedistribution(
     newDeadline: Date | null,

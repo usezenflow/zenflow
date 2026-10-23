@@ -25,8 +25,6 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     rrule: null,
     timetableGroupId: null,
     courseKey: null,
-    sessionIndex: null,
-    sessionTotal: null,
     reminders: [],
     late: false,
     placementReason: null,

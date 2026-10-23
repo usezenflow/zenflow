@@ -24,6 +24,7 @@ from src.api import app  # noqa: E402
 from src.core.constants import DAY_MS, FEATURE_DIM, SLOT_MS  # noqa: E402
 from src.core.preference import default_preference_matrix  # noqa: E402
 from src.core.slot import add_days_str, local_midnight_ms  # noqa: E402
+from src.schemas import HOUR_ARM_IDS  # noqa: E402
 
 NOW = 1_789_977_600_000  # 2026-09-21T08:00Z
 TZ = "Europe/Paris"
@@ -56,7 +57,7 @@ def build(policy: str, both: bool, blocks_per_day: int) -> dict[str, Any]:
             }
         )
     state = {}
-    for arm in ("EARLY_MORNING", "MORNING", "MIDDAY", "AFTERNOON", "EVENING", "NIGHT"):
+    for arm in HOUR_ARM_IDS:
         x = rng.normal(size=(60, FEATURE_DIM))
         a = np.eye(FEATURE_DIM) + x.T @ x / 10
         state[arm] = {
@@ -71,15 +72,12 @@ def build(policy: str, both: bool, blocks_per_day: int) -> dict[str, Any]:
         "timezone": TZ,
         "deadlineMs": NOW + 30 * DAY_MS,
         "maxScanDays": 30,
-        "members": [
-            {
-                "id": "b",
-                "durationMinutes": 90,
-                "primaryPolicy": policy,
-                "computeBoth": both,
-            }
-        ],
-        "fixedOccupied": [],
+        "member": {
+            "id": "b",
+            "durationMinutes": 90,
+            "primaryPolicy": policy,
+            "computeBoth": both,
+        },
         "days": days,
         "user": {
             "preferenceMatrix": default_preference_matrix().tolist(),

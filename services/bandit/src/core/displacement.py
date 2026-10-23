@@ -5,21 +5,27 @@ Issue #62 B (EDF eviction with spillover) plus issue #250 (move cost).
 
 from __future__ import annotations
 
+import time
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
 from .constants import (
+    DAY_MS,
     DISPLACE_COST_AUTO,
     DISPLACE_COST_CROSS_DAY,
     FROZEN_WINDOW_HOURS,
     HOUR_MS,
     MAX_DISPLACED_TASKS,
     MS_PER_MINUTE,
+    REPACK_CANDIDATES_PER_TASK,
+    REPACK_MAX_MOVES,
+    REPACK_MAX_NODES,
+    REPACK_TIME_BUDGET_S,
     SLOT_MS,
 )
 from .slot import (
@@ -44,7 +50,6 @@ class FlexibleTask:
     duration_minutes: int
     deadline_ms: int
     start_ms: int
-    series_id: str | None = None
 
     @property
     def end_ms(self) -> int:
@@ -64,6 +69,7 @@ class DisplacementPlan:
     kind: str  # "placed" | "infeasible"
     start_ms: int | None = None
     moves: tuple[DisplacementMove, ...] = ()
+    late: tuple[str, ...] = ()  # ids placed past their deadline (repack only)
 
     @property
     def cost(self) -> float:
@@ -125,10 +131,9 @@ def cheapest_free_start(
     lower_ms: int,
     fit_end_ms: int,
     timezone: str,
-    blocked_days: Sequence[tuple[int, int]] = (),
 ) -> tuple[int, float] | None:
     """Free start for ``task`` with the lowest :func:`move_cost` (ties ->
-    earlier), never starting inside a ``blocked_days`` interval."""
+    earlier)."""
     duration_ms = task.duration_minutes * MS_PER_MINUTE
     first = ceil_to_slot(lower_ms)
     if first + duration_ms > fit_end_ms:
@@ -136,8 +141,6 @@ def cheapest_free_start(
     n = (fit_end_ms - duration_ms - first) // SLOT_MS + 1
     starts = first + np.arange(n, dtype=np.int64) * SLOT_MS
     ok = free_start_mask(first, n, duration_ms, occupied)
-    for ds, de in blocked_days:
-        ok &= ~((starts >= ds) & (starts < de))
     starts = starts[ok]
     if starts.size == 0:
         return None
@@ -151,7 +154,9 @@ def cheapest_free_start(
     return int(starts[i]), float(cost[i])
 
 
-def _without(intervals: Intervals, remove: Iterable[tuple[int, int]]) -> Intervals:
+def _without(
+    intervals: Sequence[tuple[int, int]], remove: Iterable[tuple[int, int]]
+) -> Intervals:
     """``intervals`` minus one instance of each ``remove`` item (multiset)."""
     left = Counter(remove)
     out: Intervals = []
@@ -163,25 +168,10 @@ def _without(intervals: Intervals, remove: Iterable[tuple[int, int]]) -> Interva
     return out
 
 
-def _sibling_days(
-    task: FlexibleTask,
-    series: Sequence[FlexibleTask],
-    pos: dict[str, int],
-    timezone: str,
-) -> list[tuple[int, int]]:
-    """Local days already holding another sitting of ``task``'s series."""
-    return [
-        _local_day_bounds(pos[q.id], timezone)
-        for q in series
-        if q.series_id == task.series_id and q.id != task.id
-    ]
-
-
 def _cascade(
     candidate: tuple[int, int],
     obstacles: Intervals,
     participants: Sequence[FlexibleTask],
-    series: Sequence[FlexibleTask],
     lower_ms: int,
     horizon_end_ms: int,
     max_moves: int,
@@ -191,13 +181,12 @@ def _cascade(
 
     A participant still clear of everything settled stays put. One that
     collides moves to its cheapest free start in ``[lower, min(deadline,
-    horizon_end)]``, never on a local day holding a sibling sitting. It may
-    land on an unsettled participant with a strictly later deadline, which then
-    gets its own turn; equal-deadline peers don't ripple-shift.
+    horizon_end)]``. It may land on an unsettled participant with a strictly
+    later deadline, which then gets its own turn; equal-deadline peers don't
+    ripple-shift.
     """
     ordered = sorted(participants, key=lambda t: (t.deadline_ms, t.id))
     settled: Intervals = [*obstacles, candidate]
-    pos = {f.id: f.start_ms for f in series}
     moves: list[DisplacementMove] = []
     for i, p in enumerate(ordered):
         if not overlaps_any(settled, p.start_ms, p.end_ms):
@@ -208,16 +197,12 @@ def _cascade(
             for q in ordered[i + 1 :]
             if q.deadline_ms <= p.deadline_ms
         ]
-        blocked = (
-            _sibling_days(p, series, pos, timezone) if p.series_id is not None else []
-        )
         hit = cheapest_free_start(
             p,
             [*settled, *peers],
             lower_ms,
             min(p.deadline_ms, horizon_end_ms),
             timezone,
-            blocked,
         )
         if hit is None:
             return None
@@ -226,7 +211,6 @@ def _cascade(
         if len(moves) > max_moves:
             return None
         settled.append((slot, slot + p.duration_minutes * MS_PER_MINUTE))
-        pos[p.id] = slot
     return moves
 
 
@@ -257,7 +241,6 @@ def plan_displacement(
     duration_ms = task_duration_minutes * MS_PER_MINUTE
     lower_ms = ceil_to_slot(now_ms)
     movable = [f for f in flexible if is_movable(f, now_ms, frozen_ms)]
-    series = [f for f in flexible if f.series_id is not None]
 
     best = DisplacementPlan("infeasible")
     best_cost = float("inf")
@@ -293,7 +276,6 @@ def plan_displacement(
                 (s, s + duration_ms),
                 global_obstacles,
                 participants,
-                series,
                 lower_ms,
                 horizon_end_ms,
                 max_moves,
@@ -306,6 +288,289 @@ def plan_displacement(
                 best = DisplacementPlan("placed", s, tuple(moves))
                 best_cost = cost
     return best
+
+
+@dataclass(frozen=True)
+class _Slate:
+    """One task's candidate starts, with the terms the search ranks them by."""
+
+    id: str
+    minutes: int
+    deadline_ms: int
+    orig_ms: int | None  # None for the task being placed
+    starts: NDArray[np.int64]
+    late_ms: NDArray[np.int64]
+    cost: NDArray[np.float64]
+    pref: NDArray[np.float64]
+    options: NDArray[np.intp]  # indices into the arrays above, best first
+
+    @property
+    def duration_ms(self) -> int:
+        return self.minutes * MS_PER_MINUTE
+
+
+def _per_day_best(
+    order: NDArray[np.intp], starts: NDArray[np.int64], lower_ms: int
+) -> NDArray[np.intp]:
+    """From ``order`` (best first), the first index in each 24h bucket."""
+    if order.size == 0:
+        return order
+    buckets = (starts[order] - lower_ms) // DAY_MS
+    _, first = np.unique(buckets, return_index=True)
+    return order[np.sort(first)]
+
+
+def _slate(
+    task_id: str,
+    minutes: int,
+    deadline_ms: int,
+    orig_ms: int | None,
+    pinned: Intervals,
+    lower_ms: int,
+    horizon_end_ms: int,
+    timezone: str,
+    pref_matrix: ArrayLike | None,
+    per_task: int,
+) -> _Slate | None:
+    """Free starts in ``[lower, horizon_end - duration]``, cheapest on-time and
+    least-late options first. ``None`` when nothing fits."""
+    duration_ms = minutes * MS_PER_MINUTE
+    last = horizon_end_ms - duration_ms
+    if last < lower_ms:
+        return None
+    n = (last - lower_ms) // SLOT_MS + 1
+    free = free_start_mask(lower_ms, n, duration_ms, pinned)
+    starts = (lower_ms + np.arange(n, dtype=np.int64) * SLOT_MS)[free]
+    if starts.size == 0:
+        return None
+    late_ms = np.maximum(0, starts + duration_ms - deadline_ms)
+    if orig_ms is None:
+        cost = np.zeros(starts.size)
+        pref = np.zeros(starts.size)
+    else:
+        ds, de = _local_day_bounds(orig_ms, timezone)
+        cost = np.where(
+            starts == orig_ms,
+            0.0,
+            DISPLACE_COST_AUTO
+            + np.abs(starts - orig_ms) / HOUR_MS
+            + DISPLACE_COST_CROSS_DAY * ((starts < ds) | (starts >= de)),
+        )
+        pref = (
+            np.zeros(starts.size)
+            if pref_matrix is None
+            else slot_preference_scores(pref_matrix, starts, minutes, timezone)
+        )
+    on_time = np.flatnonzero(late_ms == 0)
+    on_time = on_time[np.lexsort((starts[on_time], -pref[on_time], cost[on_time]))]
+    late = np.flatnonzero(late_ms > 0)
+    late = late[np.lexsort((starts[late], -pref[late], cost[late], late_ms[late]))]
+    # The nearest starts all sit on one day and collide with each other, so
+    # the best start of every 24h bucket is kept too. That is what lets a task
+    # spill to a later day.
+    picks = [
+        *on_time[:per_task],
+        *_per_day_best(on_time, starts, lower_ms),
+        *late[:per_task],
+        *_per_day_best(late, starts, lower_ms),
+    ]
+    options = np.array(list(dict.fromkeys(int(i) for i in picks)), dtype=np.intp)
+    return _Slate(
+        task_id,
+        minutes,
+        deadline_ms,
+        orig_ms,
+        starts,
+        late_ms,
+        cost,
+        pref,
+        options,
+    )
+
+
+def _greedy_seed(
+    order: Sequence[_Slate], max_moves: int
+) -> tuple[tuple[int, int, float, float], list[int]] | None:
+    """The first non-clashing option per task, in search order. Gives the
+    depth-first search an incumbent to prune against from the start."""
+    chosen: Intervals = []
+    picks: list[int] = []
+    late_n = late_sum = moves = 0
+    cost_sum = pref_sum = 0.0
+    for slate in order:
+        for k in slate.options.tolist():
+            s = int(slate.starts[k])
+            e = s + slate.duration_ms
+            moved = slate.orig_ms is not None and s != slate.orig_ms
+            if moves + moved > max_moves:
+                continue
+            if not any(s < ce and e > cs for cs, ce in chosen):
+                break
+        else:
+            return None
+        chosen.append((s, e))
+        picks.append(k)
+        late_n += int(slate.late_ms[k] > 0)
+        late_sum += int(slate.late_ms[k])
+        cost_sum += float(slate.cost[k])
+        pref_sum += float(slate.pref[k])
+        moves += moved
+    return (late_n, late_sum, cost_sum, -pref_sum), picks
+
+
+def plan_repack(
+    task_id: str | None,
+    task_duration_minutes: int | None,
+    task_deadline_ms: int | None,
+    flexible: Sequence[FlexibleTask],
+    fixed: Intervals,
+    now_ms: int,
+    horizon_end_ms: int,
+    *,
+    timezone: str = "UTC",
+    pref_matrix: ArrayLike | None = None,
+    horizon_occupied: Sequence[tuple[int, int]] = (),
+    frozen_ms: int = FROZEN_WINDOW_MS,
+    max_moves: int = REPACK_MAX_MOVES,
+    time_budget_s: float = REPACK_TIME_BUDGET_S,
+    per_task: int = REPACK_CANDIDATES_PER_TASK,
+    max_nodes: int = REPACK_MAX_NODES,
+) -> DisplacementPlan:
+    """Re-solve the movable flexible tasks and the new task together, over the
+    whole horizon, so slack tasks can move to another day.
+
+    Frozen, fixed and non-movable busy time on the horizon are obstacles. Tasks
+    are searched in least-laxity order, depth first, and the search is cut off
+    after ``time_budget_s``
+    (the best layout found so far is used). The objective is lexicographic:
+    fewest tasks past their deadline, least total lateness, least move cost,
+    then best preference score. Returns ``infeasible`` only when no complete
+    layout exists within the move cap and the time budget.
+
+    With ``task_id`` None there is no new task: the obstacles in ``fixed``
+    (e.g. an anchor session) stay put and only the movable ``flexible`` tasks
+    are re-solved. Then ``new_start`` in the result is None.
+    """
+    lower_ms = ceil_to_slot(now_ms)
+    stop_at = time.perf_counter() + time_budget_s
+    movable = [f for f in flexible if is_movable(f, now_ms, frozen_ms)]
+    pinned: Intervals = [
+        *fixed,
+        *_without(horizon_occupied, ((f.start_ms, f.end_ms) for f in movable)),
+        *(
+            (f.start_ms, f.end_ms)
+            for f in flexible
+            if not is_movable(f, now_ms, frozen_ms)
+        ),
+    ]
+    new_task: list[_Slate | None] = []
+    if task_id is not None:
+        if task_duration_minutes is None or task_deadline_ms is None:
+            raise ValueError("a new task needs a duration and a deadline")
+        new_task.append(
+            _slate(
+                task_id,
+                task_duration_minutes,
+                task_deadline_ms,
+                None,
+                pinned,
+                lower_ms,
+                horizon_end_ms,
+                timezone,
+                pref_matrix,
+                per_task,
+            )
+        )
+    slates = [
+        *new_task,
+        *(
+            _slate(
+                f.id,
+                f.duration_minutes,
+                f.deadline_ms,
+                f.start_ms,
+                pinned,
+                lower_ms,
+                horizon_end_ms,
+                timezone,
+                pref_matrix,
+                per_task,
+            )
+            for f in movable
+        ),
+    ]
+    if any(s is None for s in slates):
+        return DisplacementPlan("infeasible")
+    order = sorted(
+        (s for s in slates if s is not None),
+        key=lambda s: (s.deadline_ms - lower_ms - s.duration_ms, s.id),
+    )
+
+    best = _greedy_seed(order, max_moves)
+    chosen: Intervals = []
+    picks: list[int] = []
+
+    def visit(
+        depth: int,
+        late_n: int,
+        late_sum: int,
+        cost_sum: float,
+        pref_sum: float,
+        moves: int,
+    ) -> None:
+        nonlocal best
+        if time.perf_counter() > stop_at:
+            return
+        if depth == len(order):
+            key = (late_n, late_sum, cost_sum, -pref_sum)
+            if best is None or key < best[0]:
+                best = (key, list(picks))
+            return
+        slate = order[depth]
+        for k in slate.options.tolist():
+            s = int(slate.starts[k])
+            e = s + slate.duration_ms
+            if any(s < ce and e > cs for cs, ce in chosen):
+                continue
+            moved = slate.orig_ms is not None and s != slate.orig_ms
+            if moves + moved > max_moves:
+                continue
+            late_n2 = late_n + int(slate.late_ms[k] > 0)
+            late_sum2 = late_sum + int(slate.late_ms[k])
+            cost2 = cost_sum + float(slate.cost[k])
+            if best is not None and (late_n2, late_sum2, cost2) > best[0][:3]:
+                continue
+            chosen.append((s, e))
+            picks.append(k)
+            visit(
+                depth + 1,
+                late_n2,
+                late_sum2,
+                cost2,
+                pref_sum + float(slate.pref[k]),
+                moves + moved,
+            )
+            chosen.pop()
+            picks.pop()
+
+    visit(0, 0, 0, 0.0, 0.0, 0)
+    if best is None:
+        return DisplacementPlan("infeasible")
+
+    moves_out: list[DisplacementMove] = []
+    late_ids: list[str] = []
+    new_start: int | None = None
+    for slate, k in zip(order, best[1], strict=True):
+        s = int(slate.starts[k])
+        if slate.id == task_id:
+            new_start = s
+        if slate.late_ms[k] > 0:
+            late_ids.append(slate.id)
+        if slate.orig_ms is not None and s != slate.orig_ms:
+            moves_out.append(
+                DisplacementMove(slate.id, slate.orig_ms, s, float(slate.cost[k]))
+            )
+    return DisplacementPlan("placed", new_start, tuple(moves_out), tuple(late_ids))
 
 
 def pick_min_conflict_slot(
@@ -387,7 +652,6 @@ def flexible_from_dicts(raw: Sequence[dict[str, Any]]) -> list[FlexibleTask]:
             f["durationMinutes"],
             f["deadlineMs"],
             f["startMs"],
-            f.get("seriesId"),
         )
         for f in raw
     ]

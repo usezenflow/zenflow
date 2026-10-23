@@ -25,33 +25,37 @@ import threading
 import time
 from collections.abc import Awaitable, Callable
 
-import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from src.core.hybrid import Z_DIM, hybrid_update
+from src.core.hour_arms import kernel_update, unit_length
 from src.core.init_state import init_state
-from src.core.matrix_prior import default_prior
 from src.core.prep import prep_window
 from src.core.slot import utc_offsets_ms
-from src.models.linucb import update
 from src.otel import setup_otel
 from src.place import place as run_place
+from src.resolve import resolve as run_resolve
 from src.schemas import (
+    HOUR_ARM_IDS,
     ArmState,
     InitRequest,
     InitResponse,
     UpdateRequest,
     UpdateResponse,
 )
-from src.schemas_place import PLACEMENT_CONTRACT_VERSION, PlaceRequest, PlaceResponse
+from src.schemas_place import (
+    PLACEMENT_CONTRACT_VERSION,
+    PlaceRequest,
+    PlaceResponse,
+    ResolveRequest,
+    ResolveResponse,
+)
 from src.schemas_prep import PrepSizeRequest, PrepSizeResponse
 from src.serialization import (
     all_finite,
-    hydrate,
-    hydrate_shared,
+    hydrate_arms,
     require_422,
 )
 from src.telemetry import (
@@ -142,15 +146,12 @@ def _selftest_request() -> dict[str, object]:
         "timezone": "UTC",
         "deadlineMs": day + 3 * 86_400_000,
         "maxScanDays": 30,
-        "members": [
-            {
-                "id": "selftest",
-                "durationMinutes": 60,
-                "primaryPolicy": "HEURISTIC",
-                "computeBoth": False,
-            }
-        ],
-        "fixedOccupied": [],
+        "member": {
+            "id": "selftest",
+            "durationMinutes": 60,
+            "primaryPolicy": "HEURISTIC",
+            "computeBoth": False,
+        },
         "days": [
             {
                 "dayStr": f"2026-01-{5 + i:02d}",
@@ -178,7 +179,7 @@ def ensure_ready() -> bool:
             for tz in _WARM_ZONES:
                 utc_offsets_ms(first, 96 * 45, tz)
             res = run_place(PlaceRequest.model_validate(_selftest_request()))
-            _ready = res.results[0].outcome == "PLACED"
+            _ready = res.result.outcome == "PLACED"
         except Exception:  # readiness must never raise
             log.exception("readiness self-test failed")
             _ready = False
@@ -248,14 +249,21 @@ async def place(request: Request) -> PlaceResponse:
         raise ContractVersionError(req.contract_version)
     res = await run_in_threadpool(run_place, req, decode_s)
     log.info(
-        "request_id=%s place mode=%s members=%d outcomes=%s total_ms=%.2f",
+        "request_id=%s place mode=%s outcome=%s total_ms=%.2f",
         req.request_id,
         req.mode,
-        len(req.members),
-        ",".join(r.outcome for r in res.results),
+        res.result.outcome,
         res.timings_ms.total,
     )
     return res
+
+
+@app.post("/v1/resolve", dependencies=[Depends(require_token)])
+async def resolve_conflicts(req: ResolveRequest) -> ResolveResponse:
+    """Repack the flexible sessions that overlap an anchor. The anchor stays put."""
+    if req.contract_version != PLACEMENT_CONTRACT_VERSION:
+        raise ContractVersionError(req.contract_version)
+    return await run_in_threadpool(run_resolve, req)
 
 
 @app.post("/v1/prep/size", dependencies=[Depends(require_token)])
@@ -279,67 +287,47 @@ def size_prep(request: PrepSizeRequest) -> PrepSizeResponse:
 
 @app.post("/v1/update", dependencies=[Depends(require_token)])
 def update_arm(request: UpdateRequest) -> UpdateResponse:
-    """Fold one ``(context, reward)`` observation into an arm and return the new state.
+    """Fold one ``(context, reward)`` into all 24 hour arms and return them all.
 
-    An empty ``state.A``/``state.b`` (first-ever observation for this arm)
-    starts at the ridge prior (:func:`hydrate`, the same cold arm ``/v1/place``
-    scores from) before the update, so the updated matrix is what comes back for
-    the backend to persist.
+    The reward is for the hour arm ``request.arm``; its kernel spreads it over
+    neighbouring hours. A cold arm (empty ``A``/``b``) starts at its matrix prior, the
+    same state ``/v1/place`` scores from, so the returned state is what the backend
+    persists.
     """
     require_422(
         math.isfinite(request.ridge) and request.ridge > 0.0, "ridge must be > 0"
     )
     require_422(math.isfinite(request.reward), "reward must be finite")
     require_422(all_finite(request.x), "x must be finite")
-    require_422(
-        all_finite(request.state.A) and all_finite(request.state.b),
-        "state must be finite",
-    )
+    for arm, st in request.arms.items():
+        require_422(
+            all_finite(st.A) and all_finite(st.b), f"{arm} state must be finite"
+        )
 
     started = time.perf_counter()
     d = len(request.x)
-    x: np.ndarray = np.asarray(request.x, dtype=np.float64)
-    prior = default_prior(d, request.ridge).get(request.arm)
-    a, b = hydrate(request.state, d, request.ridge, prior)
-    if request.z is None:
-        new_a, new_b = update(a, b, x, request.reward)
-        update_duration.record(time.perf_counter() - started)
-        return UpdateResponse(A=new_a.reshape(-1).tolist(), b=new_b.tolist())
-
-    require_422(len(request.z) == Z_DIM, f"z must have {Z_DIM} features")
-    require_422(all_finite(request.z), "z must be finite")
-    shared_a, shared_b = hydrate_shared(request.shared, request.ridge, Z_DIM)
-    (sa, sb), (new_a, new_b) = hybrid_update(
-        shared_a,
-        shared_b,
-        a,
-        b,
-        x,
-        np.asarray(request.z, dtype=np.float64),
-        request.reward,
-    )
+    x = unit_length(request.x)
+    arms = hydrate_arms(request.arms, d, request.ridge)
+    hour = HOUR_ARM_IDS.index(request.arm)
+    updated = kernel_update(arms, hour, x, request.reward)
     update_duration.record(time.perf_counter() - started)
     return UpdateResponse(
-        A=new_a.reshape(-1).tolist(),
-        b=new_b.tolist(),
-        shared=ArmState(A=sa.reshape(-1).tolist(), b=sb.tolist()),
+        arms={
+            arm: ArmState(A=p.A.reshape(-1).tolist(), b=p.b.tolist())
+            for arm, p in updated.items()
+        },
     )
 
 
 @app.post("/v1/init", dependencies=[Depends(require_token)])
 def init_student(request: InitRequest) -> InitResponse:
-    """Starting state for a new student: matrix prior per arm, marks prior on beta."""
+    """Starting state for a new student: the matrix prior on each hour arm."""
     require_422(
         math.isfinite(request.ridge) and request.ridge > 0.0, "ridge must be > 0"
     )
-    has_marks = bool(request.marks) or request.avg_gpa4 is not None
-    state = init_state(request.ridge, has_marks)
     return InitResponse(
         arms={
             arm: ArmState(A=p.A.reshape(-1).tolist(), b=p.b.tolist())
-            for arm, p in state.arms.items()
+            for arm, p in init_state(request.ridge).items()
         },
-        shared=ArmState(
-            A=state.shared_a.reshape(-1).tolist(), b=state.shared_b.tolist()
-        ),
     )

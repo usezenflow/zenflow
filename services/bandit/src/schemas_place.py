@@ -19,14 +19,12 @@ from src.core.constants import (
     PREFERENCE_MATRIX_LENGTH,
     TIME_GRANULARITY,
 )
-from src.core.hybrid import Z_DIM
 from src.core.marks import weak_score
 from src.core.reason import PlacementReason
-from src.schemas import ArmId, ArmState
+from src.schemas import HOUR_ARM_IDS, ArmId, ArmState
 from src.schemas_prep import MarkWire
 
-PLACEMENT_CONTRACT_VERSION = 3
-MAX_MEMBERS = 64
+PLACEMENT_CONTRACT_VERSION = 4
 
 PlacementPolicy = Literal["HEURISTIC", "LINUCB"]
 Outcome = Literal[
@@ -97,7 +95,6 @@ class FlexibleWire(_Req):
     duration_minutes: int = Field(gt=0)
     deadline_ms: int
     start_ms: int
-    series_id: str | None = None
 
 
 class InfeasibleContext(_Req):
@@ -139,20 +136,17 @@ class UserWire(_Req):
 class BanditWire(_Req):
     alpha: float = Field(ge=0)
     ridge: float = Field(gt=0)
+    #: All 24 hour arms, each ``(A, b)`` of the current state.
     state: dict[ArmId, ArmState]
-    # Shared beta of the hybrid model (level-up plan). None: disjoint LinUCB only.
-    shared: ArmState | None = None
 
     @model_validator(mode="after")
     def _check(self) -> BanditWire:
         d = FEATURE_DIM
         if not (math.isfinite(self.alpha) and math.isfinite(self.ridge)):
             raise ValueError("alpha and ridge must be finite")
-        if self.shared is not None:
-            if self.shared.A and len(self.shared.A) != Z_DIM * Z_DIM:
-                raise ValueError(f"shared.A must have length {Z_DIM * Z_DIM}")
-            if self.shared.b and len(self.shared.b) != Z_DIM:
-                raise ValueError(f"shared.b must have length {Z_DIM}")
+        missing = [arm for arm in HOUR_ARM_IDS if arm not in self.state]
+        if missing:
+            raise ValueError(f"state must hold all 24 hour arms, missing {missing[0]}")
         for arm, st in self.state.items():
             if st.A and len(st.A) != d * d:
                 raise ValueError(f"{arm}.A must have length {d * d}")
@@ -171,8 +165,7 @@ class PlaceRequest(_Req):
     timezone: str
     deadline_ms: int
     max_scan_days: int = Field(ge=1, le=MAX_SCAN_DAYS)
-    members: list[PlacementMember] = Field(min_length=1, max_length=MAX_MEMBERS)
-    fixed_occupied: list[IntervalMs]
+    member: PlacementMember
     days: list[PlacementDay]
     user: UserWire
     bandit: BanditWire | None = None
@@ -209,9 +202,6 @@ class LinucbPick(_Resp):
     score: float
     selected_arm: ArmId
     feature_vector: list[float]
-    # Hybrid cross features of the picked (day, arm); the backend stores them so a
-    # delayed reward can update the shared beta.
-    cross_features: list[float]
     weights: Weights
 
 
@@ -249,5 +239,38 @@ class PlaceResponse(_Resp):
     contract_version: int
     request_id: str
     params_version: str
-    results: list[PlacedMember]
+    result: PlacedMember
     timings_ms: Timings
+
+
+class ResolveRequest(_Req):
+    """Repack the flexible sessions that overlap an anchor. The anchor stays put."""
+
+    contract_version: int
+    request_id: str
+    now_ms: int
+    timezone: str
+    horizon_end_ms: int
+    anchor: IntervalMs
+    flexible: list[FlexibleWire] = Field(max_length=64)
+    fixed: list[IntervalMs]
+    horizon_occupied: list[IntervalMs]
+    preference_matrix: list[float]
+
+    @model_validator(mode="after")
+    def _check(self) -> ResolveRequest:
+        from zoneinfo import ZoneInfo
+
+        try:
+            ZoneInfo(self.timezone)
+        except Exception as exc:
+            raise ValueError(f"unknown timezone {self.timezone!r}") from exc
+        return self
+
+
+class ResolveResponse(_Resp):
+    contract_version: int
+    request_id: str
+    outcome: Literal["RESOLVED", "INFEASIBLE"]
+    moves: list[Move]
+    late_ids: list[str]

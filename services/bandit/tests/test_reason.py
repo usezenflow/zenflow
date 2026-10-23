@@ -47,22 +47,19 @@ def _request(
     }
     return PlaceRequest.model_validate(
         {
-            "contractVersion": 3,
+            "contractVersion": 4,
             "requestId": "reason-test",
             "mode": "PLACE",
             "nowMs": NOW,
             "timezone": "UTC",
             "deadlineMs": deadline,
             "maxScanDays": 30,
-            "members": [
-                {
-                    "id": "t1",
-                    "durationMinutes": dur,
-                    "primaryPolicy": "HEURISTIC",
-                    "computeBoth": False,
-                }
-            ],
-            "fixedOccupied": [],
+            "member": {
+                "id": "t1",
+                "durationMinutes": dur,
+                "primaryPolicy": "HEURISTIC",
+                "computeBoth": False,
+            },
             "days": [day],
             "user": {"preferenceMatrix": matrix or [0.0] * 168, "observationCount": 0},
         }
@@ -70,7 +67,7 @@ def _request(
 
 
 def _only(req: PlaceRequest) -> Any:
-    return place(req).results[0]
+    return place(req).result
 
 
 @pytest.mark.parametrize("outcome", get_args(Outcome))
@@ -175,7 +172,8 @@ def _fixture_results() -> list[tuple[str, dict[str, Any]]]:
     out: list[tuple[str, dict[str, Any]]] = []
     for path in sorted(FIXTURE_DIR.glob("*.json")):
         fx = json.loads(path.read_text("utf-8"))
-        out.extend((f"{path.stem}/{r['id']}", r) for r in fx["response"]["results"])
+        r = fx["response"]["result"]
+        out.append((f"{path.stem}/{r['id']}", r))
     return out
 
 
@@ -195,7 +193,7 @@ def test_every_fixture_placement_has_a_reason(
 def test_fixture_reasons_for_moved_and_last_resort() -> None:
     def reason_of(name: str) -> str | None:
         fx = json.loads((FIXTURE_DIR / f"{name}.json").read_text("utf-8"))
-        reason: str | None = fx["response"]["results"][0]["reason"]
+        reason: str | None = fx["response"]["result"]["reason"]
         return reason
 
     assert reason_of("single-displaced") == "MOVED_FOR_DEADLINE"
