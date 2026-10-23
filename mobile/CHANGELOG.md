@@ -1,5 +1,19 @@
 # mobile
 
+## 1.0.0-beta.18
+
+### Minor Changes
+
+- 9f9d480: Onboarding no longer asks when you focus best, and the tags step is gone. New accounts start from a broad study hours prior with a lazier, later weekend, and blocks keep further from their deadline. Setup is now your LMS and portal, your home location and notifications.
+- a18c227: Placement learns the start hour of each session, with one arm per hour in place of the six time-of-day arms. Holding a conflicting block repacks the sessions around it, and Undo puts them back. Tasks are one row each: multi-sitting tasks are gone, and recurring sessions are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [9f9d480]
+- Updated dependencies [a18c227]
+  - @zenflow/shared@1.0.0-beta.18
+  - @zenflow/core@1.0.0-beta.18
+
 ## 1.0.0-beta.17
 
 ### Patch Changes
