@@ -77,6 +77,7 @@ model User {
 
   occurrenceStates SessionOccurrenceState[]
   courseColours    CourseColour[]
+  apiTokens        ApiToken[]
 
   // Issue #56: which portal sections / Moodle courses this student is
   // confirmed in, so an ingestion pass can be served from the shared
@@ -193,6 +194,23 @@ model UserDevice {
   @@index([userId])
 }
 
+/// Personal API access token. Only the HMAC of the secret is stored; see docs/adr/0038-personal-api-access.md.
+model ApiToken {
+  id         String    @id @default(uuid())
+  name       String    @db.VarChar(60)
+  /// HMAC-SHA256(secret, API_TOKEN_PEPPER), hex. Lookup key.
+  hash       String    @unique
+  createdAt  DateTime  @default(now())
+  /// Throttled to one write per 5 minutes.
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model Tag {
   id        String   @id @default(uuid())
   name      String
@@ -241,6 +259,11 @@ model Session {
   // watchers write the upstream room here (portal `PhongThi` / `RoomID`,
   // Moodle event `location`). Optional and never used by the scheduler.
   location        String?
+  // DLU exam format (`HinhThucThi`, e.g. "Thi máy"). Set only on an ingested EXAM; null otherwise.
+  examFormat      String?
+  // Credits of the exam's course (`Credits`) and whether this sitting is a retake (`LanThi` after "Lần 1"). Set only on an ingested EXAM.
+  examCredits     Int?
+  examRetake      Boolean?
   // Map point for `location` when it was picked on the map; null for text only.
   locationLat     Float?
   locationLng     Float?

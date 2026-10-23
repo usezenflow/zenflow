@@ -27,6 +27,7 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `MASTER_LMS_ENCRYPTION_KEY_V1` / `MASTER_PORTAL_ENCRYPTION_KEY_V1` | none | Required. 64 hex chars (`openssl rand -hex 32`). Add `_V<n>` and set `MASTER_KEY_CURRENT_VERSION` to rotate. |
 | `MASTER_KEY_CURRENT_VERSION` | `1` | Master-key version used for new wraps; its `_V<n>` keys must exist. |
 | `FILE_URL_SECRET` | none | Required, 32+ chars. HMAC for signed file URLs. |
+| `API_TOKEN_PEPPER` | none | Required in production, 32+ chars. Peppers the personal API token HMAC; unset outside production disables API access. Rotating revokes every token. |
 | `S3_ENDPOINT` | none | Required. `http://storage:9000` in compose; `http://localhost:9000` for host `start:dev`. |
 | `S3_REGION` | `us-east-1` | |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_BUCKET` | none | Required. Bucket must exist (compose creates it). |

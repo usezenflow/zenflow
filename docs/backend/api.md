@@ -27,6 +27,21 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | GET | `/users/me/preference-matrix` | 168-float matrix for the Insights heatmap |
 | GET | `/users/me/student` | DLU profile (`StudentResponse`); `profile` is null until the first fetch lands |
 | GET | `/users/me/marks` | Marks grouped by term, newest first; names are clean and `noCredit` flags the portal's red star (`StudentMarksResponse`) |
+| GET | `/users/me/api-access` | `mcpUrl`, `restBaseUrl`, assistant `prompt` and the user's tokens (`ApiAccessResponse`) |
+| POST | `/users/me/api-access/tokens` | `{ name }`. Returns `{ token, secret }`; the secret is shown once |
+| DELETE | `/users/me/api-access/tokens/:id` | Revoke at once. `{ revoked: true }` |
+
+## Personal API access (`/mcp`)
+
+[ADR-0038](../adr/0038-personal-api-access.md). Create a token under `/users/me/api-access`, then send `Authorization: Bearer zf_...`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/mcp` | Streamable HTTP MCP, stateless. Bearer only. GET and DELETE answer 405 |
+
+- Bearer tokens are refused (403) on routes not marked for them. Cookie sessions are unchanged.
+- Management routes above take the cookie only.
+| GET | `/users/me/insights` | `from`, `to` as `YYYY-MM-DD` (default last 7 days, max 92 inclusive); focus grid and recap for the window, buffers for exams and assignments due in the next 30 days (`InsightsResponse`) |
 
 - `timezone` is set at signup (`x-timezone`) and editable. Changing it re-keys recurring `exdates`.
 - `defaultReminderMinutes`: 0 none, default 10.

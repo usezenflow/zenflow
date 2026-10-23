@@ -11,6 +11,7 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | `POSTGRES_PASSWORD` | API, migrations, Postgres, backup (Vault sets `api`, `postgres`, `backup`) | [runbook](#database-password) |
 | `SESSION_SECRET` | Signs the session cookie | [runbook](#session-signing-key-session_secret) |
 | `FILE_URL_SECRET` | HMAC key for signed file URLs (`/files/:id?sig=`) | Change and redeploy. Notes need no rewrite |
+| `API_TOKEN_PEPPER` | Server pepper for hashing personal API tokens (required in production, min 32 chars; Vault sets `api`) | Rotating invalidates all personal API tokens |
 | `MASTER_LMS_ENCRYPTION_KEY_V<n>`, `MASTER_PORTAL_ENCRYPTION_KEY_V<n>` | Wrap per-user DEKs for DLU and LMS credentials (`backend/src/crypto`) | [runbook](#crypto-master-keys-master__encryption_key_vn) |
 | `PORTAL_API_KEY` | DLU portal API key | Replace when DLU invalidates it |
 | `MAIL_PASSWORD` | SMTP password | At the SMTP provider |

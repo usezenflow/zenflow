@@ -11,6 +11,8 @@ import { redisOptions, redisUrl } from "./common/config/connections";
 import { MailService } from "./mail/mail.service";
 import { MailModule } from "./mail/mail.module";
 import { UsersModule } from "./users/users.module";
+import { InsightsModule } from "./insights/insights.module";
+import { ApiAccessModule } from "./api-access/api-access.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { CourseColoursModule } from "./course-colours/course-colours.module";
 import { TagsModule } from "./tags/tags.module";
@@ -116,6 +118,12 @@ const jobModules = [
         // HMAC key for signed file URLs (files/). Rotating it invalidates every
         // link already stored in notes.
         FILE_URL_SECRET: Joi.string().min(32).required(),
+        // Server pepper for personal API tokens: tokens are stored as
+        // HMAC-SHA256(secret, pepper). Rotating it revokes every API token.
+        // Optional outside production; without it API access is disabled.
+        API_TOKEN_PEPPER: Joi.string()
+          .min(32)
+          .when("NODE_ENV", { is: "production", then: Joi.required() }),
         CORS_ORIGIN: Joi.string().required(),
         // S3-compatible object storage for uploaded files (files/). The bucket
         // must already exist — compose `storage-init` creates it.
@@ -576,6 +584,8 @@ const jobModules = [
     QueueModule,
     RateLimitModule,
     UsersModule,
+    InsightsModule,
+    ApiAccessModule,
     PrismaModule,
     AuthModule,
     MailModule,
