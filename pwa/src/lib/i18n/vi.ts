@@ -384,6 +384,12 @@ export default {
   "Month view":
     "Chế độ tháng",
   "Moved to {when}": "Đã chuyển sang {when}",
+  "Moved 1 session": "Đã dời 1 buổi",
+  "Moved {count} sessions": "Đã dời {count} buổi",
+  "{count} now past deadline": "{count} buổi đã quá hạn",
+  "Nothing to move": "Không có gì để dời",
+  "Couldn't resolve this overlap": "Không thể xử lý trùng lịch này",
+  "No layout fits these sessions": "Không có cách xếp nào vừa",
   "Reschedule prep plans?": "Dời kế hoạch ôn bài?",
   "Plan around the new lecture time.": "Xếp lại theo giờ học mới.",
   "Prep plans rescheduled": "Đã dời kế hoạch ôn bài",

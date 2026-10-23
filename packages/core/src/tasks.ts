@@ -23,13 +23,6 @@ import {
  */
 export const MAX_TITLE_LENGTH = 60;
 
-/**
- * Ceiling on a `TASK`'s `sessionCount`. Mirrors the backend's
- * `MAX_SESSION_COUNT` (`backend/src/sessions/dto/create-session.dto.ts`): one
- * per day of the 60-day scheduling horizon.
- */
-export const MAX_TASK_SESSION_COUNT = 60;
-
 export const SESSION_FORM_TYPES = [
   "TASK",
   "ASSIGNMENT",
@@ -79,21 +72,6 @@ export const sessionSchema = z
       .max(DAILY_HORIZON, { error: "Session duration must be at most 24 hours" })
       .optional(),
     deadline: z.string().optional(),
-    /**
-     * Number of study sessions (`TASK` only). Omitted or `1` → one ordinary
-     * task; `> 1` → a series of N sessions spread across `now … deadline`.
-     * No upper-bound check (and no error message) here on purpose —
-     * `SessionCountStepper` physically disables `+` at
-     * `MAX_TASK_SESSION_COUNT`, so the UI can't produce a value that needs
-     * one; the backend's `@Max` on `CreateSessionDto.sessionCount` is the
-     * actual enforcement, for a direct API call bypassing the form.
-     */
-    sessionCount: z.int().min(1, { error: "At least 1 session" }).optional(),
-    /**
-     * Mobile's composer: `duration` is the whole task and `sessionCount` splits
-     * it into equal sittings. Unset, `duration` is the length of each sitting.
-     */
-    splitTotal: z.boolean().optional(),
 
     /**
      * Minutes-before-start reminders (max `MAX_REMINDERS_PER_SESSION`). Omitted
@@ -137,16 +115,12 @@ export const sessionSchema = z
       // catches "the arithmetic fits but every day is already full"). The
       // `"\n"` splits toast title from description (`splitToastMessage`).
       if (durationOk && deadlineOk) {
-        const sessionCount = Math.max(1, Math.trunc(v.sessionCount ?? 1));
-        const neededMs =
-          (v.duration as number) * (v.splitTotal ? 1 : sessionCount) * 60_000;
+        const neededMs = (v.duration as number) * 60_000;
         if (Date.now() + neededMs > Date.parse(v.deadline as string)) {
           ctx.addIssue({
             code: "custom",
             message:
-              sessionCount > 1
-                ? `Not enough time for ${sessionCount} sessions before this deadline\nChoose a later deadline or fewer sessions.`
-                : "Not enough time left before this deadline\nChoose a later deadline to leave room for this session.",
+              "Not enough time left before this deadline\nChoose a later deadline to leave room for this session.",
             path: ["deadline"],
           });
         }
@@ -226,10 +200,7 @@ export function placementQualifier(
  * Which kind of series (if any) a session belongs to (CLAUDE.md invariant #4).
  * `seriesId` is set for both:
  * - a recurring **fixed** series (`rrule` set) — virtual occurrences; scope
- *   choices are "this occurrence" / truncate the rrule / delete the series;
- * - a materialized multi-sitting **TASK** series (`rrule` null, `sessionTotal`
- *   set instead) — real rows; scope choices are "this sitting" / delete it and
- *   later sittings by `sessionIndex` / delete the series.
+ *   choices are "this occurrence" / truncate the rrule / delete the series.
  *
  * A portal-ingested `LECTURE` meeting instead carries `timetableGroupId` (no
  * `seriesId`/`rrule` of its own) — the grouping key behind the
@@ -241,12 +212,12 @@ export function placementQualifier(
  * `"none"` covers a one-off fixed session or a single-sitting TASK — no scope
  * choice needed, delete is always just that one row.
  */
-export type SeriesKind = "none" | "recurring" | "task" | "timetable";
+export type SeriesKind = "none" | "recurring" | "timetable";
 
 export function getSeriesKind(
   session: Pick<Session, "seriesId" | "rrule" | "timetableGroupId">,
 ): SeriesKind {
   if (!session.seriesId && session.timetableGroupId) return "timetable";
   if (!session.seriesId) return "none";
-  return session.rrule ? "recurring" : "task";
+  return "recurring";
 }
