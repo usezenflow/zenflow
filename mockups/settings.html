@@ -39,7 +39,7 @@
         an extra tap + back-chevron for no benefit). Section order:
         <b>Profile, Appearance, Preferences, Travel, Tags, LMS and portal, Advanced, Account</b>.
         Preferences holds Language, Timezone and Default reminder (pushes a
-        picker sheet). Notifications holds the Allow notifications toggle. Storage shows the per-user file quota as a bar (light frame: normal; dark frame: past 80%, with an amber bar and a warning below it; at 100% the bar and callout turn red and the text says storage is full). The warning is a tinted card with dark same-hue text. Offline, the section stays: it shows the last known usage with an "Offline. Showing your last known usage." note, or, with nothing cached yet, an empty bar and "Usage is unavailable offline.").
+        picker sheet). Notifications holds the Allow notifications toggle. Advanced (open here, collapsed by default in the app) holds Storage and AI assistants: the MCP and REST URLs and the prompt, each with copy; tokens are created by name (the secret is shown once, with copy) and revoked after a confirm. Storage shows the per-user file quota as a bar (light frame: normal; dark frame: past 80%, with an amber bar and a warning below it; at 100% the bar and callout turn red and the text says storage is full). The warning is a tinted card with dark same-hue text. Offline, the section stays: it shows the last known usage with an "Offline. Showing your last known usage." note, or, with nothing cached yet, an empty bar and "Usage is unavailable offline.").
         Working hours and Work days were dropped along with
         <code>User.workStart</code>/<code>workEnd</code>/<code>workDays</code>
         in the education-pivot migration
@@ -258,6 +258,10 @@
                   </div>
                 </div>
 
+                <div class="mx-1 mt-[22px] mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
+                  Advanced
+                  <span class="[&_svg]:size-[14px]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg></span>
+                </div>
                 <div
                   class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >
@@ -275,6 +279,52 @@
                   <div class="mt-3 h-2.5 overflow-hidden rounded-full bg-muted"><div class="h-full bg-primary" style="width:34%"></div></div>
                 </div>
 
+                <div class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground">AI assistants</div>
+                <div class="overflow-hidden rounded-2xl border bg-card">
+                  <div class="flex items-center gap-2 px-4 py-2">
+                    <div class="min-w-0 flex-1 space-y-0.5">
+                      <div class="text-[13px] text-muted-foreground">MCP server</div>
+                      <div class="truncate text-[15px]">https://zenflow.example/api/v1/mcp</div>
+                    </div>
+                    <span class="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground [&_svg]:size-4" aria-label="Copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></span>
+                  </div>
+                  <div class="mx-4 h-px bg-border"></div>
+                  <div class="flex items-center gap-2 px-4 py-2">
+                    <div class="min-w-0 flex-1 space-y-0.5">
+                      <div class="text-[13px] text-muted-foreground">REST base URL</div>
+                      <div class="truncate text-[15px]">https://zenflow.example/api/v1</div>
+                    </div>
+                    <span class="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground [&_svg]:size-4" aria-label="Copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg></span>
+                  </div>
+                  <div class="mx-4 h-px bg-border"></div>
+                  <div class="space-y-2 px-4 py-3.5">
+                    <div class="text-[15px] font-semibold">Prompt</div>
+                    <div class="line-clamp-4 text-[13px] leading-[18px] text-muted-foreground">You plan study sessions in Zenflow. Use its tools to read and change the plan.</div>
+                    <span class="inline-flex h-11 items-center gap-2 self-start rounded-xl bg-muted px-3.5 text-[14px] font-semibold [&_svg]:size-4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg> Copy</span>
+                  </div>
+                </div>
+                <div class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground">Tokens</div>
+                <div class="overflow-hidden rounded-2xl border bg-card">
+                  <div class="flex items-center gap-3 px-4 py-2.5">
+                    <div class="min-w-0 flex-1 space-y-0.5">
+                      <div class="truncate text-[15px] font-semibold">ChatGPT</div>
+                      <div class="text-[12px] text-muted-foreground">Created Oct 12 2026</div>
+                      <div class="text-[12px] text-muted-foreground">Last used Oct 20 2026</div>
+                    </div>
+                    <span class="flex h-11 items-center px-2 text-[14px] font-semibold text-foreground">Revoke</span>
+                  </div>
+                  <div class="mx-4 h-px bg-border"></div>
+                  <div class="flex items-center gap-3 px-4 py-2.5">
+                    <div class="min-w-0 flex-1 space-y-0.5">
+                      <div class="truncate text-[15px] font-semibold">Claude Desktop</div>
+                      <div class="text-[12px] text-muted-foreground">Created Oct 21 2026</div>
+                      <div class="text-[12px] text-muted-foreground">Never used</div>
+                    </div>
+                    <span class="flex h-11 items-center px-2 text-[14px] font-semibold text-foreground">Revoke</span>
+                  </div>
+                  <div class="mx-4 h-px bg-border"></div>
+                  <span class="flex h-11 items-center gap-2 px-4 text-[15px] font-semibold text-primary [&_svg]:size-[18px]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg> Create token</span>
+                </div>
                 <div
                   class="mx-1 mt-[22px] mb-2 text-[13px] font-semibold text-muted-foreground"
                 >

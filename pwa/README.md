@@ -85,7 +85,7 @@ pwa/
 - `session-count.ts`, `session-time.ts`, `session-type.ts`, `reminders.ts`, `location.ts`
 - `tz.ts`, `time.ts`, `constants.ts`
 
-Screens, session form, calendar, notifications and toasts: [docs/pwa/screens.md](../docs/pwa/screens.md).
+Screens, session form, calendar, notifications and toasts: [docs/frontend/screens.md](../docs/frontend/screens.md).
 
 ## Conventions
 

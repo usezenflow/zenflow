@@ -24,6 +24,8 @@ A dialog (`components/settings/settings-dialog.tsx`) opened from the sidebar foo
 | Integrations | Connect, sync, disconnect the DLU LMS and student portal; last-sync status; credentials never returned |
 | Account      | Signed-in identity, read-only timezone, Log out                                                    |
 
+- **Advanced > AI assistants** (`ai-assistants-section.tsx`): MCP and REST URLs, the system prompt and personal tokens from `/users/me/api-access`. The secret shows once at creation; revoke asks to confirm.
+
 ## Sessions
 
 `SessionType` = `TASK | ASSIGNMENT | EXAM | LECTURE | DND`.
@@ -74,6 +76,7 @@ A pairwise-sampled placement returns a second candidate slot. Model identity is 
   - For a series, `update-recurring-dialog.tsx` first asks the scope (`scope` + `skipConflicting`).
 - **Conflicts**: `getOverlapLayout` lays overlaps side by side and flags same-time overlap; `withOverlap` folds it into the `conflict` state. No backend conflict flag.
 - **No work-hours shading**: the scheduler uses the full 24 h grid.
+- **Day view insights** (mobile, `insights-section.tsx`): a pill under the Today card opens a sheet with the focus map (7x24 DONE heat, from 5 DONE events), the seven-day recap and prep buffers, all from `GET /users/me/insights`.
 
 ## Notifications
 

@@ -23,3 +23,5 @@ export * from "./campus";
 export * from "./commute";
 export * from "./link-preview";
 export * from "./admin";
+export * from "./api-access";
+export * from "./insights";

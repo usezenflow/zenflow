@@ -199,6 +199,9 @@ export default {
   "Skip ones that would conflict": "Bỏ qua các buổi bị trùng lịch",
   "Skipped steps are waiting for you in Settings.":
     "Mấy bước đã bỏ qua vẫn nằm trong Cài đặt nha.",
+  "Connect an AI assistant": "Kết nối trợ lý AI",
+  "Let an assistant read and plan your calendar. You can also do this later in Settings.":
+    "Cho trợ lý đọc và lên kế hoạch lịch của bạn. Bạn cũng có thể làm việc này sau trong Cài đặt.",
   Morning: "Buổi sáng",
   Afternoon: "Buổi chiều",
   Evening: "Buổi tối",

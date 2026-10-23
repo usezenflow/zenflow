@@ -65,7 +65,7 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 ```
 mobile/
 ├── app/            # Expo Router: _layout (Stack.Protected guards), (auth), (onboarding), (app) tabs, task/, notifications
-├── api/            # the only HTTP layer: auth, tasks, users, tags, files, devices, integrations, notifications
+├── api/            # the only HTTP layer: auth, tasks, users, tags, files, devices, integrations, notifications, api-access, insights
 ├── components/     # ui/, primitives/ (.native/.web), calendar/, tasks/ (+ form/), settings/, onboarding/
 ├── hooks/          # use-user-store, use-task-form, use-notifications, use-push-registration, ...
 ├── lib/            # api-client, session, i18n*, push, blocks, overlap, date math, ...
@@ -84,9 +84,9 @@ is mounted under the splash so the launch URL `/` resolves, then the guards narr
 | ------------------- | --------------------------------------------------------------------------------- |
 | `/(auth)/login`     | student ID or email then OTP; timezone captured on verify                         |
 | `/(onboarding)`     | first-run setup (focus band, LMS, notifications)                                                      |
-| `/(app)` (Calendar) | home: Day, Week or Month view behind one header; Day is the timeline + 7-day chip strip |
+| `/(app)` (Calendar) | home: Day, Week or Month view behind one header; Day is the timeline + 7-day chip strip, with the Today card and a collapsed Insights section (focus map, last 7 days, prep buffers) |
 | `/(app)/today`      | Today tab: redirects to the calendar's Day view on today                          |
-| `/(app)/settings`   | Me tab: profile, appearance, preferences (language, default reminder), integrations; Advanced holds timezone and storage |
+| `/(app)/settings`   | Me tab: profile, appearance, preferences (language, default reminder), integrations; Advanced holds timezone, storage and AI assistants (MCP and REST endpoints, prompt, tokens) |
 | `/task/new`         | create task or event (bottom-sheet composer)                                      |
 | `/task/[id]/edit`   | edit session (same composer; type fixed), opened from a block's detail sheet      |
 | `/notifications`    | ingestion inbox (modal)                                                           |
