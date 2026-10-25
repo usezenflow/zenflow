@@ -123,7 +123,6 @@ function resolveSessionDefaults(eventName: string): {
     case "LECTURE":
       return { type: "LECTURE", source: "PORTAL", durationMinutes: 90 };
     case "ASSIGNMENT":
-    case "REMINDER":
     default:
       return { type: "TASK", source: "LMS", durationMinutes: 90 };
   }

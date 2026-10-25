@@ -361,7 +361,7 @@ describe("NotificationsService", () => {
       const { service } = await makeService([
         row({
           id: "n1",
-          eventName: "reminder.fired",
+          eventName: "sync_conflict.overlap",
           session: { type: "EXAM" },
         }),
       ]);

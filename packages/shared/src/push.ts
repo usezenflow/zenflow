@@ -16,11 +16,10 @@
  * sound is right even when the app is closed (Android binds sound to the
  * notification channel, iOS to the payload's sound file).
  */
-export type PushTone = "default" | "reminder" | "urgent";
+export type PushTone = "default" | "urgent";
 
-/** Event slug → tone: reminders are soft, sync conflicts need action, the rest is the default chime. */
+/** Event slug → tone: sync conflicts need action, the rest is the default chime. */
 export function pushToneFor(eventName: string): PushTone {
-  if (eventName === "reminder.fired") return "reminder";
   if (eventName.startsWith("sync_conflict.")) return "urgent";
   return "default";
 }

@@ -120,7 +120,7 @@ export function configureForegroundHandler(): void {
   });
 }
 
-const TONES: PushTone[] = ["default", "reminder", "urgent"];
+const TONES: PushTone[] = ["default", "urgent"];
 
 /**
  * Android 8+ needs explicit channels or notifications are dropped silently.
@@ -133,13 +133,7 @@ export async function ensureAndroidChannel(): Promise<void> {
   await Promise.all(
     TONES.map((tone) =>
       Notifications.setNotificationChannelAsync(pushChannelId(tone), {
-        name: t(
-          tone === "urgent"
-            ? "Urgent"
-            : tone === "reminder"
-              ? "Reminders"
-              : "General",
-        ),
+        name: t(tone === "urgent" ? "Urgent" : "General"),
         importance: Notifications.AndroidImportance.MAX,
         sound: pushSoundFile(tone),
         vibrationPattern:

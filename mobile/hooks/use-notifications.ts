@@ -297,9 +297,7 @@ export function useNotificationsSubscription(): void {
         // `rescheduleConflicts` in `api/notifications.ts` — already calls
         // `notifySessionsMutated()` itself), so skip invalidation here for
         // that case.
-        // A reminder changes no session either — it's just the nudge.
-        const kind = notificationEventKind(n.eventName);
-        if (kind !== "CONFLICT" && kind !== "REMINDER") {
+        if (notificationEventKind(n.eventName) !== "CONFLICT") {
           notifySessionsMutated();
         }
 
@@ -312,7 +310,8 @@ export function useNotificationsSubscription(): void {
 
         const cleanTitle = (n.title || "").replace(/^\[.*?\]\s*/, "").trim();
         const hasConflicts =
-          kind === "CONFLICT" && (n.conflictSessionIds?.length ?? 0) > 0;
+          notificationEventKind(n.eventName) === "CONFLICT" &&
+          (n.conflictSessionIds?.length ?? 0) > 0;
 
         // 1. In-app tap-to-act toast with clear title and "View on calendar" action
         const { router: currentRouter, toast: currentToast } =

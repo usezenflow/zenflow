@@ -63,9 +63,6 @@ export const CATEGORY_LABEL: Record<NotificationCategory, string> = {
   get LECTURE() {
     return t("Timetable");
   },
-  get REMINDER() {
-    return t("Reminder");
-  },
   get MARKS() {
     return t("Marks");
   },
@@ -101,7 +98,7 @@ export function notificationVisual(
     };
   }
   const sessionType =
-    category === "REMINDER" ? linkedType : CATEGORY_SESSION_TYPE[category];
+    CATEGORY_SESSION_TYPE[category];
   const kindVisual = sessionType ? KIND_VISUAL[notificationEventKind(eventName)] : undefined;
   if (kindVisual) {
     return {
@@ -138,7 +135,7 @@ export function notificationVisual(
       const ink = { light: "#c2410c", dark: "#fb923c" };
       return {
         Icon: Bell,
-        label: CATEGORY_LABEL.REMINDER,
+        label: t("Notification"),
         tint: "border-primary/50 bg-primary/20",
         ink,
         accent: ink,
@@ -148,7 +145,7 @@ export function notificationVisual(
 }
 
 /** `icon` + `accent` for a notification's toast. Tolerates a missing or
- * unrecognized eventName (an older push payload) with the reminder bell. */
+ * unrecognized eventName (an older push payload) with a generic bell. */
 export function notificationToastVisual(
   eventName: string | undefined,
   linkedType: SessionType | null = null,
