@@ -12,7 +12,6 @@ import {
 
 const ctx: PlanContext = {
   timeZone: "Asia/Ho_Chi_Minh",
-  reminderMinutes: 15,
   from: new Date("2026-10-24T00:00:00Z"),
   to: new Date("2026-12-10T00:00:00Z"),
 };
@@ -83,7 +82,7 @@ describe("buildSpecs", () => {
     );
     expect(specs.map((s) => s.key)).toEqual(["a"]);
     expect(specs[0].endDate.toISOString()).toBe("2026-11-03T03:00:00.000Z");
-    expect(specs[0].alarmMinutes).toBe(15);
+    expect(specs[0].alarmMinutes).toBe(30);
   });
 
   it("gives DND no alarm and a task its due line", () => {

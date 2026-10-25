@@ -24,9 +24,11 @@ export interface DeviceLink {
 
 export type DeviceLinks = Record<string, DeviceLink>;
 
+/** Every event but DND rings this long before it starts. */
+export const ALARM_MINUTES = 30;
+
 export interface PlanContext {
   timeZone: string;
-  reminderMinutes: number;
   /** Sessions starting outside [from, to] are neither written nor removed. */
   from: Date;
   to: Date;
@@ -75,7 +77,7 @@ export function buildSpecs(sessions: Session[], ctx: PlanContext): DeviceEventSp
       timeZone: ctx.timeZone,
       location: s.location ?? null,
       notes: dueNote(s.deadline, ctx.timeZone),
-      alarmMinutes: s.type === "DND" ? 0 : ctx.reminderMinutes,
+      alarmMinutes: s.type === "DND" ? 0 : ALARM_MINUTES,
     };
     specs.push({
       ...base,

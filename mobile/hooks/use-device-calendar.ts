@@ -81,7 +81,6 @@ export const useDeviceCalendar = create<Store>((set, get) => {
         const sessions = await fetchWindow(now);
         const result = await syncDeviceCalendar(expoCalendarAdapter, get().state, sessions, {
           timeZone: user.timezone,
-          reminderMinutes: user.defaultReminderMinutes,
           from: addDays(now, -BACK_DAYS),
           to: addDays(now, AHEAD_DAYS),
         });
