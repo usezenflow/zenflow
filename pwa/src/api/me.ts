@@ -3,7 +3,6 @@ import type {
   ApiSuccess,
   CreateApiTokenInput,
   CreateApiTokenResponse,
-  InsightsResponse,
   RevokeApiTokenResponse,
 } from "@zenflow/shared";
 import { api } from "./base";
@@ -30,10 +29,3 @@ export async function revokeApiToken(id: string): Promise<RevokeApiTokenResponse
   return data.data;
 }
 
-/** Focus map, recap and buffers over `from`..`to`, both `YYYY-MM-DD` in the user's timezone. */
-export async function getInsights(from: string, to: string): Promise<InsightsResponse> {
-  const { data } = await api.get<ApiSuccess<InsightsResponse>>("/users/me/insights", {
-    params: { from, to },
-  });
-  return data.data;
-}

@@ -6,7 +6,6 @@
 
 export const ONBOARDING_STEPS = [
   "campus",
-  "commute",
   "notifications",
   "assistants",
   "done",

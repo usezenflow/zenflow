@@ -1,17 +1,10 @@
 import { useState } from "react";
-import { AlarmClock, Bell, BellOff, Clock, Globe } from "lucide-react";
-import {
-  DEFAULT_REMINDER_CHOICES,
-  type DefaultReminderChoice,
-  type Lang,
-  type UpdateUserInput,
-  type User,
-} from "@zenflow/shared";
+import { Bell, Globe } from "lucide-react";
+import { type Lang, type UpdateUserInput, type User } from "@zenflow/shared";
 import { Switch } from "@/components/ui/switch";
 import { OptionSheet, type SheetOption } from "@/components/settings/option-sheet";
 import {
   IconTile,
-  Divider,
   SettingsCard,
   SettingsLabel,
   SettingsRow,
@@ -23,23 +16,10 @@ import { setLanguage, t, useLanguage } from "@/lib/i18n";
 import { errorToast } from "@/lib/toast";
 import { LANGUAGES, languageOption } from "@/lib/languages";
 
-
-function reminderLabels(): Record<DefaultReminderChoice, string> {
-  return {
-    0: t("None"),
-    5: t("5 min before"),
-    10: t("10 min before"),
-    15: t("15 min before"),
-    30: t("30 min before"),
-    60: t("1 hour before"),
-  };
-}
-
-/** Language, default reminder and the notification opt-in, saved to the account. */
+/** Language and the notification opt-in, saved to the account. */
 export function PreferencesSection({ user }: { user: User }) {
   useLanguage();
-  const [sheet, setSheet] = useState<"language" | "reminder" | null>(null);
-  const reminders = reminderLabels();
+  const [sheet, setSheet] = useState<"language" | null>(null);
   const push = useWebPush();
 
   const languages: SheetOption<Lang>[] = LANGUAGES.map(({ value, label, flag }) => ({
@@ -47,13 +27,6 @@ export function PreferencesSection({ user }: { user: User }) {
     label,
     flag,
   }));
-  const reminderOptions: SheetOption<DefaultReminderChoice>[] = DEFAULT_REMINDER_CHOICES.map(
-    (value) => ({
-      value,
-      label: reminders[value],
-      icon: value === 0 ? BellOff : value >= 60 ? Clock : AlarmClock,
-    }),
-  );
 
   async function save(patch: UpdateUserInput, onSaved?: () => void) {
     if (await saveUser(patch)) {
@@ -71,7 +44,7 @@ export function PreferencesSection({ user }: { user: User }) {
       : t("Notifications aren't supported in this browser.")
     : push.denied
       ? t("Allow them in browser settings.")
-      : t("Push alerts for reminders and schedule changes");
+      : t("Push alerts for schedule changes and sync problems");
 
   return (
     <>
@@ -82,13 +55,6 @@ export function PreferencesSection({ user }: { user: User }) {
           title={t("Language")}
           value={`${languageOption(user.lang).flag} ${languageOption(user.lang).label}`}
           onClick={() => setSheet("language")}
-        />
-        <Divider />
-        <SettingsRow
-          icon={AlarmClock}
-          title={t("Reminder")}
-          value={reminders[user.defaultReminderMinutes]}
-          onClick={() => setSheet("reminder")}
         />
       </SettingsCard>
 
@@ -124,14 +90,6 @@ export function PreferencesSection({ user }: { user: User }) {
         options={languages}
         value={user.lang}
         onSelect={(lang) => void save({ lang }, () => setLanguage(lang))}
-      />
-      <OptionSheet
-        open={sheet === "reminder"}
-        onOpenChange={(open) => setSheet(open ? "reminder" : null)}
-        title={t("Reminder")}
-        options={reminderOptions}
-        value={user.defaultReminderMinutes}
-        onSelect={(defaultReminderMinutes) => void save({ defaultReminderMinutes })}
       />
     </>
   );

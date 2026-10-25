@@ -1,8 +1,6 @@
 import { listIntegrations } from "@/api/integrations";
 import { getApiAccess } from "@/api/me";
 import { updateBasicInfo } from "@/api/users";
-import { TravelSection } from "@/components/settings/travel-section";
-import { useMyLocationStop } from "@/lib/places/use-my-location-stop";
 import { SunriseBackdrop } from "@/components/brand/sunrise-backdrop";
 import { Button } from "@/components/ui/button";
 import { Glass } from "@/components/ui/glass";
@@ -19,7 +17,6 @@ import {
   Check,
   ChevronLeft,
   GraduationCap,
-  LocateFixed,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -38,7 +35,6 @@ import {
 
 const STEP_ICON: Partial<Record<OnboardingStep, LucideIcon>> = {
   campus: GraduationCap,
-  commute: LocateFixed,
   notifications: Bell,
   assistants: Sparkles,
 };
@@ -58,7 +54,7 @@ function Group({ children }: { children: ReactNode }) {
 }
 
 /**
- * First-run setup: focus, campus connect, commute, notifications, then a summary.
+ * First-run setup: focus, campus connect, notifications, then a summary.
  * Each step can be skipped; skipped items are listed on the summary with a
  * "Set up" link that returns to them.
  */
@@ -75,7 +71,6 @@ export function OnboardingFlow() {
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
-  const myLocation = useMyLocationStop();
 
   const [aiConnected, setAiConnected] = useState(false);
 
@@ -95,27 +90,6 @@ export function OnboardingFlow() {
 
   const campusConnected = integrations.some((i) => i.connected);
   const notificationsOn = user?.allowNotifications === true;
-  const home = user?.homeLocation ?? null;
-
-  /** Asks the browser for location, then saves the position as home. */
-  async function saveHomeFromLocation() {
-    const point = await myLocation.locate();
-    if (!point) return;
-    setBusy(true);
-    try {
-      setUser(
-        await updateBasicInfo({
-          homeLocation: t("My location"),
-          homeLat: point.lat,
-          homeLng: point.lng,
-        }),
-      );
-    } catch {
-      saveFailed();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   function go() {
     if (fromSummary) {
@@ -269,53 +243,6 @@ export function OnboardingFlow() {
       );
       break;
     }
-    case "commute": {
-      title = t("Plan your commute");
-      body = t(
-        "Share where you leave from and how you travel. We'll add buffer time before sessions on campus.",
-      );
-      content = (
-        <div className="flex flex-col gap-4">
-          <Group>
-            <button
-              type="button"
-              data-testid="onboarding.commute.use-location"
-              disabled={busy || myLocation.locating}
-              onClick={() => void saveHomeFromLocation()}
-              className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left"
-            >
-              <span className="flex size-[38px] shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <BusyOr busy={myLocation.locating} className="size-4">
-                  <LocateFixed className="size-[18px]" />
-                </BusyOr>
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-semibold">
-                  {t("Use my location")}
-                </span>
-                <span className="mt-0.5 block text-[13px] text-muted-foreground">
-                  {t("Set your home to where you are now")}
-                </span>
-              </span>
-            </button>
-          </Group>
-          {myLocation.note && (
-            <div className="flex gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
-              <AlertCircle className="size-5 shrink-0 text-destructive" />
-              <p className="text-[13.5px] leading-snug">{myLocation.note}</p>
-            </div>
-          )}
-          {user && <TravelSection user={user} hideLabel />}
-        </div>
-      );
-      footer = (
-        <>
-          {primary(t("Continue"), go)}
-          {!home && ghost(t("Skip for now"), skip)}
-        </>
-      );
-      break;
-    }
     case "notifications": {
       title = t("Stay ahead of deadlines");
       body = t(
@@ -426,12 +353,6 @@ export function OnboardingFlow() {
           value: campusConnected ? t("Connected") : t("Skipped"),
           skipped: !campusConnected,
           step: "campus",
-        },
-        {
-          key: t("Home"),
-          value: home ?? t("Skipped"),
-          skipped: !home,
-          step: "commute",
         },
         {
           key: t("Notifications"),

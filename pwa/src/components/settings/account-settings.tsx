@@ -14,7 +14,6 @@ import { PreferencesSection } from "@/components/settings/preferences-section";
 import { ProfileRow } from "@/components/settings/profile-row";
 import { SettingsCard, SettingsLabel, Divider } from "@/components/settings/settings-ui";
 import { StudentCard, StudentCardSkeleton } from "@/components/settings/student-card";
-import { TravelSection } from "@/components/settings/travel-section";
 import { useStudentProfile } from "@/components/settings/use-student-profile";
 import { useWebPush } from "@/components/settings/use-web-push";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,7 +25,7 @@ import { useConnectivity } from "@/lib/connectivity";
 
 const LMS_SECTION_ID = "settings-lms";
 
-/** The Me screen body, in mobile's order: setup, profile, appearance, preferences, travel, tags, LMS, advanced, sign out. */
+/** The Me screen body, in mobile's order: setup, profile, appearance, preferences, tags, LMS, advanced, sign out. */
 export function AccountSettings({ focusLms = false }: { focusLms?: boolean } = {}) {
   useLanguage();
   const navigate = useNavigate();
@@ -136,7 +135,6 @@ export function AccountSettings({ focusLms = false }: { focusLms?: boolean } = {
 
       <AppearanceSection />
       <PreferencesSection user={user} />
-      <TravelSection user={user} />
 
       <div id={LMS_SECTION_ID} className="scroll-mt-4">
         <SettingsLabel>{t("LMS and portal")}</SettingsLabel>
