@@ -15,6 +15,7 @@ import { type ApiToken, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   API_TOKEN_PREFIX,
+  OAUTH_ACCESS_PREFIX,
   generateApiTokenSecret,
   hashApiToken,
 } from "./api-token.util";
@@ -93,6 +94,9 @@ export class ApiTokensService {
    * wrong-pepper secret. Stamps `lastUsedAt` at most once per interval.
    */
   async authenticate(secret: string, now = new Date()): Promise<User | null> {
+    if (this.pepper && secret.startsWith(OAUTH_ACCESS_PREFIX)) {
+      return this.authenticateOAuth(secret, now);
+    }
     if (!this.pepper || !secret.startsWith(API_TOKEN_PREFIX)) return null;
     const row = await this.prisma.apiToken.findUnique({
       where: { hash: hashApiToken(secret, this.pepper) },
@@ -101,6 +105,22 @@ export class ApiTokensService {
     if (!row || row.revokedAt) return null;
     await this.touch(row.id, row.lastUsedAt, now);
     return row.user;
+  }
+
+  /** The user behind a live OAuth access token an AI assistant was given. */
+  private async authenticateOAuth(
+    secret: string,
+    now: Date,
+  ): Promise<User | null> {
+    const row = await this.prisma.oAuthToken.findFirst({
+      where: {
+        hash: hashApiToken(secret, this.pepper!),
+        kind: "ACCESS",
+        expiresAt: { gt: now },
+      },
+      include: { user: true },
+    });
+    return row?.user ?? null;
   }
 
   /** Conditional write, so concurrent requests stamp at most one update. */

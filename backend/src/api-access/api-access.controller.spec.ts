@@ -1,13 +1,14 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import type { Request } from "express";
 import { type User } from "../../generated/prisma";
+import { PublicUrls } from "../common/config/public-urls";
 import { ApiAccessController } from "./api-access.controller";
 import { ApiAccessService } from "./api-access.service";
 import { ApiTokensService } from "./api-tokens.service";
 
 const USER = { id: "u1", timezone: "UTC" } as unknown as User;
 
-async function make() {
+async function make(publicApi = "") {
   const summary = jest.fn().mockResolvedValue({ mcpUrl: "m" });
   const create = jest
     .fn()
@@ -18,6 +19,7 @@ async function make() {
     providers: [
       { provide: ApiAccessService, useValue: { summary } },
       { provide: ApiTokensService, useValue: { create, revoke } },
+      { provide: PublicUrls, useValue: { api: publicApi } },
     ],
   }).compile();
   return {
@@ -43,6 +45,23 @@ describe("ApiAccessController", () => {
       "https://api.example.com/api/v1",
     );
     expect(res).toEqual({ success: true, data: { mcpUrl: "m" } });
+  });
+
+  it("prefers the configured public API URL", async () => {
+    const { summary, controller } = await make(
+      "https://api.usezenflow.com/api/v1",
+    );
+    const req = {
+      protocol: "http",
+      get: () => "internal:8000",
+    } as unknown as Request;
+
+    await controller.get(req, USER);
+
+    expect(summary).toHaveBeenCalledWith(
+      USER,
+      "https://api.usezenflow.com/api/v1",
+    );
   });
 
   it("returns the secret in the create response", async () => {

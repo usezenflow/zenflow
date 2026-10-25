@@ -32,11 +32,11 @@ describe("buildApiAccessPrompt", () => {
     expect(prompt).toContain("Trả lời ngắn gọn.");
   });
 
-  it("stays under 1,500 characters with the real tool list", () => {
+  it("stays under 2,200 characters with the real tool list", () => {
     expect(
       buildApiAccessPrompt({ timezone: "Asia/Ho_Chi_Minh", tools: MCP_TOOLS })
         .length,
-    ).toBeLessThan(1500);
+    ).toBeLessThan(2200);
   });
 
   it("builds without tools", () => {

@@ -3,68 +3,70 @@ import type { AssistantSetupGuide } from "@zenflow/shared";
 const TOKEN = "zf_..."; // Placeholder: the real secret is shown once when the token is created.
 
 /**
- * Connection steps per assistant, one tab each. Each client has its own menu
- * names, so the steps name the exact screens. Vietnamese, like the prompt.
+ * Connection steps per assistant, one tab each, each with a link to the exact
+ * settings page. Assistants sign in through OAuth, so no token is pasted.
+ * Vietnamese, like the prompt.
  */
 export function buildAssistantSetup(args: {
   mcpUrl: string;
 }): AssistantSetupGuide[] {
   const { mcpUrl } = args;
-  const header = `Authorization: Bearer ${TOKEN}`;
   return [
     {
       id: "chatgpt",
       label: "ChatGPT",
+      link: {
+        label: "Mở Connectors của ChatGPT",
+        url: "https://chatgpt.com/#settings/Connectors",
+      },
       steps: [
-        "Tạo token ở mục Token bên dưới và sao chép ngay. Token chỉ hiện một lần.",
-        "Mở ChatGPT, vào Settings, chọn Connectors, rồi bật Developer mode trong Advanced.",
-        "Chọn Add custom MCP server, đặt tên là Zenflow, rồi dán MCP server URL ở trên.",
-        `Nếu có ô nhập header, thêm ${header}. Nếu không có, kết nối này chưa dùng được.`,
-        "Mở cuộc trò chuyện mới và dán system prompt ở trên làm hướng dẫn.",
-      ],
-    },
-    {
-      id: "claude",
-      label: "Claude",
-      steps: [
-        "Tạo token ở mục Token bên dưới và sao chép ngay. Token chỉ hiện một lần.",
-        "Trên claude.ai, mở Customize, chọn Connectors. Nếu dùng gói nhóm, vào Organization settings rồi chọn Connectors.",
-        "Chọn +, Add custom connector, đặt tên là Zenflow, rồi dán MCP server URL ở trên.",
-        `Chọn No sign-in và nhập ${header} vào ô header.`,
-        "Mở cuộc trò chuyện mới, bật Zenflow trong danh sách công cụ, và dán system prompt ở trên làm hướng dẫn.",
+        "Gói Free chỉ dùng được app có trong thư viện Apps của ChatGPT. Zenflow chưa có ở đó, hãy dùng gói Plus trở lên.",
+        "Mở Connectors, bật Developer mode trong Advanced.",
+        "Chọn Create, đặt tên Zenflow, dán MCP server URL ở trên và chọn OAuth.",
+        "Bấm Connect, đăng nhập Zenflow rồi chọn Cho phép.",
+        "Trong cuộc trò chuyện mới, chọn Zenflow ở menu +.",
       ],
     },
     {
       id: "gemini",
       label: "Gemini",
+      link: {
+        label: "Mở Connected apps của Gemini",
+        url: "https://gemini.google.com/apps",
+      },
       steps: [
-        "Tạo token ở mục Token bên dưới và sao chép ngay. Token chỉ hiện một lần.",
-        "Gemini CLI kết nối MCP qua file ~/.gemini/settings.json. Tạo file nếu chưa có.",
-        "Thêm khối dưới đây vào mcpServers, thay zf_... bằng token của bạn.",
-        "Chạy gemini rồi gõ /mcp để kiểm tra Zenflow đã kết nối.",
+        "Dùng gemini.google.com trên máy tính. Gemini chỉ mở tính năng này cho tài khoản Google cá nhân từ 18 tuổi, ở Mỹ, tiếng Anh, và bật Keep Activity.",
+        "Mở Connected apps. Dưới Custom apps, dán MCP server URL ở trên rồi chọn Next.",
+        "Đăng nhập Zenflow rồi chọn Cho phép.",
+        "Trong cuộc trò chuyện, gõ @ rồi chọn Zenflow.",
       ],
-      code: JSON.stringify(
-        {
-          mcpServers: {
-            zenflow: {
-              httpUrl: mcpUrl,
-              headers: { Authorization: `Bearer ${TOKEN}` },
-            },
-          },
-        },
-        null,
-        2,
-      ),
+    },
+    {
+      id: "claude",
+      label: "Claude",
+      link: {
+        label: "Mở Connectors của Claude",
+        url: "https://claude.ai/customize/connectors",
+      },
+      steps: [
+        "Mở Connectors, chọn + Add rồi Add custom connector.",
+        "Đặt tên Zenflow, dán MCP server URL ở trên rồi chọn Continue.",
+        "Giữ cài đặt mặc định và chọn Add.",
+        "Bấm Connect, đăng nhập Zenflow rồi chọn Cho phép.",
+        "Trong cuộc trò chuyện mới, bật Zenflow ở menu +.",
+      ],
     },
     {
       id: "other",
       label: "Khác",
       steps: [
-        "Với Claude Code, chạy lệnh dưới đây trong terminal, thay zf_... bằng token của bạn.",
-        "Với client khác, chọn Streamable HTTP, nhập MCP server URL và thêm header Authorization như trên.",
-        "Client không hỗ trợ MCP thì dùng REST base URL và gửi cùng header Authorization.",
+        "Với Claude Code, chạy lệnh dưới đây rồi gõ /mcp để đăng nhập.",
+        "Với script hoặc client không có OAuth, tạo token ở mục Token bên dưới và gửi header Authorization: Bearer như trong lệnh thứ hai.",
       ],
-      code: `claude mcp add --transport http zenflow ${mcpUrl} --header "Authorization: Bearer ${TOKEN}"`,
+      code: [
+        `claude mcp add --transport http zenflow ${mcpUrl}`,
+        `curl ${mcpUrl} -H "Authorization: Bearer ${TOKEN}"`,
+      ].join("\n"),
     },
   ];
 }

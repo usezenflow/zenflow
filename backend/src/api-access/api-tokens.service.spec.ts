@@ -102,11 +102,18 @@ function fakePrisma(users: User[]) {
 
 type FakePrisma = ReturnType<typeof fakePrisma>;
 
-async function make(pepper: string | undefined, prisma: FakePrisma) {
+async function make(
+  pepper: string | undefined,
+  prisma: FakePrisma,
+  oAuthToken: unknown = {},
+) {
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       ApiTokensService,
-      { provide: PrismaService, useValue: { apiToken: prisma.apiToken } },
+      {
+        provide: PrismaService,
+        useValue: { apiToken: prisma.apiToken, oAuthToken },
+      },
       {
         provide: ConfigService,
         useValue: {
@@ -191,6 +198,36 @@ describe("ApiTokensService", () => {
     expect(await service.authenticate("zf_unknown", T0)).toBeNull();
     expect(await service.authenticate("Bearer something", T0)).toBeNull();
     expect(prisma.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it("authenticates a live OAuth access token and refuses an expired one", async () => {
+    const expiresAt = new Date(T0.getTime() + 60_000);
+    const stored = {
+      hash: hashApiToken("zo_live", PEPPER),
+      expiresAt,
+      user: alice,
+    };
+    const oAuthToken = {
+      findFirst: jest.fn(
+        (args: {
+          where: { hash: string; kind: string; expiresAt: { gt: Date } };
+        }) =>
+          Promise.resolve(
+            args.where.hash === stored.hash &&
+              args.where.kind === "ACCESS" &&
+              stored.expiresAt > args.where.expiresAt.gt
+              ? stored
+              : null,
+          ),
+      ),
+    };
+    const service = await make(PEPPER, fakePrisma([alice]), oAuthToken);
+
+    expect((await service.authenticate("zo_live", T0))?.id).toBe("u-alice");
+    expect(
+      await service.authenticate("zo_live", new Date(T0.getTime() + 120_000)),
+    ).toBeNull();
+    expect(await service.authenticate("zo_other", T0)).toBeNull();
   });
 
   it("stamps lastUsedAt at most once per interval", async () => {

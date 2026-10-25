@@ -7,6 +7,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { type User } from "../../generated/prisma";
 import { AllowApiToken, ApiTokenOnly } from "./allow-api-token.decorator";
 import { ApiTokenGuard } from "./api-token.guard";
+import { OAuthConfig } from "../oauth/oauth.config";
 import { ApiTokensService } from "./api-tokens.service";
 
 /** A controller with one route per access mode, so the guard reads real metadata. */
@@ -37,9 +38,13 @@ function request(
   };
 }
 
-function context(handler: () => void, req: FakeRequest): ExecutionContext {
+function context(
+  handler: () => void,
+  req: FakeRequest,
+  res: { setHeader: jest.Mock } = { setHeader: jest.fn() },
+): ExecutionContext {
   return {
-    switchToHttp: () => ({ getRequest: () => req }),
+    switchToHttp: () => ({ getRequest: () => req, getResponse: () => res }),
     getHandler: () => handler,
     getClass: () => Probe,
   } as unknown as ExecutionContext;
@@ -56,11 +61,17 @@ describe("ApiTokenGuard", () => {
     else process.env.ALLOWED_EMAIL_DOMAINS = originalDomains;
   });
 
-  async function make(authenticate: jest.Mock) {
+  const MCP = new URL("https://api.example.com/api/v1/mcp");
+
+  async function make(authenticate: jest.Mock, oauthAvailable = false) {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ApiTokenGuard,
         { provide: ApiTokensService, useValue: { authenticate } },
+        {
+          provide: OAuthConfig,
+          useValue: { available: oauthAvailable, mcpUrl: MCP },
+        },
       ],
     }).compile();
     return module.get(ApiTokenGuard);
@@ -148,5 +159,49 @@ describe("ApiTokenGuard", () => {
         context(Probe.prototype.allowed, request({}, NO_SESSION)),
       ),
     ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it("points an OAuth client at the resource metadata when the bearer is missing or refused", async () => {
+    const guard = await make(jest.fn().mockResolvedValue(null), true);
+    const expected =
+      'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/api/v1/mcp"';
+
+    const missing = { setHeader: jest.fn() };
+    await expect(
+      guard.canActivate(
+        context(Probe.prototype.bearerOnly, request({}, NO_SESSION), missing),
+      ),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(missing.setHeader).toHaveBeenCalledWith(
+      "WWW-Authenticate",
+      expected,
+    );
+
+    const refused = { setHeader: jest.fn() };
+    await expect(
+      guard.canActivate(
+        context(
+          Probe.prototype.bearerOnly,
+          request({ authorization: "Bearer zo_bad" }, NO_SESSION),
+          refused,
+        ),
+      ),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(refused.setHeader).toHaveBeenCalledWith(
+      "WWW-Authenticate",
+      expected,
+    );
+  });
+
+  it("sends no challenge when OAuth is not configured", async () => {
+    const guard = await make(jest.fn().mockResolvedValue(null), false);
+    const res = { setHeader: jest.fn() };
+
+    await expect(
+      guard.canActivate(
+        context(Probe.prototype.bearerOnly, request({}, NO_SESSION), res),
+      ),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(res.setHeader).not.toHaveBeenCalled();
   });
 });
