@@ -6,7 +6,7 @@
 
 /** Same string unions as `SchedulingModel` and `SessionEventType` in the Prisma schema. */
 export type Policy = "HEURISTIC" | "LINUCB";
-export type SettledEvent = "START" | "MOVE";
+export type SettledEvent = "KEPT" | "MOVE";
 
 /** `ActiveUsersService`: one HyperLogLog per UTC day, kept 8 days. */
 export interface ActiveDay {
@@ -136,7 +136,7 @@ function buildLearning(): LearningQuality {
       proposals: 1840,
       acceptedUnmodified: 1121,
       due: 1258,
-      events: { START: 902, MOVE: 719 },
+      events: { KEPT: 902, MOVE: 719 },
       dragMinutes: 74,
       reward: 0.31,
     },
@@ -145,7 +145,7 @@ function buildLearning(): LearningQuality {
       proposals: 1795,
       acceptedUnmodified: 1236,
       due: 1304,
-      events: { START: 1013, MOVE: 559 },
+      events: { KEPT: 1013, MOVE: 559 },
       dragMinutes: 52,
       reward: 0.42,
     },
@@ -224,6 +224,6 @@ export const workload: WorkloadGroup[] = [
 export const keptRate = (p: { acceptedUnmodified: number; proposals: number }) =>
   p.proposals ? p.acceptedUnmodified / p.proposals : 0;
 
-/** START over placed sessions whose slot has passed (`due`). */
-export const startRate = (p: Pick<PolicyQuality, "events" | "due">) =>
-  p.due ? p.events.START / p.due : 0;
+/** KEPT events over placed sessions whose slot has passed (`due`). */
+export const settledKeptRate = (p: Pick<PolicyQuality, "events" | "due">) =>
+  p.due ? p.events.KEPT / p.due : 0;
