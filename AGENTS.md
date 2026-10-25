@@ -91,7 +91,7 @@ pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typech
    may still reject a create/edit before anything is written; once a row exists, placement ends in
    a real slot or the last resort (`ACCEPTED_LAST_RESORT` / `lastResortStart`), and a placement
    that throws discards the just-inserted rows (`placeOrDiscard`). Don't add a path that writes
-   `null` onto a `TASK`. Repair old rows with `pnpm --filter backend backfill:unplaced`.
+   `null` onto a `TASK`.
 
 8. **Auth is OTP + Redis sessions** (no passwords/JWT). Protected routes use
    `CookieAuthGuard`; the current user comes from `@CurrentUser()`.

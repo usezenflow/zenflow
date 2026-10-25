@@ -11,7 +11,7 @@ You own where a task lands on the calendar. Ranking is Python (ADR-0003); Nest g
 
 ## Map
 - `scheduler/io/` gathers inputs and calls `POST /v1/place` via `placement-client.service.ts`; `task-placement.service.ts` is the entry point, `placement-gateway.service.ts` picks policy, `fallback-placer.service.ts` and `heuristic-placer.service.ts` take over when Python is down (`circuit-breaker.ts`).
-- `scheduler/core/` is pure: `slot.ts`, `horizon.ts`, `recurrence.ts`, `matrix-decay.ts`, `reminder.ts`, `reward.ts`. The frozen fallback (`slot-score.ts`, `preference.ts`, `series-spread.ts`, `sync-conflicts.ts`) changes only for bug fixes.
+- `scheduler/core/` is pure: `slot.ts`, `horizon.ts`, `recurrence.ts`, `matrix-decay.ts`, `reward.ts`. The frozen fallback (`slot-score.ts`, `preference.ts`, `series-spread.ts`, `sync-conflicts.ts`) changes only for bug fixes.
 - `sessions/` is the HTTP surface: create, reschedule, resize, series routes (`/sessions/series/:id[/truncate]`).
 - `packages/shared/contract/place/*.json` are the TS/Python contract fixtures.
 

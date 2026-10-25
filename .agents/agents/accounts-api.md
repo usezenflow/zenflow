@@ -1,7 +1,7 @@
 ---
 name: accounts-api
 summary: "Auth, users, files, notifications, Prisma, shared contract"
-description: "Zenflow's account and platform-facing API: OTP auth and Redis sessions, users and tags, devices and push, reminders, mail, signed file URLs and S3, Prisma schema and migrations, and the @zenflow/shared contract."
+description: "Zenflow's account and platform-facing API: OTP auth and Redis sessions, users and tags, devices and push, mail, signed file URLs and S3, Prisma schema and migrations, and the @zenflow/shared contract."
 owns:
   - backend/src/*.ts
   - backend/src/auth/**
@@ -9,9 +9,10 @@ owns:
   - backend/src/tags/**
   - backend/src/devices/**
   - backend/src/notifications/**
-  - backend/src/reminders/**
   - backend/src/mail/**
-  - backend/src/streaks/**
+  - backend/src/api-access/**
+  - backend/src/calendar-feed/**
+  - backend/src/insights/**
   - backend/src/course-colours/**
   - backend/src/files/**
   - backend/src/prisma/**
@@ -20,7 +21,6 @@ owns:
   - backend/src/health/**
   - backend/src/crypto/**
   - backend/prisma/**
-  - backend/scripts/send-test-notification.ts
   - backend/src/places/**
   - backend/src/commute/**
   - backend/src/admin/**
@@ -35,7 +35,7 @@ You own the NestJS surface around the scheduler: who the user is, what they stor
 **Read first:** `backend/README.md`, `docs/backend/api.md`, `docs/adr/0004-s3-file-storage.md`, `docs/ops/secrets.md`.
 
 ## Map
-- `auth/` OTP + Redis sessions (`CookieAuthGuard`, `@CurrentUser()`); `users/`, `tags/`; `devices/` + `notifications/` (SSE stream and FCM/APNs push, each provider self-disables when unconfigured); `reminders/`; `mail/`; `files/` (S3, HMAC `file-url-signer.service.ts`, `FILE_URL_SECRET`).
+- `auth/` OTP + Redis sessions (`CookieAuthGuard`, `@CurrentUser()`); `users/`, `tags/`; `devices/` + `notifications/` (SSE stream and FCM/APNs push, each provider self-disables when unconfigured); `mail/`; `files/` (S3, HMAC `file-url-signer.service.ts`, `FILE_URL_SECRET`).
 - `backend/prisma/schema.prisma` + migrations; `packages/shared/src/` (`api.ts`, `bandit.ts`, ...) is the FE/BE contract.
 
 ## Rules
