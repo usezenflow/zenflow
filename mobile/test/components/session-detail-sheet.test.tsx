@@ -67,7 +67,6 @@ describe("SessionDetailSheet", () => {
           deadline: "2026-10-20T10:00:00.000Z",
           location: "Room B201",
           tags: ["Algorithms"],
-          reminders: [15],
         }),
       ),
     );

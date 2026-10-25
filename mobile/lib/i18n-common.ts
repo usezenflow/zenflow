@@ -1,7 +1,6 @@
 export default {
   "{provider} synced": "Đã đồng bộ {provider}",
   "Search...": "Tìm kiếm…",
-  "List of items": "Danh sách các mục",
   "Dismiss notification": "Đóng thông báo",
   "Show all notifications": "Hiện tất cả thông báo",
   "Show less": "Thu gọn",
@@ -31,13 +30,9 @@ export default {
   "Remove files from your notes, or use smaller ones.":
     "Xóa bớt file trong ghi chú, hoặc dùng file nhỏ hơn nha.",
   Close: "Đóng",
-  "Available online": "Chỉ xem được khi có mạng",
-  "Reconnect to play this file.": "Có mạng lại rồi mở file này nha.",
   "Couldn't load. Tap to retry.": "Không tải được. Chạm để thử lại.",
-  "Overdue at": "Hết hạn vào",
   Hour: "Giờ",
   Minute: "Phút",
-  "+{count} more": "+{count} nữa",
   "Back online": "Có mạng lại rồi",
   "Your calendar and plans are up to date.":
     "Lịch và kế hoạch của bạn đã được cập nhật.",
@@ -48,11 +43,8 @@ export default {
   "Showing saved days": "Đang hiện lịch đã lưu",
   Urgent: "Khẩn cấp",
   to: "đến",
-  "{time} → next day": "{time} → ngày hôm sau",
   Theme: "Giao diện",
   Add: "Thêm",
-  "{count} sitting has an alternative":
-    "{count} buổi có thời gian thay thế để chọn",
   "Location must be at most 200 characters.":
     "Địa điểm không được vượt quá 200 ký tự.",
   "This part didn't load. Everything else still works.":

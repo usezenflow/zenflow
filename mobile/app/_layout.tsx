@@ -9,6 +9,7 @@ import { sessionIsDead } from "@/lib/session-guard";
 import { useDevOfflineToggle } from "@/hooks/use-dev-offline-toggle";
 import { useConnectivityWatch } from "@/hooks/use-connectivity-watch";
 import { useNotificationsSubscription } from "@/hooks/use-notifications";
+import { useDeviceCalendarSync } from "@/hooks/use-device-calendar";
 import { usePushRegistration } from "@/hooks/use-push-registration";
 import { useUserStore } from "@/hooks/use-user-store";
 import { setAndroidNavigationBar } from "@/lib/android-navigation-bar";
@@ -73,6 +74,7 @@ SplashScreen.preventAutoHideAsync();
 function PushRegistrar() {
   useLanguage();
   usePushRegistration();
+  useDeviceCalendarSync();
   return null;
 }
 

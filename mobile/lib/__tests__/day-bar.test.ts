@@ -31,7 +31,6 @@ function session(
     prepForSessionId: null,
     prepForOccurrenceStart: null,
     tags: [],
-    reminders: [],
     scheduledStartTime: `2026-10-15T${start}:00.000Z`,
     seriesId: null,
     rrule: null,

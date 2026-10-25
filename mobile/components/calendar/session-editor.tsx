@@ -15,8 +15,6 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { DeadlinePicker, deadlineLine } from "@/components/tasks/fields/deadline-picker";
 import { DurationPicker } from "@/components/tasks/fields/duration-picker";
 import { EventWhenPicker, type EventWhen } from "@/components/tasks/fields/event-when-picker";
-import { ReminderField } from "@/components/tasks/fields/reminder-field";
-import { localizedReminderLabel } from "@/components/tasks/fields/reminder-field";
 import { DescriptionField } from "@/components/tasks/note/description-field";
 import { SessionNote } from "@/components/tasks/note/session-note";
 import { LocationScreen, type LocationValue } from "@/components/calendar/location-screen";
@@ -46,7 +44,7 @@ import {
   hhmmToMinutes,
   zonedDate,
 } from "@zenflow/core";
-import { DEFAULT_REMINDER_MINUTES, type Session, type UpdateSessionInput } from "@zenflow/shared";
+import type { Session, UpdateSessionInput } from "@zenflow/shared";
 import * as Haptics from "expo-haptics";
 import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -77,7 +75,7 @@ function repeatLabel(rrule: string | null): string | null {
 }
 
 /** Which inline picker is open under a row. */
-type Open = "when" | "placed" | "deadline" | "duration" | "reminder" | null;
+type Open = "when" | "placed" | "deadline" | "duration" | null;
 
 /** The session's colours: the tile fill, and the ink its icons and labels use. */
 interface Tint {
@@ -209,7 +207,7 @@ export function SessionEditor({
   const [values, setValues] = useState<SessionFormValues>(() =>
     session
       ? valuesFromSession(session, tz)
-      : draftValues(draft ?? { title: "", deadline: "" }, user?.defaultReminderMinutes ?? DEFAULT_REMINDER_MINUTES),
+      : draftValues(draft ?? { title: "", deadline: "" }),
   );
   const [open, setOpen] = useState<Open>(null);
   const [placing, setPlacing] = useState(false);
@@ -520,29 +518,6 @@ export function SessionEditor({
           </PropertyRow>
         )}
 
-        {session?.type !== "DND" && (
-          <PropertyRow
-            testID="session.reminder"
-            label={t("Reminder")}
-            icon={Bell}
-            tint={tint}
-            value={
-              values.reminders && values.reminders.length > 0
-                ? values.reminders.map((m) => localizedReminderLabel(m)).join(", ")
-                : t("No reminder")
-            }
-            onPress={() => toggle("reminder")}
-            disabled={disabled || placing}
-          >
-            {open === "reminder" && (
-              <ReminderField
-                value={values.reminders ?? []}
-                disabled={disabled || placing}
-                onChange={(reminders) => set({ reminders }, ["reminders"], true)}
-              />
-            )}
-          </PropertyRow>
-        )}
 
         {repeat && <PropertyRow testID="session.repeat" label={t("Repeat")} icon={Repeat} tint={tint} value={repeat} />}
 

@@ -67,8 +67,8 @@ mobile/
 ├── app/            # Expo Router: _layout (Stack.Protected guards), (auth), (onboarding), (app) tabs, task/, notifications
 ├── api/            # the only HTTP layer: auth, tasks, users, tags, files, devices, integrations, notifications, api-access, insights
 ├── components/     # ui/, primitives/ (.native/.web), calendar/, tasks/ (+ form/), settings/, onboarding/
-├── hooks/          # use-user-store, use-task-form, use-notifications, use-push-registration, ...
-├── lib/            # api-client, session, i18n*, push, blocks, overlap, date math, ...
+├── hooks/          # use-user-store, use-notifications, use-push-registration, use-device-calendar, ...
+├── lib/            # api-client, session, i18n*, push, device-calendar/, date math, ...
 ├── plugins/        # Expo config plugins: withAndroidBuildFixes, withIosBuildFixes
 ├── scripts/        # iOS personal-team helpers
 └── global.css, tailwind.config.ts, metro.config.js, babel.config.js   # NativeWind wiring
@@ -95,7 +95,11 @@ A calendar block opens its detail sheet in place (`components/calendar/session-d
 
 Session model, series-scope editing, recurrence and reschedule match web: see
 [ADR-0002](../docs/adr/0002-scheduling-simplification.md).
-Task composer is `components/tasks/composer/` (fields in `composer-fields.tsx`, reminders in `reminder-field.tsx`, hidden for `DND`); quick-add parsing is `lib/task-parser.ts`; labels and the no-duplicate rule come from `@zenflow/core`.
+Task composer is `components/tasks/composer/` (fields in `composer-fields.tsx`); quick-add parsing is `lib/task-parser.ts`; labels and the no-duplicate rule come from `@zenflow/core`.
+
+## Phone calendar
+
+Settings has a "Phone calendar" switch ([ADR-0039](../docs/adr/0039-thin-layer-calendar-native.md)). On, `lib/device-calendar/` writes the schedule into a local "Zenflow" calendar through `expo-calendar`: on launch, on return to the app and after edits. Zenflow is the source of truth; the plan (`plan.ts`) and sync (`sync.ts`) are pure and unit tested, `expo-adapter.ts` is the only code that touches the OS. Event reminders use the account's default reminder. Turn it off if Google Calendar on the phone already shows Zenflow.
 
 ## Push and live notifications
 

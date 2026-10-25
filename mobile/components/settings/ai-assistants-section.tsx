@@ -16,7 +16,7 @@ import { zonedDate } from "@zenflow/core";
 import type { ApiAccessResponse, ApiTokenSummary } from "@zenflow/shared";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Linking, Pressable, View } from "react-native";
 
 function Divider() {
   return <View className="mx-4 h-px bg-border" />;
@@ -60,6 +60,16 @@ function AssistantSetup({ guides }: { guides: ApiAccessResponse["setup"] }) {
           );
         })}
       </View>
+      {guide.link ? (
+        <Pressable
+          onPress={() => void Linking.openURL(guide.link!.url)}
+          accessibilityRole="link"
+          testID={`api-access.link.${guide.id}`}
+          className="h-10 self-start justify-center rounded-full border border-border px-4 active:opacity-70"
+        >
+          <Text className="text-[14px] font-semibold text-primary">{guide.link.label}</Text>
+        </Pressable>
+      ) : null}
       <View className="gap-2">
         {guide.steps.map((step, index) => (
           <View key={step} className="flex-row gap-2.5">

@@ -203,7 +203,6 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
         originLng: values.originLocation?.trim() ? (values.originLng ?? null) : null,
         commuteMinutes: values.originLocation?.trim() && values.location?.trim() ? (values.commuteMinutes ?? null) : null,
         tags: [],
-        reminders: values.reminders ?? [],
         durationMinutes: values.duration ?? DRAFT_DURATION,
         deadline: values.deadline as string,
         ...(policy ? { infeasiblePolicy: policy } : {}),

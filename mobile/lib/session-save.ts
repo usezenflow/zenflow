@@ -30,7 +30,6 @@ export function valuesFromSession(session: Session, tz: string): SessionFormValu
     location: session.location ?? "",
     locationLat: session.locationLat,
     locationLng: session.locationLng,
-    reminders: session.reminders ?? [],
     duration: session.durationMinutes,
     deadline: session.deadline ?? "",
   };
@@ -73,9 +72,6 @@ export function patchFor(
     );
     patch.durationMinutes =
       hhmmToMinutes(values.endTime as string) - hhmmToMinutes(values.startTime as string);
-  }
-  if (names.has("reminders") && session.type !== "DND") {
-    patch.reminders = values.reminders ?? [];
   }
   return patch;
 }
@@ -153,11 +149,8 @@ export async function saveSession({
   );
 }
 
-/** Starting values for a plan that is not placed yet: a title, a deadline, one default reminder. */
-export function draftValues(
-  draft: { title: string; deadline: string },
-  reminderMinutes: number,
-): SessionFormValues {
+/** Starting values for a plan that is not placed yet: a title and a deadline. */
+export function draftValues(draft: { title: string; deadline: string }): SessionFormValues {
   return {
     type: "TASK",
     title: draft.title,
@@ -166,6 +159,5 @@ export function draftValues(
     note: "",
     location: "",
     deadline: draft.deadline,
-    reminders: reminderMinutes > 0 ? [reminderMinutes] : [],
   };
 }

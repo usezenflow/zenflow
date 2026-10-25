@@ -174,6 +174,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         dark: { backgroundColor: "#0F0D0A" },
       },
     ],
+    [
+      "expo-calendar",
+      {
+        calendarPermission: "Allow Zenflow to show your schedule in your calendar",
+        remindersPermission: false,
+      },
+    ],
     "expo-status-bar",
     "expo-web-browser",
     withAndroidBuildFixes,
