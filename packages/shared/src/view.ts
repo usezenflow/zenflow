@@ -1,8 +1,6 @@
 /** Active calendar view; drives the scheduling horizon. */
 export type ViewMode = "day" | "week" | "month";
 
-export const VIEW_MODES: ViewMode[] = ["day", "week", "month"];
-
 /** Atomic scheduling unit, in minutes. */
 export const SLOT_MINUTES = 15;
 

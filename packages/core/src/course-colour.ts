@@ -35,18 +35,3 @@ export function courseKeyHash(key: string): number {
   }
   return h >>> 0;
 }
-
-/**
- * The swatch index a course paints with: the user's pick when set, otherwise
- * the automatic colour, which is the course key's hash slot. The same key gets
- * the same colour on every device.
- */
-export function courseSwatchIndex(
-  key: string,
-  overrides: ReadonlyMap<string, number>,
-): number {
-  // Picks saved when there were 12 swatches wrap into the 6 that remain.
-  return (
-    (overrides.get(key) ?? courseKeyHash(key)) % COURSE_SWATCH_COUNT
-  );
-}

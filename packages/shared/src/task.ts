@@ -32,16 +32,6 @@ export interface Session {
    * upstream room for an ingested fixed session.
    */
   location: string | null;
-  /** Map point of `location`, when it was picked on the map. */
-  locationLat: number | null;
-  locationLng: number | null;
-  /** Where the commute starts: a campus place or free text, or `null`. */
-  originLocation: string | null;
-  /** Map point of `originLocation`, when known. */
-  originLat: number | null;
-  originLng: number | null;
-  /** Minutes to travel between the origin and the location, each way. The scheduler keeps it clear on both sides. */
-  commuteMinutes: number | null;
   /** Always a positive multiple of 15. */
   durationMinutes: number;
   /**
@@ -87,8 +77,6 @@ export interface Session {
    * exam. The key a {@link CourseColour} is stored under.
    */
   courseKey: string | null;
-  /** Minutes before start at which the user is reminded (max 2; always `[]` for DND). */
-  reminders: number[];
   /**
    * `true` when a scheduled `TASK` ends after its `deadline` (the user chose
    * "accept late deadline" — see {@link InfeasiblePolicy}). Clients render it
@@ -96,8 +84,6 @@ export interface Session {
    * for unscheduled tasks.
    */
   late: boolean;
-  /** The user skipped this session. Only non-TASK sessions can be skipped. Per occurrence for a recurring series. */
-  skipped: boolean;
   /**
    * Why the scheduler picked the current start. `null` when unscheduled, when
    * the start was set by the user or a move since, or for a fallback placement.
@@ -105,12 +91,6 @@ export interface Session {
   placementReason: PlacementReason | null;
   createdAt: string;
   updatedAt: string;
-  /**
-   * `true` when the user has marked this placed `TASK` done. Only present on
-   * `SessionDetailResponse` by default; the session list includes it too so
-   * calendar blocks and agenda rows can render the completed state.
-   */
-  done?: boolean;
 }
 
 /**
@@ -267,13 +247,6 @@ export interface DisplacedSession {
   to: string;
 }
 
-/** Max reminders per session. */
-export const MAX_REMINDERS_PER_SESSION = 2;
-/** Max lead time of a reminder (7 days), minutes. */
-export const MAX_REMINDER_MINUTES = 10080;
-/** Reminder created when `reminders` is omitted (non-DND). */
-export const DEFAULT_REMINDER_MINUTES = 60;
-
 /** Create a flexible study task — engine-scheduled, deadline-driven. */
 export interface CreateTaskInput {
   type: "TASK";
@@ -281,26 +254,11 @@ export interface CreateTaskInput {
   note?: string | null;
   /** Free-text location (room / building), optional. */
   location?: string | null;
-  /** Map point of `location`. `null` clears it; omit to leave unchanged. */
-  locationLat?: number | null;
-  locationLng?: number | null;
-  /** Where the commute starts, with its map point and travel minutes each way. */
-  originLocation?: string | null;
-  originLat?: number | null;
-  originLng?: number | null;
-  commuteMinutes?: number | null;
   /** Positive multiple of 15. */
   durationMinutes: number;
   /** ISO-8601 deadline — required for a `TASK`; shared by every session of a series. */
   deadline: string;
   tags?: string[];
-  /**
-   * Minutes-before-start reminders (max MAX_REMINDERS_PER_SESSION, each an
-   * integer 0 (at start) to MAX_REMINDER_MINUTES); not allowed for `DND`.
-   * Omitted on create -> one default reminder 60 min before start (non-DND);
-   * `[]` -> none. On update: omit to keep, an array replaces.
-   */
-  reminders?: number[];
   /** The lecture, exam or assignment this task prepares for. A recurring lecture occurrence id pins that occurrence. */
   prepForSessionId?: string;
   /** Answer to a prior 409 {@link ScheduleInfeasibleError}; omit on the first attempt. */
@@ -314,9 +272,6 @@ export interface CreateFixedSessionInput {
   note?: string | null;
   /** Free-text location (room / building), optional. */
   location?: string | null;
-  /** Map point of `location`. `null` clears it; omit to leave unchanged. */
-  locationLat?: number | null;
-  locationLng?: number | null;
   /** Positive multiple of 15 (the client derives it from start/end pickers). */
   durationMinutes: number;
   /** ISO-8601 instant — required; there is no deadline for a fixed session. */
@@ -328,13 +283,6 @@ export interface CreateFixedSessionInput {
    */
   rrule?: string | null;
   tags?: string[];
-  /**
-   * Minutes-before-start reminders (max MAX_REMINDERS_PER_SESSION, each an
-   * integer 0 (at start) to MAX_REMINDER_MINUTES); not allowed for `DND`.
-   * Omitted on create -> one default reminder 60 min before start (non-DND);
-   * `[]` -> none. On update: omit to keep, an array replaces.
-   */
-  reminders?: number[];
 }
 
 /** Create a do-not-disturb block, optionally recurring. */
@@ -344,21 +292,11 @@ export interface CreateDndInput {
   note?: string | null;
   /** Free-text location (room / building), optional. */
   location?: string | null;
-  /** Map point of `location`. `null` clears it; omit to leave unchanged. */
-  locationLat?: number | null;
-  locationLng?: number | null;
   durationMinutes: number;
   scheduledStartTime: string;
   /** RFC 5545 RRULE; omit for a one-off block. */
   rrule?: string | null;
   tags?: string[];
-  /**
-   * Minutes-before-start reminders (max MAX_REMINDERS_PER_SESSION, each an
-   * integer 0 (at start) to MAX_REMINDER_MINUTES); not allowed for `DND`.
-   * Omitted on create -> one default reminder 60 min before start (non-DND);
-   * `[]` -> none. On update: omit to keep, an array replaces.
-   */
-  reminders?: number[];
 }
 
 export type CreateSessionInput =
@@ -390,27 +328,10 @@ export interface UpdateSessionInput {
   note?: string | null;
   /** Free-text location (room / building). `null` clears it; omit to leave unchanged. */
   location?: string | null;
-  /** Map point of `location`. `null` clears it; omit to leave unchanged. */
-  locationLat?: number | null;
-  locationLng?: number | null;
-  /** Where the commute starts. `null` clears it; omit to leave unchanged. */
-  originLocation?: string | null;
-  /** Map point of `originLocation`. `null` clears it; omit to leave unchanged. */
-  originLat?: number | null;
-  originLng?: number | null;
-  /** Travel minutes each way, 0 to 180. `null` clears it; omit to leave unchanged. */
-  commuteMinutes?: number | null;
   durationMinutes?: number;
   /** ISO-8601 deadline (TASK only). Omit to leave unchanged. */
   deadline?: string;
   tags?: string[];
-  /**
-   * Minutes-before-start reminders (max MAX_REMINDERS_PER_SESSION, each an
-   * integer 0 (at start) to MAX_REMINDER_MINUTES); not allowed for `DND`.
-   * Omitted on create -> one default reminder 60 min before start (non-DND);
-   * `[]` -> none. On update: omit to keep, an array replaces.
-   */
-  reminders?: number[];
   scheduledStartTime?: string | null;
   /**
    * RFC 5545 RRULE — for a recurring fixed session (`DND` / `ASSIGNMENT` /
@@ -486,12 +407,6 @@ export interface SlotProposalFields {
  * its deadline (`services/bandit/README.md`) — no other session is moved.
  */
 export interface CreateSessionResponse extends Session, SlotProposalFields {
-  /**
-   * Reminder leads (minutes) not stored for at least one targeted session
-   * because their fire time was already past or under a minute away. Omitted
-   * when nothing was skipped. Recurring series are never skipped.
-   */
-  skippedReminders?: number[];
 }
 
 /**
@@ -507,23 +422,15 @@ export interface UpdateSessionResponse extends Session, SlotProposalFields {
   placementPlan?: PlacementPlan;
   /** Ids left untouched by a `skipConflicting` update because their new landing slot conflicted. */
   skippedSessionIds?: string[];
-  /**
-   * Reminder leads (minutes) not stored for at least one targeted session
-   * because their fire time was already past or under a minute away. Omitted
-   * when nothing was skipped. Recurring series are never skipped.
-   */
-  skippedReminders?: number[];
 }
 export interface SessionDetailResponse extends Session {
-  /** Whether the user tapped Done on this placed TASK (a `DONE` event exists). */
-  done: boolean;
   /** Chips explaining the placement; empty for fixed sessions and unplaced TASKs. */
   placementChips: PlacementChip[];
   /** Live prep `TASK`s linked to this session (or, for a recurring occurrence id, to that occurrence). */
   prepSessions: Session[];
   /**
-   * For a recurring occurrence id: the start of the next occurrence that is not
-   * skipped and has no prep plan yet, else `null`.
+   * For a recurring occurrence id: the start of the next occurrence that has no
+   * prep plan yet, else `null`.
    */
   nextPrepOccurrenceStart: string | null;
   /** For a prep plan: the lecture occurrence, exam or assignment it prepares for, else `null`. */
@@ -587,11 +494,6 @@ export interface RemoveSessionSeriesResponse {
  */
 export interface RemoveTimetableGroupResponse {
   removedSessionIds: string[];
-}
-
-/** `POST /sessions/timetable-group/:sessionId/skip` and `/skip/from`: the meetings skipped. */
-export interface SkipTimetableGroupResponse {
-  skippedSessionIds: string[];
 }
 
 /**

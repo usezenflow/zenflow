@@ -1,6 +1,7 @@
 /**
- * Personal API access for AI assistants (MCP and REST). A token is shown once,
- * stored only as an HMAC, and sent as `Authorization: Bearer zf_...`.
+ * AI assistant access (MCP and REST). Assistants sign in through OAuth; scripts
+ * can use a personal token, shown once, stored only as an HMAC and sent as
+ * `Authorization: Bearer zf_...`.
  */
 
 export interface ApiTokenSummary {
@@ -17,6 +18,8 @@ export interface AssistantSetupGuide {
   id: string;
   /** Tab label, e.g. "ChatGPT". */
   label: string;
+  /** Opens the assistant's own settings page for adding the connection. */
+  link?: { label: string; url: string };
   steps: string[];
   code?: string;
 }

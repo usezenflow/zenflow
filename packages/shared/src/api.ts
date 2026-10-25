@@ -14,15 +14,6 @@ export interface ApiError {
   field?: string;
 }
 
-export interface SchedulingRationale {
-  /** Human-readable summary, e.g. "You usually keep work in the morning". */
-  summary: string;
-  /** Dominant preferred work window (minutes-from-midnight), if any. */
-  preferredWindow?: { startMin: number; endMin: number } | null;
-  /** Top day×block cells that drove the pick (matrix coords + score). */
-  topCells?: { day: number; block: number; score: number }[];
-}
-
 /** 7×24 signed preference matrix for the Insights heatmap. */
 export interface PreferenceMatrixResponse {
   /** Flat 168-element float row-major [day0..6][block0..23], signed scores.

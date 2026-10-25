@@ -1,8 +1,6 @@
 import * as z from "zod";
 import {
   DAILY_HORIZON,
-  MAX_REMINDERS_PER_SESSION,
-  MAX_REMINDER_MINUTES,
   SLOT_MINUTES,
   type Session,
 } from "@zenflow/shared";
@@ -54,14 +52,6 @@ export const sessionSchema = z
     note: z.string().optional(),
     /** Free-text location (room / building). Optional for every session type. */
     location: z.string().optional(),
-    /** Map point of `location`, when it was picked on the map. */
-    locationLat: z.number().nullable().optional(),
-    locationLng: z.number().nullable().optional(),
-    /** Where the commute starts, its map point and travel minutes each way. */
-    originLocation: z.string().nullable().optional(),
-    originLat: z.number().nullable().optional(),
-    originLng: z.number().nullable().optional(),
-    commuteMinutes: z.number().nullable().optional(),
 
     // TASK-only
     duration: z
@@ -72,15 +62,6 @@ export const sessionSchema = z
       .max(DAILY_HORIZON, { error: "Session duration must be at most 24 hours" })
       .optional(),
     deadline: z.string().optional(),
-
-    /**
-     * Minutes-before-start reminders (max `MAX_REMINDERS_PER_SESSION`). Omitted
-     * = server default (one hour before, non-DND). Never sent for DND.
-     */
-    reminders: z
-      .array(z.int().min(0).max(MAX_REMINDER_MINUTES))
-      .max(MAX_REMINDERS_PER_SESSION)
-      .optional(),
 
     // Fixed / DND
     date: z.string().optional(),
@@ -167,13 +148,6 @@ export const sessionSchema = z
   });
 
 export type SessionFormValues = z.infer<typeof sessionSchema>;
-
-/**
- * The edit form never changes `type`, so it validates the same flat shape.
- * Kept as a separate export in case the edit surface needs to diverge.
- */
-export const editSessionSchema = sessionSchema;
-export type EditSessionFormValues = SessionFormValues;
 
 /**
  * Client-side signal for why a session's placement is unusual — the backend

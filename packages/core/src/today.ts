@@ -1,5 +1,6 @@
 import type { Session, SessionType } from "@zenflow/shared";
-import { isZonedToday, zonedDate } from "./tz";
+import { isSameDay } from "date-fns";
+import { zonedDate } from "./tz";
 
 /** Session types the Today card lists. DND blocks are protected time, not work. */
 export const TODAY_TYPES: readonly SessionType[] = ["TASK", "ASSIGNMENT", "EXAM", "LECTURE"];
@@ -30,9 +31,9 @@ export function buildToday(sessions: Session[], now: Date, tz: string): TodayVie
 
   for (const s of sessions) {
     if (!TODAY_TYPES.includes(s.type)) continue;
-    if (s.scheduledStartTime === null || s.skipped) continue;
+    if (s.scheduledStartTime === null) continue;
     const start = new Date(s.scheduledStartTime);
-    if (!isZonedToday(zonedDate(start, tz), tz)) continue;
+    if (!isSameDay(zonedDate(start, tz), zonedDate(now, tz))) continue;
     const end = new Date(start.getTime() + s.durationMinutes * 60_000);
     if (end.getTime() <= now.getTime()) continue;
     items.push({

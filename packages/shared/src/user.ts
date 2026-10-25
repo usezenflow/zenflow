@@ -9,14 +9,6 @@ export const DEFAULT_USER_NAME = "New User";
 export const LANGS = ["vi", "en"] as const;
 export type Lang = (typeof LANGS)[number];
 
-/** How the user gets to campus. Mirrors the DB `CommuteTransport` enum. */
-export const COMMUTE_TRANSPORTS = ["MOTORCYCLE", "CAR", "BIKE", "WALK"] as const;
-export type CommuteTransport = (typeof COMMUTE_TRANSPORTS)[number];
-
-/** Allowed values of `defaultReminderMinutes` (0 = none). */
-export const DEFAULT_REMINDER_CHOICES = [0, 5, 10, 15, 30, 60] as const;
-export type DefaultReminderChoice = (typeof DEFAULT_REMINDER_CHOICES)[number];
-
 /**
  * A user's scheduling preferences. Used to carry just `timezone` — the
  * working-window fields (workStart/workEnd/workDays) were dropped from
@@ -29,12 +21,6 @@ export interface UserPreferences {
   timezone: string;
   /** UI language. Maps to the DB enum VI_VN / EN_US. */
   lang: Lang;
-  /**
-   * Lead time (minutes) of the reminder given to a new session when the
-   * request omits `reminders`. One of {@link DEFAULT_REMINDER_CHOICES};
-   * 0 = no default reminder. DND sessions never get one.
-   */
-  defaultReminderMinutes: DefaultReminderChoice;
 }
 
 export interface User extends UserPreferences {
@@ -47,12 +33,6 @@ export interface User extends UserPreferences {
   onboardedAt: string | null;
   /** User intent for native push notifications; in-app notifications are unaffected. */
   allowNotifications: boolean;
-  /** Vehicle for commute routes; `null` reads as MOTORCYCLE. */
-  defaultTransport: CommuteTransport | null;
-  /** Where trips to campus start; the point is set together with the name. Null = not set. */
-  homeLocation: string | null;
-  homeLat: number | null;
-  homeLng: number | null;
 }
 
 /** Partial update to a user's name and preferences. */
@@ -61,12 +41,6 @@ export interface UpdateUserInput {
   /** Valid IANA zone. Affects only future scheduling/rendering. */
   timezone?: string;
   lang?: Lang;
-  defaultReminderMinutes?: DefaultReminderChoice;
-  defaultTransport?: CommuteTransport;
-  /** Set the three together; `null` clears them. */
-  homeLocation?: string | null;
-  homeLat?: number | null;
-  homeLng?: number | null;
   /**
    * `true` marks onboarding complete (sets `onboardedAt` to now if still
    * null; idempotent — never moves an existing timestamp). Can't be unset.

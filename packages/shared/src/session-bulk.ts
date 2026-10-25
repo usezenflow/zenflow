@@ -1,11 +1,12 @@
 /**
- * Bulk session create: `POST /sessions/bulk` and the token API. Items are
- * saved in order; a failing item does not stop the rest.
+ * Bulk session create and delete for assistants: `POST /sessions/bulk`,
+ * `POST /sessions/bulk-delete` and the MCP tools. Items run in order; a failing
+ * item does not stop the rest.
  */
 import type { CreateSessionInput } from "./task";
 
-/** Most sessions one bulk request creates. */
-export const MAX_BULK_SESSIONS = 20;
+/** Most items one bulk request creates or deletes. */
+export const MAX_BULK_SESSIONS = 50;
 
 /** `POST /sessions/bulk` body. `items` holds 1 to `MAX_BULK_SESSIONS` entries. */
 export interface BulkCreateSessionsInput {
@@ -28,4 +29,56 @@ export type BulkCreateItemResult =
 export interface BulkCreateSessionsResponse {
   dryRun: boolean;
   results: BulkCreateItemResult[];
+}
+
+/**
+ * What one delete item removes: a `session` (an occurrence id removes that
+ * occurrence), a whole recurring `series`, or a `timetable` group, which is
+ * every meeting of the course (`all`) or this meeting and later ones (`following`).
+ */
+export type BulkDeleteKind = "session" | "series" | "timetable";
+
+export interface BulkDeleteItem {
+  kind: BulkDeleteKind;
+  id: string;
+  /** Timetable only. Default `all`. */
+  scope?: "all" | "following";
+}
+
+/** `POST /sessions/bulk-delete` body. `items` holds 1 to `MAX_BULK_SESSIONS` entries. */
+export interface BulkDeleteSessionsInput {
+  /** Describe what would go without deleting anything. */
+  dryRun?: boolean;
+  items: BulkDeleteItem[];
+}
+
+export type BulkDeleteItemResult =
+  | {
+      index: number;
+      status: "DELETED";
+      kind: BulkDeleteKind;
+      id: string;
+      removed: number;
+    }
+  | {
+      index: number;
+      status: "PREVIEW";
+      kind: BulkDeleteKind;
+      id: string;
+      title: string;
+      count: number;
+    }
+  | {
+      index: number;
+      status: "ERROR";
+      kind: BulkDeleteKind;
+      id: string;
+      code: string;
+      message: string;
+    };
+
+/** `POST /sessions/bulk-delete` response data. `results` follows the item order. */
+export interface BulkDeleteSessionsResponse {
+  dryRun: boolean;
+  results: BulkDeleteItemResult[];
 }

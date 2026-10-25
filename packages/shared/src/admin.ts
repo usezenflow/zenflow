@@ -41,16 +41,16 @@ export interface EngagementResponse {
  * Per primary policy, PYTHON placements only. Counts come from `SlotProposal`
  * and the `SessionEvent` rows of each session's latest proposal.
  * `dragMinutes` is the mean of |dragDistanceMinutes| over MOVE rows.
- * `reward` is the mean `rewardScore` over START and MOVE rows.
- * `due` counts placed sessions whose slot has passed. The start rate is
- * `events.START / due` (ADR-0035).
+ * `reward` is the mean `rewardScore` over KEPT and MOVE rows.
+ * `due` counts placed sessions whose slot has passed. The kept rate is
+ * `events.KEPT / due` (ADR-0042).
  */
 export interface PolicyQuality {
   policy: AdminPolicy;
   proposals: number;
   acceptedUnmodified: number;
   due: number;
-  events: { START: number; MOVE: number };
+  events: { KEPT: number; MOVE: number };
   dragMinutes: number;
   reward: number;
 }

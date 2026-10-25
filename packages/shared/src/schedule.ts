@@ -37,10 +37,6 @@ export interface Event {
   location?: string | null;
   /** The course the session belongs to (see {@link Session.courseKey}), or null. */
   courseKey?: string | null;
-  /** One-way travel minutes kept clear on each side of the session, or null. */
-  commuteMinutes?: number | null;
-  /** `true` when the user has marked this placed `TASK` done. */
-  done?: boolean;
 }
 
 /**
