@@ -138,6 +138,20 @@ export function ScheduledBlockItem({
   const clearHighlight = useHighlightStore((s) => s.clearHighlight);
   const isHighlighted = highlightSessionId === block.taskId;
 
+  // Completion animation: detect when block becomes done
+  const wasDone = useRef(Boolean(block.done));
+  const [showCompletion, setShowCompletion] = useState(false);
+  useEffect(() => {
+    const nowDone = Boolean(block.done);
+    if (nowDone && !wasDone.current) {
+      wasDone.current = true;
+      setShowCompletion(true);
+      const t = setTimeout(() => setShowCompletion(false), 900);
+      return () => clearTimeout(t);
+    }
+    if (!nowDone) wasDone.current = false;
+  }, [block.done]);
+
   const startMin = minutesOfDay(block.start, tz);
   // A segment ending exactly at the next midnight has minutesOfDay() === 0;
   // treat that as the full-day bottom (1440) so the block fills to the boundary.
@@ -385,6 +399,7 @@ export function ScheduledBlockItem({
   const late = useIsLate(block.taskId);
   const width = 100 / layout.columns;
   const leftPct = layout.column * width;
+  const isDone = Boolean(block.done);
   // A short session fully contained inside another block's time range renders
   // stacked on top of it — full (container) width, inset down-and-right —
   // instead of splitting both into unreadably-narrow side-by-side columns.
@@ -529,7 +544,7 @@ export function ScheduledBlockItem({
         )}
         <div
           className={cn(
-            "relative flex h-full overflow-hidden rounded-[14px] border shadow-sm transition-[box-shadow,background-color,border-color,color] duration-200 hover:shadow-md backdrop-blur-lg",
+            "relative flex h-full overflow-hidden rounded-[14px] shadow-sm transition-[box-shadow,background-color,border-color,color] duration-200 hover:shadow-md backdrop-blur-lg",
             // While shrinking, outline the block in rose so the removed extent
             // reads distinctly from a normal resize.
             preview && deltaMinutes < 0 && "ring-1 ring-rose-400/60",
@@ -547,11 +562,18 @@ export function ScheduledBlockItem({
             block.continued && "border-t-0 border-dashed",
             SESSION_TONE_CLASSES[tone].tint,
             SESSION_TONE_CLASSES[tone].text,
+            // Done state: glass gray background, lime left accent, faded text
+            // Must include dark: variant to override tone's dark:bg-*
+            isDone && "border-0 border-l-4 border-brand-lime bg-background/80 dark:bg-background/80 backdrop-blur-xl opacity-60",
             // Ring-glow pulse that fires once after the task is created so the
             // user's eye is drawn to where it landed on the grid.
             isHighlighted && "animate-block-highlight",
           )}
-          style={{ borderColor: hexAlpha(SESSION_TONES[tone].base, 0.55) }}
+          style={
+            isDone
+              ? {}
+              : { borderColor: hexAlpha(SESSION_TONES[tone].base, 0.55) }
+          }
           onAnimationEnd={isHighlighted ? clearHighlight : undefined}
         >
           {holding && (
@@ -560,9 +582,16 @@ export function ScheduledBlockItem({
               className="animate-block-wipe pointer-events-none absolute inset-0"
             />
           )}
+          {showCompletion && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 animate-block-highlight"
+              style={{ boxShadow: "0 0 0 0 oklch(0.74 0.195 124 / 0.7), 0 0 20px oklch(0.74 0.195 124 / 0.4)" }}
+            />
+          )}
           <span
             aria-hidden
-            className="pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[3px] rounded-full"
+            className={cn("pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[3px] rounded-full", isDone && "hidden")}
             style={{ backgroundColor: SESSION_TONES[tone].base }}
           />
           {isCompact ? (
@@ -571,7 +600,7 @@ export function ScheduledBlockItem({
                 {block.continued && (
                   <CornerDownRight className="h-3 w-3 shrink-0 text-muted-foreground" />
                 )}
-                <span className="truncate text-[11px] font-semibold leading-none">
+                <span className={cn("truncate text-[11px] font-semibold leading-none", isDone && "line-through")}>
                   {block.title}
                 </span>
                 {late && <OverdueBadge iconOnly />}
@@ -588,7 +617,7 @@ export function ScheduledBlockItem({
                 {block.continued && (
                   <CornerDownRight className="h-3 w-3 shrink-0 text-muted-foreground" />
                 )}
-                <span className="truncate text-[12px] font-semibold leading-4">
+                <span className={cn("truncate text-[12px] font-semibold leading-4", isDone && "line-through")}>
                   {block.title}
                 </span>
               </div>

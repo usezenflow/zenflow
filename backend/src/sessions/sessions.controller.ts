@@ -21,7 +21,12 @@ import { DeadlineOptionsDto } from "./dto/deadline-options.dto";
 import { SearchSessionsDto } from "./dto/search-sessions.dto";
 import { SessionSearchService } from "./session-search.service";
 import { SignNoteFilesInterceptor } from "./sign-note-files.interceptor";
-import { CookieAuthGuard } from "../auth/guards";
+import {
+  AllowApiToken,
+  ApiTokenOnly,
+} from "../api-access/allow-api-token.decorator";
+import { ApiTokenGuard } from "../api-access/api-token.guard";
+import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
 import { CurrentUser } from "../users/decorators/current-user.decorator";
 import { type User } from "../../generated/prisma";
 import { deadlineOptions } from "./utils/deadline-options";
@@ -29,7 +34,7 @@ import { ConfirmPlacementDto } from "./dto/confirm-placement.dto";
 import { PlacementPlanService } from "./placement-plan.service";
 
 @Controller("sessions")
-@UseGuards(CookieAuthGuard)
+@UseGuards(ApiTokenGuard)
 @UseInterceptors(SignNoteFilesInterceptor)
 export class SessionsController {
   constructor(
@@ -106,7 +111,26 @@ export class SessionsController {
     return { success: true, message: "Session created", data };
   }
 
+  /** Up to 20 sessions in one call, each created or proposed on its own. Assistants only. */
+  @Post("bulk")
+  @ApiTokenOnly()
+  async bulkCreate(
+    @Body() dto: BulkCreateSessionsDto,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.bulkCreate(dto, user);
+    const created = data.results.filter((r) => r.status === "CREATED").length;
+    return {
+      success: true,
+      message: data.dryRun
+        ? `Proposed ${data.results.length} sessions`
+        : `Created ${created} of ${data.results.length} sessions`,
+      data,
+    };
+  }
+
   @Get()
+  @AllowApiToken()
   async list(@Query() dto: ListSessionsDto, @CurrentUser() user: User) {
     const data = await this.sessionsService.list(dto, user);
     return {
@@ -132,6 +156,7 @@ export class SessionsController {
 
   // NOTE: must precede @Get(":id") so "search" isn't matched as an :id.
   @Get("search")
+  @AllowApiToken()
   async search(@Query() dto: SearchSessionsDto, @CurrentUser() user: User) {
     const data = await this.searchService.search(dto, user);
     return {
@@ -149,6 +174,7 @@ export class SessionsController {
   }
 
   @Get(":id")
+  @AllowApiToken()
   async findOne(@Param("id") id: string, @CurrentUser() user: User) {
     const data = await this.sessionsService.findById(id, user);
     return { success: true, message: "Found session", data };
@@ -214,6 +240,18 @@ export class SessionsController {
   async start(@Param("id") id: string, @CurrentUser() user: User) {
     const data = await this.sessionsService.recordStart(id, user);
     return { success: true, message: "Start recorded", data };
+  }
+
+  @Post(":id/done")
+  async markDone(@Param("id") id: string, @CurrentUser() user: User) {
+    const data = await this.sessionsService.markDone(id, user);
+    return { success: true, message: "Marked done", data };
+  }
+
+  @Delete(":id/done")
+  async clearDone(@Param("id") id: string, @CurrentUser() user: User) {
+    const data = await this.sessionsService.clearDone(id, user);
+    return { success: true, message: "Done cleared", data };
   }
 
   // NOTE: must precede @Delete(":id") so "series" isn't matched as an :id.

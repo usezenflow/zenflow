@@ -1187,7 +1187,7 @@ export function DayTimeline({
               {hourLineMins.map((min) => (
                 <View
                   key={min}
-                  className="absolute left-0 right-0 bg-border/50"
+                  className="absolute left-0 right-0 bg-muted-foreground/40"
                   style={{
                     top: minToY(grid, min),
                     height: 1,
@@ -1242,7 +1242,7 @@ export function DayTimeline({
                 {hourLineMins.map((min) => (
                   <View
                     key={min}
-                    className="absolute left-0 right-0 bg-border/50"
+                    className="absolute left-0 right-0 bg-muted-foreground/40"
                     style={{
                       top: minToY(grid, min),
                       height: 1,

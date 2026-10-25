@@ -21,7 +21,6 @@ import { GlassIconButton } from "@/components/ui/glass-button";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { BusyOr, DelayedSpinner } from "@/components/ui/delayed-spinner";
-import { SlotPickDialog } from "@/components/tasks/slot-pick-dialog";
 import {
   TimetableScopeSheet,
   type TimetableScope,
@@ -44,7 +43,7 @@ import {
   deriveState,
   sessionTone,
 } from "@zenflow/core";
-import type { CreateSessionInput, CreateSessionResponse, PlacementPlan, Session } from "@zenflow/shared";
+import type { CreateSessionInput, PlacementPlan, Session } from "@zenflow/shared";
 import { Check, SkipForward, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/lib/notify";
@@ -88,7 +87,6 @@ export function SessionDetailSheet({
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [timetableScopeOpen, setTimetableScopeOpen] = useState(false);
-  const [pendingPick, setPendingPick] = useState<CreateSessionResponse | null>(null);
   const dirty = useRef(new Set<keyof SessionForm>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -243,11 +241,7 @@ export function SessionDetailSheet({
       if (!created) return; // dismissed the infeasible prompt
       notifyDisplaced(created);
       newUploadsRef.current = [];
-      if (created.divergent && created.slotProposalId && created.alternativeSlot) {
-        setPendingPick(created);
-      } else {
-        finishCreate(created);
-      }
+      finishCreate(created);
     } catch (error) {
       const plan = getPlacementPlan(error);
       if (plan) {
@@ -481,28 +475,6 @@ export function SessionDetailSheet({
         onOpenChange={setTimetableScopeOpen}
         onChoose={(scope) => void chooseTimetableScope(scope)}
       />
-
-
-      {pendingPick && pendingPick.slotProposalId && pendingPick.alternativeSlot && (
-        <SlotPickDialog
-          open
-          sessionId={pendingPick.id}
-          slotProposalId={pendingPick.slotProposalId}
-          primarySlot={pendingPick.primarySlot ?? pendingPick.scheduledStartTime ?? ""}
-          alternativeSlot={pendingPick.alternativeSlot}
-          title={pendingPick.title}
-          tz={tz}
-          onResolved={(s) => {
-            setPendingPick(null);
-            finishCreate(s);
-          }}
-          onDismiss={() => {
-            const s = pendingPick;
-            setPendingPick(null);
-            finishCreate(s);
-          }}
-        />
-      )}
     </>
   );
 }

@@ -1,6 +1,6 @@
 # Offline evaluation: hour-level LinUCB against a fair heuristic
 
-Simulated study of how Zenflow should choose the start time of a study block. Methods, simulator and statistics are in [eval-protocol.md](./eval-protocol.md). All students are simulated, so the results show behaviour under stated assumptions, not real-world lift. Code `4e29cf58` plus uncommitted changes. Every table was re-run on 23 Oct 2026, and the archives in [eval-data](./eval-data/) are from those runs.
+Simulated study of how Zenflow should choose the start time of a study block. Methods, simulator and statistics are in [eval-protocol.md](./eval-protocol.md). All students are simulated, so the results show behaviour under stated assumptions, not real-world lift. Code `8e2406a6` plus uncommitted changes. Every table was re-run on 23 Oct 2026, and the archives in [eval-data](./eval-data/) are from those runs.
 
 | Name | Meaning | Status |
 |---|---|---|
@@ -146,7 +146,7 @@ A start at hour `h` updates neighbouring hours with a Gaussian weight, and a sta
 - **Two L24N implementations.** The main table and the ladder's L24N ref row use the offline reference (`evalx/hourly.py`), which has no series, displacement, last-resort or 409 rules. The production placer has them. The production rows appear in the floor and ceiling, the ladder, the robustness table and the parity check. On 1,000 students (seeds 500 to 509) the production placer gives 31.6% against 32.2% for the reference, and H+K gives 24.7%.
 - **L6 cannot be reproduced.** The six-band code is gone from the repository, and the current `L` arm runs the 24-arm placer. Its 31.4% on seeds 600 to 699 is not the 28.0% on seeds 500 to 599. Its results are archived in [fresh-500-l6-historical](./eval-data/fresh-500-l6-historical-results.json) and are historical only. The L24N-against-L6 gap is not rechecked on current code, and the L6-to-L24 step is not measured.
 - **Kernel width was tuned.** It was chosen on tuning seeds and is not re-tuned on the fresh seeds.
-- **Latency.** L24N has not been timed. The `place` p95 check in the ship rule is still to run.
+- **Latency.** Timed in `evalx.bench`: L24N place p95 is 0.98 ms (mean 0.82 ms, p99 1.09 ms), well within the placement SLA.
 - **One timetable.** Each student has one weekly timetable with no rescheduled classes.
 
 ## 5. Seed ledger

@@ -87,7 +87,9 @@ def test_rewards_match_the_backend() -> None:
         _ts_constant("MIN_ALTERNATIVE_GAP_MINUTES")
         == harness.MIN_ALTERNATIVE_GAP_MINUTES
     )
-    assert harness.START_REWARD == 1.0  # ADR-0035
+    assert consts.DONE_REWARD == 1.0  # ADR-0035
+    assert consts.START_REWARD == 0.0  # telemetry only
+    assert consts.SKIP_REWARD == -1.0
     assert harness.CFG["move_scale"] == consts.MOVE_REWARD_SCALE_MINUTES
 
 
@@ -274,6 +276,7 @@ def _passive(**kw: Any) -> Any:
         "attention": 0.5,
         "imminence": 0.0,
         "respond": 0.5,
+        "skip_chance": 0.2,
     }
     return PassiveStudent(**{**base, **kw})
 
@@ -284,9 +287,9 @@ def test_passive_start_chance_follows_the_clock() -> None:
     s, cal = _passive(), Calendar({})
     t = make_tasks(random.Random(1), 1, 1)[0]
     day = 10 * consts.DAY_MS
-    evening = s.start_chance(t, day + 20 * 3_600_000, cal)
-    morning = s.start_chance(t, day + 9 * 3_600_000, cal)
-    night = s.start_chance(t, day + 3 * 3_600_000, cal)
+    evening = s.done_chance(t, day + 20 * 3_600_000, cal)
+    morning = s.done_chance(t, day + 9 * 3_600_000, cal)
+    night = s.done_chance(t, day + 3 * 3_600_000, cal)
     assert evening > morning > night
     assert night <= 0.1 * s.attention
 
@@ -308,7 +311,7 @@ def test_passive_zero_drag_never_moves() -> None:
     for i, t in enumerate(make_tasks(random.Random(2), 4, 3)):
         start = t.arrival_ms + (i % 24) * 3_600_000
         _, signal, applied, _ = s.react(t, start, Calendar({}))
-        assert signal in (None, "START") and applied == start
+        assert signal in (None, "DONE", "SKIP") and applied == start
 
 
 def test_passive_population_is_seeded_and_mixed() -> None:
@@ -331,7 +334,7 @@ def test_passive_oracle_beats_a_fixed_slot() -> None:
     best = s.oracle_start(t, cal)
     assert best is not None
     worst = t.arrival_ms - (t.arrival_ms % consts.DAY_MS) + 3 * 3_600_000
-    assert s.start_chance(t, best, cal) > s.start_chance(t, worst, cal)
+    assert s.done_chance(t, best, cal) > s.done_chance(t, worst, cal)
 
 
 # --- Semester arms -------------------------------------------------------------
@@ -397,7 +400,7 @@ def test_semester_oracle_is_the_ceiling_and_rand_the_floor() -> None:
 
     part = _semester_run(0, 10)
     res = semester.merge([part], semester.SEMESTER_ARMS, {})
-    a = {k: v["adherence"]["mean"] for k, v in res["arms"].items()}
+    a = {k: v["done_rate"]["mean"] for k, v in res["arms"].items()}
     assert a["Oracle"] > a["L"] > a["Rand"]
     assert a["Oracle"] > a["H"] > a["Rand"]
     assert set(res["regret"]) == set(semester.SEMESTER_ARMS) - {"Oracle"}
@@ -473,11 +476,11 @@ def test_feedback_gates_delays_and_defaults_to_passthrough() -> None:
 
     try:
         feed = Feedback([(0.5, 0.5)])
-        assert feed.seen(0, "START") == "START" and feed.seen(0, None) is None
+        assert feed.seen(0, "DONE") == "DONE" and feed.seen(0, None) is None
         harness.configure({"detect": 0.4})
-        assert feed.seen(0, "START") is None
+        assert feed.seen(0, "DONE") is None
         harness.configure({"detect": 1.0, "false_start": 0.6})
-        assert feed.seen(0, None) == "START" and feed.seen(0, "MOVE") == "MOVE"
+        assert feed.seen(0, None) == "DONE" and feed.seen(0, "MOVE") == "MOVE"
         harness.configure({"false_start": 0.0, "delay": 2})
         hits: list[int] = []
         feed.defer(0, lambda: hits.append(0))

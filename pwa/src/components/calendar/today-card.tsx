@@ -1,5 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { BookOpen, CalendarClock, FileText, GraduationCap, Play, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  BookOpen,
+  CalendarClock,
+  ChevronDown,
+  FileText,
+  GraduationCap,
+  Play,
+  Sparkles,
+  X,
+} from "lucide-react";
 import {
   buildToday,
   deriveState,
@@ -17,6 +26,7 @@ import { useUserStore } from "@/hooks/use-user-store";
 import { filterHidden } from "@/lib/hidden-sessions";
 import { t } from "@/lib/i18n";
 import { apiErrorMessage, errorToast } from "@/lib/toast";
+import { toast } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { zonedDate } from "@/utils/tz";
 import { format } from "date-fns";
@@ -29,7 +39,6 @@ const TYPE_ICON: Record<SessionType, typeof BookOpen> = {
   DND: CalendarClock,
 };
 
-/** Shown as the type chip. Keys are catalogue strings, translated at render. */
 const TYPE_LABEL: Record<SessionType, string> = {
   LECTURE: "Lecture",
   ASSIGNMENT: "Assignment",
@@ -38,7 +47,6 @@ const TYPE_LABEL: Record<SessionType, string> = {
   DND: "Busy",
 };
 
-/** A short countdown to `start`, rounded to 5 minutes. */
 function untilLabel(start: Date, now: Date): string {
   const minutes = Math.round((start.getTime() - now.getTime()) / 60_000 / 5) * 5;
   if (minutes <= 0) return t("Now");
@@ -74,14 +82,16 @@ function Hourly({ items, tz }: { items: TodayItem[]; tz: string }) {
 }
 
 /**
- * The day at a glance, laid out like a weather widget: the current item large
- * up top with its countdown, and the rest of the day as an hourly strip below.
+ * Floating pill showing what's up next. Tap to expand into a card.
+ * Lives in a portal so it floats above the calendar grid.
  */
 export function TodayCard() {
   const tz = useUserStore((s) => s.user?.timezone) || "UTC";
   const now = useNow();
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -99,6 +109,18 @@ export function TodayCard() {
     return () => window.removeEventListener("zenflow:calendar-refresh", refresh);
   }, [load]);
 
+  // Close expanded card when clicking outside
+  useEffect(() => {
+    if (!expanded) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setExpanded(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [expanded]);
+
   if (!sessions) return null;
 
   const view: TodayView = buildToday(sessions, now, tz);
@@ -106,13 +128,22 @@ export function TodayCard() {
 
   if (!next) {
     return (
-      <section className="flex items-center justify-between gap-4 rounded-3xl bg-gradient-to-br from-amber-200/70 via-orange-200/60 to-rose-200/60 p-5 text-stone-800 dark:from-amber-900/40 dark:via-orange-900/30 dark:to-rose-900/30 dark:text-stone-100">
-        <div className="min-w-0">
-          <p className="text-sm opacity-80">{t("Today")}</p>
-          <p className="mt-2 text-3xl font-semibold tracking-tight">{t("Nothing left today")}</p>
-        </div>
-        <EmptyMark size={64} />
-      </section>
+      <div
+        ref={cardRef}
+        className={cn(
+          "fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4",
+          "glass-panel rounded-2xl border border-border shadow-xl",
+          "animate-in fade-in-0 slide-in-from-bottom-2 duration-200",
+        )}
+      >
+        <section className="flex items-center justify-between gap-4 p-4">
+          <div className="min-w-0">
+            <p className="text-sm opacity-80">{t("Today")}</p>
+            <p className="mt-2 text-3xl font-semibold tracking-tight">{t("Nothing left today")}</p>
+          </div>
+          <EmptyMark size={64} />
+        </section>
+      </div>
     );
   }
 
@@ -126,6 +157,7 @@ export function TodayCard() {
     try {
       await startSession(next.id);
       window.dispatchEvent(new CustomEvent("zenflow:calendar-refresh"));
+      toast.success(t("Session started"), { icon: "calendar-check" });
     } catch (error) {
       errorToast(apiErrorMessage(error, t("Could not start this session")));
     } finally {
@@ -133,47 +165,112 @@ export function TodayCard() {
     }
   }
 
-  return (
-    <section
-      className={cn(
-        "flex flex-col gap-4 rounded-3xl p-5 shadow-sm",
-        "bg-gradient-to-br from-sky-200/70 via-indigo-100/60 to-violet-200/60 text-stone-800",
-        "dark:from-sky-900/50 dark:via-indigo-900/40 dark:to-violet-900/40 dark:text-stone-100",
-      )}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span
-          className={cn(
-            "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-            tone.badge,
-          )}
-        >
-          <Icon className="size-3.5" aria-hidden />
-          {t(started ? "On now" : "Up next")}
-        </span>
-        <span className="text-sm font-medium tabular-nums opacity-80">
-          {untilLabel(next.start, now)}
-        </span>
-      </div>
-
-      <div className="min-w-0">
-        <p className="truncate text-3xl font-semibold tracking-tight">{next.title}</p>
-        <p className="text-sm opacity-70">{t(TYPE_LABEL[next.type])}</p>
-        <p className="mt-1 text-sm tabular-nums opacity-80">
+  const pillContent = (
+    <div className="flex items-center gap-3 w-full">
+      <span
+        className={cn(
+          "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium",
+          tone.badge,
+        )}
+      >
+        <Icon className="size-3.5" aria-hidden />
+        {t(started ? "On now" : "Up next")}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-semibold">{next.title}</p>
+        <p className="truncate text-xs opacity-70">
           {t("{start} to {end}", {
             start: format(zonedDate(next.start, tz), "HH:mm"),
             end: format(zonedDate(next.end, tz), "HH:mm"),
           })}
         </p>
       </div>
-
-      <div className="flex items-end justify-between gap-3">
-        <Hourly items={view.later} tz={tz} />
-        <Button size="sm" className="shrink-0 rounded-full" disabled={busy} onClick={start}>
-          <Play className="size-4" aria-hidden />
-          {t("Start")}
-        </Button>
-      </div>
-    </section>
+      <span className="text-sm font-medium tabular-nums opacity-80 shrink-0">
+        {untilLabel(next.start, now)}
+      </span>
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        aria-label={t("Expand")}
+      >
+        <ChevronDown className="size-4" />
+      </button>
+    </div>
   );
+
+  const cardContent = (
+    <div
+      ref={cardRef}
+      className={cn(
+        "fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4",
+        "glass-panel rounded-2xl border border-border shadow-xl",
+        expanded
+          ? "animate-in fade-in-0 slide-in-from-bottom-2 duration-200"
+          : "animate-out fade-out-0 slide-out-to-bottom-2 duration-150",
+      )}
+    >
+      <section className="flex flex-col gap-4 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span
+              className={cn(
+                "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium",
+                tone.badge,
+              )}
+            >
+              <Icon className="size-3.5" aria-hidden />
+              {t(started ? "On now" : "Up next")}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xl font-semibold tracking-tight">{next.title}</p>
+              <p className="text-sm opacity-70">{t(TYPE_LABEL[next.type])}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium tabular-nums opacity-80 shrink-0">
+              {untilLabel(next.start, now)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              aria-label={t("Close")}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-1 text-sm tabular-nums opacity-80">
+          {t("{start} to {end}", {
+            start: format(zonedDate(next.start, tz), "HH:mm"),
+            end: format(zonedDate(next.end, tz), "HH:mm"),
+          })}
+        </div>
+
+        {view.later.length > 0 && (
+          <div className="pt-2 border-t border-border/50">
+            <p className="mb-2 text-xs font-medium opacity-60">{t("Later today")}</p>
+            <Hourly items={view.later} tz={tz} />
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-full"
+            disabled={busy}
+            onClick={start}
+          >
+            <Play className="size-4" aria-hidden />
+            {t(started ? "Mark started" : "Start")}
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+
+  return expanded ? cardContent : pillContent;
 }

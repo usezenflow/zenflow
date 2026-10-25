@@ -32,8 +32,7 @@ describe("InsightsController", () => {
   let app: INestApplication;
   let prisma: {
     $queryRaw: jest.Mock;
-    session: { aggregate: jest.Mock; findMany: jest.Mock };
-    sessionEvent: { count: jest.Mock };
+    session: { aggregate: jest.Mock; count: jest.Mock; findMany: jest.Mock };
   };
 
   const getInsights = (query: Record<string, string> = {}) =>
@@ -48,9 +47,9 @@ describe("InsightsController", () => {
         aggregate: jest.fn(() =>
           Promise.resolve({ _sum: { durationMinutes: null } }),
         ),
+        count: jest.fn(() => Promise.resolve(0)),
         findMany: jest.fn(() => Promise.resolve([])),
       },
-      sessionEvent: { count: jest.fn(() => Promise.resolve(0)) },
     };
     const module = await Test.createTestingModule({
       controllers: [InsightsController],

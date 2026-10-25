@@ -34,6 +34,7 @@ import { format, t } from "@/lib/i18n";
 import { isNoteEmpty } from "@/lib/note-html";
 import { isPastDeadlineDrop } from "@/lib/overdue";
 import { clockLabel } from "@/lib/slider-math";
+import { cn } from "@/lib/utils";
 import { draftValues, patchFor, saveSession, valuesFromSession } from "@/lib/session-save";
 import { useColorScheme } from "@/lib/useColorScheme";
 import {
@@ -162,7 +163,7 @@ export interface SessionEditorProps {
   /** Told when a save lands (`true`) and when its confirmation should clear (`false`). */
   onSavedChange?: (saved: boolean) => void;
   /** The saved session, or `null` for a draft that is not placed yet. */
-  session: Session | null;
+  session: Session & { done?: boolean } | null;
   /** Starting values for a draft. */
   draft?: { title: string; deadline: string };
   tz: string;
@@ -408,7 +409,10 @@ export function SessionEditor({
           placeholder={t("Untitled")}
           accessibilityLabel={t("Title")}
           multiline={false}
-          className="border-0 bg-transparent px-0 py-1 text-[18px] font-bold tracking-tight text-foreground"
+          className={cn(
+            "border-0 bg-transparent px-0 py-1 text-[18px] font-bold tracking-tight text-foreground",
+            session?.done && "line-through opacity-50",
+          )}
         />
         {values.title === "" && !session && (
           <Text className="text-[12px] text-destructive">{t("Name your plan")}</Text>

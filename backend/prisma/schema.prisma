@@ -24,6 +24,8 @@ enum UserRole {
 
 model User {
   id                 String              @id @default(uuid())
+  calendarFeedTokenHash String?   @unique // SHA-256 of the calendar feed secret; null when no feed
+  calendarFeedCreatedAt DateTime?
   studentProfile     StudentProfile?
   studyPrograms      StudyProgram[]
   studentMarks       StudentMark[]
@@ -583,6 +585,7 @@ enum SessionEventType {
   MOVE // user drag or resize of a scheduled TASK (graded negative signal)
   SYSTEM_MOVE // scheduler-initiated move (displacement / conflict reschedule): reward 0, no preference update
   START // user opened the app inside an unmoved TASK's slot (rewardScore +1)
+  DONE // user tapped Done on a TASK
 }
 
 /// Range-partitioned by month on `occurredAt` (hand-written migration, ADR-0016); children are `SessionEvent_YYYY_MM`.

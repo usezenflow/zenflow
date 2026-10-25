@@ -4,7 +4,7 @@ import type {
   SessionSearchDirection,
   SessionSearchResponse,
 } from "@zenflow/shared";
-import { Prisma, type User } from "../../generated/prisma";
+import { Prisma, type User, SessionEventType } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { expandRrule, occurrenceId } from "../scheduler/core/recurrence";
 import { DAY_MS } from "../scheduler/core/slot";
@@ -149,10 +149,18 @@ export class SessionSearchService {
       include: WITH_TAGS_AND_SERIES,
     });
     const byId = new Map(rows.map((r) => [r.id, r]));
+    const doneRows = await this.prisma.sessionEvent.findMany({
+      where: {
+        sessionId: { in: rows.map((r) => r.id) },
+        eventType: SessionEventType.DONE,
+      },
+      select: { sessionId: true },
+    });
+    const doneIds = new Set(doneRows.map((r) => r.sessionId));
     return ids.flatMap(({ id }) => {
       const row = byId.get(id);
       if (!row?.scheduledStartTime) return [];
-      return [{ start: row.scheduledStartTime, id, dto: toSessionDto(row) }];
+      return [{ start: row.scheduledStartTime, id, dto: { ...toSessionDto(row), done: doneIds.has(row.id) } }];
     });
   }
 
@@ -178,6 +186,14 @@ export class SessionSearchService {
       where: { id: { in: ids.map((r) => r.id) } },
       include: WITH_TAGS_AND_SERIES,
     });
+    const doneRows = await this.prisma.sessionEvent.findMany({
+      where: {
+        sessionId: { in: reps.map((r) => r.id) },
+        eventType: SessionEventType.DONE,
+      },
+      select: { sessionId: true },
+    });
+    const doneIds = new Set(doneRows.map((r) => r.sessionId));
 
     const [from, to] =
       direction === "forward" ? [cursor.start, bound] : [bound, cursor.start];
@@ -185,7 +201,7 @@ export class SessionSearchService {
     for (const rep of reps) {
       if (!rep.seriesId || !rep.series?.rrule || !rep.scheduledStartTime)
         continue;
-      const base = toSessionDto(rep);
+      const base = { ...toSessionDto(rep), done: doneIds.has(rep.id) };
       const seriesId = rep.seriesId;
       let starts = expandRrule(
         rep.series.rrule,

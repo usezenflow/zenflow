@@ -13,6 +13,7 @@ import { MailModule } from "./mail/mail.module";
 import { UsersModule } from "./users/users.module";
 import { InsightsModule } from "./insights/insights.module";
 import { ApiAccessModule } from "./api-access/api-access.module";
+import { CalendarFeedModule } from "./calendar-feed/calendar-feed.module";
 import { SessionsModule } from "./sessions/sessions.module";
 import { CourseColoursModule } from "./course-colours/course-colours.module";
 import { TagsModule } from "./tags/tags.module";
@@ -586,6 +587,7 @@ const jobModules = [
     UsersModule,
     InsightsModule,
     ApiAccessModule,
+    CalendarFeedModule,
     PrismaModule,
     AuthModule,
     MailModule,

@@ -7,10 +7,10 @@ import numpy as np
 from evalx import metrics as m
 
 
-def test_adherence_edges() -> None:
-    assert m.adherence_rate(np.zeros(5)) == 0.0
-    assert m.adherence_rate(np.ones(5)) == 1.0
-    assert np.isnan(m.adherence_rate(np.array([])))
+def test_done_rate_edges() -> None:
+    assert m.done_rate(np.zeros(5)) == 0.0
+    assert m.done_rate(np.ones(5)) == 1.0
+    assert np.isnan(m.done_rate(np.array([])))
 
 
 def test_margin_and_last_day_share() -> None:

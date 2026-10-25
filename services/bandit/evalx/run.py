@@ -75,6 +75,7 @@ from src.api import update_arm  # noqa: E402
 from src.core import constants as consts  # noqa: E402
 from src.core.constants import (  # noqa: E402
     DAY_MS,
+    DONE_REWARD,
     MS_PER_MINUTE,
     PREFERENCE_KEPT_WEIGHT,
 )
@@ -90,7 +91,7 @@ from src.schemas_place import PLACEMENT_CONTRACT_VERSION, PlaceRequest  # noqa: 
 
 ALPHA = 0.15  # BANDIT_ALPHA, backend/src/scheduler/constants.ts
 RIDGE = 1.0  # BANDIT_RIDGE
-START_REWARD = 1.0  # a START
+# DONE_REWARD and SKIP_REWARD come from src.core.constants (mirror of the backend).
 PAIRWISE_WIN_REWARD = 0.5  # backend/src/scheduler/constants.ts
 PAIRWISE_LOSS_REWARD = -0.2
 MIN_ALTERNATIVE_GAP_MINUTES = 60  # an offer needs two starts at least this far apart
@@ -451,7 +452,7 @@ def react(
 ) -> tuple[bool, str | None, float | None, int]:
     """(done, signal, reward, new_start) for a block at ``start``.
 
-    START inside the band when the student opens the app. Outside it only a
+    DONE inside the band when the student completes the block. Outside it only a
     ``drag`` style student moves the block, to the free start nearest the band
     centre (a MOVE); with none free, it stays.
     """
@@ -459,8 +460,8 @@ def react(
     p = open_chance(s, (task.deadline_ms - start) / DAY_MS, start)
     if in_band(s, start, midnight):
         if task.u_open < p:
-            return True, "START", START_REWARD, start
-        return False, None, None, start  # ignored: no signal
+            return True, "DONE", DONE_REWARD, start
+        return False, None, None, start  # silent: no signal
     if style == "drag" and task.u_drag < s.drag:
         minute = feasible_start(
             s.band_on(midnight // DAY_MS),
@@ -586,8 +587,7 @@ def simulate(
             close += left_h <= CLOSE_HOURS
         ok, signal, reward, new_start = react(st, task, start, style, cal)
         done += ok
-        if signal == "START":
-            starts += 1
+        if signal == "DONE":
             matrix = _kept(matrix, start, kern)
         elif signal == "MOVE":
             moves += 1
@@ -684,7 +684,7 @@ def simulate_ab(
                 )
                 matrix = _moved(matrix, ls, hs, drag, kern)
         ok, signal, reward, new_start = react(st, task, applied, style, cal)
-        if signal == "START":
+        if signal == "DONE":
             matrix = _kept(matrix, applied, kern)
         elif signal == "MOVE":
             drag = abs(new_start - applied) / MS_PER_MINUTE
@@ -808,8 +808,8 @@ def _ab_summary(cols: dict[str, np.ndarray], seed: int) -> dict[str, Any]:
         "offered": rate(cols["offered"], cols["events"], seed),
         "tapped": rate(cols["tapped"], cols["offered"], seed),
         "pick_linucb": rate(cols["picked_linucb"], cols["tapped"], seed),
-        "start_linucb_primary": rate(cols["done_linucb"], cols["events_linucb"], seed),
-        "start_heuristic_primary": rate(
+        "done_linucb_primary": rate(cols["done_linucb"], cols["events_linucb"], seed),
+        "done_heuristic_primary": rate(
             cols["done_heuristic"], cols["events_heuristic"], seed
         ),
     }
@@ -1136,7 +1136,7 @@ def render(res: dict[str, Any]) -> str:
         f"tasks, reaction mix `{cfg['cfg']['mix']}`. Code `{man['code_sha']}`, "
         f"config `{man['config_hash']}`, {man['generated']}.",
         "",
-        "Effects are starts per student. Each reads "
+        "Effects are done rate per student. Each reads "
         "`mean [95% CI over students] / [95% CI over seeds]`.",
         "",
         "## Headline: L against the default heuristic (H)",
@@ -1154,7 +1154,7 @@ def render(res: dict[str, Any]) -> str:
         )
     lines += [
         "",
-        "## Every arm, starts per student",
+        "## Every arm, done rate per student",
         "",
         "| World | H | L-cold | L | Oracle | Rand |",
         "|---|---|---|---|---|---|",
@@ -1204,15 +1204,15 @@ def render(res: dict[str, Any]) -> str:
         "Cluster bootstrap by student. A pick rate of 50% is no preference.",
         "",
         "| World | Offered | Tapped | LinUCB pick rate "
-        "| Start, LinUCB primary | Start, heuristic primary |",
+        "| Done, LinUCB primary | Done, heuristic primary |",
         "|---|---|---|---|---|---|",
     ]
     for name, w in res["worlds"].items():
         a = w["ab"]
         lines.append(
             f"| {name} | {_pct(a['offered'])} | {_pct(a['tapped'])} "
-            f"| {_pct(a['pick_linucb'])} | {_pct(a['start_linucb_primary'])} "
-            f"| {_pct(a['start_heuristic_primary'])} |"
+            f"| {_pct(a['pick_linucb'])} | {_pct(a['done_linucb_primary'])} "
+            f"| {_pct(a['done_heuristic_primary'])} |"
         )
     lines += [
         "",
@@ -1322,7 +1322,7 @@ def main(argv: list[str] | None = None) -> int:
     real.add_argument("--seed-offset", type=int, default=100)
     dl = sub.add_parser(
         "deadline",
-        help="adherence and distance by deadline weight",
+        help="done rate and distance by deadline weight",
         parents=[sub_bands],
     )
     dl.add_argument("--seeds", type=int, default=10)

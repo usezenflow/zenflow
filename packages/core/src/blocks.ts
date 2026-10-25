@@ -21,6 +21,7 @@ export function taskToBlock(task: Session): Event | null {
     location: task.location,
     courseKey: task.courseKey,
     commuteMinutes: task.commuteMinutes,
+    done: task.done,
   };
 }
 

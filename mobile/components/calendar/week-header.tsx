@@ -1,5 +1,6 @@
 import { Plus } from "@/components/Icons";
 import { GlassButton } from "@/components/ui/glass-button";
+import { InsightsTrigger } from "@/components/calendar/insights-section";
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { format, formatTitle } from "@/lib/i18n";
@@ -445,6 +446,7 @@ function WeekHeaderImpl(
                 testID="week-header.new"
               />
             )}
+            <InsightsTrigger />
           </View>
         </View>
 

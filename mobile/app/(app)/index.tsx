@@ -28,8 +28,8 @@ import { CalendarViewSkeleton } from "@/components/calendar/view-skeleton";
 import { MonthView } from "@/components/calendar/month-view";
 import { SessionSearchView } from "@/components/calendar/session-search-view";
 import { TodayButton } from "@/components/calendar/today-button";
-import { InsightsSection } from "@/components/calendar/insights-section";
-import { TodayCard } from "@/components/calendar/today-card";
+import { TodayPill, TodayCardOverlay } from "@/components/calendar/today-card";
+import { InsightsProvider, InsightsSheet } from "@/components/calendar/insights-section";
 import {
   type CalendarView,
 } from "@/components/calendar/view-switch";
@@ -193,6 +193,9 @@ export default function CalendarScreen() {
   // re-syncs (a task created/edited on another screen shows up the moment we
   // return, no manual pull-to-refresh).
   const [focusTick, setFocusTick] = useState(0);
+  // Today pill → floating card overlay. The pill hovers over the day grid; the
+  // card opens full-bleed on top of it and never takes a layout block.
+  const [todayOpen, setTodayOpen] = useState(false);
   // Load state of the focused Day page, reported up by the pager — gates the FAB.
   const [timelineState, setTimelineState] = useState<TimelineState>("loading");
   // Session id to pulse on the focused day — set by a create/edit teleport
@@ -455,7 +458,8 @@ export default function CalendarScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <CalendarHeader
+      <InsightsProvider>
+        <CalendarHeader
         view={view}
         onViewChange={handleViewChange}
         offlineKey={`${view}:${dateKey(focusedDate)}`}
@@ -481,13 +485,17 @@ export default function CalendarScreen() {
           />
 
           {isAtToday ? (
-            <View className="gap-3 px-4 pt-3">
-              <TodayCard />
-              <InsightsSection />
+            <View style={{ position: "absolute", top: -12, left: 16, zIndex: 45 }}>
+              <TodayPill onPress={() => setTodayOpen(true)} />
             </View>
           ) : null}
 
-          <View className="flex-1">
+          <View className="flex-1 relative">
+            <TodayCardOverlay
+              visible={todayOpen}
+              onClose={() => setTodayOpen(false)}
+              sessionDetailSheetRef={sessionDetailSheetRef}
+            />
             <WeekPager
               ref={pagerRef}
               focusedDate={focusedDate}
@@ -531,7 +539,9 @@ export default function CalendarScreen() {
 
       <SessionDetailSheet ref={sessionDetailSheetRef} tz={tz} onMoved={handleMoved} />
       <UpdateRecurringSheet ref={updateScopeSheetRef} />
+      <InsightsSheet />
       {searchOpen ? <SessionSearchView onClose={closeSearch} /> : null}
+      </InsightsProvider>
     </View>
   );
 }

@@ -1,4 +1,5 @@
 import type { PlacementReason } from "./placement";
+import type { PlacementChip } from "./placement-chip";
 
 /**
  * What kind of session this is.
@@ -104,6 +105,12 @@ export interface Session {
   placementReason: PlacementReason | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * `true` when the user has marked this placed `TASK` done. Only present on
+   * `SessionDetailResponse` by default; the session list includes it too so
+   * calendar blocks and agenda rows can render the completed state.
+   */
+  done?: boolean;
 }
 
 /**
@@ -508,6 +515,10 @@ export interface UpdateSessionResponse extends Session, SlotProposalFields {
   skippedReminders?: number[];
 }
 export interface SessionDetailResponse extends Session {
+  /** Whether the user tapped Done on this placed TASK (a `DONE` event exists). */
+  done: boolean;
+  /** Chips explaining the placement; empty for fixed sessions and unplaced TASKs. */
+  placementChips: PlacementChip[];
   /** Live prep `TASK`s linked to this session (or, for a recurring occurrence id, to that occurrence). */
   prepSessions: Session[];
   /**

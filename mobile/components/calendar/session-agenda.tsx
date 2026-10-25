@@ -28,6 +28,7 @@ import type { Session, SessionSearchDirection } from "@zenflow/shared";
 import { EmptyMark, NoResultsMark } from "@/components/brand/state-marks";
 import { type Href, useRouter } from "expo-router";
 import { sessionEditHref } from "@/lib/session-detail";
+import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, View } from "react-native";
 
@@ -68,6 +69,7 @@ function AgendaRow({
   const { isDarkColorScheme } = useColorScheme();
   const tone = sessionTone(deriveState(session), session.late);
   const location = session.location?.trim();
+  const isDone = Boolean(session.done);
   return (
     <View className="mx-4 my-1 flex-row items-center">
       <Pressable
@@ -76,13 +78,17 @@ function AgendaRow({
         accessibilityRole="button"
         accessibilityLabel={session.title}
         className="min-w-0 flex-1 rounded-r-xl active:opacity-70"
-        style={{ borderLeftWidth: 3, borderLeftColor: stripeColor(tone, isDarkColorScheme) }}
+        style={{
+          borderLeftWidth: 3,
+          borderLeftColor: isDone ? "rgba(82, 127, 12, 1)" : stripeColor(tone, isDarkColorScheme),
+          opacity: isDone ? 0.5 : 1,
+        }}
       >
         <View className="gap-0.5 py-2 pl-3">
           <Text testID={`${testIDPrefix}.time.${session.id}`} className="text-[12px] text-muted-foreground">
             {sessionTimeRange(session, tz)}
           </Text>
-          <Text numberOfLines={1} className="text-[15px] font-medium">
+          <Text numberOfLines={1} className={cn("text-[15px] font-medium", isDone && "line-through")}>
             {highlightParts(session.title, term).map((part, i) =>
               part.match ? (
                 <Text

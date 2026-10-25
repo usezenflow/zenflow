@@ -3,12 +3,12 @@
 Each student gets the same semester (timetable, assignments, exams) and the same
 random draws under every arm, so arms differ only by placement. Placed blocks
 occupy the calendar for later placements, as in production. Learning follows
-``run.py``: START +1, MOVE by distance, pairwise rewards as the backend.
+``run.py``: DONE +1, SKIP -1, MOVE by distance, pairwise rewards as the backend.
 
 Arms
   H, L, L-cold      as in ``run.py``
   Fixed             7 pm the day before the deadline, nearest free slot back from it
-  Oracle            the free slot with the best chance of a start (ceiling)
+  Oracle            the free slot with the best chance of a completion (ceiling)
   Rand              a random day and hour in the window (floor)
   AB                the live protocol: 50/50 primary, both slots, a pairwise offer
 Ablations (``ABLATIONS``) add the deadline and gap variants of H and L.
@@ -37,9 +37,9 @@ from evalx.student_behavior import (
     sample_student,
 )
 from evalx.world import HOUR_MS, Calendar, Task, busy_minutes
-from src.core.constants import DAY_MS, MS_PER_MINUTE
+from src.core.constants import DAY_MS, DONE_REWARD, MS_PER_MINUTE, SKIP_REWARD
 from src.core.preference import default_preference_matrix
-from src.core.reward import drag_distance_reward
+from src.core.reward import answer_reward, drag_distance_reward
 from src.schemas import HOUR_ARM_IDS
 
 HEADLINE = (
@@ -121,7 +121,7 @@ ABLATIONS = ("H-deadline", "L-deadline", "L-nogap", "L-nogap-deadline")
 SEMESTER_ARMS = (*HEADLINE, "AB")
 LONG_WINDOW_DAYS = core.LONG_WINDOW_DAYS
 CLOSE_HOURS = core.CLOSE_HOURS
-ADHERENCE_DELTA = 0.03  # non-inferiority margin, share of tasks started
+DONE_RATE_DELTA = 0.03  # non-inferiority margin, share of tasks completed
 CURVE_TASKS = 30
 FIXED_HOUR = 19  # the Fixed baseline's start hour
 EARLIEST_H = 6  # no baseline starts a block before this hour
@@ -156,6 +156,9 @@ PAIRS: dict[str, tuple[str, str]] = {
     "kernel_H": ("H+K", "H"),
     "L_minus_HK": ("L", "H+K"),
 }
+# Column keys: s = done (1.0 if the student completed the block), p = done
+# chance, m = deadline margin hours, c = conflict free, tap/offer/pick/pri are
+# AB pairwise fields, mov = move flag.
 COLS = ("s", "p", "m", "c", "tap", "mov", "off", "pl", "pri")
 
 
@@ -292,10 +295,12 @@ class Feedback:
 
     def seen(self, n: int, signal: str | None) -> str | None:
         u_detect, u_false = self.noise[n] if self.noise else (0.0, 1.0)
-        if signal == "START":
-            return "START" if u_detect < core.CFG["detect"] else None
+        if signal == "DONE":
+            return "DONE" if u_detect < core.CFG["detect"] else None
+        if signal == "SKIP":
+            return "SKIP" if u_detect < core.CFG["detect"] else None
         if signal is None and u_false < core.CFG["false_start"]:
-            return "START"
+            return "DONE"
         return signal
 
     def defer(self, n: int, effect: Callable[..., None]) -> None:
@@ -412,8 +417,8 @@ def simulate_arm(
         if start is None:
             rows.append(_unplaced())
             continue
-        started, signal, applied, p = s.react(task, start, cal)
-        row = _row(task, applied, started, p, cal, placed)
+        done, signal, applied, p = s.react(task, start, cal)
+        row = _row(task, applied, done, p, cal, placed)
         row["mov"] = float(signal == "MOVE")
         rows.append(row)
         _occupy(placed, applied, task.duration_min)
@@ -421,18 +426,20 @@ def simulate_arm(
         reward: float | None = None
         if hourly and hourly.start_model and lin:
             hour, z = lin["selectedArm"], np.asarray(lin["slot"])
-            started_label = heard == "START"
+            done_label = heard == "DONE"
             feed.defer(
                 n,
-                lambda h=hour, v=z, y=started_label: hourly.observe_label(h, v, y),
+                lambda h=hour, v=z, y=done_label: hourly.observe_label(h, v, y),
             )
-        if heard == "START":
-            reward = core.START_REWARD
+        if heard == "DONE":
+            reward = DONE_REWARD
             if not spec.get("frozen"):
                 feed.defer(
                     n,
                     lambda a=applied: box.__setitem__(0, core._kept(box[0], a, kern)),
                 )
+        elif heard == "SKIP":
+            reward = SKIP_REWARD
         elif heard == "MOVE":
             drag = abs(applied - start) / MS_PER_MINUTE
             reward = drag_distance_reward(drag, core.CFG["move_scale"])
@@ -510,8 +517,8 @@ def simulate_ab(
                 learn_reward = drag_distance_reward(drag, core.CFG["move_scale"])
                 core._learn(state, arm_id, x, learn_reward, variant)
                 box[0] = core._moved(box[0], ls, hs, drag)
-        started, signal, final, p = s.react(task, applied, cal)
-        row = _row(task, final, started, p, cal, placed)
+        done, signal, final, p = s.react(task, applied, cal)
+        row = _row(task, final, done, p, cal, placed)
         row.update(
             tap=float(tapped),
             mov=float(signal == "MOVE"),
@@ -523,9 +530,11 @@ def simulate_ab(
         _occupy(placed, final, task.duration_min)
         heard = feed.seen(n, signal)
         reward: float | None = None
-        if heard == "START":
-            reward = core.START_REWARD
+        if heard == "DONE":
+            reward = DONE_REWARD
             feed.defer(n, lambda a=final: box.__setitem__(0, core._kept(box[0], a)))
+        elif heard == "SKIP":
+            reward = SKIP_REWARD
         elif heard == "MOVE":
             drag = abs(final - applied) / MS_PER_MINUTE
             reward = drag_distance_reward(drag, core.CFG["move_scale"])
@@ -632,8 +641,8 @@ def _per_student(
     cols: dict[str, np.ndarray], long: np.ndarray
 ) -> dict[str, np.ndarray]:
     """Student level outcomes from one arm's task grids."""
-    started = cols["s"]
-    valid = ~np.isnan(started)
+    done = cols["s"]
+    valid = ~np.isnan(done)
     tasks = valid.sum(axis=1)
     margin = cols["m"]
     placed = ~np.isnan(margin)
@@ -643,12 +652,12 @@ def _per_student(
     with np.errstate(invalid="ignore", divide="ignore"), warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)  # a student with no blocks
         return {
-            "adherence": zero(started).sum(axis=1) / tasks,
-            "starts": zero(started).sum(axis=1),
+            "done_rate": zero(done).sum(axis=1) / tasks,
+            "dones": zero(done).sum(axis=1),
             "margin_h": np.nanmean(margin, axis=1),
             "last_day": close.sum(axis=1) / window.sum(axis=1),
             "conflict_free": np.nanmean(cols["c"], axis=1),
-            "burden": zero(started).sum(axis=1)
+            "burden": zero(done).sum(axis=1)
             + zero(cols["tap"]).sum(axis=1)
             + zero(cols["mov"]).sum(axis=1),
         }
@@ -663,12 +672,12 @@ def _ci(values: np.ndarray, seed: int) -> dict[str, float]:
 
 
 def verdict(c: dict[str, float]) -> str:
-    """Read an adherence contrast from both intervals, taking the wider side."""
+    """Read a done-rate contrast from both intervals, taking the wider side."""
     lo, hi = min(c["ci_lo"], c["seed_lo"]), max(c["ci_hi"], c["seed_hi"])
     if lo > 0:
         return "better"
     if hi < 0:
-        return "worse" if lo < -ADHERENCE_DELTA else "slightly worse"
+        return "worse" if lo < -DONE_RATE_DELTA else "slightly worse"
     return "level"
 
 
@@ -688,12 +697,12 @@ def _ab_summary(rows: list[list[dict[str, Any]]]) -> dict[str, Any]:
         "start_heuristic_primary": rate(
             (started * (1 - primary) * placed).sum(axis=1), events - g["pri"], 3
         ),
-        "adherence": rate(g["s"], events, 3),
+        "done_rate": rate(g["s"], events, 3),
     }
 
 
 def _groups(meta: list[dict[str, Any]], diff: np.ndarray) -> dict[str, Any]:
-    """L minus H in adherence by chronotype, attention tercile and offer response."""
+    """L minus H in done rate by chronotype, attention tercile and offer response."""
     attention = np.array([m["attention"] for m in meta])
     lo, hi = np.quantile(attention, [1 / 3, 2 / 3])
     keys: dict[str, np.ndarray] = {
@@ -755,8 +764,8 @@ def merge(
     for arm in arms:
         a = per[arm]
         entry: dict[str, Any] = {k: _ci(v, 1) for k, v in a.items()}
-        per_seed = a["adherence"].reshape(seeds, -1).mean(axis=1)
-        entry["adherence"]["seed_sd"] = (
+        per_seed = a["done_rate"].reshape(seeds, -1).mean(axis=1)
+        entry["done_rate"]["seed_sd"] = (
             float(per_seed.std(ddof=1)) if seeds > 1 else 0.0
         )
         out["arms"][arm] = entry
@@ -764,10 +773,10 @@ def merge(
     labels = [PAIRS[n] for n in names]
     contrasts: dict[str, dict[str, Any]] = {}
     for name, (x, y) in zip(names, labels, strict=True):
-        diff = per[x]["adherence"] - per[y]["adherence"]
+        diff = per[x]["done_rate"] - per[y]["done_rate"]
         contrasts[name] = metrics.contrast(diff, seeds, seed=2)
         contrasts[name]["verdict"] = verdict(contrasts[name])
-        base = float(per[y]["adherence"].mean())
+        base = float(per[y]["done_rate"].mean())
         contrasts[name]["rel_lift"] = contrasts[name]["mean"] / base if base else 0.0
         mdiff = np.nan_to_num(per[x]["margin_h"] - per[y]["margin_h"])
         contrasts[name]["margin_h"] = metrics.contrast(mdiff, seeds, seed=6)
@@ -775,11 +784,11 @@ def merge(
     for name, p_adj in zip(names, adjusted, strict=True):
         contrasts[name]["p_holm"] = p_adj
         contrasts[name]["non_inferior"] = bool(
-            min(contrasts[name]["ci_lo"], contrasts[name]["seed_lo"]) > -ADHERENCE_DELTA
+            min(contrasts[name]["ci_lo"], contrasts[name]["seed_lo"]) > -DONE_RATE_DELTA
         )
     out["contrasts"] = contrasts
     if "L" in per and "H" in per:
-        out["groups"] = _groups(meta, per["L"]["adherence"] - per["H"]["adherence"])
+        out["groups"] = _groups(meta, per["L"]["done_rate"] - per["H"]["done_rate"])
     if "Oracle" in grids:
         zero = np.nan_to_num
         oracle_p = zero(grids["Oracle"]["p"])
@@ -814,7 +823,7 @@ def merge(
             "margin_h": [
                 None if np.isnan(x) else float(x) for x in per[arm]["margin_h"]
             ],
-            "adherence": per[arm]["adherence"].tolist(),
+            "done_rate": per[arm]["done_rate"].tolist(),
         }
         for arm in arms
     }
@@ -855,15 +864,15 @@ def _summary(res: dict[str, Any]) -> dict[str, Any]:
     c = res["contrasts"]["L_minus_H"]
     return {
         "L_minus_H": c,
-        "L": res["arms"]["L"]["adherence"]["mean"],
-        "H": res["arms"]["H"]["adherence"]["mean"],
+        "L": res["arms"]["L"]["done_rate"]["mean"],
+        "H": res["arms"]["H"]["done_rate"]["mean"],
         "L_hours": res["arms"]["L"]["margin_h"]["mean"],
         "H_hours": res["arms"]["H"]["margin_h"]["mean"],
         "L_last_day": res["arms"]["L"]["last_day"]["mean"],
         "H_last_day": res["arms"]["H"]["last_day"]["mean"],
         "pick_linucb": res["ab"]["pick_linucb"],
         **{
-            f"{k}_adherence": res["arms"][k]["adherence"]["mean"]
+            f"{k}_done_rate": res["arms"][k]["done_rate"]["mean"]
             for k in ("L-flat", "H-frozen", "L-deadline", "H-deadline", "AB")
             if k in res["arms"]
         },
@@ -1039,8 +1048,8 @@ def render_misspec(rows: dict[str, Any]) -> str:
     ]
     for name, r in rows.items():
         lines.append(
-            f"| {name} | {100 * r['H']:.1f}% | {100 * r['H-frozen_adherence']:.1f}% "
-            f"| {100 * r['L']:.1f}% | {100 * r['L-flat_adherence']:.1f}% "
+            f"| {name} | {100 * r['H']:.1f}% | {100 * r['H-frozen_done_rate']:.1f}% "
+            f"| {100 * r['L']:.1f}% | {100 * r['L-flat_done_rate']:.1f}% "
             f"| {_points(r['L_minus_H'])} |"
         )
     return "\n".join(lines) + "\n"
@@ -1051,8 +1060,8 @@ def _robust_row(res: dict[str, Any]) -> dict[str, Any]:
     c = res["contrasts"]["L_minus_HK"]
     return {
         "L_minus_HK": c,
-        "L": res["arms"]["L"]["adherence"]["mean"],
-        "HK": res["arms"]["H+K"]["adherence"]["mean"],
+        "L": res["arms"]["L"]["done_rate"]["mean"],
+        "HK": res["arms"]["H+K"]["done_rate"]["mean"],
         "L_hours": res["arms"]["L"]["margin_h"]["mean"],
         "HK_hours": res["arms"]["H+K"]["margin_h"]["mean"],
     }
@@ -1097,7 +1106,7 @@ def heuristic_sweep(
     )
     rows = {
         arm: {
-            "adherence": a["adherence"],
+            "done_rate": a["done_rate"],
             "hours": a["margin_h"]["mean"],
             "last_day": a["last_day"]["mean"],
             "exam": res["by_kind"][arm]["exam"],
@@ -1121,7 +1130,7 @@ def render_heuristic(rows: dict[str, Any]) -> str:
         "|---|---|---|---|---|---|",
     ]
     for arm, r in rows.items():
-        a = r["adherence"]
+        a = r["done_rate"]
         lines.append(
             f"| {arm} | {100 * a['mean']:.1f}% "
             f"[{100 * a['ci_lo']:.1f}, {100 * a['ci_hi']:.1f}] "

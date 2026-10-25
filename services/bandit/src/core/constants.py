@@ -12,8 +12,14 @@ PREFERENCE_KEPT_WEIGHT = 0.25
 STABILITY_WEIGHT = 0.1
 STABILITY_SATURATION_HOURS = 4
 MOVE_REWARD_SCALE_MINUTES = 240
-# Reward of a START inside an unmoved placement's slot (ADR-0035).
-STARTED_REWARD = 1.0
+# Reward of a DONE inside an unmoved placement's slot (ADR-0035).
+DONE_REWARD = 1.0
+# Reward of a SKIP (the student declines the placed block).
+SKIP_REWARD = -1.0
+# How long after a block ends the student can still answer DONE/SKIP.
+DONE_WINDOW_MS = 60 * 60 * 1000
+# START stays tracked for telemetry only; it carries no learning signal.
+START_REWARD = 0.0
 MATRIX_HALF_LIFE_DAYS = 21
 
 PREFERENCE_SLOTS_PER_DAY = 24

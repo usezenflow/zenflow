@@ -2,6 +2,8 @@ import {
   confirmPlacement,
   createSession,
   getSessionDetails,
+  markSessionDone,
+  clearSessionDone,
   removeSession,
   removeSessionSeries,
   truncateSessionSeries,
@@ -19,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BusyOr } from "@/components/ui/delayed-spinner";
 import { useDelayedLoading } from "@/hooks/use-delayed-loading";
 import { type SessionFormValues, getSeriesKind, zonedDate } from "@zenflow/core";
-import type { CreateSessionInput, InfeasiblePolicy, PlacementPlan, Session } from "@zenflow/shared";
+import type { CreateSessionInput, InfeasiblePolicy, PlacementPlan, Session, SessionDetailResponse } from "@zenflow/shared";
 import { useToast } from "@/components/ui/toast";
 import { showDisplacedToast, showErrorToast, showSplitToast, placementToastMessage, withInfeasibleRetry } from "@/lib/task-toasts";
 import {
@@ -52,7 +54,7 @@ import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { GLASS_HIT_SIZE, GLASS_SIZE, GlassButton } from "@/components/ui/glass-button";
 import { useOffline } from "@/hooks/use-offline";
 import { forwardRef, startTransition, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 export interface SessionDetailSheetHandle {
   open: (session: Session) => void;
@@ -103,7 +105,7 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
   const offline = useOffline();
   const deleteScopeSheet = useRef<DeleteRecurringSheetHandle>(null);
   const makeRoom = useRef<MakeRoomSheetHandle>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<(Session & { done?: boolean }) | null>(null);
   const [draft, setDraft] = useState<{
     title: string;
     deadline: string;
@@ -114,6 +116,7 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
   const [preps, setPreps] = useState<Session[]>([]);
   const [justSaved, setJustSaved] = useState(false);
   const [placing, setPlacing] = useState(false);
+  const [doneBusy, setDoneBusy] = useState(false);
   const placeRef = useRef<(() => void) | null>(null);
   // For a prep plan: the lecture, exam or assignment it prepares for.
   const [target, setTarget] = useState<Session | null>(null);
@@ -404,6 +407,25 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
     deleteScopeSheet.current?.open(occurrenceDate);
   }
 
+  async function toggleDone() {
+    const current = session;
+    if (!current || doneBusy) return;
+    const next = !current.done;
+    if (next && current.scheduledStartTime && Date.now() < new Date(current.scheduledStartTime).getTime()) {
+      showErrorToast(toast, null, t("Mark done once it's started"), "calendar-x");
+      return;
+    }
+    setDoneBusy(true);
+    try {
+      const res = next ? await markSessionDone(current.id) : await clearSessionDone(current.id);
+      setSession((s) => (s ? { ...s, done: res.done } : s));
+    } catch (error) {
+      showErrorToast(toast, error, t("Couldn't update this session"), "calendar-x");
+    } finally {
+      setDoneBusy(false);
+    }
+  }
+
   // Hosted in the screen's own view, not the overlay window: the photo and
   // file pickers the note editor opens present above the screen, and would
   // sit behind an overlay sheet.
@@ -474,6 +496,44 @@ export const SessionDetailSheet = forwardRef<SessionDetailSheetHandle, SessionDe
                       destructive
                       accessibilityLabel={t("Delete session")}
                     />
+                  )}
+                  {session && session.scheduledStartTime && !offline && !isSyncedSession(session) && (
+                    <Pressable
+                      testID="session.mark-done"
+                      accessibilityRole="button"
+                      accessibilityLabel={session?.done ? t("Mark undone") : t("Mark done")}
+                      accessibilityState={{ selected: session.done }}
+                      disabled={doneBusy || !!(session.scheduledStartTime && Date.now() < new Date(session.scheduledStartTime).getTime())}
+                      onPress={toggleDone}
+                      style={({ pressed }) => ({
+                        minWidth: GLASS_HIT_SIZE,
+                        minHeight: GLASS_HIT_SIZE,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: doneBusy ? 0.4 : pressed ? 0.8 : 1,
+                        transform: [{ scale: pressed ? 0.96 : 1 }],
+                      })}
+                    >
+                      <View
+                        className={cn(
+                          "items-center justify-center",
+                          session?.done && "bg-brand-lime",
+                        )}
+                        style={{
+                          width: GLASS_SIZE,
+                          height: GLASS_SIZE,
+                          borderRadius: GLASS_SIZE / 2,
+                          borderWidth: session?.done ? 0 : StyleSheet.hairlineWidth,
+                          borderColor: session?.done ? undefined : "rgba(0, 0, 0, 0.12)",
+                        }}
+                      >
+                        {session?.done ? (
+                          <Check size={14} className="text-card" />
+                        ) : (
+                          <Check size={14} className="text-muted-foreground" />
+                        )}
+                      </View>
+                    </Pressable>
                   )}
                 </View>
               </BottomSheetHeader>

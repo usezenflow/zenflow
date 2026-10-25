@@ -34,6 +34,7 @@ function makePrisma() {
             _sum: { durationMinutes: args.where.events ? 120 : 300 },
           }),
       ),
+      count: jest.fn(() => Promise.resolve(3)),
       findMany: jest.fn((args: WhereArgs) =>
         Promise.resolve(
           args.where.type && typeof args.where.type === "object"
@@ -41,9 +42,6 @@ function makePrisma() {
             : PREPS,
         ),
       ),
-    },
-    sessionEvent: {
-      count: jest.fn(() => Promise.resolve(3)),
     },
   };
 }
@@ -127,11 +125,13 @@ describe("InsightsService.summarize", () => {
         new Date("2026-10-23T17:00:00.000Z"),
       ]),
     );
-    expect(prisma.sessionEvent.count).toHaveBeenCalledWith({
+    expect(prisma.session.count).toHaveBeenCalledWith({
       where: {
         userId: USER.id,
-        eventType: "SKIP",
-        occurredAt: {
+        type: "TASK",
+        deleted: false,
+        skipped: true,
+        scheduledStartTime: {
           gte: new Date("2026-10-16T17:00:00.000Z"),
           lt: new Date("2026-10-23T17:00:00.000Z"),
         },
@@ -171,7 +171,7 @@ describe("InsightsService.summarize", () => {
       skipped: false,
     });
     expect(prisma.session.aggregate.mock.calls[1][0].where.events).toEqual({
-      some: { eventType: "COMPLETE" },
+      some: { eventType: "DONE" },
     });
   });
 
@@ -180,7 +180,7 @@ describe("InsightsService.summarize", () => {
     prisma.session.aggregate.mockResolvedValue({
       _sum: { durationMinutes: null },
     });
-    prisma.sessionEvent.count.mockResolvedValue(0);
+    prisma.session.count.mockResolvedValue(0);
     prisma.$queryRaw.mockResolvedValue([{ count: 0 }]);
     const service = await makeService(prisma);
 
@@ -238,7 +238,7 @@ describe("InsightsService.summarize", () => {
       type: "TASK",
       deleted: false,
       skipped: false,
-      completedAt: null,
+      events: { none: { eventType: "DONE" } },
       prepForSessionId: { in: ["exam-1", "assign-1", "assign-2"] },
     });
   });

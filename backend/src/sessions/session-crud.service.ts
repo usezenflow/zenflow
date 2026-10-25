@@ -14,7 +14,7 @@ import type {
   SessionSuggestionsResponse,
   SessionsListResponse,
 } from "@zenflow/shared";
-import { Prisma, type SessionType, type User } from "../../generated/prisma";
+import { Prisma, type SessionType, type User, SessionEventType } from "../../generated/prisma";
 import { minutesToUtc } from "../common/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { TagsService } from "../tags/tags.service";
@@ -114,6 +114,23 @@ export class SessionCrudService {
       return this.createFixedRecurring(dto, user, cleanTags);
     }
     return this.createFixedOneOff(dto, user, cleanTags);
+  }
+
+  /**
+   * The start `create` would give this item, with nothing written (bulk dry
+   * run). Fixed sessions are not placed, so their own start is the proposal.
+   */
+  async proposeCreate(dto: CreateSessionDto, user: User): Promise<Date | null> {
+    if (dto.type !== "TASK") {
+      return dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : null;
+    }
+    return this.taskPlacement.proposeSingle({
+      user,
+      durationMinutes: dto.durationMinutes,
+      deadline: new Date(dto.deadline as string),
+      now: new Date(),
+      policy: dto.infeasiblePolicy,
+    });
   }
 
   /**
@@ -369,10 +386,23 @@ export class SessionCrudService {
       displayEnd,
     );
 
+    // A placed TASK is done when a DONE SessionEvent exists for its real row id.
+    // Fixed types can't be done (the done service requires TASK), so occurrences
+    // of fixed series always stay undone.
+    const doneRows = await this.prisma.sessionEvent.findMany({
+      where: {
+        sessionId: { in: rows.map((r) => r.id) },
+        eventType: SessionEventType.DONE,
+      },
+      select: { sessionId: true },
+    });
+    const doneIds = new Set(doneRows.map((r) => r.sessionId));
+
     const sessions: SharedSession[] = [];
     for (const row of rows) {
+      const done = doneIds.has(row.id);
       if (row.seriesId && row.series?.rrule && row.scheduledStartTime) {
-        const base = toSessionDto(row);
+        const base = { ...toSessionDto(row), done };
         for (const occ of expandRrule(
           row.series.rrule,
           row.scheduledStartTime,
@@ -409,7 +439,7 @@ export class SessionCrudService {
         ) {
           continue;
         }
-        sessions.push(toSessionDto(row));
+        sessions.push({ ...toSessionDto(row), done });
       }
     }
 
@@ -525,6 +555,8 @@ export class SessionCrudService {
           start,
         ),
         prepTarget: null,
+        done: false,
+        placementChips: [],
       };
     }
 
@@ -540,6 +572,8 @@ export class SessionCrudService {
       prepSessions: await this.prepSessionsOf(user, session.id, null),
       nextPrepOccurrenceStart: null,
       prepTarget: await this.prepTargetOf(user, session),
+      done: false,
+      placementChips: [],
     };
   }
 

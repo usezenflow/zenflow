@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
+import { BarChart2, ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ViewModeSelect } from "./view-mode-select";
@@ -102,6 +102,15 @@ export function CalendarHeader({
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
         <NotificationBell />
         <ViewModeSelect value={currentView} onChange={setCurrentView} />
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t("Insights")}
+          onClick={() => window.dispatchEvent(new CustomEvent("zenflow:open-insights"))}
+          className="text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        >
+          <BarChart2 className="size-4" />
+        </Button>
         <Button size="icon-sm" aria-label={t("New session")} onClick={onNew} className="sm:hidden">
           <Plus className="size-4" />
         </Button>

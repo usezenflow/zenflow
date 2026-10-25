@@ -778,6 +778,7 @@ function SessionBlockImpl({
   const tone = sessionTone(state, overdue);
   // The session kind owns the colour (see `SESSION_TONES`), not its course.
   const stateClasses = `${flashRing} ${SESSION_TONE_CLASSES[tone].tint}`;
+  const isDone = Boolean(segment.done);
   // Solid single-colour rim, drawn as its own overlay ABOVE the blur: a border on
   // the blurred container itself came out jagged (the blur mask isn't anti-aliased).
   const edgeColor = hexAlpha(
@@ -894,12 +895,13 @@ function SessionBlockImpl({
             "flex overflow-hidden rounded-[14px]",
             tier !== "full"
               ? "flex-row items-start gap-1 pl-3.5 pr-2"
-              : "flex-col gap-0.5 pl-4 pr-2.5 py-1.5",
+              : "flex-col gap-0.5 pl-4 pr-2 py-1.5",
             ((segment.continues && !drawsThrough) || afterPx > 0) && "rounded-b-none",
             (segment.continued || beforePx > 0) && "rounded-t-none",
             segment.continued && "[border-top-style:dashed]",
             isInteractive && "cursor-grab",
             stateClasses,
+            isDone && "bg-background/80 dark:bg-background/80 backdrop-blur-xl",
           )}
           accessible
           accessibilityRole="button"
@@ -941,7 +943,8 @@ function SessionBlockImpl({
               left: 6,
               width: SESSION_STRIPE_WIDTH,
               borderRadius: SESSION_STRIPE_WIDTH / 2,
-              backgroundColor: accentColor,
+              backgroundColor: isDone ? undefined : accentColor,
+              opacity: isDone ? 0 : 1,
             }}
           />
           <View
@@ -952,11 +955,12 @@ function SessionBlockImpl({
               right: 0,
               bottom: 0,
               left: 0,
-              borderWidth: 1,
-              // The edge cut at midnight is drawn dashed below.
-              borderTopWidth: segment.continued ? 0 : 1,
-              borderBottomWidth: segment.continues && !drawsThrough ? 0 : 1,
-              borderColor: edgeColor,
+              borderWidth: isDone ? 0 : 1,
+              borderTopWidth: isDone ? 0 : segment.continued ? 0 : 1,
+              borderBottomWidth: isDone ? 0 : (segment.continues && !drawsThrough ? 0 : 1),
+              borderColor: isDone ? "transparent" : edgeColor,
+              borderLeftWidth: isDone ? 3 : 1,
+              borderLeftColor: isDone ? "rgba(82, 127, 12, 1)" : edgeColor,
               borderTopLeftRadius: topRadius,
               borderTopRightRadius: topRadius,
               borderBottomLeftRadius: bottomRadius,
@@ -1002,7 +1006,10 @@ function SessionBlockImpl({
               <TypeIcon size={11} color={typeInk} />
               <Text
                 className="min-w-0 flex-1 text-[11px] font-semibold leading-[14px]"
-                style={COMPACT_TEXT_STYLE}
+                style={{
+                  ...COMPACT_TEXT_STYLE,
+                  ...(isDone && { textDecorationLine: "line-through" }),
+                }}
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
@@ -1030,6 +1037,7 @@ function SessionBlockImpl({
                 <SessionTypeBadge type={segment.type} size="md" className="shrink-0" />
                 <Text
                   className="min-w-0 shrink text-[12px] font-semibold leading-4"
+                  style={isDone ? { textDecorationLine: "line-through" } : undefined}
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >

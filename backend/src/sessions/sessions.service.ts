@@ -1,10 +1,13 @@
-import { Injectable } from "@nestjs/common";
+import { HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import type {
+  BulkCreateItemResult,
+  BulkCreateSessionsResponse,
   CreateSessionResponse,
   RemoveSessionResponse,
   RemoveSessionSeriesResponse,
   RemoveTimetableGroupResponse,
   SessionDetailResponse,
+  SessionDoneResponse,
   SessionSkipResponse,
   SessionStartResponse,
   SessionResolveConflictsResponse,
@@ -14,6 +17,7 @@ import type {
   UpdateSessionResponse,
 } from "@zenflow/shared";
 import { type User } from "../../generated/prisma";
+import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
@@ -25,6 +29,8 @@ import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
 import { type SkipScope, SessionSkipService } from "./session-skip.service";
 import { SessionStartService } from "./session-start.service";
+import { SessionDoneService } from "./session-done.service";
+import { PlacementChipsService } from "./placement-chips.service";
 import { NoteFilesService } from "../files/note-files.service";
 import { RemindersService } from "../reminders/reminders.service";
 import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service";
@@ -44,6 +50,8 @@ import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service
  */
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name);
+
   constructor(
     private readonly crud: SessionCrudService,
     private readonly series: SeriesService,
@@ -51,6 +59,8 @@ export class SessionsService {
     private readonly slotPickService: SlotPickService,
     private readonly skips: SessionSkipService,
     private readonly sessionStart: SessionStartService,
+    private readonly sessionDone: SessionDoneService,
+    private readonly chips: PlacementChipsService,
     private readonly reminders: RemindersService,
     private readonly noteFiles: NoteFilesService,
     private readonly conflictResolve: ConflictResolveService,
@@ -81,6 +91,73 @@ export class SessionsService {
     return res;
   }
 
+  /**
+   * Creates each item through the single-create path, in order. One item's
+   * failure is reported on that item and does not stop the others. With
+   * `dryRun`, nothing is written and each item reports its proposed start.
+   */
+  async bulkCreate(
+    dto: BulkCreateSessionsDto,
+    user: User,
+  ): Promise<BulkCreateSessionsResponse> {
+    const dryRun = dto.dryRun === true;
+    const results: BulkCreateItemResult[] = [];
+    for (const [index, item] of dto.items.entries()) {
+      results.push(await this.bulkItem(index, item, dryRun, user));
+    }
+    return { dryRun, results };
+  }
+
+  private async bulkItem(
+    index: number,
+    item: CreateSessionDto,
+    dryRun: boolean,
+    user: User,
+  ): Promise<BulkCreateItemResult> {
+    try {
+      if (dryRun) {
+        const start = await this.crud.proposeCreate(item, user);
+        return {
+          index,
+          status: "PROPOSED",
+          proposedStart: start ? start.toISOString() : null,
+        };
+      }
+      const res = await this.create(item, user);
+      return {
+        index,
+        status: "CREATED",
+        id: res.id,
+        scheduledStartTime: res.scheduledStartTime
+          ? new Date(res.scheduledStartTime).toISOString()
+          : null,
+      };
+    } catch (err) {
+      return { index, status: "ERROR", ...this.bulkError(err) };
+    }
+  }
+
+  private bulkError(err: unknown): { code: string; message: string } {
+    if (err instanceof HttpException) {
+      const body: unknown = err.getResponse();
+      const fields =
+        typeof body === "object" && body !== null
+          ? (body as { code?: unknown; message?: unknown })
+          : {};
+      const status = (HttpStatus as unknown as Record<number, string>)[
+        err.getStatus()
+      ];
+      return {
+        code:
+          typeof fields.code === "string" ? fields.code : (status ?? "ERROR"),
+        message:
+          typeof fields.message === "string" ? fields.message : err.message,
+      };
+    }
+    this.logger.error("Bulk session create failed", err as Error);
+    return { code: "INTERNAL_ERROR", message: "Couldn't create this session." };
+  }
+
   list(dto: ListSessionsDto, user: User): Promise<SessionsListResponse> {
     return this.crud.list(dto, user);
   }
@@ -92,8 +169,20 @@ export class SessionsService {
     return this.crud.suggestions(dto, user);
   }
 
-  findById(id: string, user: User): Promise<SessionDetailResponse> {
-    return this.crud.findById(id, user);
+  /** Session detail, plus Done state and placement chips for a placed TASK. */
+  async findById(id: string, user: User): Promise<SessionDetailResponse> {
+    const detail = await this.crud.findById(id, user);
+    if (
+      detail.type !== "TASK" ||
+      !detail.scheduledStartTime ||
+      detail.id !== id
+    )
+      return detail;
+    const [done, placementChips] = await Promise.all([
+      this.sessionDone.isDone(id, user),
+      this.chips.forTask(detail, user),
+    ]);
+    return { ...detail, done, placementChips };
   }
 
   async update(
@@ -166,6 +255,16 @@ export class SessionsService {
   /** Records that the user is in this placed block now (`POST /sessions/:id/start`). */
   recordStart(id: string, user: User): Promise<SessionStartResponse> {
     return this.sessionStart.record(id, user);
+  }
+
+  /** Marks the placed TASK done (`POST /sessions/:id/done`). */
+  markDone(id: string, user: User): Promise<SessionDoneResponse> {
+    return this.sessionDone.mark(id, user);
+  }
+
+  /** Clears the Done mark (`DELETE /sessions/:id/done`). */
+  clearDone(id: string, user: User): Promise<SessionDoneResponse> {
+    return this.sessionDone.clear(id, user);
   }
 
   async truncateSeriesFrom(

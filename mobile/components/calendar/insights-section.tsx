@@ -1,21 +1,18 @@
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { getInsights } from "@/api/insights";
 import { SunriseIcon } from "@/components/brand/icons";
 import { EmptyMark } from "@/components/brand/state-marks";
 import { ChevronRight } from "@/components/Icons";
 import { LoadError } from "@/components/load-error";
-import {
-  BottomSheet,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetOpenTrigger,
-  BottomSheetScrollView,
-} from "@/components/ui/bottom-sheet";
+import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetScrollView } from "@/components/ui/bottom-sheet";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
 import { useLanguage } from "@/hooks/use-language";
 import { useOffline } from "@/hooks/use-offline";
 import { useUserStore } from "@/hooks/use-user-store";
+import { GlassButton } from "@/components/ui/glass-button";
 import { locale, t } from "@/lib/i18n";
 import {
   bufferLabel,
@@ -31,19 +28,18 @@ import { subscribeToSessionMutations } from "@/lib/session-cache";
 import { cn } from "@/lib/utils";
 import { zonedNow } from "@zenflow/core";
 import type { BufferItem, InsightsResponse, WeeklyRecap } from "@zenflow/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 
 /** Brand orange, as in `packages/core/src/palette.ts`. */
 const SUN = "#FF8E3E";
 
-/** Heat per bucket, 0 (none) to 4 (busiest). */
+/** Heat per bucket, 0 (none) to 4 (busiest). Bright brand lime in dark mode. */
 const HEAT = [
   "bg-muted",
-  "bg-brand-lime/20",
-  "bg-brand-lime/40",
-  "bg-brand-lime/65",
-  "bg-brand-lime/90",
+  "bg-brand-lime/30",
+  "bg-brand-lime/55",
+  "bg-brand-lime/80",
+  "bg-brand-lime",
 ];
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -107,7 +103,7 @@ function StatTile({
   progress?: number;
 }) {
   return (
-    <View className={cn("w-[48%] gap-2 rounded-2xl p-3.5", done ? "bg-brand-lime/10" : "bg-secondary")}>
+    <View className={cn("w-[48%] gap-2 rounded-2xl p-3.5", done ? "bg-brand-lime/10 border border-brand-lime/30" : "bg-secondary border border-border")}>
       <Text className="text-[12px] font-medium text-muted-foreground">{label}</Text>
       <Text className="text-[26px] font-bold leading-[30px] tracking-tight">{value}</Text>
       {progress !== undefined ? (
@@ -141,16 +137,23 @@ function BufferChip({ item }: { item: BufferItem }) {
   const label = bufferLabel(item.bufferDays);
   const ready = item.bufferDays !== null;
   return (
-    <View className="w-48 gap-2 rounded-2xl border border-border bg-card p-3.5">
+    <View
+      className={cn(
+        "w-48 gap-2 rounded-2xl p-3.5",
+        ready
+          ? "bg-brand-lime/10 border border-brand-lime/30"
+          : "bg-muted border border-border/60",
+      )}
+    >
       <View className="flex-row items-center gap-2">
-        <View className={cn("h-2 w-2 rounded-full", ready ? "bg-brand-lime" : "bg-muted-foreground/40")} />
+        <View className={cn("h-2 w-2 rounded-full", ready ? "bg-brand-lime" : "bg-muted-foreground/50")} />
         <Text numberOfLines={1} className="flex-1 text-[14px] font-semibold">
           {item.title}
         </Text>
       </View>
       <Text
         numberOfLines={1}
-        className={cn("text-[12px]", ready ? "text-brand-lime" : "text-muted-foreground")}
+        className={cn("text-[12px]", ready ? "text-brand-lime font-semibold" : "text-muted-foreground")}
       >
         {t(label.key, label.values)}
       </Text>
@@ -158,16 +161,62 @@ function BufferChip({ item }: { item: BufferItem }) {
   );
 }
 
-/**
- * Insights in a sheet opened from the day view: the focus map, a seven-day
- * recap and prep buffers for upcoming exams and assignments. Loads when
- * opened and again after any session change while it is open.
- */
-export function InsightsSection() {
+type SheetHandle = { present: () => void; dismiss: () => void };
+
+type InsightsContextShape = {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  present: () => void;
+  dismiss: () => void;
+  sheetRef: RefObject<SheetHandle | null>;
+};
+const InsightsContext = createContext<InsightsContextShape | null>(null);
+
+/** Shared open state so the compact trigger (next to the `+` in the week
+ * header) and the sheet (mounted unclipped at screen root) stay in sync.
+ * `present`/`dismiss` drive the sheet imperatively. */
+export function InsightsProvider({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const sheetRef = useRef<SheetHandle | null>(null);
+  const present = useCallback(() => sheetRef.current?.present(), []);
+  const dismiss = useCallback(() => sheetRef.current?.dismiss(), []);
+  return (
+    <InsightsContext.Provider value={{ open, setOpen, present, dismiss, sheetRef }}>
+      {children}
+    </InsightsContext.Provider>
+  );
+}
+
+function useInsights() {
+  const ctx = useContext(InsightsContext);
+  if (!ctx) throw new Error("useInsights must be used within an InsightsProvider");
+  return ctx;
+}
+
+/** The compact trigger button: lives next to the `+` in the week header. */
+export function InsightsTrigger() {
+  const { setOpen, present } = useInsights();
   useLanguage();
+  return (
+    <GlassButton
+      icon={SunriseIcon}
+      accessibilityLabel={t("Insights")}
+      onPress={() => {
+        setOpen(true);
+        present();
+      }}
+      testID="calendar.insights"
+    />
+  );
+}
+
+/** The insights sheet: mounted unclipped at screen root, presented by the
+ * trigger via shared state. */
+export function InsightsSheet() {
+  useLanguage();
+  const { open, setOpen, dismiss, sheetRef } = useInsights();
   const tz = useUserStore((s) => s.user?.timezone) || "UTC";
   const offline = useOffline();
-  const [open, setOpen] = useState(false);
   const [view, setView] = useState<{ data: InsightsResponse | null; error: boolean }>({
     data: null,
     error: false,
@@ -197,34 +246,24 @@ export function InsightsSection() {
 
   return (
     <BottomSheet>
-      <BottomSheetOpenTrigger
-        onPress={() => setOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={t("Insights")}
-        testID="calendar.insights"
-        className="w-full flex-row items-center gap-3.5 rounded-2xl border border-border bg-card px-4 py-3.5 active:opacity-70"
-      >
-        <View className="size-10 items-center justify-center rounded-xl bg-brand-orange/10">
-          <SunriseIcon color={SUN} size={20} />
-        </View>
-        <View className="flex-1 gap-0.5">
-          <Text className="text-[15px] font-semibold">{t("Insights")}</Text>
-          <Text className="text-[13px] text-muted-foreground">{t("Focus map, recap and prep")}</Text>
-        </View>
-        <ChevronRight size={18} className="text-muted-foreground" />
-      </BottomSheetOpenTrigger>
+      {/* Presented imperatively via `present`/`dismiss` from the provider. The
+         handle is captured on BottomSheetContent's ref. */}
       <BottomSheetContent
+        ref={sheetRef as any}
         snapPoints={["85%"]}
         enableDynamicSizing={false}
-        onDismiss={() => setOpen(false)}
+        onDismiss={dismiss}
       >
         <BottomSheetHeader className="border-b-0 px-5 pb-3">
           <View className="flex-row items-center gap-3">
-            <EmptyMark size={44} />
-            <View className="gap-0.5">
-              <Text className="text-[22px] font-bold tracking-tight">{t("Insights")}</Text>
+            <View className="size-10 items-center justify-center rounded-xl bg-brand-orange/10">
+              <SunriseIcon color={SUN} size={20} />
+            </View>
+            <View className="flex-1 gap-0.5">
+              <Text className="text-[15px] font-semibold">{t("Insights")}</Text>
               <Text className="text-[13px] text-muted-foreground">{t("Last 7 days")}</Text>
             </View>
+            <ChevronRight size={18} className="text-muted-foreground" />
           </View>
         </BottomSheetHeader>
         <BottomSheetScrollView>
@@ -279,5 +318,15 @@ export function InsightsSection() {
         </BottomSheetScrollView>
       </BottomSheetContent>
     </BottomSheet>
+  );
+}
+
+/** Combined convenience: provider + trigger + sheet (kept for tests). */
+export function InsightsSection() {
+  return (
+    <InsightsProvider>
+      <InsightsTrigger />
+      <InsightsSheet />
+    </InsightsProvider>
   );
 }

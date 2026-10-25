@@ -7,6 +7,7 @@ import type {
   RemoveSessionResponse,
   Session,
   SessionDetailResponse,
+  SessionDoneResponse,
   SessionSearchQuery,
   SessionSearchResponse,
   SessionsListResponse,
@@ -132,6 +133,18 @@ export async function removeSession(
 /** Record that the user started a session now (`POST /sessions/:id/start`). */
 export async function startSession(id: string): Promise<void> {
   await api.post(`/sessions/${encodeURIComponent(id)}/start`);
+}
+
+/** Marks a placed TASK done (`POST /sessions/:id/done`). */
+export async function markSessionDone(id: string): Promise<SessionDoneResponse> {
+  const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/done`);
+  return data.data;
+}
+
+/** Clears the Done mark (`DELETE /sessions/:id/done`). */
+export async function clearSessionDone(id: string): Promise<SessionDoneResponse> {
+  const { data } = await api.delete(`/sessions/${encodeURIComponent(id)}/done`);
+  return data.data;
 }
 
 /** Skip one session: it stays on the calendar, marked as skipped. */

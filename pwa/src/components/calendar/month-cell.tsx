@@ -117,6 +117,7 @@ export function MonthCell({
 
 function MonthEventItem({ ev }: { ev: Event }) {
   const late = useIsLate(ev.taskId);
+  const isDone = Boolean(ev.done);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: ev.id,
   });
@@ -136,11 +137,13 @@ function MonthEventItem({ ev }: { ev: Event }) {
       className={cn(
         "relative z-30 mt-0 h-auto w-full justify-start gap-x-1 rounded border border-l-2 px-1.5 py-0.5 text-[11px] font-medium",
         isDragging && "opacity-40",
-        TASK_CARD_CLASSES[ev.state],
+        isDone
+          ? "border-0 border-l-4 border-brand-lime bg-background/80 dark:bg-background/80 opacity-60"
+          : TASK_CARD_CLASSES[ev.state],
         late && LATE_CARD_CLASSES,
       )}
     >
-      <span className="truncate">{ev.title}</span>
+      <span className={cn("truncate", isDone && "line-through")}>{ev.title}</span>
     </Button>
   );
 }

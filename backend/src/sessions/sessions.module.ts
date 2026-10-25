@@ -13,7 +13,10 @@ import { FilesModule } from "../files/files.module";
 import { SchedulerModule } from "../scheduler/scheduler.module";
 import { SessionSkipService } from "./session-skip.service";
 import { SessionStartService } from "./session-start.service";
+import { SessionDoneService } from "./session-done.service";
+import { PlacementChipsService } from "./placement-chips.service";
 import { PlacementPlanService } from "./placement-plan.service";
+import { ApiTokensModule } from "../api-access/api-tokens.module";
 
 @Module({
   imports: [
@@ -22,6 +25,7 @@ import { PlacementPlanService } from "./placement-plan.service";
     SchedulerModule,
     RemindersModule,
     FilesModule,
+    ApiTokensModule,
   ],
   controllers: [SessionsController],
   providers: [
@@ -33,6 +37,8 @@ import { PlacementPlanService } from "./placement-plan.service";
     SessionSearchService,
     SessionSkipService,
     SessionStartService,
+    SessionDoneService,
+    PlacementChipsService,
     PlacementPlanService,
   ],
   exports: [SessionsService],

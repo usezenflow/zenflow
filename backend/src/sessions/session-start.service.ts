@@ -19,8 +19,9 @@ import { recordSessionEvent } from "./session-events";
 /**
  * Records that the user opened the app inside a placed block: one `START`
  * `SessionEvent` per unmoved placement, written only while `now` is inside its
- * slot. The START is the reward (ADR-0035): LinUCB and the preference matrix
- * learn from it as soon as it is recorded.
+ * slot. START is telemetry only (ADR-0035): it carries `SESSION_STARTED_REWARD
+ * = 0.0`, so LinUCB and the preference matrix do not learn from it. DONE is
+ * the learning signal, written by {@link SessionDoneService}.
  */
 @Injectable()
 export class SessionStartService {

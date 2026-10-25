@@ -55,7 +55,7 @@ export class InsightsService {
              count(*)::int AS done
       FROM "SessionEvent" e
       WHERE e."userId" = ${user.id}
-        AND e."eventType" = 'COMPLETE'
+        AND e."eventType" = 'DONE'
         AND e."occurredAt" >= ${fromAt}
         AND e."occurredAt" < ${toAt}
       GROUP BY 1, 2`;
@@ -85,21 +85,23 @@ export class InsightsService {
         _sum: { durationMinutes: true },
       }),
       this.prisma.session.aggregate({
-        where: { ...placed, events: { some: { eventType: "COMPLETE" } } },
+        where: { ...placed, events: { some: { eventType: "DONE" } } },
         _sum: { durationMinutes: true },
       }),
-      this.prisma.sessionEvent.count({
+      this.prisma.session.count({
         where: {
           userId,
-          eventType: "SKIP",
-          occurredAt: { gte: fromAt, lt: toAt },
+          type: "TASK",
+          deleted: false,
+          skipped: true,
+          scheduledStartTime: { gte: fromAt, lt: toAt },
         },
       }),
       this.onTimeCount(userId, fromAt, toAt),
     ]);
     return {
       plannedMinutes: planned._sum.durationMinutes ?? 0,
-      doneMinutes: done._sum.durationMinutes ?? 0,
+      doneMinutes: done._sum?.durationMinutes ?? 0,
       notThisTimeCount,
       onTimeCount,
     };
@@ -124,7 +126,7 @@ export class InsightsService {
         AND (
           SELECT min(e."occurredAt")
           FROM "SessionEvent" e
-          WHERE e."sessionId" = s.id AND e."eventType" = 'COMPLETE'
+          WHERE e."sessionId" = s.id AND e."eventType" = 'DONE'
         ) < s.deadline`;
     return row?.count ?? 0;
   }
@@ -154,7 +156,7 @@ export class InsightsService {
         type: "TASK",
         deleted: false,
         skipped: false,
-        completedAt: null,
+        events: { none: { eventType: "DONE" } },
         prepForSessionId: { in: parents.map((p) => p.id) },
         scheduledStartTime: { not: null },
       },

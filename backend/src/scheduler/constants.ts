@@ -67,11 +67,15 @@ export const STABILITY_SATURATION_HOURS = 4;
 
 /**
  * Reward written on the `SessionEvent` (ADR-0035). A user drag/resize of a
- * scheduled TASK is graded by displacement (`MOVE`). A START inside an unmoved
- * TASK's slot is positive. `CREATE` events carry a neutral 0.
+ * scheduled TASK is graded by displacement (`MOVE`). A DONE inside an unmoved
+ * TASK's slot is positive; a SKIP is negative. `CREATE` events carry a neutral
+ * 0. `START` remains tracked for telemetry only and carries no learning signal.
  */
 export const SESSION_MOVE_REWARD = -1.0;
-export const SESSION_STARTED_REWARD = 1.0;
+export const SESSION_DONE_REWARD = 1.0;
+export const SESSION_SKIP_REWARD = -1.0;
+/* START stays tracked for telemetry only; it carries no learning signal. */
+export const SESSION_STARTED_REWARD = 0.0;
 /**
  * Reward for the LinUCB arm when the user picks LinUCB's option in a shown
  * pairwise comparison (`docs/scheduler/ab-testing.md` §3). Below completion:

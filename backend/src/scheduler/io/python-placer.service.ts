@@ -120,6 +120,59 @@ export class PythonPlacer {
     throw new ScheduleInfeasibleException();
   }
 
+  /**
+   * The start a single `TASK` would get, without writing anything (the
+   * dry-run path). `startMs` is null when no slot fits. `needsConfirmation`
+   * is set when the plan would move a `CHOSEN` session.
+   */
+  async proposeSingle(args: {
+    user: User;
+    durationMinutes: number;
+    deadline: Date;
+    now: Date;
+    policy?: InfeasiblePolicy;
+  }): Promise<{ startMs: number | null; needsConfirmation: boolean }> {
+    const { user, deadline, now, policy } = args;
+    const task: PlaceableTask = {
+      id: PREFLIGHT_TASK_ID,
+      durationMinutes: args.durationMinutes,
+      deadline,
+    };
+    const req = await this.gateway.buildRequest({
+      user,
+      member: this.memberOf(task, "HEURISTIC", false),
+      deadline,
+      now,
+      mode: "PREFLIGHT",
+      maxScanDays: SCAN_CAP_DAYS,
+      excludeSessionIds: [],
+    });
+    const res = await this.gateway.placeSingleTwoPhase(req, user, task, policy);
+    if (!res.ok) {
+      this.noteFallback(res.reason);
+      const start = await this.fallback.placeSingle(
+        user.id,
+        task,
+        user.timezone,
+        user.preferenceMatrix,
+        now,
+      );
+      return {
+        startMs: start ? start.getTime() : null,
+        needsConfirmation: false,
+      };
+    }
+    this.noteSource("python");
+    const r = res.response.result;
+    if (r.outcome === "NEEDS_CONFIRMATION") {
+      return { startMs: r.startMs, needsConfirmation: true };
+    }
+    return {
+      startMs: placed(r.outcome) ? r.startMs : null,
+      needsConfirmation: false,
+    };
+  }
+
   // ---- single TASK -------------------------------------------------------
 
   /**

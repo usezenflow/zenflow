@@ -9,6 +9,8 @@ import { ScheduleInfeasibleException } from "../scheduler/schedule-infeasible.ex
 import { SessionsService } from "./sessions.service";
 import { SessionSkipService } from "./session-skip.service";
 import { SessionStartService } from "./session-start.service";
+import { SessionDoneService } from "./session-done.service";
+import { PlacementChipsService } from "./placement-chips.service";
 import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service";
 import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
@@ -186,6 +188,14 @@ async function makeService(
       { provide: RemindersService, useValue: fakeReminders() },
       { provide: SessionSkipService, useValue: {} },
       { provide: SessionStartService, useValue: {} },
+      {
+        provide: SessionDoneService,
+        useValue: { mark: jest.fn(), clear: jest.fn(), isDone: jest.fn() },
+      },
+      {
+        provide: PlacementChipsService,
+        useValue: { forTask: jest.fn().mockResolvedValue([]) },
+      },
       { provide: ConflictResolveService, useValue: {} },
       {
         provide: NoteFilesService,
@@ -595,6 +605,7 @@ describe("SessionsService.list", () => {
     const prisma = {
       session: { findMany },
       sessionOccurrenceState: { findMany: jest.fn().mockResolvedValue([]) },
+      sessionEvent: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = await makeService(
       prisma,
@@ -638,6 +649,7 @@ describe("SessionsService.list", () => {
     const prisma = {
       session: { findMany },
       sessionOccurrenceState: { findMany: jest.fn().mockResolvedValue([]) },
+      sessionEvent: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = await makeService(
       prisma,
@@ -687,6 +699,7 @@ describe("SessionsService.list", () => {
           },
         ]),
       },
+      sessionEvent: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = await makeService(prisma, fakeTagsService());
 
@@ -716,6 +729,7 @@ describe("SessionsService.list", () => {
     const prisma = {
       session: { findMany },
       sessionOccurrenceState: { findMany: jest.fn().mockResolvedValue([]) },
+      sessionEvent: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = await makeService(
       prisma,
@@ -759,6 +773,7 @@ describe("SessionsService.list", () => {
     const prisma = {
       session: { findMany },
       sessionOccurrenceState: { findMany: jest.fn().mockResolvedValue([]) },
+      sessionEvent: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = await makeService(
       prisma,
@@ -785,6 +800,7 @@ describe("SessionsService.list", () => {
     const prisma = {
       session: { findMany },
       sessionOccurrenceState: { findMany: jest.fn().mockResolvedValue([]) },
+      sessionEvent: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = await makeService(
       prisma,
@@ -825,6 +841,7 @@ describe("SessionsService.list", () => {
     const prisma = {
       session: { findMany },
       sessionOccurrenceState: { findMany: jest.fn().mockResolvedValue([]) },
+      sessionEvent: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = await makeService(
       prisma,

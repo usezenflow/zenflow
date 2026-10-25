@@ -52,6 +52,7 @@ function AgendaRow({
   const online = location ? isOnlineLocation(location) : false;
   const LocationIcon = online ? Globe : MapPin;
   const [start, end] = sessionTimeRange(session, tz);
+  const isDone = Boolean(session.done);
 
   return (
     <button
@@ -61,13 +62,16 @@ function AgendaRow({
           new CustomEvent("zenflow:open-task", { detail: session.id }),
         )
       }
-      className="flex w-full min-w-0 items-stretch gap-3 rounded-r-xl py-2 pr-2 text-left transition-colors hover:bg-muted/60"
+      className={cn(
+        "flex w-full min-w-0 items-stretch gap-3 rounded-r-xl py-2 pr-2 text-left transition-colors hover:bg-muted/60",
+        isDone && "opacity-50",
+      )}
     >
       <span
         aria-hidden
         className={cn(
           "w-[3px] shrink-0 rounded-full",
-          SESSION_TONE_CLASSES[tone].dot,
+          isDone ? "bg-brand-lime" : SESSION_TONE_CLASSES[tone].dot,
         )}
       />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -75,7 +79,7 @@ function AgendaRow({
           <span>{start}</span>
           <span className="opacity-60">{end}</span>
         </span>
-        <span className="truncate text-[15px] font-medium">
+        <span className={cn("truncate text-[15px] font-medium", isDone && "line-through")}>
           {highlightParts(session.title, term).map((part, i) =>
             part.match ? (
               <mark
