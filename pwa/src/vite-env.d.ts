@@ -11,7 +11,6 @@ interface ViteTypeOptions {
 interface ImportMetaEnv {
   readonly VITE_API_URL: string;
   /** Map edge base URL (`<origin>/maps`). Defaults to the API origin. */
-  readonly VITE_MAPS_URL?: string;
   /** Base64url VAPID public key for Web Push. Public by design. */
   readonly VITE_VAPID_PUBLIC_KEY: string;
   // more env variables...
