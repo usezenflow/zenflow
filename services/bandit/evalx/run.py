@@ -75,7 +75,7 @@ from src.api import update_arm  # noqa: E402
 from src.core import constants as consts  # noqa: E402
 from src.core.constants import (  # noqa: E402
     DAY_MS,
-    DONE_REWARD,
+    KEPT_REWARD,
     MS_PER_MINUTE,
     PREFERENCE_KEPT_WEIGHT,
 )
@@ -91,7 +91,7 @@ from src.schemas_place import PLACEMENT_CONTRACT_VERSION, PlaceRequest  # noqa: 
 
 ALPHA = 0.15  # BANDIT_ALPHA, backend/src/scheduler/constants.ts
 RIDGE = 1.0  # BANDIT_RIDGE
-# DONE_REWARD and SKIP_REWARD come from src.core.constants (mirror of the backend).
+# KEPT_REWARD comes from src.core.constants (mirror of the backend).
 PAIRWISE_WIN_REWARD = 0.5  # backend/src/scheduler/constants.ts
 PAIRWISE_LOSS_REWARD = -0.2
 MIN_ALTERNATIVE_GAP_MINUTES = 60  # an offer needs two starts at least this far apart
@@ -138,8 +138,7 @@ CFG: dict[str, Any] = {
     "worlds": "all",  # "all" or "bands"
     # Reality knobs (semester). The defaults are the headline student and signal.
     "timing": 1.0,  # how much the hour matters to a student, 1 to 0
-    "detect": 1.0,  # chance a real start reaches the learner
-    "false_start": 0.0,  # chance a non-start is logged as a start
+    "detect": 1.0,  # chance a kept slot reaches the learner
     "delay": 0,  # tasks between a start and its reward
     "tap_scale": 1.0,  # scale on the chance a student answers an offer
     "drift": None,  # {"kind": "step" or "walk", "hours": n}: the peak hour moves
@@ -452,16 +451,15 @@ def react(
 ) -> tuple[bool, str | None, float | None, int]:
     """(done, signal, reward, new_start) for a block at ``start``.
 
-    DONE inside the band when the student completes the block. Outside it only a
-    ``drag`` style student moves the block, to the free start nearest the band
-    centre (a MOVE); with none free, it stays.
+    ``done`` is the latent outcome the metrics read: the student completes a block
+    inside the band. The learner hears only KEPT for a block left in place, in the
+    band or not. Outside the band a ``drag`` style student moves the block, to the
+    free start nearest the band centre (a MOVE); with none free, it stays.
     """
     midnight = (start // DAY_MS) * DAY_MS
     p = open_chance(s, (task.deadline_ms - start) / DAY_MS, start)
     if in_band(s, start, midnight):
-        if task.u_open < p:
-            return True, "DONE", DONE_REWARD, start
-        return False, None, None, start  # silent: no signal
+        return task.u_open < p, "KEPT", KEPT_REWARD, start
     if style == "drag" and task.u_drag < s.drag:
         minute = feasible_start(
             s.band_on(midnight // DAY_MS),
@@ -469,7 +467,7 @@ def react(
             task.duration_min,
         )
         if minute is None:
-            return False, None, None, start
+            return False, "KEPT", KEPT_REWARD, start
         moved = midnight + minute * MS_PER_MINUTE
         drag = abs(moved - start) / MS_PER_MINUTE
         return (
@@ -478,7 +476,7 @@ def react(
             drag_distance_reward(drag, CFG["move_scale"]),
             moved,
         )
-    return False, None, None, start
+    return False, "KEPT", KEPT_REWARD, start
 
 
 def utility(s: Student, start: int) -> float:
@@ -587,7 +585,7 @@ def simulate(
             close += left_h <= CLOSE_HOURS
         ok, signal, reward, new_start = react(st, task, start, style, cal)
         done += ok
-        if signal == "DONE":
+        if signal == "KEPT":
             matrix = _kept(matrix, start, kern)
         elif signal == "MOVE":
             moves += 1
@@ -684,7 +682,7 @@ def simulate_ab(
                 )
                 matrix = _moved(matrix, ls, hs, drag, kern)
         ok, signal, reward, new_start = react(st, task, applied, style, cal)
-        if signal == "DONE":
+        if signal == "KEPT":
             matrix = _kept(matrix, applied, kern)
         elif signal == "MOVE":
             drag = abs(new_start - applied) / MS_PER_MINUTE

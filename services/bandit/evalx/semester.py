@@ -37,9 +37,9 @@ from evalx.student_behavior import (
     sample_student,
 )
 from evalx.world import HOUR_MS, Calendar, Task, busy_minutes
-from src.core.constants import DAY_MS, DONE_REWARD, MS_PER_MINUTE, SKIP_REWARD
+from src.core.constants import DAY_MS, KEPT_REWARD, MS_PER_MINUTE
 from src.core.preference import default_preference_matrix
-from src.core.reward import answer_reward, drag_distance_reward
+from src.core.reward import drag_distance_reward
 from src.schemas import HOUR_ARM_IDS
 
 HEADLINE = (
@@ -284,8 +284,8 @@ Noise = list[tuple[float, float]]
 class Feedback:
     """What the learner hears of a student's actions, as the live app would.
 
-    A real start reaches the learner with chance ``detect``; a non-start is logged
-    as a start with chance ``false_start``; every effect lands ``delay`` tasks late.
+    A kept slot reaches the learner with chance ``detect`` (the sweep missed it);
+    every effect lands ``delay`` tasks late.
     The student's true behaviour, and so the metrics, are untouched.
     """
 
@@ -294,13 +294,9 @@ class Feedback:
         self.queue: list[tuple[int, Callable[[], None]]] = []
 
     def seen(self, n: int, signal: str | None) -> str | None:
-        u_detect, u_false = self.noise[n] if self.noise else (0.0, 1.0)
-        if signal == "DONE":
-            return "DONE" if u_detect < core.CFG["detect"] else None
-        if signal == "SKIP":
-            return "SKIP" if u_detect < core.CFG["detect"] else None
-        if signal is None and u_false < core.CFG["false_start"]:
-            return "DONE"
+        u_detect = self.noise[n][0] if self.noise else 0.0
+        if signal == "KEPT":
+            return "KEPT" if u_detect < core.CFG["detect"] else None
         return signal
 
     def defer(self, n: int, effect: Callable[..., None]) -> None:
@@ -426,20 +422,18 @@ def simulate_arm(
         reward: float | None = None
         if hourly and hourly.start_model and lin:
             hour, z = lin["selectedArm"], np.asarray(lin["slot"])
-            done_label = heard == "DONE"
+            done_label = heard == "KEPT"
             feed.defer(
                 n,
                 lambda h=hour, v=z, y=done_label: hourly.observe_label(h, v, y),
             )
-        if heard == "DONE":
-            reward = DONE_REWARD
+        if heard == "KEPT":
+            reward = KEPT_REWARD
             if not spec.get("frozen"):
                 feed.defer(
                     n,
                     lambda a=applied: box.__setitem__(0, core._kept(box[0], a, kern)),
                 )
-        elif heard == "SKIP":
-            reward = SKIP_REWARD
         elif heard == "MOVE":
             drag = abs(applied - start) / MS_PER_MINUTE
             reward = drag_distance_reward(drag, core.CFG["move_scale"])
@@ -530,11 +524,9 @@ def simulate_ab(
         _occupy(placed, final, task.duration_min)
         heard = feed.seen(n, signal)
         reward: float | None = None
-        if heard == "DONE":
-            reward = DONE_REWARD
+        if heard == "KEPT":
+            reward = KEPT_REWARD
             feed.defer(n, lambda a=final: box.__setitem__(0, core._kept(box[0], a)))
-        elif heard == "SKIP":
-            reward = SKIP_REWARD
         elif heard == "MOVE":
             drag = abs(final - applied) / MS_PER_MINUTE
             reward = drag_distance_reward(drag, core.CFG["move_scale"])
@@ -966,7 +958,6 @@ TYPICAL: dict[str, Any] = {
 HARSH: dict[str, Any] = {
     "timing": 0.25,
     "detect": 0.3,
-    "false_start": 0.1,
     "delay": 10,
     "tap_scale": 0.2,
     "drift": {"kind": "walk", "hours": 1.5},
@@ -975,9 +966,8 @@ REALITY: dict[str, dict[str, Any]] = {
     "headline student and signal": {},
     "hour matters half as much": {"timing": 0.5},
     "hour matters a quarter as much": {"timing": 0.25},
-    "60% of real starts reach the learner": {"detect": 0.6},
-    "30% of real starts reach the learner": {"detect": 0.3},
-    "10% of non-starts logged as starts": {"false_start": 0.1},
+    "60% of kept slots reach the learner": {"detect": 0.6},
+    "30% of kept slots reach the learner": {"detect": 0.3},
     "rewards 3 tasks late": {"delay": 3},
     "rewards 10 tasks late": {"delay": 10},
     "peak hour shifts 3 hours once": {"drift": {"kind": "step", "hours": 3.0}},

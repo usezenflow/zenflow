@@ -87,9 +87,7 @@ def test_rewards_match_the_backend() -> None:
         _ts_constant("MIN_ALTERNATIVE_GAP_MINUTES")
         == harness.MIN_ALTERNATIVE_GAP_MINUTES
     )
-    assert consts.DONE_REWARD == 1.0  # ADR-0035
-    assert consts.START_REWARD == 0.0  # telemetry only
-    assert consts.SKIP_REWARD == -1.0
+    assert consts.KEPT_REWARD == _ts_constant("SESSION_KEPT_REWARD")  # ADR-0042
     assert harness.CFG["move_scale"] == consts.MOVE_REWARD_SCALE_MINUTES
 
 
@@ -276,7 +274,6 @@ def _passive(**kw: Any) -> Any:
         "attention": 0.5,
         "imminence": 0.0,
         "respond": 0.5,
-        "skip_chance": 0.2,
     }
     return PassiveStudent(**{**base, **kw})
 

@@ -1,8 +1,8 @@
 """A passive student: completes what is placed when it suits them, answers prompts or not.
 
-Students do not create tasks, drag blocks or tick boxes. Two signals reach the
-learner: a DONE inside a placed block, and the keep or try pick on a pairwise
-offer. Every number here is an assumption, drawn per student so the report shows
+Students do not create tasks or tick boxes. Three signals reach the learner: a
+placed block whose slot passes unmoved is KEPT, a dragged block is a MOVE, and
+the keep or try pick on a pairwise offer is a tap. Every number here is an assumption, drawn per student so the report shows
 a spread rather than one tuned setting.
 
 The chance to complete a block is ``attention`` scaled by four factors:
@@ -13,9 +13,8 @@ The chance to complete a block is ``attention`` scaled by four factors:
 ``drag`` is 0 for the headline; a positive value lets the student move a block
 that starts at a poor hour, and exists only as an ablation.
 
-When a placed block falls due, the student either completes it (``DONE``),
-declines it (``SKIP``, "not this time"), or stays silent. ``skip_chance``
-shapes how often a non-completing student still answers explicitly.
+Whether the student completes a block is the latent outcome the metrics read;
+the learner never sees it. It hears only that the block was kept or moved.
 
 Two reality knobs default to the headline student. ``timing`` (1 to 0) pulls the
 circadian bump toward its daily mean, so the hour matters less to a lazy student
@@ -61,7 +60,6 @@ CLOSE_DAYS = 2  # a deadline this close counts as imminent
 ATTENTION_RANGE = (0.15, 0.7)
 IGNORER_SHARE = 0.3  # students who never respond to an offer
 RESPOND_RANGE = (0.4, 0.7)  # chance a responsive student acts on an offer
-SKIP_RANGE = (0.1, 0.3)  # chance a non-completing student still declines explicitly
 FIT_GOOD = 0.5  # a drag-capable student keeps a block whose circadian fit is this
 
 
@@ -73,7 +71,6 @@ class PassiveStudent:
     attention: float  # base chance to complete a well-timed block, 0..1
     imminence: float  # extra factor when the deadline is close, 0..1
     respond: float  # chance to act on a pairwise offer, 0 for an ignorer
-    skip_chance: float  # chance to explicitly decline a block they do not complete
     drag: float = 0.0
     timing: float = 1.0  # 1 the hour fully matters, 0 it does not matter
     shifts: tuple[tuple[int, float], ...] = ()  # (from day, peak offset in hours)
@@ -136,24 +133,18 @@ class PassiveStudent:
     ) -> tuple[bool, str | None, int, float]:
         """(done, signal, applied start, done chance) for a block at ``start_ms``.
 
-        The student either completes the block (``DONE``), declines it
-        (``SKIP``, "not this time") or stays silent. A student with drag first
-        moves a poorly timed block to a better free hour that day; the signal
-        is then MOVE, as in production.
+        ``done`` is the latent outcome. A student with drag first moves a poorly
+        timed block to a better free hour that day; the signal is then MOVE.
+        Any other block stays put and is KEPT, whether or not it suited the
+        student, as in production.
         """
-        applied, signal = start_ms, None
+        applied, signal = start_ms, "KEPT"
         if self.drag > 0 and task.u_drag < self.drag and self.fit(start_ms) < FIT_GOOD:
             moved = self._better_start(task, start_ms, cal)
             if moved is not None:
                 applied, signal = moved, "MOVE"
         p = self.done_chance(task, applied, cal)
         done = task.u_open < p
-        if signal is None:
-            if done:
-                signal = "DONE"
-            elif task.u_open < self.skip_chance:
-                signal = "SKIP"
-            # otherwise silent: no signal, no update
         return done, signal, applied, p
 
     def _better_start(self, task: Task, start_ms: int, cal: Calendar) -> int | None:
@@ -229,7 +220,6 @@ def sample_student(
             name, peak = n, p
             break
     respond = 0.0 if rng.random() < IGNORER_SHARE else rng.uniform(*RESPOND_RANGE)
-    skip_chance = 0.0 if respond == 0.0 else rng.uniform(*SKIP_RANGE)
     return PassiveStudent(
         f"{name}-{idx}",
         name,
@@ -237,7 +227,6 @@ def sample_student(
         rng.uniform(*ATTENTION_RANGE),
         rng.random(),
         respond,
-        skip_chance,
     )
 
 
