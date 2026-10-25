@@ -11,7 +11,6 @@ import { Prisma, SessionEventType, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { wouldConflict } from "../scheduler/io/conflict-check";
 import { DisplacementService } from "../scheduler/io/displacement.service";
-import { RemindersService } from "../reminders/reminders.service";
 import { MS_PER_MINUTE } from "../scheduler/core/slot";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { SessionCrudService } from "./session-crud.service";
@@ -49,7 +48,6 @@ export class PlacementPlanService {
     private readonly prisma: PrismaService,
     private readonly displacement: DisplacementService,
     private readonly crud: SessionCrudService,
-    private readonly reminders: RemindersService,
   ) {}
 
   async confirm(
@@ -202,17 +200,7 @@ export class PlacementPlanService {
       return placed;
     });
 
-    let session: SharedSession = toSessionDto(row);
-    if (!plan.subjectId && createInput) {
-      // A create gets the reminders its request asked for, as a direct create does.
-      const minutes = this.reminders.resolveForCreate(
-        createInput.type,
-        createInput.reminders,
-        user.defaultReminderMinutes,
-      );
-      const { applied } = await this.reminders.replace([row.id], minutes);
-      session = { ...session, reminders: applied };
-    }
+    const session: SharedSession = toSessionDto(row);
 
     return {
       session,

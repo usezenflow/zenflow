@@ -37,10 +37,9 @@ type LinucbProposal = {
  * `acceptedWithoutModification`) that first modification stamps. Every step
  * is best-effort — a bandit failure never breaks the session update.
  *
- * The DONE reward of an unmoved session comes from {@link SessionDoneService},
+ * The KEPT reward of an unmoved session comes from {@link KeptSweepService},
  * which calls {@link applyDelayedReward} directly; both paths share the same
  * "find the LinUCB proposal, fold the reward in, link the event back" logic.
- * START events carry `SESSION_STARTED_REWARD = 0.0` and produce no bandit update.
  */
 @Injectable()
 export class SchedulingFeedbackService {

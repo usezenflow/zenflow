@@ -70,7 +70,6 @@ backend/
 │   ├── main.ts            # /api/v1 prefix, CORS, ValidationPipe, Redis session, Swagger
 │   ├── auth/  users/  tags/  devices/  mail/  crypto/
 │   ├── sessions/          # session CRUD; a create or edit places one TASK (or series)
-│   ├── reminders/         # per-session reminder timers
 │   ├── scheduler/         # core/ (pure), io/ (Prisma + bandit HTTP), types/
 │   ├── bandit/            # HTTP client for services/bandit + per-user (A,b) repo
 │   ├── experiments/       # 50/50 policy assignment + SlotProposal
@@ -96,7 +95,7 @@ Layering rule: `scheduler/core/*` and `ingestion/core/*` are pure and determinis
 | [docs/backend/api.md](../docs/backend/api.md) | Endpoints, response envelope, error codes, rate limits, fail-open store |
 | [docs/backend/data-model.md](../docs/backend/data-model.md) | Tables, Session invariants, indexes |
 | [docs/backend/ingestion.md](../docs/backend/ingestion.md) | Queue flow, confirm/miss gate, cache, circuit breakers, manual sync |
-| [docs/backend/scheduler.md](../docs/backend/scheduler.md) | Python-authoritative placement, degraded mode, reminders, file map |
+| [docs/backend/scheduler.md](../docs/backend/scheduler.md) | Python-authoritative placement, degraded mode, file map |
 | [docs/backend/config.md](../docs/backend/config.md) | Every env var with defaults |
 | [observability/README.md](observability/README.md) | Traces, metrics, logs, Grafana |
 | [docs/architecture/](../docs/architecture/scheduler-flows.md) | Diagrams and sequence flows |

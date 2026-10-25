@@ -66,11 +66,9 @@ export class PrepPlanProcessor implements OnModuleInit {
         title: true,
         type: true,
         scheduledStartTime: true,
-        skipped: true,
       },
     });
     if (!parent?.scheduledStartTime) return null;
-    if (parent.skipped) return null;
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) return null;

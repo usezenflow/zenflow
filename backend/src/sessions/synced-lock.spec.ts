@@ -1,9 +1,5 @@
 import { ForbiddenException } from "@nestjs/common";
-import {
-  assertSyncedDeletable,
-  assertSyncedEditable,
-  isSynced,
-} from "./synced-lock";
+import { assertSyncedEditable, isSynced } from "./synced-lock";
 
 const portalLecture = { source: "PORTAL", type: "LECTURE" } as const;
 
@@ -16,13 +12,11 @@ describe("synced lock", () => {
     expect(isSynced({ source: "PORTAL", type: "TASK" })).toBe(false);
   });
 
-  it("lets the student edit note, tags, reminders and commute start", () => {
+  it("lets the student edit note and tags", () => {
     expect(() =>
       assertSyncedEditable(portalLecture, {
         note: "bring laptop",
         tags: ["math"],
-        reminders: [15],
-        originLocation: "Dorm",
       }),
     ).not.toThrow();
   });
@@ -40,14 +34,5 @@ describe("synced lock", () => {
     expect(() => assertSyncedEditable(portalLecture, { title: "New" })).toThrow(
       ForbiddenException,
     );
-  });
-
-  it("refuses to delete a synced session but not the student's own", () => {
-    expect(() => assertSyncedDeletable(portalLecture)).toThrow(
-      ForbiddenException,
-    );
-    expect(() =>
-      assertSyncedDeletable({ source: "USER", type: "EXAM" }),
-    ).not.toThrow();
   });
 });

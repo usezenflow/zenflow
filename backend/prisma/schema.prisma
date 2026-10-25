@@ -23,36 +23,23 @@ enum UserRole {
 }
 
 model User {
-  id                 String              @id @default(uuid())
-  calendarFeedTokenHash String?   @unique // SHA-256 of the calendar feed secret; null when no feed
-  calendarFeedCreatedAt DateTime?
-  studentProfile     StudentProfile?
-  studyPrograms      StudyProgram[]
-  studentMarks       StudentMark[]
-  studentTermResults StudentTermResult[]
-  name               String              @db.VarChar(60)
-  email              String              @unique @db.VarChar(255)
-  timezone           String              @default("Asia/Saigon") @db.VarChar(50)
-  lang               Language            @default(VI_VN)
+  id                    String              @id @default(uuid())
+  studentProfile        StudentProfile?
+  studyPrograms         StudyProgram[]
+  studentMarks          StudentMark[]
+  studentTermResults    StudentTermResult[]
+  name                  String              @db.VarChar(60)
+  email                 String              @unique @db.VarChar(255)
+  timezone              String              @default("Asia/Saigon") @db.VarChar(50)
+  lang                  Language            @default(VI_VN)
 
-  /// Gates `/admin/*` (read-only management data). Set in the database; no API grants it.
+  /// Gates `/admin/*`; set in the database only
   role UserRole @default(USER)
 
-  /// Reminder lead time (minutes) applied to new sessions that omit `reminders`; 0 = none.
-  defaultReminderMinutes Int @default(10)
-
-  /// Transport used for commute estimates. Null = not set yet.
-  defaultTransport CommuteTransport?
-
-  /// Where the student's trips to campus start. Filled into sessions that have no start of their own.
-  homeLocation String? @db.VarChar(200)
-  homeLat      Float?
-  homeLng      Float?
-
-  /// When the user finished (or skipped through) first-run onboarding; null = not yet. Set once, server-side.
+  /// When the user finished first-run onboarding
   onboardedAt DateTime?
 
-  /// User intent for native push (Settings toggle / OS-permission denial, set by mobile). Gates push fan-out only; in-app/SSE unaffected.
+  /// User intent for native push
   allowNotifications Boolean @default(true)
 
   preferenceMatrix          Float[]   @default([])
@@ -63,7 +50,6 @@ model User {
 
   // Relations
   sessions      Session[]
-  files         File[]
   sessionEvents SessionEvent[]
   tags          Tag[]
 
@@ -77,22 +63,19 @@ model User {
 
   banditArmStates BanditArmState[]
 
-  occurrenceStates SessionOccurrenceState[]
-  courseColours    CourseColour[]
-  apiTokens        ApiToken[]
+  courseColours      CourseColour[]
+  apiTokens          ApiToken[]
+  calendarConnection CalendarConnection?
+  calendarLinks      CalendarLink[]
+  oauthTokens        OAuthToken[]
 
-  // Issue #56: which portal sections / Moodle courses this student is
-  // confirmed in, so an ingestion pass can be served from the shared
-  // occurrence cache without walking their timetable.
+  // which portal sections / Moodle courses this student is confirmed in
   portalSectionEnrollments PortalSectionEnrollment[]
   lmsCourseEnrollments     LmsCourseEnrollment[]
   placementPlans           PlacementPlan[]
 }
 
-/**
- * One arm per local start hour for the LinUCB scheduler (L24N). `HOUR_09` is the
- * arm of a slot starting at 09:00 to 10:00 local time.
- */
+/// One arm per local start hour for the LinUCB scheduler
 enum SchedulingArm {
   HOUR_00
   HOUR_01
@@ -120,14 +103,7 @@ enum SchedulingArm {
   HOUR_23
 }
 
-/**
- * Per-(user, hour arm) LinUCB state, one row per local start hour. `A` is the
- * row-major `d·d` design matrix, `b` the length-`d` response vector
- * (`d = FEATURE_DIM`, 7, in `@zenflow/shared`). The Python bandit service is
- * stateless: the backend loads all 24 rows, passes them in each `/v1/update`, and
- * overwrites all 24 with what comes back. A row with empty `A` and `b` is cold
- * and starts at its matrix prior.
- */
+/// Per-(user, hour arm) LinUCB state, one row per local start hour
 model BanditArmState {
   userId    String
   arm       SchedulingArm
@@ -139,21 +115,15 @@ model BanditArmState {
   @@id([userId, arm])
 }
 
-// Per-(user, provider) data-encryption key, itself protected by a per-provider
-// server-held master key kept outside the DB
-// (MASTER_<provider>_ENCRYPTION_KEY_V<masterKeyVersion>).
+// Per-(user, provider) data-encryption key, itself protected by a per-provider server-held master key
 model UserEncryptionKey {
   id               String              @id @default(uuid())
   provider         IntegrationProvider
-  // DEK version — bumped when the per-user key itself is rotated. Independent of
-  // `masterKeyVersion`: rotating the DEK re-encrypts this user's Integration
-  // rows; rotating the master key only re-wraps `key` below.
+  // DEK version — bumped when the per-user key itself is rotated
   version          Int
   // Which MASTER_<provider>_ENCRYPTION_KEY_V<n> env secret wrapped `key`.
   masterKeyVersion Int
-  // `key` is the DEK AFTER being wrapped (AES-256-GCM) under that master key;
-  // `iv` and `authTag` belong to that wrap operation, not to any credential.
-  // The plaintext DEK never touches the DB.
+  // `key` is the DEK AFTER being wrapped
   key              String
   iv               String
   authTag          String
@@ -174,12 +144,7 @@ enum DevicePlatform {
   WEB
 }
 
-// Push registration (FCM on Android, APNs on iOS, Web Push on WEB); one row per
-// device so a user can have multiple. `pushToken` is the raw provider token —
-// for WEB the push subscription endpoint — unique, so it is the natural key:
-// registration upserts on it and a device re-homes to whoever logs in on it
-// (the `userId` is rewritten on conflict). `p256dh` and `auth` are the Web Push
-// subscription keys, set on WEB rows only.
+// Push registration (FCM on Android, APNs on iOS, Web Push on WEB)
 model UserDevice {
   id         String         @id @default(uuid())
   platform   DevicePlatform
@@ -196,7 +161,7 @@ model UserDevice {
   @@index([userId])
 }
 
-/// Personal API access token. Only the HMAC of the secret is stored; see docs/adr/0038-personal-api-access.md.
+/// Personal API access token
 model ApiToken {
   id         String    @id @default(uuid())
   name       String    @db.VarChar(60)
@@ -223,7 +188,7 @@ model Tag {
 
   // Implicit many-to-many with Session.
   sessions Session[]
-  // GET /sessions/search uses the `Tag_name_unaccent_idx` expression index, which lives in migrations only.
+  // GET /sessions/search uses the `Tag_name_unaccent_idx` expression index, which lives in migrations
 
   @@unique([userId, name])
   @@index([userId])
@@ -245,41 +210,17 @@ enum SessionSource {
   AUTO
 }
 
-enum CommuteTransport {
-  WALK
-  BIKE
-  MOTORCYCLE
-  CAR
-}
-
 model Session {
   id              String        @id @default(uuid())
   title           String
   note            String?
-  // Where the session takes place — a room / building / campus string. Free
-  // text for a user-pinned session; for an ingested fixed session the DLU
-  // watchers write the upstream room here (portal `PhongThi` / `RoomID`,
-  // Moodle event `location`). Optional and never used by the scheduler.
+  // Where the session takes place
   location        String?
   // DLU exam format (`HinhThucThi`, e.g. "Thi máy"). Set only on an ingested EXAM; null otherwise.
   examFormat      String?
-  // Credits of the exam's course (`Credits`) and whether this sitting is a retake (`LanThi` after "Lần 1"). Set only on an ingested EXAM.
+  // Credits of the exam's course
   examCredits     Int?
   examRetake      Boolean?
-  // Map point for `location` when it was picked on the map; null for text only.
-  locationLat     Float?
-  locationLng     Float?
-  // Where the commute starts (a campus place or free text). Null when unset.
-  originLocation  String?
-  // Map point of `originLocation` when it was a position or searched place; null for text only.
-  originLat       Float?
-  originLng       Float?
-  // Minutes to travel between `originLocation` and `location`, each way, from the
-  // route the app showed. The scheduler keeps this much clear on both sides of
-  // the session (ADR-0029). Null when unknown.
-  commuteMinutes  Int?
-  // True while the start and minutes came from the student's home and vehicle, so a change there can redo them. Any manual edit of the commute clears it.
-  commuteAuto     Boolean       @default(false)
   durationMinutes Int // positive multiple of 15
   deadline        DateTime? // required for TASK; null for fixed types (ASSIGNMENT/EXAM/LECTURE/DND)
   type            SessionType   @default(TASK)
@@ -287,52 +228,27 @@ model Session {
 
   conflict Boolean @default(false)
 
-  // Soft-delete flag. A user-initiated delete sets this instead of removing
-  // the row, so an ingested item's still-unique `externalKey` lets the
-  // materializer recognize "the student deleted this" on the next re-fetch
-  // and skip recreating it, rather than the row disappearing and silently
-  // coming back. Every read that feeds scheduling or calendar display filters
-  // `deleted: false`; the materializer's own `userId_externalKey` lookup is
-  // the deliberate exception (it must see a soft-deleted row on purpose).
+  // Soft-delete flag. A user-initiated delete sets this instead of removing the row
   deleted Boolean @default(false)
 
   scheduledStartTime DateTime? // fixed types (ASSIGNMENT/EXAM/LECTURE/DND) are always scheduled; TASK is placed by the engine
   userId             String
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Stamped on every user move/resize of a scheduled TASK. `lastMovedAt == null`
-  // means "never moved", which gates the START event.
+  // Stamped on every user move/resize of a scheduled TASK
   lastMovedAt     DateTime?
   // Set on insert; the daily cap on automatic prep plans counts rows by it.
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  // Two-consecutive-run confirmation gate for ingested rows (materializer.service.ts).
-  // Null means "created but not yet confirmed by a second watcher run" — the
-  // item is already on the calendar, but its "new item" notification is held
-  // back and a run that stops seeing it hard-deletes the row outright rather
-  // than soft-deleting it, since it was never a real, user-facing item. Set to
-  // the confirming run's `now` the first time a second run also sees it; from
-  // then on the row is a normal ingested session eligible for update/removal
-  // notifications. Always null for a user-created (non-ingested) session.
+  // Two-consecutive-run confirmation gate for ingested rows
   syncConfirmedAt DateTime?
-  // Set to a run's `now` the first time a *confirmed* item is missing from
-  // that run's upstream listing — one miss so far, not yet a removal. Cleared
-  // back to null the moment the item reappears (the miss streak broke, no
-  // notification either way). A second consecutive miss (still set on the next
-  // run) is what actually soft-deletes the row and raises the removal
-  // notification. Always null for a user-created (non-ingested) session.
+  // Set to a run's `now` the first time a *confirmed* item is missing from that run's upstream listing
   syncMissedAt    DateTime?
 
-  // Skipped from the calendar (non-TASK sessions only). Clears on undo.
-  // Unused on a recurring representative: occurrences use SessionOccurrenceState.
-  skipped     Boolean   @default(false)
-  // First time an LMS calendar showed the assignment without its "add submission"
-  // action (ingestion/core/parse-lms.ts). Set once; never cleared.
+  // First time an LMS calendar showed the assignment without its "add submission" action
   submittedAt DateTime?
 
-  // Why the scheduler picked the start (issue #254). The reason describes
-  // `placementReasonStartAt`; once the start moves by any other write, the two
-  // differ and the reason is not shown.
+  // Why the scheduler picked the start
   placementReason        PlacementReason?
   placementReasonStartAt DateTime?
 
@@ -341,8 +257,7 @@ model Session {
 
   events SessionEvent[]
 
-  // The exam, assignment or lecture this prep session exists for. Null otherwise.
-  // `prepForOccurrenceStart` pins one occurrence when the target is a recurring lecture.
+  // The exam, assignment or lecture this prep session exists for
   prepForSessionId       String?
   prepForOccurrenceStart DateTime?
   prepForSession         Session?  @relation("PrepFor", fields: [prepForSessionId], references: [id], onDelete: SetNull)
@@ -351,63 +266,18 @@ model Session {
   seriesId String? // for series with rrule, only create a representative session and filter sessions belonging to a series whose rrule covers a particular day range
   series   SessionSeries? @relation(fields: [seriesId], references: [id], onDelete: Cascade)
 
-  // Stable identity of the upstream DLU item this session mirrors — null for
-  // every user-created session. Format is "<source>:<kind>:<upstream id>":
-  //
-  //   "lms:assign:<instance>"        Moodle assignment  (mod_assign instance)
-  //   "lms:quiz:<instance>"          Moodle quiz        (mod_quiz instance)
-  //   "portal:exam:<Examination>"    portal exam row
-  //   "portal:lecture:<ScheduleStudyUnitID>:<YYYY-MM-DD>:<PeriodID>"
-  //                                  one timetable meeting
-  //
-  // The formats are built and documented in
-  // `src/ingestion/core/external-key.ts` — that file, not this comment, is the
-  // single source of truth, and it carries the rule for deciding what belongs
-  // inside a key (identity) versus outside it (an in-place update).
-  //
-  // The lecture key was "portal:meeting:<WeekScheduleID>" before issue #56.
-  // The portal mints WeekScheduleID per (section, student), which made the key
-  // student-specific and the cross-student occurrence cache impossible — a
-  // cached section occurrence cannot mint another student's id. The three
-  // components above are all properties of the section's meeting instead.
-  // Pre-#56 rows are renamed in place by MaterializerService.adoptLegacyKey
-  // the next time a walk sees them; the alias can be dropped one term after
-  // deploy.
-  //
-  // The LMS half deliberately keys on the activity `instance`, never the
-  // calendar event id: one quiz emits two events (open + close) with different
-  // ids but one instance, and a teacher re-creating a due date mints a fresh
-  // event id for the same activity.
-  //
-  // This is the ingestion idempotency guard. The watchers run on a cron and
-  // re-fetch the same window every tick, so every write upserts on
-  // [userId, externalKey]; without the unique constraint each tick would
-  // duplicate the student's whole calendar.
+  // Stable identity of the upstream DLU item this session mirrors
   externalKey String?
 
-  // The portal's ScheduleStudyUnitID for a portal-ingested LECTURE — one
-  // meeting's course section, shared by every meeting of that class across
-  // the term. Null for anything that isn't a portal-ingested LECTURE
-  // (including a user-created recurring LECTURE via rrule). There is no
-  // SessionSeries linking these rows (each meeting is its own flat Session),
-  // so this is the grouping key for bulk delete/scope operations on a
-  // timetable class ("this and following" / "all occurrences" —
-  // `DELETE /sessions/timetable-group/:sessionId[/from]`).
+  // The portal's ScheduleStudyUnitID for a portal-ingested LECTURE
   scheduleStudyUnitId String?
 
-  // The Moodle course.id of an LMS-ingested ASSIGNMENT/EXAM — the symmetric
-  // partner of scheduleStudyUnitId above, and the lookup key the issue-#56
-  // occurrence fan-out uses to find every session belonging to a course whose
-  // cached items changed. Null for everything else.
-  //
-  // Set on create only. Rows ingested before this column existed are linked
-  // by `pnpm --filter backend backfill:lms-course` (scripts/backfill-lms-course.ts).
+  // The Moodle course.id of an LMS-ingested ASSIGNMENT/EXAM
   lmsCourseId Int?
 
-  reminders     SessionReminder[]
   notifications Notification[]
   slotProposals SlotProposal[]
-  // GET /sessions/search uses the `Session_{title,note,location}_unaccent_idx` expression indexes, which live in migrations only.
+  // GET /sessions/search uses the `Session_{title,note,location}_unaccent_idx` expression indexes
 
   @@unique([userId, externalKey])
   @@index([userId, deadline])
@@ -420,43 +290,21 @@ model Session {
 }
 
 model SessionSeries {
-  id          String      @id @default(uuid())
-  createdAt   DateTime    @default(now())
-  type        SessionType @default(DND) // recurring DND/ASSIGNMENT/EXAM/LECTURE (via rrule)
-  rrule       String? // the recurrence rule of the series (RFC 5545 RRULE, bare)
-  exdates     String[]    @default([]) // ISO instants of individually-deleted occurrences (rrule series only)
-  skippedFrom DateTime? // occurrences starting at or after this are skipped ("skip this and following" / "all"); rrule series only
+  id        String      @id @default(uuid())
+  createdAt DateTime    @default(now())
+  type      SessionType @default(DND) // recurring DND/ASSIGNMENT/EXAM/LECTURE (via rrule)
+  rrule     String? // the recurrence rule of the series (RFC 5545 RRULE, bare)
+  exdates   String[]    @default([]) // ISO instants of individually-deleted occurrences (rrule series only)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  sessions         Session[]
-  occurrenceStates SessionOccurrenceState[]
+  sessions Session[]
 
   @@index([userId])
 }
 
-/// Skipped state of one virtual occurrence of a recurring series (issue #247).
-/// A row exists only while the occurrence is skipped.
-model SessionOccurrenceState {
-  id              String   @id @default(uuid())
-  occurrenceStart DateTime
-  skipped         Boolean  @default(false)
-
-  seriesId String
-  series   SessionSeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  userId   String
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([seriesId, occurrenceStart])
-}
-
-/// A user's own colour pick for one course (issue #238). `courseKey` is
-/// `lms:<Moodle course id>` or `portal:<ScheduleStudyUnitID>`; a course with no
-/// row paints with its automatic colour from `@zenflow/core`.
+/// A user's own colour pick for one course
 model CourseColour {
   id        String   @id @default(uuid())
   courseKey String   @db.VarChar(120)
@@ -469,24 +317,6 @@ model CourseColour {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseKey])
-}
-
-// Excludes DND; at most twice per session (enforced in DTO + RemindersService).
-// Armed as an in-memory SchedulerRegistry timeout keyed by `reminder:<id>`
-// (see src/reminders/). For a recurring fixed series the row hangs off the
-// representative session and applies to every occurrence.
-model SessionReminder {
-  id                  String    @id @default(uuid())
-  remindBeforeMinutes Int       @default(15)
-  // Start instant of the occurrence this reminder last fired for — dedupes
-  // firing across restarts / re-arms and lets a recurring series fire once
-  // per occurrence. Null until first fired.
-  firedForStart       DateTime?
-
-  sessionId String
-  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId])
 }
 
 enum SlotProposalEvent {
@@ -506,9 +336,6 @@ enum SlotProposalFeedback {
 }
 
 // A/B experiment record for the heuristic-vs-model scheduling comparison
-// (`docs/scheduler/ab-testing.md`). Columns only for now — nothing writes this
-// table yet; the ExperimentService / randomizer / pairwise + feedback UI are a
-// later phase.
 enum PlacementSource {
   PYTHON
   TS_FALLBACK
@@ -528,20 +355,14 @@ model SlotProposal {
   proposedStartTime DateTime? // primary policy's concrete pick for this session
   appliedStartTime  DateTime?
 
-  // The length-`d` LinUCB context vector for the selected day and the arm
-  // behind the chosen slot, kept so a delayed MOVE / START reward can call
-  // `/update` for the right arm (`docs/adr/0001-linucb-model-design.md` §9).
-  // Empty / null when the primary policy was the heuristic.
+  // The length-`d` LinUCB context vector for the selected day and the arm behind the chosen slot, kept
   featureVector   Float[]        @default([])
   selectedArm     SchedulingArm?
-  // Applied LinUCB slot-score weights (`wL` = 1, `wS` = proximity-scaled
-  // stability, `services/bandit/src/core/slot_score.py::stability_weight`);
-  // null when the primary policy was the pref-only heuristic.
+  // Applied LinUCB slot-score weights
   linucbWeight    Float?
   stabilityWeight Float?
 
-  // Provenance (ADR-0003): which implementation produced the placement, so A/B
-  // analysis can exclude degraded (frozen-TS-fallback) events.
+  // Provenance (ADR-0003): which implementation produced the placement
   placementSource PlacementSource @default(PYTHON)
   degradedReason  String? // "timeout" | "breaker_open" | "connect" | "http_5xx" | "version" | "disabled"
 
@@ -584,11 +405,10 @@ enum SessionEventType {
   CREATE
   MOVE // user drag or resize of a scheduled TASK (graded negative signal)
   SYSTEM_MOVE // scheduler-initiated move (displacement / conflict reschedule): reward 0, no preference update
-  START // user opened the app inside an unmoved TASK's slot (rewardScore +1)
-  DONE // user tapped Done on a TASK
+  KEPT // an unmoved TASK's slot passed: the recommendation stood (rewardScore +1)
 }
 
-/// Range-partitioned by month on `occurredAt` (hand-written migration, ADR-0016); children are `SessionEvent_YYYY_MM`.
+/// Range-partitioned by month on `occurredAt`
 model SessionEvent {
   id                  BigInt           @default(autoincrement())
   eventType           SessionEventType
@@ -597,19 +417,15 @@ model SessionEvent {
   rewardScore         Float            @default(0.0) // CREATE 0 · MOVE graded ≤ 0 · START +1 (ADR-0001, ADR-0035)
   dragDistanceMinutes Int? // signed (new − old start); null unless MOVE — for graded reward later
   policy              SchedulingModel? // attribution once a model is live
-  // Shared by every row one user action wrote (a drag's MOVE, a cascade's
-  // SYSTEM_MOVEs, a confirmed plan). `POST /sessions/undo/:groupId` reverts them
-  // together. Null for rows written outside such an action.
+  // Shared by every row one user action wrote
   groupId             String?
   occurredAt          DateTime         @default(now())
 
-  // Nullable + SetNull so START / observation-count history survives a
-  // session deletion (needed for cold-start bucketing).
+  // Nullable + SetNull so START / observation-count history survives a session deletion
   sessionId String?
   session   Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   // The LinUCB SlotProposal this MOVE / START delivered a reward for, if any
-  // (`docs/adr/0001-linucb-model-design.md` §9).
   slotProposalId String?
   slotProposal   SlotProposal? @relation(fields: [slotProposalId], references: [id], onDelete: SetNull)
 
@@ -623,10 +439,7 @@ model SessionEvent {
   @@index([groupId])
 }
 
-/// A placement the user has to confirm (ADR-0022): the cheapest plan moves a
-/// CHOSEN session. Nothing is applied until `POST /sessions/placement/confirm`.
-/// `subjectId` is the session being placed (null for a create, which is
-/// inserted from `createInput` on confirm). `moves` is the plan's `PlacementMove[]`.
+/// A placement the user has to confirm
 model PlacementPlan {
   id          String    @id @default(uuid())
   userId      String
@@ -642,21 +455,6 @@ model PlacementPlan {
   @@index([userId])
 }
 
-model File {
-  id           String   @id @default(uuid())
-  originalName String
-  filename     String
-  path         String
-  mimetype     String
-  size         Int
-  userId       String
-  createdAt    DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
 enum IntegrationProvider {
   LMS
   PORTAL
@@ -666,10 +464,7 @@ enum IntegrationProvider {
 model Integration {
   id                   String              @id @default(uuid())
   provider             IntegrationProvider
-  // `encryptedCredentials` is the JSON credential blob encrypted (AES-256-GCM)
-  // under the user's current UserEncryptionKey; `iv` and `authTag` belong to
-  // that operation. `encryptionVersion` tracks which UserEncryptionKey.version
-  // was used so a rotated key can still decrypt older rows.
+  // `encryptedCredentials` is the JSON credential blob encrypted
   encryptedCredentials String
   iv                   String?
   authTag              String?
@@ -684,8 +479,7 @@ model Integration {
   lmsSyncJobs   LmsSyncJob[]
   portalApiJobs PortalAPIJob[]
 
-  // Issue #56: one independent cadence per sync kind, and the confirmed
-  // enrolment sets discovery writes for the walk passes to read.
+  // one independent cadence per sync kind
   schedules         IngestionSchedule[]
   portalEnrollments PortalSectionEnrollment[]
   lmsEnrollments    LmsCourseEnrollment[]
@@ -701,25 +495,15 @@ model Notification {
   sentAt             DateTime   @default(now())
   readAt             DateTime?
   actionTakenAt      DateTime?
-  // Stable machine-readable slug ("assignment.created", "lecture.removed",
-  // "sync_conflict.exam", …) a client can switch on without pattern-matching
-  // the free-text `title`/`content` below, which are for display only.
-  // Encodes both the created/updated/removed/conflict classification and the
-  // assignment/exam/lecture/reminder category (see `notificationEventKind` /
-  // `notificationCategory` in @zenflow/shared) — no separate `topic`/
-  // `eventType` columns for those, so there is one field to keep in sync.
+  // Stable machine-readable slug
   eventName          String
   title              String
   content            String
-  // The fixed end instant of the session behind this row (start + duration) —
-  // an ASSIGNMENT/EXAM/LECTURE is always scheduled, so this is the "due" / "at"
-  // time the inbox shows. Null for grouped rows and for drops (no one session).
+  // The fixed end instant of the session behind this row
   eventEndsAt        DateTime?
-  // A CONFLICT row's (see `notificationEventKind`) user's flexible tasks the
-  // sync landed on top of.
+  // A CONFLICT row's (see `notificationEventKind`) user's flexible tasks the sync landed on top of
   conflictSessionIds String[]   @default([])
-  // A `plan_offer.*` row's pairwise proposal, and its two start times as
-  // `[keep, prefer]`: the scheduler's time, then the other policy's.
+  // A `plan_offer.*` row's pairwise proposal
   slotProposalId     String?
   offerSlots         DateTime[] @default([])
 
@@ -740,8 +524,7 @@ enum JobStatus {
   FAILED
 }
 
-// Per-run job tracking for the LMS watcher. Named "sync", not "crawl":
-// the watcher reads Moodle's JSON calendar API, it does not scrape pages.
+// Per-run job tracking for the LMS watcher
 model LmsSyncJob {
   id        String    @id @default(uuid())
   status    JobStatus @default(PENDING)
@@ -758,10 +541,7 @@ model LmsSyncJobItem {
   url          String
   status       JobStatus @default(PENDING)
   attempt      Int       @default(0)
-  // Mirrors PortalAPIJobItem field-for-field on purpose: while ingestion is
-  // still being validated against the live LMS, having the raw upstream JSON
-  // sitting on the item row is what makes a bad parse diagnosable after the
-  // fact, without re-running the fetch against a moving target.
+  // Mirrors PortalAPIJobItem field-for-field on purpose
   statusCode   Int?
   responseBody String?
   createdAt    DateTime  @default(now())
@@ -799,53 +579,18 @@ model PortalAPIJobItem {
   @@index([portalApiJobId])
 }
 
-// ---------------------------------------------------------------------------
-// DLU course identity — two independent catalogs.
-//
-// A Moodle course (LmsCourse) and a portal timetable section (PortalSection)
-// describe the same real-world class, but there is deliberately NO correlation
-// table, no foreign key and no mapping between them: the two systems share no
-// identifier, their names differ (abbreviations, diacritics, group suffixes),
-// and every join we could build would be a fuzzy string match that is wrong
-// often enough to corrupt a student's calendar. Nothing in the ingestion path
-// needs the join either — an LMS item is scheduled from LMS data alone and a
-// timetable meeting from portal data alone.
-//
-// Both tables are plain, cross-user reference data, deduped on the upstream id.
-// They exist so an ingested Session can be traced back to a human-readable
-// course without re-fetching, and so the later shared cross-student catalog
-// (deferred) has somewhere to land.
-// ---------------------------------------------------------------------------
-
 // A Moodle course, as it appears in the `course` block of the LMS calendar
-// (core_calendar_get_calendar_monthly_view) response.
 model LmsCourse {
   id          String  @id @default(uuid())
   lmsCourseId Int     @unique // Moodle course.id, e.g. 90001 — the upstream identity
   fullName    String
   shortName   String?
 
-  // ── issue #56 cache coverage ────────────────────────────────────────────
-  // When some student's walk last re-read this course's items, and the last
-  // instant that walk covered. Both halves are needed: "refreshed 10 minutes
-  // ago" is not fresh if it only covered up to last Friday.
-  //
-  // A stamp on the catalog row rather than an aggregate over
-  // LmsCourseOccurrence.lastSeenAt, because freshness is a property of the
-  // catalog entry, there is exactly one row per course already, and a
-  // max(lastSeenAt) groupBy in the claim path cannot express the window at all.
+  // Cache coverage of this course's occurrences
   occurrencesRefreshedAt DateTime?
   occurrencesThroughDate DateTime?
 
-  // ── issue #56 divergence guard ──────────────────────────────────────────
-  // Moodle can show two students different things under one shared key: a
-  // per-user or per-group due-date override, or a group-restricted activity
-  // that is simply absent for everyone else. So a Moodle change is only fanned
-  // out once TWO different students have each seen the same before -> after
-  // transition. These three fields are that agreement state — see
-  // `observeUnit` in ingestion/core/occurrences.ts. The fingerprint is of the
-  // last walker's view of this course; `…By` is who; `…Prior` is what that
-  // walker saw before it (equal to the fingerprint once fanned out).
+  // Detects two Moodle views of one course disagreeing
   occurrencesFingerprint      String?
   occurrencesFingerprintBy    String?
   occurrencesPriorFingerprint String?
@@ -857,13 +602,10 @@ model LmsCourse {
   updatedAt DateTime @updatedAt
 }
 
-// One student-portal course section — a specific offering of a curriculum unit
-// in one term, taught by one teacher to one group in one room.
+// One student-portal course section
 model PortalSection {
   id                  String  @id @default(uuid())
-  // The portal's ScheduleStudyUnitID, e.g. "99910AB100101". Composite by
-  // construction (term + curriculum + group), but treated as an opaque
-  // upstream identity — we never parse it.
+  // The portal's ScheduleStudyUnitID, e.g
   scheduleStudyUnitId String  @unique
   curriculumId        String? // "10AB1001"
   curriculumName      String // "Môn học Mẫu Một"
@@ -875,14 +617,7 @@ model PortalSection {
   buildingName        String? // "A27"
   campusName          String? // CampusName / Address
 
-  // ── issue #56 cache coverage ────────────────────────────────────────────
-  // When some student's walk last re-read this section's meetings, and the
-  // last date that walk covered — see the note on LmsCourse for why both
-  // halves live here rather than being aggregated off the occurrence rows.
-  //
-  // timetableThroughDate is a date, not an ISO week number: HK02 straddles New
-  // Year and week numbers wrap 52 (or 53) -> 1, so "covered through week N" is
-  // not a numeric comparison. semester.ts walks Mondays for the same reason.
+  // Cache coverage of this section's timetable
   timetableRefreshedAt DateTime?
   timetableThroughDate DateTime?
 
@@ -892,48 +627,11 @@ model PortalSection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // The watcher fetches a whole term at a time, so (yearStudy, termId) is the
-  // access path for every refresh and every stale-section sweep.
+  // The watcher fetches a whole term at a time
   @@index([yearStudy, termId])
 }
 
-// ---------------------------------------------------------------------------
-// Issue #56 — rolling ingestion cadence + cross-student occurrence cache.
-//
-// Two problems, two halves of this block.
-//
-// 1. CADENCE. Each watcher used to be one plain @Cron whose firing swept the
-//    entire student population in a single instant: the same total volume, but
-//    concentrated in one few-minute window every day. Against a real
-//    university portal a burst of hundreds of logins back to back is not what
-//    organic traffic looks like. `IngestionSchedule` gives every
-//    (integration, kind) pair its own `nextDueAt`, and a short-interval ticker
-//    claims only the most-overdue few — the same daily volume, spread
-//    continuously. One `Integration.updatedAt` could not represent this:
-//    discovery and the walk for one student are independently due.
-//
-// 2. VOLUME. Every student re-fetched the same term-scoped resource. A
-//    measured 150-student run issued 6,395 upstream requests against 21
-//    distinct resources — ~305x redundancy. The `*Occurrence` tables hold each
-//    real, dated activity once, keyed by the SECTION or COURSE rather than by
-//    the student, so whichever student is claimed first warms the data for
-//    every classmate.
-//
-// The `*Enrollment` tables are the prerequisite: they record which sections and
-// courses a student is CONFIRMED in, discovered from DKHP's registration
-// history and Moodle's enrolled-courses call, so a walk can be
-// skipped without having walked. Fan-out only ever reads occurrences for
-// sections in that student's own confirmed set — no schedule is ever inferred
-// by copying another student's.
-// ---------------------------------------------------------------------------
-
-// The five independently-scheduled kinds of sync work.
-//
-// Discovery is split from the walk because they want different cadences and
-// different failure handling: discovery answers "which sections is this
-// student in" (cheap, ~3 requests, once a day) and the walk answers "what does
-// that section's week look like" (expensive, up to ~22 requests). Splitting
-// them is also what lets the walk be skipped at all.
+// The five independently-scheduled kinds of sync work
 enum IngestionSyncKind {
   PORTAL_DISCOVERY // DKHP getAllRegistHistory, once per term -> confirmed ScheduleStudyUnitID set
   LMS_DISCOVERY // enrolled-courses      -> confirmed Moodle course id set
@@ -947,35 +645,18 @@ model IngestionSchedule {
   id   String            @id @default(uuid())
   kind IngestionSyncKind
 
-  // The claim ordering key AND the compare-and-set token.
-  //
-  // A tick reads the most-overdue rows (nextDueAt <= now, oldest first) and
-  // then claims each with `updateMany where { id, nextDueAt: theValueItRead }`.
-  // An overlapping tick that read the same row loses the race and gets
-  // count 0, so no target is ever processed twice — no advisory lock and no
-  // raw SQL. See IngestionScheduleService.claimDue.
-  //
-  // Stamped forward on CLAIM, not on completion: a pass that throws must still
-  // have moved its due time, or the next tick re-claims the same failing
-  // student forever and starves everyone queued behind it.
+  // The claim ordering key AND the compare-and-set token
   nextDueAt     DateTime
   lastClaimedAt DateTime?
   lastRunAt     DateTime?
 
-  // The last pass that finished with every upstream request succeeding. For a
-  // discovery kind this is the freshness stamp the walk passes gate on, which
-  // is why a FAILED discovery pass must leave it untouched: the failure mode of
-  // "discovery is down" has to be "we do more work", never "we skip a student".
+  // The last pass that finished with every upstream request succeeding
   lastSuccessAt       DateTime?
-  // PORTAL_DISCOVERY only: the "<year>/<term>" the last clean pass covered, ""
-  // before any. The timetable gate requires it to equal the current term, and
-  // a mismatch makes the row due ahead of its period (a new term).
+  // PORTAL_DISCOVERY only: the "<year>/<term>" the last clean pass covered, "" before any
   lastSuccessTerm     String    @default("")
   consecutiveFailures Int       @default(0)
 
-  // How many consecutive passes were served entirely from the occurrence cache.
-  // Forces a full live walk every INGESTION_FULL_WALK_EVERY passes, so no
-  // student can drift indefinitely on a cache nobody is refreshing.
+  // How many consecutive passes were served entirely from the occurrence cache
   cacheHitStreak Int @default(0)
 
   integrationId String
@@ -989,29 +670,20 @@ model IngestionSchedule {
   @@index([kind, nextDueAt])
 }
 
-// A student's confirmed registration in one portal section.
-//
-// Rows, not a String[] column on the integration, for two reasons: fan-out
-// needs the reverse lookup "every confirmed student of section X", which an
-// array cannot index; and a per-row droppedAt is what distinguishes a
-// registration the student actually withdrew from from one that is missing only
-// because a discovery pass failed.
+// A student's confirmed registration in one portal section
 model PortalSectionEnrollment {
   id                  String @id @default(uuid())
   userId              String
   integrationId       String
   scheduleStudyUnitId String
 
-  // The term the set belongs to. A student's confirmed set is per-term by
-  // construction, and a new term must not silently inherit the old one's.
+  // The term the set belongs to
   yearStudy String
   termId    String
 
   // Last discovery pass that listed this registration.
   discoveredAt DateTime
-  // First SUCCESSFUL pass that no longer listed it — a dropped or withdrawn
-  // registration. Soft, like Session.deleted: a reappearance clears it rather
-  // than inserting a second row.
+  // First SUCCESSFUL pass that no longer listed it
   droppedAt    DateTime?
 
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1035,24 +707,18 @@ model LmsCourseEnrollment {
   integrationId String
   lmsCourseId   Int
 
-  // The three signals the current-term filter reads, stored so a disagreement
-  // between them is inspectable after the fact rather than only in a log line.
-  // Moodle's `classification: "allincludinghidden"` returns a student's ENTIRE
-  // enrolment history, so some filter is unavoidable.
+  // The three signals the current-term filter reads, stored so a disagreement between them is
   courseCategory String?
   startDate      DateTime?
   hidden         Boolean   @default(false)
 
-  // The filter's verdict. ADVISORY while INGESTION_LMS_TERM_FILTER=shadow:
-  // recorded and metered but gating nothing, because the issue requires the
-  // filter be validated against a real account before it can cause a skip.
+  // The filter's verdict. ADVISORY while INGESTION_LMS_TERM_FILTER=shadow
   currentTerm Boolean @default(true)
 
   discoveredAt DateTime
   droppedAt    DateTime?
 
-  // This student's own last live view of the course — see
-  // PortalSectionEnrollment.examsSeenFingerprint.
+  // This student's own last live view of the course
   seenFingerprint String?
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1067,31 +733,22 @@ model LmsCourseEnrollment {
   @@index([userId, droppedAt])
 }
 
-// One real, dated meeting of a portal section, shared by every student in it.
-//
-// The unique triple below is exactly the lecture externalKey
-// (`src/ingestion/core/external-key.ts`), which is what lets a row here mint
-// the key for any confirmed student without a fetch.
+// One real, dated meeting of a portal section, shared by every student in it
 model PortalSectionOccurrence {
   id                  String @id @default(uuid())
   scheduleStudyUnitId String
 
-  // The meeting day as the upstream row's own DLU_TZ wall clock, 'YYYY-MM-DD'.
-  // A string rather than a DateTime on purpose: it is part of the identity, and
-  // storing it as an instant would make the key depend on which timezone read
-  // it back.
+  // The meeting day as the upstream row's own DLU_TZ wall clock, 'YYYY-MM-DD'
   meetingDate     String
   periodId        Int
   numberOfPeriods Int
 
-  // The ISO week the row was fetched under (the portal's `tuan`), kept for
-  // diagnosis: it is how you find which request produced a given row.
+  // The ISO week the row was fetched under
   isoWeek   Int
   yearStudy String
   termId    String
 
-  // The resolved instant and length, on the 15-minute grid (invariant #3), so
-  // the fan-out path never re-runs period-map.ts.
+  // The resolved instant and length, on the 15-minute grid
   startsAt        DateTime
   durationMinutes Int
 
@@ -1099,13 +756,10 @@ model PortalSectionOccurrence {
   roomId      String?
   teacherName String?
 
-  // First fetch that saw this meeting, and the most recent one. lastSeenAt is
-  // what freshness is measured against.
+  // First fetch that saw this meeting
   firstSeenAt DateTime
   lastSeenAt  DateTime
-  // Set by the first complete fetch of this week that no longer lists the
-  // meeting — a cancelled class. Soft, so a re-listing is recognised as the
-  // same meeting rather than a new one.
+  // Set by the first complete fetch of this week that no longer lists the meeting
   canceledAt  DateTime?
 
   section PortalSection @relation(fields: [scheduleStudyUnitId], references: [scheduleStudyUnitId], onDelete: Cascade)
@@ -1117,12 +771,7 @@ model PortalSectionOccurrence {
   @@index([scheduleStudyUnitId, startsAt])
 }
 
-// One dated Moodle activity (assignment due date or quiz window), shared by
-// every student enrolled in the course.
-//
-// Keyed on the full externalKey rather than the bare `instance` because an
-// assignment and a quiz can carry the same instance number in different Moodle
-// modules — the kind is part of the identity.
+// One dated Moodle activity
 model LmsCourseOccurrence {
   id          String @id @default(uuid())
   lmsCourseId Int
@@ -1148,12 +797,7 @@ model LmsCourseOccurrence {
   @@index([lmsCourseId, startsAt])
 }
 
-// ---------------------------------------------------------------------------
-// Split ingestion queues: student profile, marks, and fan-out run tracking.
-// ---------------------------------------------------------------------------
-
-// A student's DLU profile (GET /api/student/info plus marks aggregates).
-// Normalised fields only: no phone, birthday, birthplace or raw payload.
+// A student's DLU profile (GET /api/student/info plus marks aggregates)
 model StudentProfile {
   userId        String @id
   integrationId String
@@ -1199,9 +843,7 @@ model StudyProgram {
   @@unique([userId, studyProgramId])
 }
 
-// One graded course. Keyed by the portal's ScheduleStudyUnitID so it lines up
-// with PortalSectionEnrollment / PortalSection for the current term; past
-// terms have no enrolment row and stand on their own.
+// One graded course. Keyed by the portal's ScheduleStudyUnitID so it lines up with
 model StudentMark {
   id                  String   @id @default(uuid())
   userId              String
@@ -1248,9 +890,7 @@ model StudentTermResult {
   @@unique([userId, yearStudy, termId])
 }
 
-// Week-level cache coverage. PortalSection.timetableThroughDate is a single
-// watermark, which cannot say "week N is cached" when weeks are fetched by
-// separate jobs, so each fetched week stamps its own row.
+// Week-level cache coverage
 model PortalWeekCoverage {
   scheduleStudyUnitId String
   weekStart           DateTime @db.Date
@@ -1265,10 +905,7 @@ enum SyncUnitStatus {
   FAILED
 }
 
-// One fan-out pass for one integration: a timetable term split into week jobs,
-// or an LMS calendar split into month jobs. Units finish in any order; the job
-// that completes the last one wins the notifiedAt compare-and-set and does the
-// closing work (deletion pass, single digest, schedule outcome).
+// One fan-out pass for one integration
 model SyncRun {
   id            String            @id @default(uuid())
   integrationId String
@@ -1303,8 +940,7 @@ model SyncRunUnit {
   status  SyncUnitStatus @default(PENDING)
   // True when a live request was made for this unit.
   fetched Boolean        @default(false)
-  // Lectures this unit created and other rows it updated or removed; summed
-  // when the run settles to word its notice.
+  // Lectures this unit created and other rows it updated or removed
   created Int            @default(0)
   changed Int            @default(0)
 
@@ -1313,12 +949,7 @@ model SyncRunUnit {
   @@id([runId, unit])
 }
 
-// Per-window LMS cache state. A course used to keep one fingerprint for the
-// last window any student walked, which thrashes once the calendar is fetched
-// one month per job. Each (course, scope) now carries its own coverage and
-// corroboration state, and each student's last view is kept per scope too.
-// The old LmsCourse.occurrences* and LmsCourseEnrollment.seenFingerprint
-// columns are no longer read.
+// Per-window LMS cache state
 model LmsCourseWindow {
   lmsCourseId      Int
   // Names the months the view covers, e.g. "2026-10".
@@ -1336,8 +967,7 @@ model LmsCourseSeen {
   userId      String
   lmsCourseId Int
   scope       String
-  // This student's own last live view of the course in the scope; null when it
-  // could not be cached (an item with no course block).
+  // This student's own last live view of the course in the scope
   fingerprint String?
 
   @@id([userId, lmsCourseId, scope])
@@ -1350,8 +980,7 @@ enum ClientEventKind {
   APP_OPEN // the app came to the foreground
 }
 
-/// Passive exposure from the app: what the student was shown and when they opened the app.
-/// Feeds the offer funnel and the activity-alignment metric (ADR-0025).
+/// Passive exposure from the app
 model ClientEvent {
   id             String          @id @default(uuid())
   kind           ClientEventKind
@@ -1365,4 +994,85 @@ model ClientEvent {
 
   @@index([userId, occurredAt])
   @@index([slotProposalId])
+}
+
+enum CalendarSyncStatus {
+  ACTIVE
+  NEEDS_RECONNECT
+}
+
+/// A user's Google Calendar connection and its sync cursors
+model CalendarConnection {
+  id                String             @id @default(uuid())
+  googleCalendarId  String // the secondary calendar Zenflow writes to
+  refreshTokenEnc   String // encrypted with GOOGLE_TOKEN_ENCRYPTION_KEY
+  status            CalendarSyncStatus @default(ACTIVE)
+  syncToken         String? // `events.list` incremental token
+  channelId         String?            @unique // `events.watch` channel
+  channelResourceId String?
+  channelExpiresAt  DateTime?
+  lastSyncedAt      DateTime?
+  lastError         String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Maps a session or recurring series to its Google event; no FK so a hard delete can still remove the event
+model CalendarLink {
+  id          String   @id @default(uuid())
+  sessionId   String? // set for a single session
+  seriesId    String? // set for a recurring series
+  eventId     String // Google event id: the session or series id without dashes
+  payloadHash String // hash of the event last written
+  etag        String?
+  syncedAt    DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId, sessionId])
+  @@index([userId, seriesId])
+}
+
+/// An AI assistant registered through dynamic client registration (RFC 7591)
+model OAuthClient {
+  id        String   @id // the client_id
+  name      String?  @db.VarChar(120)
+  metadata  Json // the registered client metadata, redirect_uris included
+  createdAt DateTime @default(now())
+
+  tokens OAuthToken[]
+}
+
+enum OAuthTokenKind {
+  CODE
+  ACCESS
+  REFRESH
+}
+
+/// A one-time code, access token or refresh token; only the HMAC of the secret is stored
+model OAuthToken {
+  id            String         @id @default(uuid())
+  kind          OAuthTokenKind
+  hash          String         @unique
+  familyId      String // a code and every token issued from it; revoked together
+  scope         String         @default("")
+  codeChallenge String? // PKCE, codes only
+  redirectUri   String? // codes only
+  expiresAt     DateTime
+  usedAt        DateTime? // set once a code or refresh token is spent
+  createdAt     DateTime       @default(now())
+
+  clientId String
+  client   OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, clientId])
+  @@index([familyId])
+  @@index([expiresAt])
 }

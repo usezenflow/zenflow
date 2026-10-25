@@ -83,7 +83,6 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 function makePrismaDouble() {
   const sessions: SessionRow[] = [];
   const notifications: NotificationRow[] = [];
-  const reminders: { sessionId: string; remindBeforeMinutes: number }[] = [];
   const events: Record<string, unknown>[] = [];
   const prefs = { defaultReminderMinutes: 60 };
   const tags: { id: string; userId: string; name: string }[] = [];
@@ -282,19 +281,11 @@ function makePrismaDouble() {
     user: {
       findUnique: () => Promise.resolve({ ...prefs }),
     },
-    sessionReminder: {
-      create: (args: {
-        data: { sessionId: string; remindBeforeMinutes: number };
-      }) => {
-        reminders.push(args.data);
-        return Promise.resolve(args.data);
-      },
-    },
     $transaction: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
       fn(client),
   };
 
-  return { client, sessions, notifications, events, tags, reminders, prefs };
+  return { client, sessions, notifications, events, tags, prefs };
 }
 
 // ── fixtures (deliberately fictional — never real DLU data) ────────────────
@@ -615,44 +606,6 @@ describe("MaterializerService", () => {
       expect(db.sessions).toHaveLength(1);
       expect(db.notifications).toHaveLength(1);
       expect(db.events).toHaveLength(1);
-      expect(db.reminders).toHaveLength(1);
-    });
-  });
-
-  describe("default reminder", () => {
-    it("gives every newly ingested item a 1-hour reminder", async () => {
-      const { db, service } = await makeService();
-      await service.materialize(
-        USER,
-        [
-          block(),
-          block({ externalKey: "portal:exam:1", type: "EXAM" }),
-          block({ externalKey: "portal:tt:1", type: "LECTURE" }),
-        ],
-        "LMS",
-      );
-      expect(db.reminders).toHaveLength(3);
-      expect(db.reminders.every((r) => r.remindBeforeMinutes === 60)).toBe(
-        true,
-      );
-    });
-  });
-
-  describe("user default reminder", () => {
-    it("uses the user's default and skips it when set to none", async () => {
-      const { db, service } = await makeService();
-      db.prefs.defaultReminderMinutes = 15;
-      await service.materialize(USER, [block()], "LMS");
-      expect(db.reminders.map((r) => r.remindBeforeMinutes)).toEqual([15]);
-
-      db.reminders.length = 0;
-      db.prefs.defaultReminderMinutes = 0;
-      await service.materialize(
-        USER,
-        [block({ externalKey: "portal:exam:2", type: "EXAM" })],
-        "LMS",
-      );
-      expect(db.reminders).toHaveLength(0);
     });
   });
 

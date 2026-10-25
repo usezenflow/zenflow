@@ -9,11 +9,6 @@ const mockVerify = jest.fn();
 jest.mock("nodemailer", () => ({
   createTransport: jest.fn(() => ({ verify: mockVerify, close: jest.fn() })),
 }));
-const mockS3Send = jest.fn();
-jest.mock("@aws-sdk/client-s3", () => ({
-  S3Client: jest.fn(() => ({ send: mockS3Send })),
-  HeadBucketCommand: jest.fn((input: unknown) => ({ input })),
-}));
 
 function build(over: { pg?: boolean; redis?: boolean; rl?: boolean } = {}) {
   const prisma = {
@@ -89,41 +84,30 @@ describe("HealthController", () => {
         new HealthService(prisma, ok, ok, config, undefined, killswitch),
       );
     }
-    const storage = {
-      S3_ENDPOINT: "http://s3",
-      S3_BUCKET: "b",
-      S3_ACCESS_KEY_ID: "k",
-      S3_SECRET_ACCESS_KEY: "s",
-    };
-
-    it("adds storage, mail and the kill-switch redis when configured", async () => {
-      mockS3Send.mockResolvedValue({});
+    it("adds mail and the kill-switch redis when configured", async () => {
       mockVerify.mockResolvedValue(true);
       const ks = {
         ping: jest.fn().mockResolvedValue("PONG"),
       } as unknown as Redis;
-      const res = await withConfig({ ...storage, MAIL_HOST: "smtp" }, ks).all();
+      const res = await withConfig({ MAIL_HOST: "smtp" }, ks).all();
       expect(Object.keys(res.data.checks)).toEqual([
         "postgres",
         "redis",
         "redisRateLimit",
         "redisKillswitch",
-        "storage",
         "mail",
       ]);
     });
 
-    it("is 503 when the bucket or the mail relay is unreachable", async () => {
-      mockS3Send.mockRejectedValue(new Error("NoSuchBucket"));
+    it("is 503 when the mail relay is unreachable", async () => {
       mockVerify.mockRejectedValue(new Error("ECONNREFUSED"));
-      const err = await withConfig({ ...storage, MAIL_HOST: "smtp" })
+      const err = await withConfig({ MAIL_HOST: "smtp" })
         .all()
         .catch((e: unknown) => e);
       expect(err).toBeInstanceOf(ServiceUnavailableException);
       expect((err as ServiceUnavailableException).getResponse()).toMatchObject({
         data: {
           checks: {
-            storage: { status: "down", error: "NoSuchBucket" },
             mail: { status: "down", error: "ECONNREFUSED" },
           },
         },

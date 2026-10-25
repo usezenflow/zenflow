@@ -63,12 +63,6 @@ export function toSessionDto(row: SessionRow): SharedSession {
     title: row.title,
     note: row.note,
     location: row.location,
-    locationLat: row.locationLat,
-    locationLng: row.locationLng,
-    originLocation: row.originLocation,
-    originLat: row.originLat,
-    originLng: row.originLng,
-    commuteMinutes: row.commuteMinutes,
     durationMinutes: row.durationMinutes,
     deadline: row.deadline ? row.deadline.toISOString() : null,
     type: row.type,
@@ -83,11 +77,7 @@ export function toSessionDto(row: SessionRow): SharedSession {
     rrule: row.series?.rrule ?? null,
     timetableGroupId: row.scheduleStudyUnitId,
     courseKey: courseKeyOf(row),
-    reminders: (row.reminders ?? [])
-      .map((r) => r.remindBeforeMinutes)
-      .sort((a, b) => b - a),
     late: isLate(row),
-    skipped: row.skipped,
     placementReason: placementReasonOf(row),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -138,7 +128,7 @@ export function toUpdateSessionResponse(
 }
 
 /** The `{ scheduledStartTime, durationMinutes, type, tags }` snapshot stored on a
- * `SessionEvent` (`CREATE` / `START`). */
+ * `SessionEvent` (`CREATE`). */
 export function toSessionSnapshot(row: SessionRow): Prisma.InputJsonValue {
   return {
     scheduledStartTime: row.scheduledStartTime

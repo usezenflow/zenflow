@@ -358,21 +358,6 @@ export class SessionUpdateService {
       if (dto.title !== undefined) data.title = dto.title;
       if (dto.note !== undefined) data.note = dto.note;
       if (dto.location !== undefined) data.location = dto.location;
-      if (dto.locationLat !== undefined) data.locationLat = dto.locationLat;
-      if (dto.locationLng !== undefined) data.locationLng = dto.locationLng;
-      if (dto.originLocation !== undefined)
-        data.originLocation = dto.originLocation;
-      if (dto.originLat !== undefined) data.originLat = dto.originLat;
-      if (dto.originLng !== undefined) data.originLng = dto.originLng;
-      if (dto.commuteMinutes !== undefined)
-        data.commuteMinutes = dto.commuteMinutes;
-      if (
-        dto.originLocation !== undefined ||
-        dto.originLat !== undefined ||
-        dto.originLng !== undefined ||
-        dto.commuteMinutes !== undefined
-      )
-        data.commuteAuto = false;
 
       if (dto.durationMinutes !== undefined)
         data.durationMinutes = dto.durationMinutes;

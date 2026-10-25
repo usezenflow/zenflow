@@ -1,11 +1,7 @@
-import {
-  MOVE_REWARD_SCALE_MINUTES,
-  SESSION_DONE_REWARD,
-  SESSION_SKIP_REWARD,
-} from "../constants";
+import { MOVE_REWARD_SCALE_MINUTES } from "../constants";
 
 /**
- * Pure reward math for LinUCB-placed sessions (ADR-0001 §7/§9, ADR-0035). No
+ * Pure reward math for LinUCB-placed sessions (ADR-0001 §7/§9, ADR-0042). No
  * I/O, no clock.
  */
 
@@ -22,16 +18,3 @@ export function dragDistanceReward(
   if (dragDistanceMinutes === 0) return 0;
   return -Math.min(1, Math.abs(dragDistanceMinutes) / scaleMinutes);
 }
-
-/**
- * The LinUCB reward for the student's answer to a placed block:
- * `+1.0` for DONE, `-1.0` for SKIP, `null` for SILENT (no update, preserving
- * partial-feedback dynamics).
- */
-export function answerReward(outcome: "DONE" | "SKIP" | "SILENT"): number | null {
-  if (outcome === "DONE") return SESSION_DONE_REWARD;
-  if (outcome === "SKIP") return SESSION_SKIP_REWARD;
-  return null;
-}
-
-export { SESSION_DONE_REWARD, SESSION_SKIP_REWARD };

@@ -1,6 +1,4 @@
 import {
-  ArrayMaxSize,
-  ArrayUnique,
   IsArray,
   IsBoolean,
   IsDivisibleBy,
@@ -20,13 +18,10 @@ import type {
   UpdateScope,
   UpdateSessionInput,
 } from "@zenflow/shared";
-import { MAX_COMMUTE_MINUTES, TIME_GRANULARITY } from "../../common/constants";
+import { TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
 import { INFEASIBLE_POLICIES } from "./create-session.dto";
-import {
-  MAX_REMINDER_MINUTES,
-  MAX_REMINDERS_PER_SESSION,
-} from "@zenflow/shared";
+import {} from "@zenflow/shared";
 
 /**
  * Generic metadata / reschedule / resize update — one `PATCH /sessions/:id`
@@ -51,51 +46,6 @@ export class UpdateSessionDto implements UpdateSessionInput {
   @IsString()
   @MaxLength(200, { message: "Location must be at most 200 characters." })
   location?: string | null;
-
-  /** Map point of the location, set together with `location`. `null` clears it. */
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsNumber()
-  @Min(-90)
-  @Max(90)
-  locationLat?: number | null;
-
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsNumber()
-  @Min(-180)
-  @Max(180)
-  locationLng?: number | null;
-
-  /** Where the commute starts. `null` clears it; omit to leave unchanged. */
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsString()
-  @MaxLength(200, { message: "Origin must be at most 200 characters." })
-  originLocation?: string | null;
-
-  /** Map point of the origin, set together with `originLocation`. `null` clears it. */
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsNumber()
-  @Min(-90)
-  @Max(90)
-  originLat?: number | null;
-
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsNumber()
-  @Min(-180)
-  @Max(180)
-  originLng?: number | null;
-
-  /** Travel minutes between origin and location, each way. `null` clears it. */
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsInt()
-  @Min(0)
-  @Max(MAX_COMMUTE_MINUTES)
-  commuteMinutes?: number | null;
 
   @IsOptional()
   @IsInt()
@@ -153,17 +103,4 @@ export class UpdateSessionDto implements UpdateSessionInput {
   @IsOptional()
   @IsIn(INFEASIBLE_POLICIES)
   infeasiblePolicy?: InfeasiblePolicy;
-
-  /**
-   * Minutes before start to remind the user (max 2, not for DND). Omit on
-   * create for the default (60 min, non-DND); `[]` for none.
-   */
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(MAX_REMINDERS_PER_SESSION)
-  @ArrayUnique()
-  @IsInt({ each: true })
-  @Min(0, { each: true })
-  @Max(MAX_REMINDER_MINUTES, { each: true })
-  reminders?: number[];
 }

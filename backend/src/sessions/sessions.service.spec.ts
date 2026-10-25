@@ -7,17 +7,13 @@ import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { ScheduleInfeasibleException } from "../scheduler/schedule-infeasible.exception";
 import { SessionsService } from "./sessions.service";
-import { SessionSkipService } from "./session-skip.service";
-import { SessionStartService } from "./session-start.service";
-import { SessionDoneService } from "./session-done.service";
 import { PlacementChipsService } from "./placement-chips.service";
 import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service";
 import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
 import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
-import { RemindersService } from "../reminders/reminders.service";
-import { NoteFilesService } from "../files/note-files.service";
+import { CalendarSyncTrigger } from "../google-calendar/calendar-sync-trigger.service";
 import type { Tag, Session, SessionSeries, User } from "../../generated/prisma";
 import type { CreateSessionDto } from "./dto/create-session.dto";
 import type { UpdateSessionDto } from "./dto/update-session.dto";
@@ -56,13 +52,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     examFormat: null,
     examCredits: null,
     examRetake: null,
-    locationLat: null,
-    locationLng: null,
-    originLocation: null,
-    originLat: null,
-    originLng: null,
-    commuteMinutes: null,
-    commuteAuto: false,
     durationMinutes: 60,
     deadline: new Date("2026-01-05T12:00:00.000Z"),
     tags: [],
@@ -77,7 +66,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     prepForOccurrenceStart: null,
     syncConfirmedAt: null,
     syncMissedAt: null,
-    skipped: false,
     placementReason: null,
     placementReasonStartAt: null,
     deleted: false,
@@ -146,22 +134,6 @@ function fakeSchedulingFeedback() {
   };
 }
 
-/** Reminder persistence/timers are covered in `reminders.service.spec.ts`. */
-function fakeReminders() {
-  return {
-    resolveForCreate: jest.fn(
-      (type: string, req?: number[]) => req ?? (type === "DND" ? [] : [60]),
-    ),
-    resolveUpdateTargets: jest.fn(),
-    replace: jest
-      .fn()
-      .mockImplementation((_ids: string[], minutes: number[]) =>
-        Promise.resolve({ applied: minutes, skipped: [] }),
-      ),
-    propagateSeries: jest.fn().mockResolvedValue(undefined),
-  };
-}
-
 /**
  * Wire the facade to real collaborators (they're thin) via Nest's DI
  * container — mirroring `SessionsModule`'s real provider wiring — over the
@@ -185,25 +157,12 @@ async function makeService(
       { provide: TagsService, useValue: tags },
       { provide: TaskPlacementService, useValue: placement },
       { provide: SchedulingFeedbackService, useValue: feedback },
-      { provide: RemindersService, useValue: fakeReminders() },
-      { provide: SessionSkipService, useValue: {} },
-      { provide: SessionStartService, useValue: {} },
-      {
-        provide: SessionDoneService,
-        useValue: { mark: jest.fn(), clear: jest.fn(), isDone: jest.fn() },
-      },
       {
         provide: PlacementChipsService,
         useValue: { forTask: jest.fn().mockResolvedValue([]) },
       },
       { provide: ConflictResolveService, useValue: {} },
-      {
-        provide: NoteFilesService,
-        useValue: {
-          normalize: (note: unknown) => Promise.resolve(note),
-          releasingUnreferenced: (_userId: string, fn: () => unknown) => fn(),
-        },
-      },
+      { provide: CalendarSyncTrigger, useValue: { request: jest.fn() } },
     ],
   }).compile();
   return module.get<SessionsService>(SessionsService);
@@ -361,12 +320,6 @@ describe("SessionsService.create", () => {
       title: "Write report",
       note: null,
       location: null,
-      locationLat: null,
-      locationLng: null,
-      originLocation: null,
-      originLat: null,
-      originLng: null,
-      commuteMinutes: null,
       durationMinutes: 30,
       deadline: "2026-06-10T17:00:00.000Z",
       type: "TASK",
@@ -381,8 +334,6 @@ describe("SessionsService.create", () => {
       courseKey: null,
       late: false,
       displacedSessions: [],
-      skipped: false,
-      reminders: [60],
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
       slotProposalId: null,
@@ -502,7 +453,6 @@ describe("SessionsService.create", () => {
       type: "DND",
       rrule: "FREQ=WEEKLY;BYDAY=MO",
       exdates: [],
-      skippedFrom: null,
       userId: user.id,
     };
     const created = session({
@@ -554,7 +504,6 @@ describe("SessionsService.create", () => {
       type: "LECTURE",
       rrule: "FREQ=WEEKLY;BYDAY=MO,WE",
       exdates: [],
-      skippedFrom: null,
       userId: user.id,
     };
     const created = session({
@@ -634,7 +583,6 @@ describe("SessionsService.list", () => {
       type: "DND",
       rrule: "FREQ=DAILY",
       exdates: [],
-      skippedFrom: null,
       userId: user.id,
     };
     const rep = session({
@@ -668,51 +616,6 @@ describe("SessionsService.list", () => {
       true,
     );
     expect(result.sessions.every((s) => s.type === "DND")).toBe(true);
-  });
-
-  it("stamps a done occurrence from SessionOccurrenceState and leaves the rest open", async () => {
-    const series: SessionSeries = {
-      id: "series-1",
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      type: "LECTURE",
-      rrule: "FREQ=DAILY",
-      exdates: [],
-      skippedFrom: null,
-      userId: user.id,
-    };
-    const rep = session({
-      id: "lecture-rep",
-      type: "LECTURE",
-      seriesId: "series-1",
-      series,
-      scheduledStartTime: new Date("2026-06-01T12:00:00.000Z"),
-    });
-    const done = new Date("2026-06-15T12:00:00.000Z");
-    const prisma = {
-      session: { findMany: jest.fn().mockResolvedValue([rep]) },
-      sessionOccurrenceState: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            seriesId: "series-1",
-            occurrenceStart: done,
-            skipped: true,
-          },
-        ]),
-      },
-      sessionEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    };
-    const service = await makeService(prisma, fakeTagsService());
-
-    const { sessions } = await service.list(
-      { view: "week", date: "2026-06-15" },
-      user,
-    );
-
-    const stamped = sessions.find(
-      (s) => s.id === `series-1::${done.toISOString()}`,
-    );
-    expect(stamped?.skipped).toBe(true);
-    expect(sessions.filter((s) => s.skipped)).toHaveLength(1);
   });
 
   it("includes a plain session that starts the previous day and crosses midnight into the requested day", async () => {
@@ -824,7 +727,6 @@ describe("SessionsService.list", () => {
       type: "DND",
       rrule: "FREQ=DAILY",
       exdates: [],
-      skippedFrom: null,
       userId: user.id,
     };
     const rep = session({
@@ -1086,27 +988,6 @@ describe("SessionsService.findById", () => {
     it("is the next class when it is free", async () => {
       const res = await detail({ row: rep() });
       expect(res.nextPrepOccurrenceStart).toBe("2026-09-16T07:00:00.000Z");
-    });
-
-    it("steps over a class the student skipped", async () => {
-      const res = await detail({
-        row: rep(),
-        states: [
-          {
-            seriesId: "series-2",
-            occurrenceStart: new Date("2026-09-16T07:00:00.000Z"),
-            skipped: true,
-          },
-        ],
-      });
-      expect(res.nextPrepOccurrenceStart).toBe("2026-09-21T07:00:00.000Z");
-    });
-
-    it("is null when the rest of the course is skipped", async () => {
-      const res = await detail({
-        row: rep({ skippedFrom: new Date("2026-09-14T07:00:00.000Z") }),
-      });
-      expect(res.nextPrepOccurrenceStart).toBeNull();
     });
 
     it("is null when the next class already has a prep plan", async () => {
@@ -1484,7 +1365,6 @@ describe("SessionsService.remove", () => {
       id: "series-1",
       rrule: "FREQ=DAILY",
       exdates: [],
-      skippedFrom: null,
     });
     const seriesUpdate = jest.fn().mockResolvedValue({});
     const del = jest.fn();
@@ -1518,7 +1398,6 @@ describe("SessionsService.remove", () => {
       id: "series-1",
       rrule: "FREQ=DAILY",
       exdates: ["2026-09-03T09:00:00.000Z"],
-      skippedFrom: null,
     });
     const seriesUpdate = jest.fn();
     const prisma = {
@@ -1592,7 +1471,6 @@ describe("SessionsService.truncateSeriesFrom", () => {
       id: "series-1",
       rrule: "FREQ=WEEKLY;BYDAY=MO",
       exdates: ["2026-09-07T09:00:00.000Z", "2026-10-12T09:00:00.000Z"],
-      skippedFrom: null,
       sessions: [
         {
           id: "rep-1",
@@ -1642,7 +1520,6 @@ describe("SessionsService.truncateSeriesFrom", () => {
       id: "series-1",
       rrule: "FREQ=DAILY",
       exdates: [],
-      skippedFrom: null,
       sessions: [
         {
           id: "rep-1",

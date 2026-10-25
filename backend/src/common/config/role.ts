@@ -3,11 +3,11 @@ import { config } from "dotenv";
 /**
  * Process role (ADR-0011, ADR-0007). One image, picked by the `ROLE` env:
  *  - `api`            HTTP only; produces jobs, consumes none, no cron.
- *  - `watcher`        the cron heartbeat (ingestion watcher, reminder sweep,
+ *  - `watcher`        the cron heartbeat (ingestion watcher, calendar sweep,
  *                     matrix decay); enqueues, never consumes.
  *  - `worker-portal`  consumes every `portal-*` queue.
  *  - `worker-lms`     consumes every `lms-*` queue.
- *  - `worker-notify`  consumes `notify` (push, email, reminder).
+ *  - `worker-notify`  consumes `notify` (push) and `calendar-sync` (Google Calendar).
  *  - `worker-scheduler` consumes `prep-plan` (prep plans, sized by bandit).
  *  - `worker`         watcher + every consumer (the pre-queue single worker).
  *  - `all`            everything incl. HTTP (default; local dev and the test stack).
@@ -72,6 +72,7 @@ export type ConsumedQueue =
   | "lms-discovery"
   | "lms-month"
   | "notify"
+  | "calendar-sync"
   | "prep-plan";
 
 /** Serves the API (controllers, sessions, CORS, Swagger). */
@@ -93,7 +94,7 @@ export function consumesQueue(role: Role, queue: ConsumedQueue): boolean {
     case "worker-lms":
       return queue.startsWith("lms-");
     case "worker-notify":
-      return queue === "notify";
+      return queue === "notify" || queue === "calendar-sync";
     case "worker-scheduler":
       return queue === "prep-plan";
     default:

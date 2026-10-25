@@ -8,24 +8,19 @@ import { SessionSearchService } from "./session-search.service";
 import { SessionsController } from "./sessions.controller";
 import { PrismaModule } from "../prisma/prisma.module";
 import { TagsModule } from "../tags/tags.module";
-import { RemindersModule } from "../reminders/reminders.module";
-import { FilesModule } from "../files/files.module";
 import { SchedulerModule } from "../scheduler/scheduler.module";
-import { SessionSkipService } from "./session-skip.service";
-import { SessionStartService } from "./session-start.service";
-import { SessionDoneService } from "./session-done.service";
 import { PlacementChipsService } from "./placement-chips.service";
 import { PlacementPlanService } from "./placement-plan.service";
 import { ApiTokensModule } from "../api-access/api-tokens.module";
+import { CalendarSyncTriggerModule } from "../google-calendar/calendar-sync-trigger.module";
 
 @Module({
   imports: [
     PrismaModule,
     TagsModule,
     SchedulerModule,
-    RemindersModule,
-    FilesModule,
     ApiTokensModule,
+    CalendarSyncTriggerModule,
   ],
   controllers: [SessionsController],
   providers: [
@@ -35,9 +30,6 @@ import { ApiTokensModule } from "../api-access/api-tokens.module";
     SessionUpdateService,
     SlotPickService,
     SessionSearchService,
-    SessionSkipService,
-    SessionStartService,
-    SessionDoneService,
     PlacementChipsService,
     PlacementPlanService,
   ],

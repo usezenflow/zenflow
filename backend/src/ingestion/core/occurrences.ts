@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { lmsAssignKey, lmsQuizKey, portalLectureKey } from "./external-key";
+import { portalLectureKey } from "./external-key";
 import type {
   IngestedSessionType,
   ParsedLmsItem,
@@ -194,14 +194,6 @@ export function blocksFromLmsOccurrences(
         : null,
     };
   });
-}
-
-/** The `externalKey` an LMS occurrence row would produce, from its parts. */
-export function lmsOccurrenceKey(
-  type: IngestedSessionType,
-  instance: number,
-): string {
-  return type === "ASSIGNMENT" ? lmsAssignKey(instance) : lmsQuizKey(instance);
 }
 
 /**

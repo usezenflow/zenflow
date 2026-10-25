@@ -63,8 +63,6 @@ export interface UnitJobData {
 export type NotifyJobData =
   /** Native push for one provider of a notification row. */
   | { type: "push"; notificationId: string; provider: PushProvider }
-  /** Fire one session reminder; `startsAt` (ISO) is the occurrence it was armed for. */
-  | { type: "reminder"; reminderId: string; startsAt: string }
   /** Ask whether a placed session got done; `endsAt` (ISO) is the end instant it was armed for. */
   | { type: "session_end"; sessionId: string; endsAt: string };
 
@@ -121,7 +119,7 @@ export const LMS_MONTH_QUEUE = defineQueue<UnitJobData>({
   concurrency: 1,
 });
 
-/** Push and reminder jobs. */
+/** Push jobs. */
 export const NOTIFY_QUEUE = defineQueue<NotifyJobData>({
   name: "notify",
   concurrency: 10,
@@ -148,6 +146,20 @@ export function prepJobId(parentSessionId: string): string {
   return idempotencyKey("prep", parentSessionId);
 }
 
+export type CalendarJobType = "sync" | "pull";
+
+/** One user's Google Calendar work: push their schedule, or read changes made in Google. */
+export interface CalendarJobData {
+  userId: string;
+  type: CalendarJobType;
+}
+
+export const CALENDAR_QUEUE = defineQueue<CalendarJobData>({
+  name: "calendar-sync",
+  concurrency: 3,
+  limiter: { max: 20, duration: 1_000 },
+});
+
 export const ALL_QUEUES = [
   PORTAL_FETCH_QUEUE,
   LMS_FETCH_QUEUE,
@@ -159,4 +171,5 @@ export const ALL_QUEUES = [
   LMS_MONTH_QUEUE,
   NOTIFY_QUEUE,
   PREP_QUEUE,
+  CALENDAR_QUEUE,
 ] as const;

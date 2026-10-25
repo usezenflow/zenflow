@@ -1,6 +1,4 @@
 import {
-  ArrayMaxSize,
-  ArrayUnique,
   IsArray,
   IsDivisibleBy,
   IsIn,
@@ -14,15 +12,10 @@ import {
   Min,
   ValidateIf,
 } from "class-validator";
-import { MAX_COMMUTE_MINUTES, TIME_GRANULARITY } from "../../common/constants";
+import { TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
 import { IsFeasibleTaskWindow } from "../../common/validators/feasible-task-window.decorator";
-import {
-  MAX_REMINDER_MINUTES,
-  MAX_REMINDERS_PER_SESSION,
-  type InfeasiblePolicy,
-  type SessionType,
-} from "@zenflow/shared";
+import { type InfeasiblePolicy, type SessionType } from "@zenflow/shared";
 
 export const INFEASIBLE_POLICIES: InfeasiblePolicy[] = [
   "ACCEPT_CONFLICTS",
@@ -74,49 +67,6 @@ export class CreateSessionDto {
   @MaxLength(200, { message: "Location must be at most 200 characters." })
   location?: string | null;
 
-  /** Map point of the location, set together with `location`. `null` clears it. */
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsNumber()
-  @Min(-90)
-  @Max(90)
-  locationLat?: number | null;
-
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsNumber()
-  @Min(-180)
-  @Max(180)
-  locationLng?: number | null;
-
-  /** Where the commute starts, with its map point and travel minutes each way. */
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsString()
-  @MaxLength(200, { message: "Origin must be at most 200 characters." })
-  originLocation?: string | null;
-
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsNumber()
-  @Min(-90)
-  @Max(90)
-  originLat?: number | null;
-
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsNumber()
-  @Min(-180)
-  @Max(180)
-  originLng?: number | null;
-
-  @IsOptional()
-  @ValidateIf((_, v) => v !== null)
-  @IsInt()
-  @Min(0)
-  @Max(MAX_COMMUTE_MINUTES)
-  commuteMinutes?: number | null;
-
   /** Session duration in minutes (always a positive multiple of 15, required). */
   @IsInt()
   @Min(TIME_GRANULARITY)
@@ -150,10 +100,6 @@ export class CreateSessionDto {
   tags?: string[];
 
   /**
-   * Minutes before start to remind the user (max 2, not for DND). Omit on
-   * create for the default (60 min, non-DND); `[]` for none.
-   */
-  /**
    * The lecture, exam or assignment this `TASK` prepares for. A recurring
    * lecture occurrence id (`<seriesId>::<startISO>`) pins that occurrence.
    */
@@ -161,13 +107,4 @@ export class CreateSessionDto {
   @IsOptional()
   @IsString()
   prepForSessionId?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(MAX_REMINDERS_PER_SESSION)
-  @ArrayUnique()
-  @IsInt({ each: true })
-  @Min(0, { each: true })
-  @Max(MAX_REMINDER_MINUTES, { each: true })
-  reminders?: number[];
 }

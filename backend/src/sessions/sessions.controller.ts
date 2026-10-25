@@ -8,25 +8,23 @@ import {
   Post,
   Query,
   UseGuards,
-  UseInterceptors,
 } from "@nestjs/common";
 import { SessionsService } from "./sessions.service";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { UpdateSessionDto } from "./dto/update-session.dto";
 import { SlotPickDto } from "./dto/slot-pick.dto";
-import { SkipScopeDto } from "./dto/skip-scope.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { DeadlineOptionsDto } from "./dto/deadline-options.dto";
 import { SearchSessionsDto } from "./dto/search-sessions.dto";
 import { SessionSearchService } from "./session-search.service";
-import { SignNoteFilesInterceptor } from "./sign-note-files.interceptor";
 import {
   AllowApiToken,
   ApiTokenOnly,
 } from "../api-access/allow-api-token.decorator";
 import { ApiTokenGuard } from "../api-access/api-token.guard";
 import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
+import { BulkDeleteSessionsDto } from "./dto/bulk-delete-sessions.dto";
 import { CurrentUser } from "../users/decorators/current-user.decorator";
 import { type User } from "../../generated/prisma";
 import { deadlineOptions } from "./utils/deadline-options";
@@ -35,50 +33,12 @@ import { PlacementPlanService } from "./placement-plan.service";
 
 @Controller("sessions")
 @UseGuards(ApiTokenGuard)
-@UseInterceptors(SignNoteFilesInterceptor)
 export class SessionsController {
   constructor(
     private readonly sessionsService: SessionsService,
     private readonly searchService: SessionSearchService,
     private readonly placementPlans: PlacementPlanService,
   ) {}
-
-  // NOTE: must precede @Post(":id/...") routes so "timetable-group" isn't matched as an :id.
-  /** Skip every meeting in the timetable group of `:sessionId`, regardless of time. */
-  @Post("timetable-group/:sessionId/skip")
-  async skipTimetableGroup(
-    @Param("sessionId") sessionId: string,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.skipTimetableGroup(
-      sessionId,
-      false,
-      user,
-    );
-    return {
-      success: true,
-      message: `Skipped ${data.skippedSessionIds.length} sessions`,
-      data,
-    };
-  }
-
-  /** Skip `:sessionId` and every later meeting in its timetable group. */
-  @Post("timetable-group/:sessionId/skip/from")
-  async skipTimetableGroupFrom(
-    @Param("sessionId") sessionId: string,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.skipTimetableGroup(
-      sessionId,
-      true,
-      user,
-    );
-    return {
-      success: true,
-      message: `Skipped ${data.skippedSessionIds.length} sessions`,
-      data,
-    };
-  }
 
   // NOTE: must precede @Post(":id/...") routes so "placement" isn't matched as an :id.
   /** Apply a plan the scheduler asked to confirm (ADR-0022). Atomic. */
@@ -125,6 +85,24 @@ export class SessionsController {
       message: data.dryRun
         ? `Proposed ${data.results.length} sessions`
         : `Created ${created} of ${data.results.length} sessions`,
+      data,
+    };
+  }
+
+  /** Up to 50 deletions in one call: sessions, recurring series or timetable groups. Assistants only. */
+  @Post("bulk-delete")
+  @ApiTokenOnly()
+  async bulkDelete(
+    @Body() dto: BulkDeleteSessionsDto,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.bulkDelete(dto, user);
+    const gone = data.results.filter((r) => r.status === "DELETED").length;
+    return {
+      success: true,
+      message: data.dryRun
+        ? `Previewed ${data.results.length} deletions`
+        : `Deleted ${gone} of ${data.results.length} items`,
       data,
     };
   }
@@ -204,54 +182,6 @@ export class SessionsController {
   ) {
     const data = await this.sessionsService.slotPick(id, dto, user);
     return { success: true, message: "Slot pick recorded", data };
-  }
-
-  @Post(":id/skip")
-  async skip(
-    @Param("id") id: string,
-    @Query() query: SkipScopeDto,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.setSkip(
-      id,
-      true,
-      user,
-      query.scope,
-    );
-    return { success: true, message: "Session skipped", data };
-  }
-
-  @Delete(":id/skip")
-  async unskip(
-    @Param("id") id: string,
-    @Query() query: SkipScopeDto,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.setSkip(
-      id,
-      false,
-      user,
-      query.scope,
-    );
-    return { success: true, message: "Skip undone", data };
-  }
-
-  @Post(":id/start")
-  async start(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.sessionsService.recordStart(id, user);
-    return { success: true, message: "Start recorded", data };
-  }
-
-  @Post(":id/done")
-  async markDone(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.sessionsService.markDone(id, user);
-    return { success: true, message: "Marked done", data };
-  }
-
-  @Delete(":id/done")
-  async clearDone(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.sessionsService.clearDone(id, user);
-    return { success: true, message: "Done cleared", data };
   }
 
   // NOTE: must precede @Delete(":id") so "series" isn't matched as an :id.

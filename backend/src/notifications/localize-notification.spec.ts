@@ -1,5 +1,4 @@
 import { Test } from "@nestjs/testing";
-import { buildReminderText } from "../scheduler/core/reminder";
 import { localizeNotification } from "./localize-notification";
 import { NotificationsService } from "./notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -126,26 +125,6 @@ describe("Vietnamese notification delivery", () => {
         body: row.content,
         data: { notificationId: "n", eventName: row.eventName, sessionId: "s" },
       });
-    },
-  );
-
-  it.each(["TASK", "EXAM", "ASSIGNMENT", "LECTURE"])(
-    "translates reminder %s date and duration while preserving title/location",
-    (type) => {
-      const text = buildReminderText({
-        sessionTitle: "English course",
-        startsAt: new Date("2026-10-06T03:30:00Z"),
-        now: new Date("2026-10-06T02:00:00Z"),
-        timezone: "Asia/Ho_Chi_Minh",
-        location: "Room A305",
-        type,
-      });
-      const row = { ...text, eventName: "reminder.fired" };
-      const vi = localizeNotification(row, "VI_VN");
-      expect(vi.title).toContain("1 giờ 30 phút: English course");
-      expect(vi.content).toContain("Thứ 3, 6/10, 10:30");
-      if (type !== "ASSIGNMENT") expect(vi.content).toContain("tại Room A305");
-      expect(localizeNotification(row, "EN_US")).toEqual(row);
     },
   );
 

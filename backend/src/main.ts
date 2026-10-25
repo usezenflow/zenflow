@@ -15,6 +15,8 @@ import { buildSessionOptions } from "./auth/session.config";
 import { REDIS_CLIENT } from "./common/redis/redis.constants";
 import { getRole, runsHttp } from "./common/config/role";
 import { WorkerOnlyHealthGuard } from "./health/worker-only-health.guard";
+import { OAuthConfig } from "./oauth/oauth.config";
+import { OAuthRouter } from "./oauth/oauth-router";
 import { IoredisSessionStore } from "./common/redis/ioredis-session.store";
 
 // 7 days. Default lifetime of an idle session; with rolling sessions an
@@ -53,6 +55,9 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   app.set("trust proxy", configService.get<number>("TRUST_PROXY_HOPS"));
   app.setGlobalPrefix("api/v1");
+  // OAuth discovery, registration, authorize and token endpoints live at the
+  // API origin root, outside the global prefix, as MCP clients expect.
+  if (app.get(OAuthConfig).available) app.use(app.get(OAuthRouter).create());
   // Comma-separated list: the web pwa and Expo's web dev server are
   // separate origins. `cors` only echoes a single origin back, so this must be
   // an array for it to match the request and reflect the right one.

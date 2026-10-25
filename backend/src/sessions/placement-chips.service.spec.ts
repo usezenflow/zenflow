@@ -40,9 +40,7 @@ describe("PlacementChipsService single trust sentence", () => {
     const chips = await service.forTask(TASK, USER);
 
     expect(chips).toHaveLength(1);
-    expect(chips[0].text).toBe(
-      "Before your Monday 18:00 deadline, no clashes",
-    );
+    expect(chips[0].text).toBe("Before your Monday 18:00 deadline, no clashes");
     expect(chips[0].tier).toBe(1);
   });
 
@@ -54,7 +52,6 @@ describe("PlacementChipsService single trust sentence", () => {
           title: "Algorithms",
           scheduledStartTime: "2026-10-30T16:30:00.000Z",
           durationMinutes: 60,
-          skipped: false,
         },
       ],
     });
@@ -69,10 +66,7 @@ describe("PlacementChipsService single trust sentence", () => {
   it("shows 'No clashes' when no deadline and no overlaps", async () => {
     const { service } = build();
 
-    const chips = await service.forTask(
-      { ...TASK, deadline: null },
-      USER,
-    );
+    const chips = await service.forTask({ ...TASK, deadline: null }, USER);
 
     expect(chips).toHaveLength(1);
     expect(chips[0].text).toBe("No clashes");
@@ -87,19 +81,15 @@ describe("PlacementChipsService single trust sentence", () => {
           title: "Algorithms",
           scheduledStartTime: "2026-10-30T16:30:00.000Z",
           durationMinutes: 60,
-          skipped: false,
         },
       ],
     });
 
-    const chips = await service.forTask(
-      { ...TASK, deadline: null },
-      USER,
-    );
+    const chips = await service.forTask({ ...TASK, deadline: null }, USER);
 
     expect(chips).toHaveLength(1);
     expect(chips[0].text).toBe(
-      "Mark it done so Zenflow learns when you work best.",
+      "Keep it, or move it, so Zenflow learns when you work best.",
     );
     expect(chips[0].tier).toBe(3);
   });
@@ -119,7 +109,7 @@ describe("PlacementChipsService personal evidence", () => {
     expect(chips).toHaveLength(1);
     expect(chips[0].tier).toBe(2);
     expect(chips[0].text).toBe(
-      "You finished 7 of 9 tasks on weekdays in the evening",
+      "You kept 7 of 9 suggestions on weekdays in the evening",
     );
   });
 

@@ -7,14 +7,12 @@ import { OutboundBreakers } from "../common/outbound-breaker";
 import { PushService } from "../devices/push.service";
 import { QueueWorkers } from "../queue/queue-workers.service";
 import { NOTIFY_QUEUE, type NotifyJobData } from "../queue/queues";
-import { ReminderSchedulerService } from "../reminders/reminder-scheduler.service";
 import { NotifyProcessor } from "./notify.processor";
 
 async function setup() {
   const workers = { register: jest.fn() };
   const push = { deliver: jest.fn().mockResolvedValue(undefined) };
   const killSwitch = { isEnabled: jest.fn().mockResolvedValue(true) };
-  const reminders = { fire: jest.fn().mockResolvedValue(undefined) };
   const moduleRef = await Test.createTestingModule({
     providers: [
       {
@@ -29,7 +27,6 @@ async function setup() {
       OutboundBreakers,
       { provide: QueueWorkers, useValue: workers },
       { provide: PushService, useValue: push },
-      { provide: ReminderSchedulerService, useValue: reminders },
     ],
   }).compile();
   const processor = moduleRef.get(NotifyProcessor);
@@ -47,7 +44,6 @@ async function setup() {
     processor,
     workers,
     push,
-    reminders,
     breakers,
     killSwitch,
     job,
@@ -64,22 +60,14 @@ describe("NotifyProcessor", () => {
     );
   });
 
-  it("drops push and reminder jobs while the notifications flag is off", async () => {
-    const { processor, push, reminders, killSwitch, job } = await setup();
+  it("drops push jobs while the notifications flag is off", async () => {
+    const { processor, push, killSwitch, job } = await setup();
     killSwitch.isEnabled.mockResolvedValue(false);
     await processor.process(
       job({ type: "push", notificationId: "n1", provider: "fcm" }),
     );
-    await processor.process(
-      job({
-        type: "reminder",
-        reminderId: "r1",
-        startsAt: new Date().toISOString(),
-      }),
-    );
     expect(killSwitch.isEnabled).toHaveBeenCalledWith("notifications");
     expect(push.deliver).not.toHaveBeenCalled();
-    expect(reminders.fire).not.toHaveBeenCalled();
   });
 
   it("push: delivers the notification for the job's provider", async () => {
@@ -153,20 +141,5 @@ describe("NotifyProcessor", () => {
       ),
     ).rejects.toBeInstanceOf(UnrecoverableError);
     expect(push.deliver).not.toHaveBeenCalled();
-  });
-
-  it("reminder: fires with the armed start as epoch ms", async () => {
-    const { processor, reminders, job } = await setup();
-    await processor.process(
-      job({
-        type: "reminder",
-        reminderId: "r1",
-        startsAt: "2026-09-20T10:00:00.000Z",
-      }),
-    );
-    expect(reminders.fire).toHaveBeenCalledWith(
-      "r1",
-      Date.parse("2026-09-20T10:00:00.000Z"),
-    );
   });
 });

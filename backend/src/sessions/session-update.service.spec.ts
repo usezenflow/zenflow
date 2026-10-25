@@ -42,13 +42,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     examFormat: null,
     examCredits: null,
     examRetake: null,
-    locationLat: null,
-    locationLng: null,
-    originLocation: null,
-    originLat: null,
-    originLng: null,
-    commuteMinutes: null,
-    commuteAuto: false,
     durationMinutes: 60,
     deadline: null,
     tags: [],
@@ -63,7 +56,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     prepForOccurrenceStart: null,
     syncConfirmedAt: null,
     syncMissedAt: null,
-    skipped: false,
     placementReason: null,
     placementReasonStartAt: null,
     deleted: false,
@@ -522,7 +514,6 @@ describe("SessionUpdateService — recurring occurrence, scope 'series' (or omit
       type: "LECTURE",
       rrule,
       exdates: [],
-      skippedFrom: null,
       userId: user.id,
     };
     const existing = session({
@@ -602,7 +593,6 @@ describe("SessionUpdateService — recurring occurrence, scope 'series' (or omit
       type: "LECTURE",
       rrule: "FREQ=DAILY;COUNT=3",
       exdates: [],
-      skippedFrom: null,
       userId: user.id,
     };
     const existing = session({

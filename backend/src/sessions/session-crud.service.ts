@@ -14,7 +14,12 @@ import type {
   SessionSuggestionsResponse,
   SessionsListResponse,
 } from "@zenflow/shared";
-import { Prisma, type SessionType, type User, SessionEventType } from "../../generated/prisma";
+import {
+  Prisma,
+  type SessionType,
+  type User,
+  SessionEventType,
+} from "../../generated/prisma";
 import { minutesToUtc } from "../common/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { TagsService } from "../tags/tags.service";
@@ -39,33 +44,13 @@ import {
 } from "./session-mapper";
 import { createEventData, recordCreateEvent } from "./session-events";
 import { insertFixedSession } from "./fixed-session-writer";
-import { assertSyncedDeletable } from "./synced-lock";
 import { mapSessionPrismaError } from "./prisma-error";
 import { placeOrDiscard } from "./placement-compensation";
 import { SeriesService } from "./series.service";
 
-/** How far ahead, and how many occurrences, to look for the next unskipped class. */
+/** How far ahead, and how many occurrences, to look for the next class without a prep plan. */
 const NEXT_OCCURRENCE_WINDOW_DAYS = 120;
 const NEXT_OCCURRENCE_SCAN = 8;
-
-type OccurrenceSkip = Pick<SharedSession, "skipped">;
-
-const occurrenceStateKey = (seriesId: string, start: Date): string =>
-  `${seriesId}|${start.getTime()}`;
-
-/** An occurrence's skipped state; a missing row means not skipped. */
-function occurrenceSkip(
-  states: Map<string, OccurrenceSkip>,
-  seriesId: string,
-  start: Date,
-  skippedFrom: Date | null = null,
-): OccurrenceSkip {
-  const state = states.get(occurrenceStateKey(seriesId, start)) ?? {
-    skipped: false,
-  };
-  const exempt = skippedFrom !== null && start >= skippedFrom;
-  return exempt && !state.skipped ? { skipped: true } : state;
-}
 
 /**
  * Plain session CRUD: `create` (dispatches by type — single `TASK`,
@@ -159,12 +144,6 @@ export class SessionCrudService {
         title: dto.title,
         note: dto.note ?? null,
         location: dto.location ?? null,
-        locationLat: dto.locationLat ?? null,
-        locationLng: dto.locationLng ?? null,
-        originLocation: dto.originLocation ?? null,
-        originLat: dto.originLocation ? (dto.originLat ?? null) : null,
-        originLng: dto.originLocation ? (dto.originLng ?? null) : null,
-        commuteMinutes: dto.commuteMinutes ?? null,
         durationMinutes: dto.durationMinutes,
         deadline,
         tags: { connect: tagIds.map((id) => ({ id })) },
@@ -379,30 +358,10 @@ export class SessionCrudService {
       include: WITH_TAGS_AND_SERIES,
     });
 
-    const states = await this.occurrenceStates(
-      user.id,
-      rows,
-      new Date(displayStart.getTime() - DAY_MS),
-      displayEnd,
-    );
-
-    // A placed TASK is done when a DONE SessionEvent exists for its real row id.
-    // Fixed types can't be done (the done service requires TASK), so occurrences
-    // of fixed series always stay undone.
-    const doneRows = await this.prisma.sessionEvent.findMany({
-      where: {
-        sessionId: { in: rows.map((r) => r.id) },
-        eventType: SessionEventType.DONE,
-      },
-      select: { sessionId: true },
-    });
-    const doneIds = new Set(doneRows.map((r) => r.sessionId));
-
     const sessions: SharedSession[] = [];
     for (const row of rows) {
-      const done = doneIds.has(row.id);
       if (row.seriesId && row.series?.rrule && row.scheduledStartTime) {
-        const base = { ...toSessionDto(row), done };
+        const base = toSessionDto(row);
         for (const occ of expandRrule(
           row.series.rrule,
           row.scheduledStartTime,
@@ -419,12 +378,6 @@ export class SessionCrudService {
             ...base,
             id: occurrenceId(row.seriesId, occ),
             scheduledStartTime: occ.toISOString(),
-            ...occurrenceSkip(
-              states,
-              row.seriesId,
-              occ,
-              row.series.skippedFrom,
-            ),
           });
         }
       } else {
@@ -439,40 +392,11 @@ export class SessionCrudService {
         ) {
           continue;
         }
-        sessions.push({ ...toSessionDto(row), done });
+        sessions.push(toSessionDto(row));
       }
     }
 
     return { sessions };
-  }
-
-  /** Done or skipped occurrences of the recurring reps in `rows`, keyed by {@link occurrenceStateKey}. */
-  private async occurrenceStates(
-    userId: string,
-    rows: {
-      seriesId: string | null;
-      series: { rrule: string | null } | null;
-    }[],
-    from: Date,
-    to: Date,
-  ): Promise<Map<string, OccurrenceSkip>> {
-    const seriesIds = rows
-      .filter((r) => r.seriesId && r.series?.rrule)
-      .map((r) => r.seriesId as string);
-    if (seriesIds.length === 0) return new Map();
-    const found = await this.prisma.sessionOccurrenceState.findMany({
-      where: {
-        userId,
-        seriesId: { in: seriesIds },
-        occurrenceStart: { gte: from, lt: to },
-      },
-    });
-    return new Map(
-      found.map((s) => [
-        occurrenceStateKey(s.seriesId, s.occurrenceStart),
-        { skipped: s.skipped },
-      ]),
-    );
   }
 
   async suggestions(
@@ -532,22 +456,10 @@ export class SessionCrudService {
       if (!rep)
         throw new NotFoundException(`Cannot find session with id ${id}`);
       const start = new Date(occ.startISO);
-      const states = await this.occurrenceStates(
-        user.id,
-        [rep],
-        start,
-        new Date(start.getTime() + 1),
-      );
       return {
         ...toSessionDto(rep),
         id,
         scheduledStartTime: occ.startISO,
-        ...occurrenceSkip(
-          states,
-          occ.seriesId,
-          start,
-          rep.series?.skippedFrom ?? null,
-        ),
         prepSessions: await this.prepSessionsOf(user, rep.id, start),
         nextPrepOccurrenceStart: await this.nextPrepOccurrence(
           user,
@@ -555,7 +467,6 @@ export class SessionCrudService {
           start,
         ),
         prepTarget: null,
-        done: false,
         placementChips: [],
       };
     }
@@ -572,7 +483,6 @@ export class SessionCrudService {
       prepSessions: await this.prepSessionsOf(user, session.id, null),
       nextPrepOccurrenceStart: null,
       prepTarget: await this.prepTargetOf(user, session),
-      done: false,
       placementChips: [],
     };
   }
@@ -598,7 +508,7 @@ export class SessionCrudService {
     };
   }
 
-  /** The next occurrence after `after` that is not skipped, unless it already has a prep plan. */
+  /** The next occurrence after `after`, unless it already has a prep plan. */
   private async nextPrepOccurrence(
     user: User,
     rep: SessionRow,
@@ -616,16 +526,7 @@ export class SessionCrudService {
       series.exdates,
     ).slice(0, NEXT_OCCURRENCE_SCAN);
     if (candidates.length === 0) return null;
-    const states = await this.occurrenceStates(
-      user.id,
-      [rep],
-      candidates[0],
-      new Date(candidates[candidates.length - 1].getTime() + 1),
-    );
-    const next = candidates.find(
-      (c) => !occurrenceSkip(states, series.id, c, series.skippedFrom).skipped,
-    );
-    if (!next) return null;
+    const next = candidates[0];
     const taken = await this.prisma.session.findFirst({
       where: {
         userId: user.id,
@@ -674,7 +575,6 @@ export class SessionCrudService {
         });
         if (!existing)
           throw new NotFoundException(`Cannot find session with id ${id}`);
-        assertSyncedDeletable(existing);
         // Soft-delete: an ingested item's externalKey stays unique, so the
         // materializer recognizes this row on the next re-fetch and leaves
         // it alone instead of recreating it.
@@ -778,5 +678,56 @@ export class SessionCrudService {
     });
 
     return { removedSessionIds };
+  }
+
+  /** What a bulk delete item would remove: a title and how many rows go. Nothing is written. */
+  async describeDelete(
+    kind: "session" | "series" | "timetable",
+    id: string,
+    scope: "all" | "following",
+    user: User,
+  ): Promise<{ title: string; count: number }> {
+    if (kind === "session") {
+      const found = await this.findById(id, user);
+      return { title: found.title, count: 1 };
+    }
+    if (kind === "series") {
+      const rows = await this.prisma.session.findMany({
+        where: { seriesId: id, userId: user.id, deleted: false },
+        orderBy: { createdAt: "asc" },
+        select: { title: true },
+      });
+      if (rows.length === 0)
+        throw new NotFoundException(`Cannot find series with id ${id}`);
+      return { title: rows[0].title, count: rows.length };
+    }
+    const anchor = await this.prisma.session.findFirst({
+      where: {
+        id,
+        userId: user.id,
+        deleted: false,
+        scheduleStudyUnitId: { not: null },
+      },
+      select: {
+        title: true,
+        scheduleStudyUnitId: true,
+        scheduledStartTime: true,
+      },
+    });
+    if (!anchor)
+      throw new NotFoundException(
+        `Cannot find groupable timetable session ${id}`,
+      );
+    const count = await this.prisma.session.count({
+      where: {
+        userId: user.id,
+        deleted: false,
+        scheduleStudyUnitId: anchor.scheduleStudyUnitId,
+        ...(scope === "following" && anchor.scheduledStartTime
+          ? { scheduledStartTime: { gte: anchor.scheduledStartTime } }
+          : {}),
+      },
+    });
+    return { title: anchor.title, count };
   }
 }

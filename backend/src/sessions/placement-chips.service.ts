@@ -118,7 +118,7 @@ export class PlacementChipsService {
 
     const day = await this.crud.list({ view: "day", date: local.date }, user);
     const others = day.sessions.filter(
-      (s) => s.id !== task.id && s.scheduledStartTime && !s.skipped,
+      (s) => s.id !== task.id && s.scheduledStartTime,
     );
     const deadline = task.deadline ? new Date(task.deadline) : null;
 
@@ -151,7 +151,7 @@ export class PlacementChipsService {
       tier = 1;
     } else {
       // Tier 3: cold start
-      text = "Mark it done so Zenflow learns when you work best.";
+      text = "Keep it, or move it, so Zenflow learns when you work best.";
       tier = 3;
     }
 
@@ -199,7 +199,7 @@ export class PlacementChipsService {
              count(*)::int AS n
       FROM "SessionEvent" e
       WHERE e."userId" = ${user.id}
-        AND e."eventType" = 'DONE'
+        AND e."eventType" = 'KEPT'
       GROUP BY 1, 2`;
 
     const buckets = new Map<string, number>();
@@ -215,7 +215,7 @@ export class PlacementChipsService {
         { tier: 3, text: COLD_START_COPY },
         {
           tier: 3,
-          text: `${total} of ${CHIP_EVIDENCE_MIN} done to personalise`,
+          text: `${total} of ${CHIP_EVIDENCE_MIN} kept to personalise`,
         },
       ];
     }
@@ -229,7 +229,7 @@ export class PlacementChipsService {
     return [
       {
         tier: 2,
-        text: `You finished ${inBucket} of ${total} tasks ${where} in the ${part}`,
+        text: `You kept ${inBucket} of ${total} suggestions ${where} in the ${part}`,
       },
     ];
   }

@@ -2,14 +2,13 @@ import { HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import type {
   BulkCreateItemResult,
   BulkCreateSessionsResponse,
+  BulkDeleteItemResult,
+  BulkDeleteSessionsResponse,
   CreateSessionResponse,
   RemoveSessionResponse,
   RemoveSessionSeriesResponse,
   RemoveTimetableGroupResponse,
   SessionDetailResponse,
-  SessionDoneResponse,
-  SessionSkipResponse,
-  SessionStartResponse,
   SessionResolveConflictsResponse,
   SessionSuggestionsResponse,
   SessionsListResponse,
@@ -18,6 +17,7 @@ import type {
 } from "@zenflow/shared";
 import { type User } from "../../generated/prisma";
 import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
+import { BulkDeleteSessionsDto } from "./dto/bulk-delete-sessions.dto";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
@@ -27,13 +27,9 @@ import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
 import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
-import { type SkipScope, SessionSkipService } from "./session-skip.service";
-import { SessionStartService } from "./session-start.service";
-import { SessionDoneService } from "./session-done.service";
 import { PlacementChipsService } from "./placement-chips.service";
-import { NoteFilesService } from "../files/note-files.service";
-import { RemindersService } from "../reminders/reminders.service";
 import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service";
+import { CalendarSyncTrigger } from "../google-calendar/calendar-sync-trigger.service";
 
 /**
  * Thin facade the controller calls — its methods delegate to the collaborator
@@ -42,8 +38,6 @@ import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service
  *  - {@link SessionUpdateService} `PATCH /sessions/:id`
  *  - {@link SeriesService}        every `SessionSeries` lifecycle op
  *  - {@link SlotPickService}      `POST /sessions/:id/slot-pick`
- *  - {@link SessionSkipService}   `POST|DELETE /sessions/:id/skip`
- *  - {@link SessionStartService}  `POST /sessions/:id/start`
  *  - {@link ConflictResolveService} `POST /sessions/:id/resolve-conflicts`
  *
  * The wire contract is unchanged — see `sessions.controller.ts`.
@@ -57,38 +51,23 @@ export class SessionsService {
     private readonly series: SeriesService,
     private readonly updates: SessionUpdateService,
     private readonly slotPickService: SlotPickService,
-    private readonly skips: SessionSkipService,
-    private readonly sessionStart: SessionStartService,
-    private readonly sessionDone: SessionDoneService,
     private readonly chips: PlacementChipsService,
-    private readonly reminders: RemindersService,
-    private readonly noteFiles: NoteFilesService,
     private readonly conflictResolve: ConflictResolveService,
+    private readonly calendar: CalendarSyncTrigger,
   ) {}
 
-  /**
-   * Reminders are persisted right after the row(s) exist (default: one at the user's
-   * `defaultReminderMinutes` for non-DND, none if 0; explicit list/[] honoured) and the response is stamped
-   * with them. Validation runs first so a bad request inserts nothing.
-   */
+  /** Queues a Google Calendar sync once a write has succeeded. */
+  private async synced<T>(user: User, work: Promise<T>): Promise<T> {
+    const result = await work;
+    void this.calendar.request(user.id);
+    return result;
+  }
+
   async create(
     dto: CreateSessionDto,
     user: User,
   ): Promise<CreateSessionResponse> {
-    dto.note = await this.noteFiles.normalize(dto.note, user.id);
-    const minutes = this.reminders.resolveForCreate(
-      dto.type,
-      dto.reminders,
-      user.defaultReminderMinutes,
-    );
-    const res = await this.crud.create(dto, user);
-    const { applied, skipped } = await this.reminders.replace(
-      [res.id],
-      minutes,
-    );
-    res.reminders = applied;
-    if (skipped.length > 0) res.skippedReminders = skipped;
-    return res;
+    return this.synced(user, this.crud.create(dto, user));
   }
 
   /**
@@ -137,6 +116,55 @@ export class SessionsService {
     }
   }
 
+  /**
+   * Deletes each item in order: a session or occurrence, a whole recurring
+   * series, or a timetable group. One item's failure is reported on that item.
+   * With `dryRun`, nothing is deleted and each item reports what would go.
+   */
+  async bulkDelete(
+    dto: BulkDeleteSessionsDto,
+    user: User,
+  ): Promise<BulkDeleteSessionsResponse> {
+    const dryRun = dto.dryRun === true;
+    const results: BulkDeleteItemResult[] = [];
+    for (const [index, item] of dto.items.entries()) {
+      const { kind, id } = item;
+      const scope = item.scope ?? "all";
+      try {
+        if (dryRun) {
+          const { title, count } = await this.crud.describeDelete(
+            kind,
+            id,
+            scope,
+            user,
+          );
+          results.push({ index, status: "PREVIEW", kind, id, title, count });
+          continue;
+        }
+        const removed =
+          kind === "session"
+            ? (await this.remove(id, user), 1)
+            : kind === "series"
+              ? (await this.removeSeries(id, user)).removedSessionIds.length
+              : (
+                  await (scope === "following"
+                    ? this.removeTimetableGroupFrom(id, user)
+                    : this.removeTimetableGroup(id, user))
+                ).removedSessionIds.length;
+        results.push({ index, status: "DELETED", kind, id, removed });
+      } catch (err) {
+        results.push({
+          index,
+          status: "ERROR",
+          kind,
+          id,
+          ...this.bulkError(err),
+        });
+      }
+    }
+    return { dryRun, results };
+  }
+
   private bulkError(err: unknown): { code: string; message: string } {
     if (err instanceof HttpException) {
       const body: unknown = err.getResponse();
@@ -169,7 +197,7 @@ export class SessionsService {
     return this.crud.suggestions(dto, user);
   }
 
-  /** Session detail, plus Done state and placement chips for a placed TASK. */
+  /** Session detail, plus placement chips for a placed TASK. */
   async findById(id: string, user: User): Promise<SessionDetailResponse> {
     const detail = await this.crud.findById(id, user);
     if (
@@ -178,11 +206,8 @@ export class SessionsService {
       detail.id !== id
     )
       return detail;
-    const [done, placementChips] = await Promise.all([
-      this.sessionDone.isDone(id, user),
-      this.chips.forTask(detail, user),
-    ]);
-    return { ...detail, done, placementChips };
+    const placementChips = await this.chips.forTask(detail, user);
+    return { ...detail, placementChips };
   }
 
   async update(
@@ -190,30 +215,11 @@ export class SessionsService {
     dto: UpdateSessionDto,
     user: User,
   ): Promise<UpdateSessionResponse> {
-    dto.note = await this.noteFiles.normalize(dto.note, user.id);
-    const target =
-      dto.reminders !== undefined
-        ? await this.reminders.resolveUpdateTargets(id, dto.reminders, user)
-        : null;
-    const res = await this.noteFiles.releasingUnreferenced(user.id, () =>
-      this.updates.update(id, dto, user),
-    );
-    if (target) {
-      const { applied, skipped } = await this.reminders.replace(
-        target.sessionIds,
-        target.minutes,
-      );
-      res.reminders = applied;
-      if (skipped.length > 0) res.skippedReminders = skipped;
-    }
-    return res;
+    return this.synced(user, this.updates.update(id, dto, user));
   }
 
   async remove(id: string, user: User): Promise<RemoveSessionResponse> {
-    const res = await this.noteFiles.releasingUnreferenced(user.id, () =>
-      this.crud.remove(id, user),
-    );
-    return res;
+    return this.synced(user, this.crud.remove(id, user));
   }
 
   /** Repacks the flexible sessions that overlap `id`; `id` itself stays put. */
@@ -221,7 +227,7 @@ export class SessionsService {
     id: string,
     user: User,
   ): Promise<SessionResolveConflictsResponse> {
-    return this.conflictResolve.resolve(user, id);
+    return this.synced(user, this.conflictResolve.resolve(user, id));
   }
 
   async slotPick(
@@ -229,42 +235,7 @@ export class SessionsService {
     dto: SlotPickDto,
     user: User,
   ): Promise<SlotPickResponse> {
-    const res = await this.slotPickService.recordPick(id, dto, user);
-    return res;
-  }
-
-  /** Set (`on`) or undo the skipped state of a session or occurrence. */
-  setSkip(
-    id: string,
-    on: boolean,
-    user: User,
-    scope?: SkipScope,
-  ): Promise<SessionSkipResponse> {
-    return this.skips.set(id, on, user, scope);
-  }
-
-  /** Skip a timetable group, or from `sessionId` onward (`POST /sessions/timetable-group/:sessionId/skip[/from]`). */
-  skipTimetableGroup(
-    sessionId: string,
-    from: boolean,
-    user: User,
-  ): Promise<{ skippedSessionIds: string[] }> {
-    return this.skips.skipTimetableGroup(sessionId, from, user);
-  }
-
-  /** Records that the user is in this placed block now (`POST /sessions/:id/start`). */
-  recordStart(id: string, user: User): Promise<SessionStartResponse> {
-    return this.sessionStart.record(id, user);
-  }
-
-  /** Marks the placed TASK done (`POST /sessions/:id/done`). */
-  markDone(id: string, user: User): Promise<SessionDoneResponse> {
-    return this.sessionDone.mark(id, user);
-  }
-
-  /** Clears the Done mark (`DELETE /sessions/:id/done`). */
-  clearDone(id: string, user: User): Promise<SessionDoneResponse> {
-    return this.sessionDone.clear(id, user);
+    return this.synced(user, this.slotPickService.recordPick(id, dto, user));
   }
 
   async truncateSeriesFrom(
@@ -272,39 +243,33 @@ export class SessionsService {
     fromStartISO: string,
     user: User,
   ): Promise<RemoveSessionSeriesResponse> {
-    const res = await this.noteFiles.releasingUnreferenced(user.id, () =>
+    return this.synced(
+      user,
       this.series.truncateFrom(seriesId, fromStartISO, user),
     );
-    return res;
   }
 
   async removeSeries(
     seriesId: string,
     user: User,
   ): Promise<RemoveSessionSeriesResponse> {
-    const res = await this.noteFiles.releasingUnreferenced(user.id, () =>
-      this.series.removeSeries(seriesId, user),
-    );
-    return res;
+    return this.synced(user, this.series.removeSeries(seriesId, user));
   }
 
   async removeTimetableGroupFrom(
     sessionId: string,
     user: User,
   ): Promise<RemoveTimetableGroupResponse> {
-    const res = await this.noteFiles.releasingUnreferenced(user.id, () =>
+    return this.synced(
+      user,
       this.crud.removeTimetableGroupFrom(sessionId, user),
     );
-    return res;
   }
 
   async removeTimetableGroup(
     sessionId: string,
     user: User,
   ): Promise<RemoveTimetableGroupResponse> {
-    const res = await this.noteFiles.releasingUnreferenced(user.id, () =>
-      this.crud.removeTimetableGroup(sessionId, user),
-    );
-    return res;
+    return this.synced(user, this.crud.removeTimetableGroup(sessionId, user));
   }
 }

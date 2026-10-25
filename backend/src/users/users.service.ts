@@ -11,7 +11,6 @@ import { CreateUserDto } from "./dto/create-user.dto";
 import { nameFromEmail } from "./name-from-email";
 import { langToDb } from "./user-response";
 import { UpdateUserDto } from "./dto/update-user.dto";
-import { CommuteDefaultsService } from "../commute/commute-defaults.service";
 import { remapExdatesForTimezone } from "../scheduler/core/recurrence";
 import {
   PREFERENCE_MATRIX_LENGTH,
@@ -23,22 +22,9 @@ import {
 const PREFERENCE_MATRIX_DAYS =
   PREFERENCE_MATRIX_LENGTH / PREFERENCE_SLOTS_PER_DAY;
 
-/** A new home or vehicle redoes the commutes filled from the old one. */
-function changesCommute(dto: UpdateUserDto): boolean {
-  return (
-    dto.defaultTransport !== undefined ||
-    dto.homeLocation !== undefined ||
-    dto.homeLat !== undefined ||
-    dto.homeLng !== undefined
-  );
-}
-
 @Injectable()
 export class UsersService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly commuteDefaults: CommuteDefaultsService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto) {
     try {
@@ -82,8 +68,6 @@ export class UsersService {
           : ((
               await this.prisma.$transaction([...seriesUpdates, userUpdate])
             ).at(-1) as Awaited<typeof userUpdate>);
-      if (changesCommute(updateUserDto))
-        void this.commuteDefaults.applyQuietly(id);
       return updated;
     } catch (error) {
       if (
