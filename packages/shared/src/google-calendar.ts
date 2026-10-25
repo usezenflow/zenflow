@@ -8,7 +8,14 @@ export interface GoogleCalendarStatus {
   state: CalendarConnectionState | null;
   /** ISO-8601 instant of the last completed sync, or null. */
   lastSyncedAt: string | null;
+  /** Last error from a failed push, or null. */
   lastError: string | null;
+  /** When the oldest unsynced session change was made, or null when the calendar is up to date. */
+  pendingSince: string | null;
+  /** When a failed push is tried again, or null. */
+  retryAt: string | null;
+  /** Failed pushes in a row; 0 when none. */
+  attempts: number;
 }
 
 /** `data` payload for `POST /google-calendar/connect`. */

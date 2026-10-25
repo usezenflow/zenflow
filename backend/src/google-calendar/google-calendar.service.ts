@@ -32,15 +32,21 @@ export class GoogleCalendarService {
   ) {}
 
   async status(user: User): Promise<GoogleCalendarStatus> {
-    const connection = await this.prisma.calendarConnection.findUnique({
-      where: { userId: user.id },
-    });
+    const [connection, outbox] = await Promise.all([
+      this.prisma.calendarConnection.findUnique({ where: { userId: user.id } }),
+      this.prisma.calendarSyncOutbox.findUnique({ where: { userId: user.id } }),
+    ]);
+    // A row in the outbox means session changes are waiting for the next push.
+    const failing = outbox && outbox.attempts > 0 ? outbox : null;
     return {
       available: this.config.available,
       connected: !!connection,
       state: connection?.status ?? null,
       lastSyncedAt: connection?.lastSyncedAt?.toISOString() ?? null,
-      lastError: connection?.lastError ?? null,
+      lastError: failing?.lastError ?? connection?.lastError ?? null,
+      pendingSince: outbox?.dirtyAt.toISOString() ?? null,
+      retryAt: failing?.nextAttemptAt.toISOString() ?? null,
+      attempts: outbox?.attempts ?? 0,
     };
   }
 

@@ -23,15 +23,15 @@ enum UserRole {
 }
 
 model User {
-  id                    String              @id @default(uuid())
-  studentProfile        StudentProfile?
-  studyPrograms         StudyProgram[]
-  studentMarks          StudentMark[]
-  studentTermResults    StudentTermResult[]
-  name                  String              @db.VarChar(60)
-  email                 String              @unique @db.VarChar(255)
-  timezone              String              @default("Asia/Saigon") @db.VarChar(50)
-  lang                  Language            @default(VI_VN)
+  id                 String              @id @default(uuid())
+  studentProfile     StudentProfile?
+  studyPrograms      StudyProgram[]
+  studentMarks       StudentMark[]
+  studentTermResults StudentTermResult[]
+  name               String              @db.VarChar(60)
+  email              String              @unique @db.VarChar(255)
+  timezone           String              @default("Asia/Saigon") @db.VarChar(50)
+  lang               Language            @default(VI_VN)
 
   /// Gates `/admin/*`; set in the database only
   role UserRole @default(USER)
@@ -1018,6 +1018,16 @@ model CalendarConnection {
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// One dirty marker per user: session changes waiting for the calendar outbox (ADR-0040).
+model CalendarSyncOutbox {
+  userId        String    @id
+  dirtyAt       DateTime
+  nextAttemptAt DateTime
+  claimedUntil  DateTime?
+  attempts      Int       @default(0)
+  lastError     String?
 }
 
 /// Maps a session or recurring series to its Google event; no FK so a hard delete can still remove the event
