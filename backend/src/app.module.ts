@@ -35,6 +35,7 @@ import {
   consumesQueue,
   envFilePath,
   getRole,
+  runsOutbox,
   runsWatcher,
 } from "./common/config/role";
 import { QueueModule } from "./queue/queue.module";
@@ -51,6 +52,7 @@ import { OAuthCleanupModule, OAuthModule } from "./oauth/oauth.module";
 import { GoogleCalendarModule } from "./google-calendar/google-calendar.module";
 import { CalendarWorkerModule } from "./google-calendar/calendar-worker.module";
 import { CalendarSweepModule } from "./google-calendar/calendar-sweep.module";
+import { CalendarOutboxModule } from "./google-calendar/calendar-outbox.module";
 
 const configEnvFile = envFilePath();
 // `<PREFIX>_HOST` / `_PORT` / `_PASSWORD` for one Redis instance (connections.ts).
@@ -82,6 +84,7 @@ const jobModules = [
   ...(consumesQueue(role, "notify") ? [NotifyWorkerModule] : []),
   ...(consumesQueue(role, "prep-plan") ? [PrepPlanWorkerModule] : []),
   ...(consumesQueue(role, "calendar-sync") ? [CalendarWorkerModule] : []),
+  ...(runsOutbox(role) ? [CalendarOutboxModule] : []),
   ...(consumesQueue(role, "portal-fetch") ? [PortalFetchWorkerModule] : []),
   ...(consumesQueue(role, "lms-fetch") ? [LmsFetchWorkerModule] : []),
 ];

@@ -9,6 +9,7 @@ import { config } from "dotenv";
  *  - `worker-lms`     consumes every `lms-*` queue.
  *  - `worker-notify`  consumes `notify` (push) and `calendar-sync` (Google Calendar).
  *  - `worker-scheduler` consumes `prep-plan` (prep plans, sized by bandit).
+ *  - `outbox`         drains the Google Calendar outbox (LISTEN + poll); no queue.
  *  - `worker`         watcher + every consumer (the pre-queue single worker).
  *  - `all`            everything incl. HTTP (default; local dev and the test stack).
  * Everything except `api` and `all` serves `/health` and nothing else.
@@ -20,6 +21,7 @@ export type Role =
   | "worker-lms"
   | "worker-notify"
   | "worker-scheduler"
+  | "outbox"
   | "worker"
   | "all";
 
@@ -30,6 +32,7 @@ const ROLES: readonly Role[] = [
   "worker-lms",
   "worker-notify",
   "worker-scheduler",
+  "outbox",
   "worker",
   "all",
 ];
@@ -101,6 +104,10 @@ export function consumesQueue(role: Role, queue: ConsumedQueue): boolean {
       return false;
   }
 }
+
+/** Drains the calendar outbox (`google-calendar/calendar-outbox.service.ts`). */
+export const runsOutbox = (role: Role): boolean =>
+  role === "outbox" || role === "worker" || role === "all";
 
 /** Any background work at all (a watcher or at least one consumer). */
 export const runsJobs = (role: Role): boolean => role !== "api";
