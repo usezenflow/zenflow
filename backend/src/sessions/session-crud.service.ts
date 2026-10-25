@@ -24,7 +24,6 @@ import { minutesToUtc } from "../common/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
-import { displayDayRange } from "../scheduler/core/horizon";
 import {
   expandRrule,
   firstOccurrence,
@@ -34,7 +33,7 @@ import {
 import { DAY_MS } from "../scheduler/core/slot";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
-import { ListSessionsDto } from "./dto/list-sessions.dto";
+import { ListSessionsDto, MAX_RANGE_DAYS } from "./dto/list-sessions.dto";
 import { SessionRow, WITH_TAGS_AND_SERIES } from "./types/session-row";
 import { PlacementNeedsConfirmationException } from "./placement-plan.exception";
 import {
@@ -329,30 +328,55 @@ export class SessionCrudService {
 
   async list(dto: ListSessionsDto, user: User): Promise<SessionsListResponse> {
     const tz = user.timezone;
-    const { startStr: displayStartStr, endStr: displayEndStr } =
-      displayDayRange(dto.view, dto.date);
-    const displayStart = minutesToUtc(displayStartStr, 0, tz);
-    const displayEnd = minutesToUtc(displayEndStr, 1439, tz);
+    const span = daysBetween(dto.from, dto.to) + 1;
+    if (span < 1 || span > MAX_RANGE_DAYS) {
+      throw new BadRequestException(`Range must be 1 to ${MAX_RANGE_DAYS} days`);
+    }
+    const displayStart = minutesToUtc(dto.from, 0, tz);
+    const displayEnd = minutesToUtc(dto.to, 1439, tz);
+
+    const filters: Prisma.SessionWhereInput[] = [];
+    if (dto.q) filters.push({ id: { in: await this.matchingIds(dto.q, user) } });
+    if (dto.types?.length) filters.push({ type: { in: dto.types } });
+    if (dto.tags?.length) {
+      filters.push({ tags: { some: { name: { in: dto.tags } } } });
+    }
+    if (dto.minDuration !== undefined || dto.maxDuration !== undefined) {
+      filters.push({
+        durationMinutes: { gte: dto.minDuration, lte: dto.maxDuration },
+      });
+    }
+    if (dto.deadlineFrom || dto.deadlineTo) {
+      filters.push({
+        deadline: {
+          gte: dto.deadlineFrom ? minutesToUtc(dto.deadlineFrom, 0, tz) : undefined,
+          lte: dto.deadlineTo ? minutesToUtc(dto.deadlineTo, 1439, tz) : undefined,
+        },
+      });
+    }
 
     const rows = await this.prisma.session.findMany({
       where: {
-        userId: user.id,
-        deleted: false,
-        OR: [
-          { scheduledStartTime: null },
-          // A day back so a plain session that started the previous evening
-          // and runs past midnight into this window is still fetched —
-          // filtered to actual overlap below (mirrors day-load.ts's
-          // occupancy scan for the same class of bug on the placement side).
+        AND: [
+          { userId: user.id, deleted: false },
           {
-            scheduledStartTime: {
-              gte: new Date(displayStart.getTime() - DAY_MS),
-              lte: displayEnd,
-            },
+            OR: [
+              { scheduledStartTime: null },
+              // A day back so a plain session that started the previous evening
+              // and runs past midnight into this window is still fetched —
+              // filtered to actual overlap below.
+              {
+                scheduledStartTime: {
+                  gte: new Date(displayStart.getTime() - DAY_MS),
+                  lte: displayEnd,
+                },
+              },
+              // Series representatives: first-occurrence instant may be outside the
+              // window; expanded below.
+              { seriesId: { not: null } },
+            ],
           },
-          // Series representatives: first-occurrence instant may be outside the
-          // window; expanded below.
-          { seriesId: { not: null } },
+          ...filters,
         ],
       },
       include: WITH_TAGS_AND_SERIES,
@@ -365,8 +389,6 @@ export class SessionCrudService {
         for (const occ of expandRrule(
           row.series.rrule,
           row.scheduledStartTime,
-          // Same day-back widening as above, so an occurrence that started
-          // the previous day and crosses into this window isn't dropped.
           new Date(displayStart.getTime() - DAY_MS),
           displayEnd,
           tz,
@@ -396,7 +418,25 @@ export class SessionCrudService {
       }
     }
 
-    return { sessions };
+    return { sessions: sortSessions(sessions, dto.sort ?? "start", dto.order) };
+  }
+
+  /** Ids of the user's sessions whose title, note or location matches the regex `pattern`. */
+  private async matchingIds(pattern: string, user: User): Promise<string[]> {
+    try {
+      const rows = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+        SELECT id FROM "Session"
+        WHERE "userId" = ${user.id} AND deleted = false
+          AND (title ~* ${pattern}
+            OR coalesce(note, '') ~* ${pattern}
+            OR coalesce(location, '') ~* ${pattern})`);
+      return rows.map((r) => r.id);
+    } catch (error) {
+      if (error instanceof Error && /regular expression/i.test(error.message)) {
+        throw new BadRequestException("Invalid search pattern");
+      }
+      throw error;
+    }
   }
 
   async suggestions(
@@ -730,4 +770,46 @@ export class SessionCrudService {
     });
     return { title: anchor.title, count };
   }
+}
+
+/** Whole days from `from` to `to` (`YYYY-MM-DD`), negative when `to` is earlier. */
+function daysBetween(from: string, to: string): number {
+  return Math.round(
+    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS,
+  );
+}
+
+/** Sorts by the chosen key; sessions without that value (or without a start) go last in either order. */
+function sortSessions(
+  sessions: SharedSession[],
+  sort: "start" | "duration" | "deadline",
+  order: "asc" | "desc" | undefined,
+): SharedSession[] {
+  const dir = order === "desc" ? -1 : 1;
+  const startOf = (s: SharedSession): number | null =>
+    s.scheduledStartTime ? Date.parse(s.scheduledStartTime) : null;
+  const keyOf = (s: SharedSession): number | null => {
+    if (sort === "duration") return s.durationMinutes;
+    if (sort === "deadline") return s.deadline ? Date.parse(s.deadline) : null;
+    return startOf(s);
+  };
+  const byNullable = (x: number | null, y: number | null): number | null => {
+    if (x === y) return null;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return 0;
+  };
+  return [...sessions].sort((a, b) => {
+    const ka = keyOf(a);
+    const kb = keyOf(b);
+    const nulls = byNullable(ka, kb);
+    if (nulls !== null) return nulls;
+    if (ka !== null && kb !== null && ka !== kb) return (ka - kb) * dir;
+    const sa = startOf(a);
+    const sb = startOf(b);
+    const nullStart = byNullable(sa, sb);
+    if (nullStart !== null) return nullStart;
+    if (sa !== null && sb !== null && sa !== sb) return sa - sb;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 }

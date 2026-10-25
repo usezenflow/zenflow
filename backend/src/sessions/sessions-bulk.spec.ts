@@ -259,7 +259,6 @@ describe("SessionsController API token routes", () => {
   it("lets bearer tokens read sessions", () => {
     const proto = SessionsController.prototype;
     expect(modeOf(proto.list)).toBe("allow");
-    expect(modeOf(proto.search)).toBe("allow");
     expect(modeOf(proto.findOne)).toBe("allow");
   });
 

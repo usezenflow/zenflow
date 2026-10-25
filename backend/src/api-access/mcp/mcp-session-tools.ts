@@ -7,7 +7,11 @@ import { z } from "zod";
 import type { User } from "../../../generated/prisma";
 import { BulkCreateSessionsDto } from "../../sessions/dto/bulk-create-sessions.dto";
 import { BulkDeleteSessionsDto } from "../../sessions/dto/bulk-delete-sessions.dto";
-import { ListSessionsDto } from "../../sessions/dto/list-sessions.dto";
+import {
+  ListSessionsDto,
+  SESSION_SORTS,
+  SESSION_TYPES,
+} from "../../sessions/dto/list-sessions.dto";
 import { UpdateSessionDto } from "../../sessions/dto/update-session.dto";
 import { SessionsService } from "../../sessions/sessions.service";
 import { MAX_BULK_SESSIONS } from "@zenflow/shared";
@@ -85,8 +89,17 @@ export function registerSessionTools(
     {
       description: described("list_schedule"),
       inputSchema: {
-        view: z.enum(["day", "week", "month"]),
-        date: z.iso.date(),
+        from: z.iso.date(),
+        to: z.iso.date(),
+        q: z.string().max(200).optional(),
+        types: z.array(z.enum(SESSION_TYPES)).optional(),
+        tags: z.array(z.string().max(60)).optional(),
+        minDuration: z.number().int().min(15).max(1440).optional(),
+        maxDuration: z.number().int().min(15).max(1440).optional(),
+        deadlineFrom: z.iso.date().optional(),
+        deadlineTo: z.iso.date().optional(),
+        sort: z.enum(SESSION_SORTS).optional(),
+        order: z.enum(["asc", "desc"]).optional(),
       },
     },
     (args) =>

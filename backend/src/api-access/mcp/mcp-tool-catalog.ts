@@ -12,7 +12,7 @@ export const MCP_TOOLS: readonly McpToolInfo[] = [
   {
     name: "list_schedule",
     description:
-      "Liệt kê các phiên trong ngày, tuần hoặc tháng quanh một ngày. view là day, week hoặc month. date là ngày dạng YYYY-MM-DD theo múi giờ của người dùng.",
+      "Liệt kê các phiên trong khoảng from đến to (YYYY-MM-DD, theo múi giờ của người dùng, tối đa 30 ngày, cả hai đầu đều tính). Có thể lọc theo q (biểu thức chính quy trên tiêu đề, ghi chú, địa điểm), types, tags, minDuration, maxDuration, deadlineFrom, deadlineTo, và sắp xếp theo sort (start, duration, deadline) với order (asc, desc).",
   },
   {
     name: "get_session",

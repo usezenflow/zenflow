@@ -564,16 +564,16 @@ describe("SessionsService.list", () => {
     );
 
     const result = await service.list(
-      { view: "day", date: "2026-06-10" },
+      { from: "2026-06-10", to: "2026-06-10" },
       user,
     );
 
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0].id).toBe("session-1");
     const [{ where }] = findMany.mock.calls[0] as [
-      { where: { userId: string } },
+      { where: { AND: Array<{ userId?: string }> } },
     ];
-    expect(where.userId).toBe(user.id);
+    expect(where.AND[0].userId).toBe(user.id);
   });
 
   it("expands a recurring DND representative into per-occurrence virtual rows", async () => {
@@ -607,7 +607,7 @@ describe("SessionsService.list", () => {
     );
 
     const result = await service.list(
-      { view: "week", date: "2026-06-15" },
+      { from: "2026-06-15", to: "2026-06-21" },
       user,
     );
 
@@ -642,7 +642,7 @@ describe("SessionsService.list", () => {
     );
 
     const result = await service.list(
-      { view: "day", date: "2026-06-10" },
+      { from: "2026-06-10", to: "2026-06-10" },
       user,
     );
 
@@ -652,11 +652,13 @@ describe("SessionsService.list", () => {
     const [{ where }] = findMany.mock.calls[0] as [
       {
         where: {
-          OR: Array<{ scheduledStartTime?: { gte?: Date; lte?: Date } }>;
+          AND: Array<{
+            OR?: Array<{ scheduledStartTime?: { gte?: Date; lte?: Date } }>;
+          }>;
         };
       },
     ];
-    const rangedClause = where.OR.find(
+    const rangedClause = where.AND[1].OR?.find(
       (c) => c.scheduledStartTime?.gte !== undefined,
     );
     expect(rangedClause?.scheduledStartTime?.gte).toEqual(
@@ -686,7 +688,7 @@ describe("SessionsService.list", () => {
     );
 
     const result = await service.list(
-      { view: "day", date: "2026-06-10" },
+      { from: "2026-06-10", to: "2026-06-10" },
       user,
     );
 
@@ -713,7 +715,7 @@ describe("SessionsService.list", () => {
     );
 
     const result = await service.list(
-      { view: "day", date: "2026-06-10" },
+      { from: "2026-06-10", to: "2026-06-10" },
       user,
     );
 
@@ -753,7 +755,7 @@ describe("SessionsService.list", () => {
     );
 
     const result = await service.list(
-      { view: "day", date: "2026-06-10" },
+      { from: "2026-06-10", to: "2026-06-10" },
       user,
     );
 

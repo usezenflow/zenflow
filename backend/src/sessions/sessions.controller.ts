@@ -16,8 +16,6 @@ import { SlotPickDto } from "./dto/slot-pick.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { DeadlineOptionsDto } from "./dto/deadline-options.dto";
-import { SearchSessionsDto } from "./dto/search-sessions.dto";
-import { SessionSearchService } from "./session-search.service";
 import {
   AllowApiToken,
   ApiTokenOnly,
@@ -36,7 +34,6 @@ import { PlacementPlanService } from "./placement-plan.service";
 export class SessionsController {
   constructor(
     private readonly sessionsService: SessionsService,
-    private readonly searchService: SessionSearchService,
     private readonly placementPlans: PlacementPlanService,
   ) {}
 
@@ -128,18 +125,6 @@ export class SessionsController {
     return {
       success: true,
       message: `Found ${data.suggestions.length} suggestions`,
-      data,
-    };
-  }
-
-  // NOTE: must precede @Get(":id") so "search" isn't matched as an :id.
-  @Get("search")
-  @AllowApiToken()
-  async search(@Query() dto: SearchSessionsDto, @CurrentUser() user: User) {
-    const data = await this.searchService.search(dto, user);
-    return {
-      success: true,
-      message: `Found ${data.sessions.length} sessions`,
       data,
     };
   }

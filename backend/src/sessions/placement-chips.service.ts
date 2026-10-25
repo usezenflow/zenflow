@@ -116,7 +116,7 @@ export class PlacementChipsService {
     );
     const local = localTime(start, tz);
 
-    const day = await this.crud.list({ view: "day", date: local.date }, user);
+    const day = await this.crud.list({ from: local.date, to: local.date }, user);
     const others = day.sessions.filter(
       (s) => s.id !== task.id && s.scheduledStartTime,
     );

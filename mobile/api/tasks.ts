@@ -10,8 +10,6 @@ import type {
   RemoveSessionSeriesResponse,
   Session,
   SessionDetailResponse,
-  SessionSearchQuery,
-  SessionSearchResponse,
   SessionsListResponse,
   SlotPickRequest,
   SlotPickResponse,
@@ -50,13 +48,6 @@ export async function listSessionSuggestions(
 }
 
 /** One page of `GET /sessions/search`; pass the returned `nextCursor` back with the same `direction`. */
-export async function searchSessions(
-  query: SessionSearchQuery,
-): Promise<SessionSearchResponse> {
-  const { data } = await api.get("/sessions/search", { params: query });
-  return data.data;
-}
-
 export async function createSession(
   input: CreateSessionInput,
 ): Promise<CreateSessionResponse> {

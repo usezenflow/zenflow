@@ -1,5 +1,4 @@
 export * from "./task";
-export * from "./session-search";
 export * from "./tag";
 export * from "./user";
 export * from "./view";
