@@ -1,93 +1,29 @@
 # PWA screens and behaviour
 
-For developers working on `pwa/`. Setup and conventions live in [pwa/README.md](../../pwa/README.md).
+For developers working on `pwa/`. Setup and conventions live in [pwa/README.md](../../pwa/README.md). Scope: [ADR-0039](../adr/0039-thin-layer-calendar-native.md).
 
 ## Routing and auth
 
-| Route    | Page                  | Notes                                  |
-| -------- | --------------------- | -------------------------------------- |
-| `/`      | `pages/home.tsx`      | the calendar; gated by `with-auth.tsx` |
-| `/login` | `pages/login.tsx`     | email, then OTP verification           |
-| `*`      | `pages/not-found.tsx` | 404                                    |
+| Route         | Page                    | Notes                                                        |
+| ------------- | ----------------------- | ------------------------------------------------------------ |
+| `/`           | `pages/home.tsx`        | settings; gated by `with-auth.tsx`; `?focus=dlu` scrolls to LMS and portal |
+| `/login`      | `pages/login.tsx`       | email, then OTP verification                                 |
+| `/onboarding` | `pages/onboarding.tsx`  | shown until `onboardedAt` is set                             |
+| `*`           | `pages/not-found.tsx`   | 404                                                          |
 
-- No onboarding step: a fresh signup lands in the app.
-- Timezone is captured once at OTP signup (`x-timezone` header, `api/auth.ts`) and is not editable.
+- Timezone is captured once at OTP signup (`x-timezone` header, `api/auth.ts`).
 - `components/hoc/with-auth.tsx` calls `me()` on mount and redirects to `/login?callback=...` when signed out.
 
 ## Settings
 
-A dialog (`components/settings/settings-dialog.tsx`) opened from the sidebar footer via the `zenflow:open-settings` window event.
+`components/settings/settings-page.tsx` renders `account-settings.tsx`, top to bottom:
 
-| Tab          | Shows                                                                                              |
-| ------------ | -------------------------------------------------------------------------------------------------- |
-| Insights     | 7x24 signed preference heatmap from `GET /users/me/preference-matrix`; cold-start empty state     |
-| Integrations | Connect, sync, disconnect the DLU LMS and student portal; last-sync status; credentials never returned |
-| Account      | Signed-in identity, read-only timezone, Log out                                                    |
-
-- **Advanced > AI assistants** (`ai-assistants-section.tsx`): MCP and REST URLs, the system prompt and personal tokens from `/users/me/api-access`. The secret shows once at creation; revoke asks to confirm.
-
-## Sessions
-
-`SessionType` = `TASK | ASSIGNMENT | EXAM | LECTURE | DND`.
-The create dialog (`create-task-dialog.tsx` -> `form/task-form.tsx`) opens with 3 tabs (`form/session-type-tabs.tsx`): Task, Fixed (Assignment, Exam, Lecture), Do Not Disturb.
-
-| Field               | Types               | Notes                                                                                                  |
-| ------------------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
-| Title               | all                 | Combobox in create mode; `GET /sessions/suggestions` autocompletes duration, tags, note, shifted deadline |
-| Location            | all                 | Optional free text (room, building, link)                                                              |
-| Description         | all                 | TipTap rich text with file uploads                                                                     |
-| Reminder            | all except `DND`    | `form/reminder-field.tsx`; up to 2 chips, edit in place, x removes; sent as `reminders: number[]` (minutes before start); new tasks default `[60]` |
-| Tags                | all                 | Name array; unknown names are upserted server-side                                                     |
-| Duration + Sessions | `TASK`, create only | `form/session-count-field.tsx`; `Sessions > 1` requests a series spread over `now ... deadline`        |
-| Deadline            | `TASK`              | Chips (`form/deadline-chip-field.tsx`) prefetched from `GET /sessions/deadline-options`: Today, Tomorrow, This week, Next week, This month, No rush, Custom |
-| When                | fixed / DND         | `form/fixed-time-field.tsx`; client derives `durationMinutes` + `scheduledStartTime`                   |
-| Repeat              | fixed / DND         | `form/recurrence-field.tsx`; Once / Daily / Weekly + weekdays + optional end date -> a bare `rrule`    |
-
-Reminder presets: At start, 15 min, 30 min, 1 hour, 2 hours, 1 day, 2 days, 3 days, 1 week, custom amount + unit.
-
-- **Edit** (`edit-task-dialog.tsx`): `type` is read-only. A `TASK` edits deadline and metadata; fixed/DND edits date, time, recurrence.
-- **Delete** in a series opens `delete-recurring-dialog.tsx` (this occurrence, this and following, whole series). A one-off deletes at once.
-- No completion lifecycle (no "Mark done", no `status`) and no manual Optimize; see [ADR-0002](../adr/0002-scheduling-simplification.md).
-- Scheduling is server-side: `POST /sessions` places a `TASK` in its best free slot; later edits are `PATCH /sessions/:id` field diffs.
-
-### Alternative times
-
-A pairwise-sampled placement returns a second candidate slot. Model identity is never shown.
-
-- **Single `TASK`** create or deadline change with `divergent: true` opens `slot-pick-dialog.tsx` (keep or switch).
-- Picking an alternative calls `POST /sessions/:id/slot-pick` (`chose: "alternative"`), fires `zenflow:calendar-refresh`, and locks the row.
-- `409` (now overlaps another session) marks the row "No longer available". Closing without picking keeps the scheduled slot.
-
-## Calendar
-
-`components/calendar/`:
-
-| File                                 | Role                                                          |
-| ------------------------------------ | ------------------------------------------------------------- |
-| `layout.tsx`                         | State, fetching, dialogs                                      |
-| `header.tsx`                         | Date navigation, view picker, notification bell, create button |
-| `sidebar.tsx`                        | Agenda list                                                   |
-| `day-view` / `week-view` / `month-view` | Grids (+ grid and cell children)                           |
-| `scheduled-block-item.tsx`           | One draggable, resizable block with a click popover           |
-
-- **Per-type colour** (`deriveState` + `SESSION_TYPE_META` from `@zenflow/core`): `TASK` amber, `ASSIGNMENT` teal, `EXAM` rose, `LECTURE` sky, `DND` dashed slate.
-  - Non-`TASK` blocks carry `SessionTypeBadge`; a `location` shows with a pin icon.
-- **Drag and resize**: dnd-kit drag (day re-times, week re-times and re-days, month re-days) and pointer edge-resize both write `PATCH /sessions/:id`.
-  - For a series, `update-recurring-dialog.tsx` first asks the scope (`scope` + `skipConflicting`).
-- **Conflicts**: `getOverlapLayout` lays overlaps side by side and flags same-time overlap; `withOverlap` folds it into the `conflict` state. No backend conflict flag.
-- **No work-hours shading**: the scheduler uses the full 24 h grid.
-- **Day view insights** (mobile, `insights-section.tsx`): a pill under the Today card opens a sheet with the focus map (7x24 DONE heat, from 5 DONE events), the seven-day recap and prep buffers, all from `GET /users/me/insights`.
-
-## Notifications
-
-`components/notifications/notification-bell.tsx`: header bell with an unread badge, opening a popover of DLU watcher notifications.
-
-- Loads `GET /notifications` and receives new ones over SSE (`GET /notifications/stream`, `withCredentials`), shown as a toast.
-- Opening the popover marks shown rows read. Clicking a row that points at a session opens it and stamps `action-taken`.
-- Row: type icon and tint, `kind` badge (New, Change, Drop), relative time, and `eventEndsAt` for assignment, exam, lecture.
-- Unread = red dot + bold meta; `NEW` also gets a red alert mark.
-- Hover x dismisses (`DELETE /notifications/:id`); the web counterpart of mobile's swipe.
-- A row action calls `POST /notifications/:id/reschedule-conflicts`.
+- Finish setup card: notifications and LMS connection.
+- Profile and student card.
+- Appearance, preferences (language, default reminder, notifications) and travel.
+- LMS and portal: connect, sync, disconnect; last-sync status; credentials never returned.
+- Advanced: timezone, storage, and AI assistants (`ai-assistants-section.tsx`): MCP and REST URLs, the system prompt and personal tokens from `/users/me/api-access`. The secret shows once at creation; revoke asks to confirm.
+- Sign out.
 
 ## Toasts
 

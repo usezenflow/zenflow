@@ -17,12 +17,12 @@ Per `SchedulingModel`, as in `backend/scripts/ab-report.ts`, PYTHON placements o
 | Shown | Source |
 | --- | --- |
 | Kept | `SlotProposal.acceptedUnmodified` over proposals |
-| Started | `SessionEvent` START over placed sessions whose slot has passed |
+| Settled | `SessionEvent` KEPT over placed sessions whose slot has passed |
 | Drag | Mean of `abs(SessionEvent.dragDistanceMinutes)` on MOVE |
 | Reward | Mean `SessionEvent.rewardScore` |
 | Weekly kept | `SlotProposal` by `date_trunc('week', timestamp)` |
 
-Completion is not shown. Only START and MOVE are tracked.
+Completion is not shown. Only KEPT and MOVE are tracked ([ADR-0042](../adr/0042-kept-and-moved-signals.md)).
 
 ## Workload
 

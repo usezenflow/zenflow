@@ -28,6 +28,10 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `MASTER_KEY_CURRENT_VERSION` | `1` | Master-key version used for new wraps; its `_V<n>` keys must exist. |
 | `FILE_URL_SECRET` | none | Required, 32+ chars. HMAC for signed file URLs. |
 | `API_TOKEN_PEPPER` | none | Required in production, 32+ chars. Peppers the personal API token HMAC; unset outside production disables API access. Rotating revokes every token. |
+| `PUBLIC_API_URL` | none | API base incl. `/api/v1`, e.g. `https://api.usezenflow.com/api/v1`. Turns on OAuth for AI assistants ([ADR-0041](../adr/0041-mcp-oauth.md)) and is the base of Google's redirect and push URLs. |
+| `PUBLIC_WEB_URL` | first `CORS_ORIGIN` | Where the PWA lives: the consent screen and the page Google returns to. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | none | Google OAuth client for Calendar sync ([ADR-0040](../adr/0040-google-calendar-sync.md)). Redirect URI `<PUBLIC_API_URL>/google-calendar/callback`, scope `calendar.app.created`. |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | none | 64 hex chars (`openssl rand -hex 32`). AES-256-GCM key for stored Google refresh tokens. Sync is off until the three Google vars and `PUBLIC_API_URL` are set. Rotating it forces everyone to reconnect. |
 | `S3_ENDPOINT` | none | Required. `http://storage:9000` in compose; `http://localhost:9000` for host `start:dev`. |
 | `S3_REGION` | `us-east-1` | |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_BUCKET` | none | Required. Bucket must exist (compose creates it). |
@@ -37,7 +41,7 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `UPLOAD_USER_QUOTA_BYTES` | 157286400 (150 MiB) | Stored bytes per user. Quota x users must fit on disk with Postgres, telemetry and backups. |
 
 | `PORT` | 8000 | |
-| `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` / `worker-scheduler` one consumer each, `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |
+| `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` (push and `calendar-sync`) / `worker-scheduler` one consumer each, `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |
 | `NODE_ENV` | `development` | `production` requires `BANDIT_SERVICE_URL` and turns Swagger (`/api`) off. |
 | `SWAGGER_ENABLED` | unset | `true` keeps Swagger on under `NODE_ENV=production` (staging only). |
 

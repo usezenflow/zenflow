@@ -12,6 +12,8 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | `SESSION_SECRET` | Signs the session cookie | [runbook](#session-signing-key-session_secret) |
 | `FILE_URL_SECRET` | HMAC key for signed file URLs (`/files/:id?sig=`) | Change and redeploy. Notes need no rewrite |
 | `API_TOKEN_PEPPER` | Server pepper for hashing personal API tokens (required in production, min 32 chars; Vault sets `api`) | Rotating invalidates all personal API tokens |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret for Calendar sync (Vault sets `api`) | Rotate in Google Cloud, redeploy |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | AES key for stored Google refresh tokens, 64 hex (Vault sets `api`) | Rotating forces every user to reconnect Google Calendar |
 | `MASTER_LMS_ENCRYPTION_KEY_V<n>`, `MASTER_PORTAL_ENCRYPTION_KEY_V<n>` | Wrap per-user DEKs for DLU and LMS credentials (`backend/src/crypto`) | [runbook](#crypto-master-keys-master__encryption_key_vn) |
 | `PORTAL_API_KEY` | DLU portal API key | Replace when DLU invalidates it |
 | `MAIL_PASSWORD` | SMTP password | At the SMTP provider |
@@ -27,7 +29,7 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `SOPS_AGE_KEY`, `SECRETS_COMMAND` | CI deploy (GitHub Environment secrets) | Yearly or on offboarding |
 | `GITHUB_TOKEN` | Image push and pull | Automatic |
 
-Not secrets: `VITE_*`, `EXPO_PUBLIC_*`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`, `backend/certs/lms-ca.pem`, `CORS_ORIGIN`, hosts, ports, usernames, database and bucket names, URLs without credentials. They go in the non-secret env file (`backend/env/prod.env` for prod), never in Vault. A name must not be in both.
+Not secrets: `GOOGLE_CLIENT_ID`, `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `VITE_*`, `EXPO_PUBLIC_*`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`, `backend/certs/lms-ca.pem`, `CORS_ORIGIN`, hosts, ports, usernames, database and bucket names, URLs without credentials. They go in the non-secret env file (`backend/env/prod.env` for prod), never in Vault. A name must not be in both.
 
 ## How secrets reach the app
 

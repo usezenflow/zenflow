@@ -9,8 +9,8 @@ Tell Zenflow **what** needs doing (a study task with a duration and deadline, or
 - Task series and recurring sessions, with "this one / this and following" edits.
 - Personalised scheduling: a time-of-day preference heuristic and a per-student LinUCB bandit, run as a live A/B experiment.
 - Moodle LMS and university portal sync: deadlines, timetable and exams land on the calendar.
-- Notes with file attachments, reminders, and an in-app and push notification inbox.
-- Web (PWA) and mobile (iOS, Android) clients.
+- Notes with file attachments and push notifications.
+- Tasks arrive through AI assistants over MCP. Web (PWA) handles login, onboarding and settings; the mobile app stays.
 
 ## Quick start
 

@@ -31,16 +31,50 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | POST | `/users/me/api-access/tokens` | `{ name }`. Returns `{ token, secret }`; the secret is shown once |
 | DELETE | `/users/me/api-access/tokens/:id` | Revoke at once. `{ revoked: true }` |
 
-## Personal API access (`/mcp`)
+## AI assistants (`/mcp`)
 
-[ADR-0038](../adr/0038-personal-api-access.md). Create a token under `/users/me/api-access`, then send `Authorization: Bearer zf_...`.
+[ADR-0038](../adr/0038-personal-api-access.md), [ADR-0041](../adr/0041-mcp-oauth.md). Assistants sign in through OAuth; scripts can use a personal token from `/users/me/api-access` (`Authorization: Bearer zf_...`). OAuth access tokens are `zo_...`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/mcp` | Streamable HTTP MCP, stateless. Bearer only. GET and DELETE answer 405 |
+| POST | `/mcp` | Streamable HTTP MCP, stateless. Bearer only; a 401 carries `WWW-Authenticate: Bearer resource_metadata=...`. GET and DELETE answer 405 |
 
+- Tools: `list_schedule`, `get_session`, `create_tasks` (`dryRun` first), `update_session`, `delete_session`. Each calls the same service as the REST route and relays its error code.
 - Bearer tokens are refused (403) on routes not marked for them. Cookie sessions are unchanged.
 - Management routes above take the cookie only.
+
+### OAuth (API origin root, outside `/api/v1`)
+
+Mounted from the MCP SDK in `main.ts`; the provider is `src/oauth/`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/.well-known/oauth-authorization-server` | Server metadata (PKCE `S256`, public clients) |
+| GET | `/.well-known/oauth-protected-resource/api/v1/mcp` | Protected resource metadata |
+| POST | `/register` | Dynamic client registration. Redirect URIs must be https or loopback |
+| GET | `/authorize` | Validates the request, then sends the browser to the PWA consent screen |
+| POST | `/token` | Code and refresh grants. Refresh tokens rotate; a spent one revokes its family |
+| POST | `/revoke` | Revokes a token family |
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/oauth/consent?request=` | Who is asking (`OAuthConsentInfo`). Cookie session |
+| POST | `/oauth/consent` | `{ request, approve }`. Returns `{ redirectUrl }` with a one-time code or `access_denied` |
+| GET | `/oauth/apps` | Connected assistants |
+| DELETE | `/oauth/apps/:clientId` | Disconnect one at once |
+
+## Google Calendar (`/google-calendar`)
+
+[ADR-0040](../adr/0040-google-calendar-sync.md). Off until configured; `GET` answers `available: false`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/google-calendar` | Status (`GoogleCalendarStatus`) |
+| POST | `/google-calendar/connect` | `{ url }` to send the browser to Google |
+| GET | `/google-calendar/callback` | Public. Google's redirect; stores the token and returns to `PUBLIC_WEB_URL/?google=` |
+| POST | `/google-calendar/sync` | Queue a sync now (202) |
+| DELETE | `/google-calendar` | Revoke, remove the Zenflow calendar and forget the links |
+| POST | `/google-calendar/webhook` | Public. Google's push; the channel token proves the sender |
 | GET | `/users/me/insights` | `from`, `to` as `YYYY-MM-DD` (default last 7 days, max 92 inclusive); focus grid and recap for the window, buffers for exams and assignments due in the next 30 days (`InsightsResponse`) |
 
 - `timezone` is set at signup (`x-timezone`) and editable. Changing it re-keys recurring `exdates`.
@@ -87,9 +121,6 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 - **Search:** every word of `q` must match, ignoring case and accents (including đ); empty `q` lists all. `direction` is `forward` (start at or after) or `backward` (before); each page is ascending.
 - Search returns `{ sessions, nextCursor }`; pass `nextCursor` with the same `direction`. Recurring series add occurrences up to a year past the cursor once stored rows run out. Unscheduled rows are skipped.
 - **Skipped:** every `Session` carries `skipped`. Skip routes return `SessionSkipResponse` (`{ session }`) and accept an occurrence id. The representative row id of a recurring series is a 400. Learning signals are START and MOVE only ([ADR-0035](../adr/0035-start-and-move-only-signals.md)).
-- **Reminders:** `POST` and `PATCH` accept `reminders?: number[]` (minutes before start, max 2, not for `DND`). Responses carry `reminders: number[]`.
-- Omitted on create: one at `defaultReminderMinutes` (none if 0). Omitted on `PATCH`: unchanged.
-- Reminders past or under 60 s away are skipped and listed in `skippedReminders`.
 
 ## Tags and files
 

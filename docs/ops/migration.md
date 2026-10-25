@@ -35,8 +35,6 @@ Project `zenflow-prod`, so volumes are `zenflow-prod_<name>`.
 
 Host files outside volumes: `/etc/zenflow/vault/{role_id,secret_id}` ([vault.md](vault.md#rotate-approle-credentials)), `/run/zenflow` (re-rendered by deploy), `$DEPLOY_PATH/backend/state/` and `.env.prod` (written by deploy).
 
-Reminders need no restore. They are Postgres rows, and the watcher re-arms the queue at boot and every minute. Only reminders over ~6 min late are skipped.
-
 ## Move to a new VPS
 
 Keep the old host untouched until the end.
@@ -78,7 +76,7 @@ Keep the old host untouched until the end.
    docker compose --env-file .env.prod -f compose.prod.yml up -d storage
    ```
    Restart the stopped services, or redeploy.
-9. **Check.** `docker compose ps` is healthy, sign in, open a note with an attachment, the watcher logs `armed N reminder job(s) from the database at boot`, and **Zenflow Backups** turns green after the next run.
+9. **Check.** `docker compose ps` is healthy, sign in, open a note with an attachment and **Zenflow Backups** turns green after the next run.
 10. **Switch DNS.** Keep the old host stopped for a week. Rotate anything that was on a retired machine.
 
 ## Restore drill

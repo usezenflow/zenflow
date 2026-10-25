@@ -13,7 +13,7 @@
 One image, a `ROLE` env:
 - `api`: HTTP only, no `ScheduleModule`, no cron or watcher providers. Run 2-3 processes behind nginx.
 - `watcher`: serves only `/health`; the sole cron runner (ingestion ticker, reminder sweep, retained-sessions, matrix decay, retention job, [ADR-0016](0016-telemetry-retention-and-partitioning.md)). It enqueues and consumes nothing. Exactly one replica, with CPU and memory limits, in the prod and staging compose files.
-- `worker-portal`, `worker-lms`, `worker-notify`: `/health` only; `worker-portal` consumes every `portal-*` queue, `worker-lms` every `lms-*` queue and `worker-notify` consumes `notify` ([ADR-0007](0007-bullmq-for-notification-queue.md), [ADR-0024](0024-split-ingestion-queues.md)) and scales by replicas. `worker` (watcher plus every consumer) and `all` (everything incl. HTTP, the default) exist for single-process dev and tests.
+- `worker-portal`, `worker-lms`, `worker-notify`: `/health` only; `worker-portal` consumes every `portal-*` queue, `worker-lms` every `lms-*` queue and `worker-notify` consumes `notify` and `calendar-sync` ([ADR-0007](0007-bullmq-for-notification-queue.md), [ADR-0024](0024-split-ingestion-queues.md)) and scales by replicas. `worker` (watcher plus every consumer) and `all` (everything incl. HTTP, the default) exist for single-process dev and tests.
 - SSE fan-out moves to Redis pub/sub ([ADR-0018](0018-redis-pubsub-instance.md)) so the worker and any replica can notify any client.
 - Reminders and retained-sessions are verified idempotent before any overlap (deploys briefly run two of each role).
 - Worker containers get `stop_grace_period: 60s` so in-flight jobs drain (`QUEUE_SHUTDOWN_TIMEOUT_MS`, 50 s).

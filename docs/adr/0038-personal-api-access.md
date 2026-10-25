@@ -25,3 +25,5 @@ Students want an assistant to read their schedule and add tasks. A third-party a
 - `@zenflow/shared` (`api-access.ts`): `ApiAccessResponse`, `ApiTokenSummary`, `CreateApiTokenInput`, `CreateApiTokenResponse`, `RevokeApiTokenResponse`.
 - Prisma: `ApiToken` (`id`, `name`, `hash`, `createdAt`, `lastUsedAt`, `revokedAt`, `userId`), migration `20261023100000_personal_api_access`.
 - Env: `API_TOKEN_PEPPER`.
+
+**Addendum (2026-10-25, ADR-0041):** assistants sign in through OAuth. Personal tokens remain for scripts.

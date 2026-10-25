@@ -1,6 +1,6 @@
 # Backend scheduler
 
-For: developers changing placement, sessions or reminders in Nest. Decisions: [ADR-0003](../adr/0003-python-authoritative-placement.md), [ADR-0002](../adr/0002-scheduling-simplification.md), [ADR-0001](../adr/0001-linucb-model-design.md). Diagrams: [scheduler-components.svg](../architecture/scheduler-components.svg), sequence flows in [scheduler-flows.md](../architecture/scheduler-flows.md). A/B and reranking: [ab-testing](../scheduler/ab-testing.md), [reranking](../scheduler/reranking.md).
+For: developers changing placement or sessions in Nest. Decisions: [ADR-0003](../adr/0003-python-authoritative-placement.md), [ADR-0002](../adr/0002-scheduling-simplification.md), [ADR-0001](../adr/0001-linucb-model-design.md). Diagrams: [scheduler-components.svg](../architecture/scheduler-components.svg), sequence flows in [scheduler-flows.md](../architecture/scheduler-flows.md). A/B and reranking: [ab-testing](../scheduler/ab-testing.md), [reranking](../scheduler/reranking.md).
 
 The scheduler places one `TASK` (or one series) into an empty slot and never moves anything else.
 
@@ -23,7 +23,6 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
   1. Least-conflict start before the deadline.
   2. First free start up to 30 days late.
   3. Latest on-grid start ending by the deadline (pinned past already-pinned siblings).
-- Backfill rows from before this guarantee: `pnpm --filter backend backfill:unplaced [--dry-run]`.
 - **Golden fixtures** cover only the frozen fallback: `pnpm --filter backend golden:export` writes `test/golden/scheduler-core.golden.json`, asserted by `services/bandit/tests/test_golden_ts.py`.
   - A fallback bug fix updates both sides. Behaviour changes go in `services/bandit` only.
 
@@ -37,16 +36,6 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
 
 - **Slot scoring** (`core/slot-score.ts`, fallback only): overlap-weighted preference sum. `bestFreeSlot` picks the top free slot. LinUCB scoring is Python's (`services/bandit/src/core/linucb_best_slot.py`).
 - **Displacement and sync conflicts:** EDF repack and the infeasible fallbacks are Python's. Nest applies the response (`scheduler/io/displacement.service.ts`) and raises per-source conflict notifications (`ingestion/sync-conflicts.service.ts`).
-
-## Session reminders
-
-`reminders/`: one-shot `SchedulerRegistry` timers.
-
-- Re-armed on every create/update/delete via `syncUser()`.
-- A 5-min sweep re-arms anything firing within 24 h (the `setTimeout` overflow guard) and claims fired occurrences via `firedForStart`, so restarts do not double-send.
-- `replace()` skips a new reminder whose time is past or under 60 s away; responses list those leads in `skippedReminders`.
-- A reminder missed by 2 min or less still fires after a restart.
-- `arm()` adds 5-10 s jitter (`REMINDER_RANDOM`, injectable).
 
 ## Where things live
 
