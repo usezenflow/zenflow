@@ -10,8 +10,6 @@ import type {
   RemoveSessionSeriesResponse,
   Session,
   SessionDetailResponse,
-  SessionDoneResponse,
-  SessionStartResponse,
   SessionSearchQuery,
   SessionSearchResponse,
   SessionsListResponse,
@@ -191,25 +189,6 @@ export async function undoPlacement(
  * `alternativeSlot`. Non-blocking — failures are surfaced as toasts by callers.
  */
 /** Records that the app is open inside a placed block. The server keeps one per slot. */
-export async function recordSessionStart(id: string): Promise<SessionStartResponse> {
-  const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/start`);
-  return data.data;
-}
-
-/** Marks a placed TASK done (`POST /sessions/:id/done`). */
-export async function markSessionDone(id: string): Promise<SessionDoneResponse> {
-  const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/done`);
-  notifySessionsMutated();
-  return data.data;
-}
-
-/** Clears the Done mark (`DELETE /sessions/:id/done`). */
-export async function clearSessionDone(id: string): Promise<SessionDoneResponse> {
-  const { data } = await api.delete(`/sessions/${encodeURIComponent(id)}/done`);
-  notifySessionsMutated();
-  return data.data;
-}
-
 export async function slotPick(
   id: string,
   input: SlotPickRequest,

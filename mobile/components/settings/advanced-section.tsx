@@ -3,7 +3,6 @@ import { ExpandChevron } from "@/components/ui/expand-chevron";
 import { useLanguage } from "@/hooks/use-language";
 import { t } from "@/lib/i18n";
 import { OfflineLock } from "@/components/offline-lock";
-import { StorageSection } from "@/components/settings/storage-section";
 import { TimezoneRow } from "@/components/settings/preferences-section";
 import { Text } from "@/components/ui/text";
 import { useState } from "react";
@@ -34,9 +33,6 @@ export function AdvancedSection() {
       {open ? (
         <>
           <TimezoneRow />
-          <OfflineLock>
-            <StorageSection />
-          </OfflineLock>
           <AiAssistantsSection />
         </>
       ) : null}

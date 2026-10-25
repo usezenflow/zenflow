@@ -73,7 +73,6 @@ describe("buildSpecs", () => {
     const specs = buildSpecs(
       [
         session("a"),
-        session("skipped", { skipped: true }),
         session("unplaced", { scheduledStartTime: null }),
         session("old", { scheduledStartTime: "2026-01-01T00:00:00.000Z" }),
         session("far", { scheduledStartTime: "2027-03-01T00:00:00.000Z" }),
@@ -139,7 +138,7 @@ describe("syncDeviceCalendar", () => {
     const next = await syncDeviceCalendar(
       phone.adapter,
       first.state,
-      [session("a", { title: "Renamed" }), session("b", { skipped: true })],
+      [session("a", { title: "Renamed" })],
       ctx,
     );
 

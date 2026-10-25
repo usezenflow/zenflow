@@ -30,15 +30,14 @@ describe("routeForSession", () => {
   it("leaves existing users alone and bounces them out of onboarding/auth", () => {
     const u = { onboardedAt: "2026-01-01T00:00:00.000Z" };
     expect(routeForSession(u, "(app)")).toBeNull();
-    expect(routeForSession(u, "(auth)")).toBe("/(app)");
-    expect(routeForSession(u, "(onboarding)")).toBe("/(app)");
+    expect(routeForSession(u, "(auth)")).toBe("/(app)/settings");
+    expect(routeForSession(u, "(onboarding)")).toBe("/(app)/settings");
   });
 });
 
 describe("step navigation", () => {
   it("walks forward and clamps", () => {
-    expect(nextStep("dlu")).toBe("commute");
-    expect(nextStep("commute")).toBe("notifications");
+    expect(nextStep("dlu")).toBe("notifications");
     expect(nextStep("notifications")).toBe("assistants");
     expect(nextStep("assistants")).toBe("done");
     expect(nextStep("done")).toBe("done");
@@ -46,7 +45,6 @@ describe("step navigation", () => {
   it("walks back and clamps; no back on first/done", () => {
     expect(prevStep("dlu")).toBe("dlu");
     expect(canGoBack("dlu")).toBe(false);
-    expect(canGoBack("commute")).toBe(true);
     expect(canGoBack("done")).toBe(false);
   });
 });

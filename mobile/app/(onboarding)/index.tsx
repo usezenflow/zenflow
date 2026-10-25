@@ -16,16 +16,13 @@ import {
 import { ImportedTimetable } from "@/components/onboarding/imported-timetable";
 import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
-import { TravelSection } from "@/components/settings/travel-section";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
 import { useIntegrationStore } from "@/hooks/use-integration-store";
-import { useMyLocationStop } from "@/hooks/use-my-location-stop";
 import { useNotificationToggle } from "@/hooks/use-notification-toggle";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useUserStore } from "@/hooks/use-user-store";
-import { homeStop } from "@/lib/home-stop";
 import {
   FIRST_STEP,
   type OnboardingStep,
@@ -174,7 +171,6 @@ const COPY = {
 
 const STEP_ICON: Partial<Record<OnboardingStep, typeof User>> = {
   dlu: GraduationCap,
-  commute: LocateFixed,
   notifications: Bell,
   assistants: Sparkles,
 };
@@ -207,7 +203,6 @@ export default function OnboardingScreen() {
   const { setIntegrations, setLoading, integrations } = useIntegrationStore();
   const notif = useNotificationToggle();
   const { prefs, update } = notif;
-  const myLocation = useMyLocationStop();
 
   // Local UI step index only; every value below is persisted server-side.
   const [step, setStep] = useState<OnboardingStep>(FIRST_STEP);
@@ -253,27 +248,6 @@ export default function OnboardingScreen() {
     }
   };
   const dluConnected = integrations.some((i) => i.connected);
-  const home = homeStop(user);
-
-  /** Asks for location permission, then saves the position as home. */
-  async function useMyLocation() {
-    const point = await myLocation.locate();
-    if (!point) return;
-    setBusy(true);
-    try {
-      updateUser(
-        await updateBasicInfo({
-          homeLocation: t("My location"),
-          homeLat: point.lat,
-          homeLng: point.lng,
-        }),
-      );
-    } catch {
-      toast(COPY.saveFailed);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function run(fn: () => Promise<undefined | false>) {
     setBusy(true);
@@ -411,61 +385,6 @@ export default function OnboardingScreen() {
         </>
       );
       break;
-    case "commute":
-      ({ title, body } = COPY.commute);
-      content = (
-        <View className="gap-4">
-          <Pressable
-            testID="onboarding.commute.use-location"
-            onPress={() => void useMyLocation()}
-            disabled={busy || myLocation.locating}
-            accessibilityRole="button"
-            className="flex-row items-center gap-[13px] rounded-2xl border border-border bg-card px-4 py-3.5 active:opacity-80"
-          >
-            <View className="size-[38px] items-center justify-center rounded-xl bg-primary/10">
-              <BusyOr busy={myLocation.locating}>
-                <LocateFixed size={18} className="text-primary" />
-              </BusyOr>
-            </View>
-            <View className="min-w-0 flex-1">
-              <Text className="text-[15px] font-semibold">
-                {COPY.commute.useLocation}
-              </Text>
-              <Text className="mt-0.5 text-[13px] text-muted-foreground">
-                {COPY.commute.useLocationBody}
-              </Text>
-            </View>
-          </Pressable>
-          {myLocation.note && (
-            <View className="flex-row gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
-              <AlertCircle size={20} className="text-destructive" />
-              <View className="flex-1">
-                <Text className="text-[13.5px] leading-snug">
-                  {myLocation.note}
-                </Text>
-                {myLocation.settingsNeeded && (
-                  <Pressable
-                    onPress={() => void Linking.openSettings()}
-                    className="mt-2"
-                  >
-                    <Text className="text-[13.5px] font-semibold text-primary">
-                      {COPY.commute.openSettings}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          )}
-          <TravelSection hideLabel />
-        </View>
-      );
-      footer = (
-        <>
-          {primary(COPY.continue, advance)}
-          {!home && ghost(COPY.skipForNow, advance)}
-        </>
-      );
-      break;
     case "notifications":
       ({ title, body } = COPY.notifications);
       content = (
@@ -588,12 +507,6 @@ export default function OnboardingScreen() {
           v: dluConnected ? t("Connected") : t("Skipped"),
           skipped: !dluConnected,
           step: "dlu",
-        },
-        {
-          k: t("Home"),
-          v: home?.text ?? t("Skipped"),
-          skipped: !home,
-          step: "commute",
         },
         {
           k: t("Notifications"),

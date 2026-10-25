@@ -1,5 +1,4 @@
 import { isOnline, useConnectivity } from "@/lib/connectivity";
-import { warmCalendar } from "@/lib/warm-calendar";
 import { notifySessionsMutated } from "@/lib/session-cache";
 import NetInfo from "@react-native-community/netinfo";
 import { useUserStore } from "@/hooks/use-user-store";
@@ -20,16 +19,14 @@ async function syncPendingPrefs(): Promise<void> {
  * the offline cache (see `warm-calendar.ts`).
  */
 export function useConnectivityWatch(): void {
-  // Fill the offline cache once signed in and whenever the app returns to the
-  // foreground (warmCalendar skips fresh entries and does nothing offline).
+  // Sync pending preferences once signed in and whenever the app returns to the
+  // foreground.
   const userId = useUserStore((s) => s.user?.id);
   useEffect(() => {
     if (!userId) return;
-    void warmCalendar();
     void syncPendingPrefs();
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        void warmCalendar();
         void syncPendingPrefs();
       }
     });
@@ -54,7 +51,6 @@ export function useConnectivityWatch(): void {
         // whose refetch fails again re-flags itself.
         s.clearStale();
         notifySessionsMutated();
-        void warmCalendar();
         void syncPendingPrefs();
       }
       wasOnline = s.online;

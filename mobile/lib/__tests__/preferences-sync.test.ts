@@ -17,24 +17,19 @@ const DEVICE = "Asia/Tokyo";
 const user = {
   timezone: "Asia/Ho_Chi_Minh",
   lang: "vi" as const,
-  defaultReminderMinutes: 15 as const,
 };
 
 describe("patchToUpdateInput", () => {
   it("maps UI names to API names", () => {
-    expect(
-      patchToUpdateInput({ language: "en", defaultReminder: 30 }, DEVICE),
-    ).toEqual({ lang: "en", defaultReminderMinutes: 30 });
+    expect(patchToUpdateInput({ language: "en" }, DEVICE)).toEqual({ lang: "en" });
   });
   it("resolves the device sentinel to the concrete zone", () => {
     expect(patchToUpdateInput({ timezone: "device" }, DEVICE)).toEqual({
       timezone: DEVICE,
     });
   });
-  it("passes explicit zones through and keeps reminder 0", () => {
-    expect(
-      patchToUpdateInput({ timezone: "UTC", defaultReminder: 0 }, DEVICE),
-    ).toEqual({ timezone: "UTC", defaultReminderMinutes: 0 });
+  it("passes explicit zones through", () => {
+    expect(patchToUpdateInput({ timezone: "UTC" }, DEVICE)).toEqual({ timezone: "UTC" });
   });
   it("omits untouched fields", () => {
     expect(patchToUpdateInput({}, DEVICE)).toEqual({});
@@ -55,7 +50,6 @@ describe("userToSyncedPrefs", () => {
       language: "vi",
       timezone: "Asia/Ho_Chi_Minh",
       timezoneMode: "explicit",
-      defaultReminder: 15,
     });
   });
 });

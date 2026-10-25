@@ -1,7 +1,6 @@
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import {
-  AlarmClockIcon,
   Bell,
   ChevronRight,
   Clock,
@@ -19,7 +18,6 @@ import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
 import {
   LANGUAGES,
-  REMINDERS,
   allTimezones,
   deviceTimezone,
   usePreferences,
@@ -143,7 +141,6 @@ export function PreferencesSection() {
   const { setEnabled, active } = useNotificationState();
   const save = usePreferenceSave();
   const languageSheet = useRef<OptionSheetHandle>(null);
-  const reminderSheet = useRef<OptionSheetHandle>(null);
 
   async function toggleNotifications(on: boolean) {
     await setEnabled(on);
@@ -162,16 +159,6 @@ export function PreferencesSection() {
           })()}
           onPress={() => languageSheet.current?.open()}
         />
-        <View className="h-px bg-border" />
-        <Row
-          Icon={AlarmClockIcon}
-          title={t("Reminder")}
-          value={
-            REMINDERS.find((r) => r.value === prefs.defaultReminder)?.label ??
-            ""
-          }
-          onPress={() => reminderSheet.current?.open()}
-        />
       </View>
 
       <SettingsSectionLabel>{t("Notifications")}</SettingsSectionLabel>
@@ -185,7 +172,7 @@ export function PreferencesSection() {
               {t("Allow notifications")}
             </Text>
             <Text className="mt-0.5 text-[14px] text-muted-foreground">
-              {t("Push alerts for reminders and schedule changes")}
+              {t("Push alerts for schedule changes and sync problems")}
             </Text>
           </View>
           <Switch checked={active} onCheckedChange={toggleNotifications} />
@@ -198,13 +185,6 @@ export function PreferencesSection() {
         options={LANGUAGES}
         value={prefs.language}
         onSelect={(language) => save({ language })}
-      />
-      <OptionSheet
-        ref={reminderSheet}
-        title={t("Reminder")}
-        options={REMINDERS}
-        value={prefs.defaultReminder}
-        onSelect={(defaultReminder) => save({ defaultReminder })}
       />
     </>
   );

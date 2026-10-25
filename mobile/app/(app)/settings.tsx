@@ -11,7 +11,6 @@ import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useNotificationState } from "@/hooks/use-notification-toggle";
 import { PreferencesSection } from "@/components/settings/preferences-section";
 import { DeviceCalendarSection } from "@/components/settings/device-calendar-section";
-import { TravelSection } from "@/components/settings/travel-section";
 import { ProfileRow } from "@/components/settings/profile-row";
 import { StudentCard, StudentCardSkeleton } from "@/components/settings/student-card";
 import { useStudent } from "@/hooks/use-student";
@@ -214,7 +213,6 @@ export default function SettingsScreen() {
         <>
         <PreferencesSection />
         <DeviceCalendarSection />
-        <TravelSection />
         <OfflineLock>
           <TagsRow />
         </OfflineLock>

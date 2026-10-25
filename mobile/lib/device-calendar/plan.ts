@@ -62,11 +62,11 @@ function dueNote(deadline: string | null | undefined, timeZone: string): string 
   return `Due ${when}`;
 }
 
-/** Placed, unskipped sessions in the window, as phone events. */
+/** Placed sessions in the window, as phone events. */
 export function buildSpecs(sessions: Session[], ctx: PlanContext): DeviceEventSpec[] {
   const specs: DeviceEventSpec[] = [];
   for (const s of sessions) {
-    if (!s.scheduledStartTime || s.skipped) continue;
+    if (!s.scheduledStartTime) continue;
     const start = new Date(s.scheduledStartTime);
     if (start < ctx.from || start > ctx.to) continue;
     const base = {

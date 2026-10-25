@@ -1,7 +1,5 @@
 import { isAxiosError } from "axios";
 import {
-  DEFAULT_REMINDER_CHOICES,
-  type DefaultReminderChoice,
   LANGS,
   type Lang,
   type UpdateUserInput,
@@ -26,22 +24,16 @@ export interface SyncedPrefs {
   /** Concrete IANA zone (never "device"). */
   timezone: string;
   timezoneMode: TimezoneMode;
-  defaultReminder: DefaultReminderChoice;
 }
 
 /** A UI edit: `timezone` may be the "device" sentinel. */
 export interface SyncedPatch {
   language?: Lang;
   timezone?: string;
-  defaultReminder?: DefaultReminderChoice;
 }
 
 export function isLang(v: unknown): v is Lang {
   return (LANGS as readonly unknown[]).includes(v);
-}
-
-export function isReminderChoice(v: unknown): v is DefaultReminderChoice {
-  return (DEFAULT_REMINDER_CHOICES as readonly unknown[]).includes(v);
 }
 
 /** Resolve a UI timezone value ("device" or IANA) to a concrete IANA zone. */
@@ -56,9 +48,6 @@ export function patchToUpdateInput(
 ): UpdateUserInput {
   const input: UpdateUserInput = {};
   if (patch.language !== undefined) input.lang = patch.language;
-  if (patch.defaultReminder !== undefined) {
-    input.defaultReminderMinutes = patch.defaultReminder;
-  }
   if (patch.timezone !== undefined) {
     input.timezone = resolveTimezone(patch.timezone, deviceTz);
   }
@@ -79,14 +68,13 @@ export function modeForTimezone(
  * is still the server's (it's re-synced separately, see `deviceZoneDrift`).
  */
 export function userToSyncedPrefs(
-  user: Pick<User, "timezone" | "lang" | "defaultReminderMinutes">,
+  user: Pick<User, "timezone" | "lang">,
   mode: TimezoneMode,
 ): SyncedPrefs {
   return {
     language: user.lang,
     timezone: user.timezone,
     timezoneMode: mode,
-    defaultReminder: user.defaultReminderMinutes,
   };
 }
 
@@ -123,14 +111,13 @@ export function timezonePickerValue(p: SyncedPrefs): string {
 /** Settings edits waiting for a connection (the API's own shape, IANA zone resolved). */
 export type PendingPrefs = Pick<
   UpdateUserInput,
-  "name" | "lang" | "timezone" | "defaultReminderMinutes" | "allowNotifications"
+  "name" | "lang" | "timezone" | "allowNotifications"
 >;
 
 const PENDING_KEYS = [
   "name",
   "lang",
   "timezone",
-  "defaultReminderMinutes",
   "allowNotifications",
 ] as const;
 

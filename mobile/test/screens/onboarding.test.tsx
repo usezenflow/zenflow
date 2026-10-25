@@ -18,7 +18,6 @@ const notif = vi.hoisted(() => ({
     language: "en",
     timezone: "Asia/Ho_Chi_Minh",
     timezoneMode: "device",
-    defaultReminder: 10,
   },
   update: vi.fn(async () => true),
   setEnabled: vi.fn(async () => true),
@@ -31,9 +30,6 @@ vi.mock("@/hooks/use-push-status-store", () => ({
   usePushStatusStore: Object.assign(() => null, {
     getState: () => ({ permission: "denied", refresh: vi.fn(async () => {}) }),
   }),
-}));
-vi.mock("@/components/settings/travel-section", () => ({
-  TravelSection: () => <div data-testid="travel-section" />,
 }));
 vi.mock("@/components/settings/dlu-accounts-section", () => ({
   DluAccountsSection: () => <div data-testid="dlu-section" />,
@@ -68,7 +64,6 @@ const next = async (title: string) =>
 // The first step is the LMS and portal; the name step was removed (the DLU name fills it on first sync).
 const TITLES = [
   "Connect your LMS or portal",
-  "Plan your commute",
   "Stay ahead of deadlines",
   "Connect an AI assistant",
   "You’re all set",
@@ -92,7 +87,7 @@ describe("OnboardingScreen", () => {
   it("goes back a step and hides Back again on the first step", async () => {
     renderScreen(<OnboardingScreen />);
     fireEvent.click(secondary());
-    await next("Plan your commute");
+    await next("Stay ahead of deadlines");
     fireEvent.click(screen.getByLabelText("Back"));
     await next("Connect your LMS or portal");
     expect(screen.queryByLabelText("Back")).toBeNull();
@@ -172,7 +167,7 @@ describe("OnboardingScreen", () => {
     it("lists skipped steps on the summary and reopens one, returning to the summary", async () => {
       await openSummary();
       const setUp = screen.getAllByText("Set up");
-      expect(setUp.length).toBe(3); // LMS, commute and notifications were skipped
+      expect(setUp.length).toBe(2); // LMS and notifications were skipped
       fireEvent.click(setUp[0]);
       await next("Connect your LMS or portal");
       fireEvent.click(primary());

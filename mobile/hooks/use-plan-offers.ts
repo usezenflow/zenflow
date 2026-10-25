@@ -1,5 +1,4 @@
 import { listNotifications, markNotificationActionTaken } from "@/api/notifications";
-import { recordClientEvents } from "@/api/client-events";
 import { useToast } from "@/components/ui/toast";
 import { isOpenPlanOffer, offerTimes } from "@/lib/plan-offer";
 import { showTimePick } from "@/lib/prep-toast";
@@ -19,14 +18,6 @@ const shownInInbox = new Set<string>();
 export function reportInboxOffer(n: NotificationDto): void {
   if (!isOpenPlanOffer(n) || shownInInbox.has(n.id)) return;
   shownInInbox.add(n.id);
-  void recordClientEvents([
-    {
-      kind: "OFFER_SHOWN",
-      channel: "INBOX",
-      slotProposalId: n.slotProposalId,
-      sessionId: n.sessionId,
-    },
-  ]);
 }
 
 /**
@@ -39,9 +30,6 @@ export function usePlanOffers(tz: string): void {
   useEffect(() => {
     let alive = true;
     const onOpen = () => {
-      void recordClientEvents([
-        { kind: "APP_OPEN", channel: null, slotProposalId: null, sessionId: null },
-      ]);
       void listNotifications({ limit: 20 })
         .then(({ notifications }) => {
           if (!alive) return;
@@ -54,14 +42,6 @@ export function usePlanOffers(tz: string): void {
           );
           if (!offer || !offer.sessionId || !offer.slotProposalId) return;
           shownOnOpen.add(offer.id);
-          void recordClientEvents([
-            {
-              kind: "OFFER_SHOWN",
-              channel: "TOAST",
-              slotProposalId: offer.slotProposalId,
-              sessionId: offer.sessionId,
-            },
-          ]);
           showTimePick(
             toast,
             {

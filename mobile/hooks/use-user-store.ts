@@ -8,11 +8,6 @@ import {
   subscribeToSessionMutations,
 } from "@/lib/session-cache";
 import { sessionDisk } from "@/lib/session-store";
-import {
-  invalidateWidgetHorizon,
-  publishWidgetSessions,
-  setWidgetUser,
-} from "@/lib/widget-sync";
 import type { User } from "@zenflow/shared";
 import { create } from "zustand";
 
@@ -30,8 +25,6 @@ type Action = {
 
 // Offline calendar: persist fetched days to disk and reload them per user.
 attachSessionDisk(sessionDisk);
-subscribeToSessionCache(publishWidgetSessions);
-subscribeToSessionMutations(invalidateWidgetHorizon);
 
 export const useUserStore = create<State & Action>((set) => ({
   user: null,
@@ -41,14 +34,12 @@ export const useUserStore = create<State & Action>((set) => ({
   loading: true,
   setUser: (user) => {
     if (user) setLanguage(user.lang);
-    setWidgetUser(user);
     hydrateSessionCache(user?.id ?? null);
     if (!user) useConnectivity.getState().clearStale();
     set({ user });
   },
   updateUser: (user) => {
     setLanguage(user.lang);
-    setWidgetUser(user);
     set({ user });
     // Cold-start fallback cache; best-effort.
     void cacheSessionUser(user).catch(() => {});

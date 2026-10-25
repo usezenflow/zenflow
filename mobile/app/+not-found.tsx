@@ -19,7 +19,7 @@ export default function NotFoundScreen() {
   const target = routeForSession(user, "");
   if (target) return <Redirect href={target as Href} />;
   // Onboarded and landed on the bare launch URL: that's just home.
-  if (user && pathname === "/") return <Redirect href={"/(app)" as Href} />;
+  if (user && pathname === "/") return <Redirect href={"/(app)/settings" as Href} />;
 
   return (
     <>

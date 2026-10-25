@@ -8,7 +8,6 @@ import { BULK_TAGS_MAX, TAG_NAME_MAX } from "@zenflow/shared";
 
 export const ONBOARDING_STEPS = [
   "dlu",
-  "commute",
   "notifications",
   "assistants",
   "done",
@@ -48,7 +47,7 @@ export function stepProgress(step: OnboardingStep): {
 }
 
 /** Where the auth gate should send the current session; null = stay put. */
-export type AuthRoute = "/(auth)/login" | "/(onboarding)" | "/(app)";
+export type AuthRoute = "/(auth)/login" | "/(onboarding)" | "/(app)/settings";
 
 export function routeForSession(
   user: { onboardedAt: string | null } | null,
@@ -59,7 +58,7 @@ export function routeForSession(
     return group === "(onboarding)" ? null : "/(onboarding)";
   }
   // Onboarded: leave the auth/onboarding groups.
-  return group === "(auth)" || group === "(onboarding)" ? "/(app)" : null;
+  return group === "(auth)" || group === "(onboarding)" ? "/(app)/settings" : null;
 }
 
 export const SUGGESTED_TAGS = [

@@ -7,7 +7,6 @@ import {
   Star,
   Trash2,
 } from "@/components/Icons";
-import { sessionTypeIcon } from "@/components/calendar/session-type-badge";
 import type { ToastAccent } from "@/components/ui/toast";
 import {
   type NotificationCategory,
@@ -117,7 +116,7 @@ export function notificationVisual(
     const tone = SESSION_TYPE_TONE[sessionType];
     const { ink } = SESSION_TONES[tone];
     return {
-      Icon: sessionTypeIcon(sessionType),
+      Icon: Bell,
       label: CATEGORY_LABEL[category],
       tint: SESSION_TONE_CLASSES[tone].badge,
       ink,
