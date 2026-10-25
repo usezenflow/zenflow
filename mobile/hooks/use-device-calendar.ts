@@ -3,9 +3,11 @@ import { addDays, addMonths } from "date-fns";
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import { create } from "zustand";
-import { listSessions } from "@/api/tasks";
+import { listSessions, updateSession } from "@/api/tasks";
 import { useConnectivity } from "@/lib/connectivity";
 import { expoCalendarAdapter } from "@/lib/device-calendar/expo-adapter";
+import { reviewDeviceEvents, type PhoneTimes } from "@/lib/device-calendar/moves";
+import type { DeviceLinks } from "@/lib/device-calendar/plan";
 import {
   EMPTY_STATE,
   removeDeviceCalendar,
@@ -78,12 +80,52 @@ export const useDeviceCalendar = create<Store>((set, get) => {
       set({ syncing: true });
       try {
         const now = new Date();
-        const sessions = await fetchWindow(now);
-        const result = await syncDeviceCalendar(expoCalendarAdapter, get().state, sessions, {
+        const ctx = {
           timeZone: user.timezone,
           from: addDays(now, -BACK_DAYS),
           to: addDays(now, AHEAD_DAYS),
+        };
+        const before = get().state;
+        let sessions = await fetchWindow(now);
+
+        // Edits made on the phone come back first: a moved task is a MOVE the
+        // server records. Everything else the phone changed is rewritten.
+        const links: DeviceLinks = { ...before.links };
+        const entries = Object.values(before.links);
+        const times = await Promise.all(
+          entries.map((link) => expoCalendarAdapter.readEvent(link.eventId)),
+        );
+        const phone: Record<string, PhoneTimes | null> = {};
+        entries.forEach((link, i) => {
+          phone[link.eventId] = times[i];
         });
+        const review = reviewDeviceEvents(
+          links,
+          phone,
+          new Map(sessions.map((session) => [session.id, session])),
+        );
+        for (const key of review.restore) links[key] = { ...links[key], hash: "" };
+        let moved = false;
+        for (const move of review.moves) {
+          try {
+            await updateSession(move.key, {
+              scheduledStartTime: new Date(move.startMs).toISOString(),
+              durationMinutes: move.durationMinutes,
+            });
+            moved = true;
+          } catch {
+            // Rejected (a conflict, or the task changed): Zenflow's time stands.
+            links[move.key] = { ...links[move.key], hash: "" };
+          }
+        }
+        if (moved) sessions = await fetchWindow(now);
+
+        const result = await syncDeviceCalendar(
+          expoCalendarAdapter,
+          { ...before, links },
+          sessions,
+          ctx,
+        );
         persist(result.state);
       } catch {
         // Offline or permission revoked: the next trigger tries again.

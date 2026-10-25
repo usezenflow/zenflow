@@ -14,6 +14,8 @@ export interface CalendarAdapter {
   /** The id of the Zenflow calendar, creating it when `existingId` is missing or gone. */
   ensureCalendar(existingId: string | null): Promise<string>;
   createEvent(calendarId: string, spec: DeviceEventSpec): Promise<string>;
+  /** Start and end of an event as the phone holds it; null when it is gone or cannot be read. */
+  readEvent(eventId: string): Promise<{ startMs: number; endMs: number } | null>;
   /** Rejects when the event no longer exists. */
   updateEvent(eventId: string, spec: DeviceEventSpec): Promise<void>;
   deleteEvent(eventId: string): Promise<void>;
@@ -62,7 +64,12 @@ export async function syncDeviceCalendar(
   const result = { created: 0, updated: 0, removed: 0, failed: 0 };
 
   const link = (spec: DeviceEventSpec, eventId: string) => {
-    links[spec.key] = { eventId, hash: spec.hash, startMs: spec.startDate.getTime() };
+    links[spec.key] = {
+      eventId,
+      hash: spec.hash,
+      startMs: spec.startDate.getTime(),
+      endMs: spec.endDate.getTime(),
+    };
   };
   const create = async (spec: DeviceEventSpec) => {
     link(spec, await adapter.createEvent(calendarId, spec));

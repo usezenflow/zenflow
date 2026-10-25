@@ -15,11 +15,13 @@ export interface DeviceEventSpec {
   hash: string;
 }
 
-/** The phone event written for a session. */
+/** The phone event written for a session, and the times Zenflow last wrote to it. */
 export interface DeviceLink {
   eventId: string;
   hash: string;
   startMs: number;
+  /** Absent on links written before end times were kept; those skip move detection for length. */
+  endMs?: number;
 }
 
 export type DeviceLinks = Record<string, DeviceLink>;

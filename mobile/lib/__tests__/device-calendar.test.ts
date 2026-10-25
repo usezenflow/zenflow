@@ -31,7 +31,7 @@ const session = (id: string, over: Partial<Session> = {}): Session =>
 
 /** A phone calendar in memory, with the failure modes the real one has. */
 function fakePhone() {
-  const events = new Map<string, { calendarId: string; title: string }>();
+  const events = new Map<string, { calendarId: string; title: string; startMs: number; endMs: number }>();
   const calendars = new Set<string>();
   let seq = 0;
   const adapter: CalendarAdapter = {
@@ -44,14 +44,20 @@ function fakePhone() {
     },
     createEvent: (calendarId, spec) => {
       const id = `ev-${++seq}`;
-      events.set(id, { calendarId, title: spec.title });
+      events.set(id, { calendarId, title: spec.title, startMs: spec.startDate.getTime(), endMs: spec.endDate.getTime() });
       return Promise.resolve(id);
     },
     updateEvent: (eventId, spec) => {
       const e = events.get(eventId);
       if (!e) return Promise.reject(new Error("gone"));
       e.title = spec.title;
+      e.startMs = spec.startDate.getTime();
+      e.endMs = spec.endDate.getTime();
       return Promise.resolve();
+    },
+    readEvent: (eventId) => {
+      const e = events.get(eventId);
+      return Promise.resolve(e ? { startMs: e.startMs, endMs: e.endMs } : null);
     },
     deleteEvent: (eventId) => {
       if (!events.delete(eventId)) return Promise.reject(new Error("gone"));

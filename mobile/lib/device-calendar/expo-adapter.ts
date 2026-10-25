@@ -54,6 +54,19 @@ export const expoCalendarAdapter: CalendarAdapter = {
     return (await calendar.createEvent(details(spec))).id;
   },
 
+  async readEvent(eventId) {
+    try {
+      const event = await Calendar.ExpoCalendarEvent.get(eventId);
+      return {
+        startMs: new Date(event.startDate).getTime(),
+        endMs: new Date(event.endDate).getTime(),
+      };
+    } catch {
+      // Gone, or unreadable: the sync rewrites it from Zenflow either way.
+      return null;
+    }
+  },
+
   async updateEvent(eventId, spec) {
     const event = await Calendar.ExpoCalendarEvent.get(eventId);
     await event.update(details(spec));
