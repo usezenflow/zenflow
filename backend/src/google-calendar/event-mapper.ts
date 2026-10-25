@@ -43,8 +43,11 @@ export interface GoogleEventBody {
   start: { dateTime: string; timeZone: string };
   end: { dateTime: string; timeZone: string };
   recurrence?: string[];
-  /** The calendar's own reminders, except for DND blocks, which never ring. */
-  reminders: { useDefault: boolean; overrides?: never[] };
+  /** A 30-minute popup, except for DND blocks, which never ring. */
+  reminders: {
+    useDefault: false;
+    overrides: { method: "popup"; minutes: number }[];
+  };
   extendedProperties: { private: { zf: string; zfk: "s" | "r" } };
 }
 
@@ -86,10 +89,11 @@ function base(
     colorId: COLOR_BY_TYPE[session.type],
     start: { dateTime: start.toISOString(), timeZone: ctx.timezone },
     end: { dateTime: end.toISOString(), timeZone: ctx.timezone },
-    reminders:
-      session.type === "DND"
-        ? { useDefault: false, overrides: [] }
-        : { useDefault: true },
+    reminders: {
+      useDefault: false,
+      overrides:
+        session.type === "DND" ? [] : [{ method: "popup", minutes: 30 }],
+    },
     extendedProperties: { private: { zf: id, zfk: kind } },
   };
 }

@@ -38,7 +38,10 @@ describe("event mapper", () => {
       timeZone: "Asia/Ho_Chi_Minh",
     });
     expect(body.end.dateTime).toBe("2026-11-02T03:00:00.000Z");
-    expect(body.reminders).toEqual({ useDefault: true });
+    expect(body.reminders).toEqual({
+      useDefault: false,
+      overrides: [{ method: "popup", minutes: 30 }],
+    });
     expect(body.extendedProperties.private).toEqual({
       zf: session.id,
       zfk: "s",
@@ -47,8 +50,11 @@ describe("event mapper", () => {
     expect(body.recurrence).toBeUndefined();
   });
 
-  it("uses the calendar's reminders, but never rings for DND", () => {
-    expect(sessionEvent(session, ctx).reminders).toEqual({ useDefault: true });
+  it("rings 30 minutes before, but never for DND", () => {
+    expect(sessionEvent(session, ctx).reminders).toEqual({
+      useDefault: false,
+      overrides: [{ method: "popup", minutes: 30 }],
+    });
     expect(sessionEvent({ ...session, type: "DND" }, ctx).reminders).toEqual({
       useDefault: false,
       overrides: [],
