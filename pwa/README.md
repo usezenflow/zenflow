@@ -1,7 +1,7 @@
 # Zenflow Web (pwa)
 
-For developers. React 19 + Vite PWA, the desktop calendar client.
-Users create sessions, the backend places flexible tasks into open slots, and drag/resize edits go back as `PATCH /sessions/:id` diffs.
+For developers. React 19 + Vite PWA, the setup client: login, onboarding and settings.
+Tasks arrive through AI assistants over MCP; the schedule moves to the user's own calendar ([ADR-0039](../docs/adr/0039-thin-layer-calendar-native.md)).
 A client of the `@zenflow/shared` contract alongside [`mobile/`](../mobile/README.md). Part of the [Zenflow monorepo](../README.md).
 
 ## Run
@@ -39,8 +39,7 @@ pnpm test:e2e:ui    # Playwright UI mode
 ## Offline
 
 - The shell, fonts and manifest are precached. Navigations fall back to `index.html`.
-- Calendar views and the signed-in user are saved to IndexedDB (`src/lib/offline/`). Offline the calendar is read-only and shows a banner. Logout wipes the cache.
-- Design rationale: [ADR-0034](../docs/adr/0034-pwa-offline-calendar-cache.md).
+- The signed-in user is saved to IndexedDB (`src/lib/offline/`) so settings open offline. Logout wipes the cache.
 
 ## Stack
 
@@ -52,9 +51,7 @@ pnpm test:e2e:ui    # Playwright UI mode
 | UI                | Radix UI + `class-variance-authority`, `lucide-react`, Geist font       |
 | State             | Zustand user store + component state                                    |
 | Routing / forms   | React Router 7; React Hook Form + Zod                                   |
-| Drag and resize   | `@dnd-kit/core` + `@dnd-kit/modifiers`                                  |
-| Rich text         | TipTap (note editor with file uploads)                                  |
-| Dates             | `date-fns`, `date-fns-tz`, `rrule`                                      |
+| Dates             | `date-fns`, `rrule`                                                     |
 | HTTP              | axios (credentials) with envelope + DTO types from `@zenflow/shared`    |
 | Toasts            | Sonner                                                                  |
 
@@ -64,9 +61,8 @@ pnpm test:e2e:ui    # Playwright UI mode
 pwa/
 ├── src/
 │   ├── api/            # axios client (base.ts) + typed endpoint fns per resource
-│   ├── components/     # auth, calendar, tasks (+ form/), notifications, onboarding, settings,
-│   │                   #   common (TipTap editor), ui (Radix primitives), hoc/with-auth
-│   ├── hooks/          # use-user-store, use-task-form, use-view-shortcuts, ...
+│   ├── components/     # auth, brand, onboarding, settings, ui (Radix primitives), hoc/with-auth
+│   ├── hooks/          # use-user-store, ...
 │   ├── lib/            # utils.ts (cn()), toast.tsx (errorToast), push/ (web push client)
 │   ├── pages/          # home, login, onboarding, not-found
 │   ├── types/          # re-exports of @zenflow/shared shapes
@@ -82,17 +78,13 @@ pwa/
 
 - `blocks.ts`, `overlap.ts`, `task-card.ts` (`deriveState`, `withOverlap`, `TASK_CARD_CLASSES`)
 - `tasks.ts` (`sessionSchema`, `getSeriesKind`, `placementQualifier`), `recurrence.ts`
-- `session-count.ts`, `session-time.ts`, `session-type.ts`, `reminders.ts`, `location.ts`
+- `session-count.ts`, `session-time.ts`, `session-type.ts`, `location.ts`
 - `tz.ts`, `time.ts`, `constants.ts`
 
-Screens, session form, calendar, notifications and toasts: [docs/frontend/screens.md](../docs/frontend/screens.md).
+Screens: [docs/frontend/screens.md](../docs/frontend/screens.md).
 
 ## Conventions
 
-- **Timezone**: the calendar reasons in the user's IANA timezone, never the browser's.
-  - Every calendar `Date` carries user-tz wall clock in its local fields, so `date-fns` works in user-tz space.
-  - `zonedNow(tz)`, `zonedDate(iso, tz)` (UTC to wall clock), `zonedWallClockToUtc(wallClock, tz)` in `src/utils/tz.ts`.
-  - Call `zonedWallClockToUtc` before sending to the API. No bare `new Date()` in day/grid logic.
 - **API layer** (`src/api/`) is the only place axios is called; endpoint fns return typed `@zenflow/shared` shapes.
 - **State**: the Zustand user store (`hooks/use-user-store.ts`), hydrated by the auth gate. Everything else is component state.
 - **UI**: build from `components/ui/` primitives before adding dependencies. Compose classes with `cn()` and CVA.
@@ -104,11 +96,11 @@ Screens, session form, calendar, notifications and toasts: [docs/frontend/screen
 ### Design system: Warm Sunrise
 
 - Taupe base + Amber accent as OKLch tokens in `src/index.css` (`:root` and `.dark`); brand ramp orange, yellow, lime.
-- Glass utilities: `.glass-task`, `.glass-header`, `.glass-panel`, `.glass-notice` (backdrop blur).
-- Dark mode via `next-themes`: full token inversion, visible borders.
+- Glass utilities: `.glass-panel`, `.glass-notice` (backdrop blur).
+- Dark mode: full token inversion, visible borders.
 
 ## Contributing
 
 - ESLint with 2-space indent ([`.editorconfig`](../.editorconfig)); use the `@/...` alias (`no-relative-import-paths` autofixes).
-- [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), e.g. `feat(calendar): ...`.
+- [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), e.g. `feat(settings): ...`.
 - Setup, branching, testing: [CONTRIBUTING.md](../CONTRIBUTING.md).

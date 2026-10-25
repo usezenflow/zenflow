@@ -5,6 +5,8 @@ import type { IntegrationStatus } from "@zenflow/shared";
 import { logout } from "@/api/auth";
 import { listIntegrations } from "@/api/integrations";
 import { AdvancedSection } from "@/components/settings/advanced-section";
+import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
+import { GoogleCalendarSection } from "@/components/settings/google-calendar-section";
 import { AppearanceSection } from "@/components/settings/appearance-section";
 import { FinishSetupCard } from "@/components/settings/finish-setup-card";
 import { IntegrationsPanel } from "@/components/settings/integrations";
@@ -12,7 +14,6 @@ import { PreferencesSection } from "@/components/settings/preferences-section";
 import { ProfileRow } from "@/components/settings/profile-row";
 import { SettingsCard, SettingsLabel, Divider } from "@/components/settings/settings-ui";
 import { StudentCard, StudentCardSkeleton } from "@/components/settings/student-card";
-import { TagsSection } from "@/components/settings/tags-section";
 import { TravelSection } from "@/components/settings/travel-section";
 import { useStudentProfile } from "@/components/settings/use-student-profile";
 import { useWebPush } from "@/components/settings/use-web-push";
@@ -130,10 +131,12 @@ export function AccountSettings({ focusLms = false }: { focusLms?: boolean } = {
         ) : null}
       </SettingsCard>
 
+      <GoogleCalendarSection />
+      <AiAssistantsSection />
+
       <AppearanceSection />
       <PreferencesSection user={user} />
       <TravelSection user={user} />
-      <TagsSection />
 
       <div id={LMS_SECTION_ID} className="scroll-mt-4">
         <SettingsLabel>{t("LMS and portal")}</SettingsLabel>

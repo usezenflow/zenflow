@@ -1,13 +1,15 @@
-import { CalendarLayout } from "@/components/calendar/layout";
+import { useSearchParams } from "react-router-dom";
 import { WithAuth } from "@/components/hoc/with-auth";
+import { SettingsPage } from "@/components/settings/settings-page";
 import { useNoindex } from "@/hooks/use-noindex";
 
 export default function HomePage() {
   useNoindex();
+  const [params] = useSearchParams();
 
   return (
     <WithAuth>
-      <CalendarLayout />
+      <SettingsPage focusLms={params.get("focus") === "dlu"} />
     </WithAuth>
   );
 }

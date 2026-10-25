@@ -1,8 +1,0 @@
-/* Node-view blocks (players, cards, images, paragraphs) keep the 8px paragraph rhythm of mobile's note. */
-.markdown > [data-node-view-wrapper] {
-  margin-bottom: 0.5rem;
-}
-
-.markdown > [data-node-view-wrapper] > p {
-  margin: 0;
-}

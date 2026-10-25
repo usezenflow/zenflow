@@ -7,6 +7,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 const HomePage = lazy(() => import("./pages/home"));
 const LoginPage = lazy(() => import("./pages/login"));
 const OnboardingPage = lazy(() => import("./pages/onboarding"));
+const OAuthConsentPage = lazy(() => import("./pages/oauth-consent"));
 const NotFoundPage = lazy(() => import("./pages/not-found"));
 
 /**
@@ -30,6 +31,7 @@ function App() {
             <Route index element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/onboarding" element={<OnboardingPage />} />
+            <Route path="/oauth/consent" element={<OAuthConsentPage />} />
             {/* Push payloads from older builds may still point here. */}
             <Route path="/notifications" element={<Navigate to="/" replace />} />
             <Route path="*" element={<NotFoundPage />} />

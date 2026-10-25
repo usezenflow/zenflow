@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Bot, Check, Copy, Plus, Trash2 } from "lucide-react";
-import type { ApiAccessResponse, ApiTokenSummary } from "@zenflow/shared";
+import { Bot, Check, Copy, ExternalLink, Plus, Trash2 } from "lucide-react";
+import type { ApiAccessResponse, ApiTokenSummary, ConnectedApp } from "@zenflow/shared";
 import { createApiToken, getApiAccess, revokeApiToken } from "@/api/me";
+import { disconnectApp, listConnectedApps } from "@/api/oauth";
 import { IconTile, SettingsCard, SettingsLabel } from "@/components/settings/settings-ui";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 /** How often the test step asks the server whether an assistant has called yet. */
 const TEST_POLL_MS = 5000;
 
-type StepId = "token" | "server" | "prompt" | "test";
+type StepId = "server" | "prompt" | "test";
 
 interface Step {
   id: StepId;
@@ -233,34 +234,81 @@ function CreateTokenDialog({
   );
 }
 
+/** One connected assistant, with an inline confirm step before it is disconnected. */
+function AppRow({ app, onChanged }: { app: ConnectedApp; onChanged: (apps: ConnectedApp[]) => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function disconnect() {
+    setBusy(true);
+    try {
+      onChanged((await disconnectApp(app.clientId)).apps);
+    } catch (error) {
+      errorToast(apiErrorMessage(error, t("Couldn't disconnect the assistant")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="py-3">
+      <div className="flex items-center gap-3">
+        <p className="min-w-0 flex-1 truncate text-[15px] font-medium">{app.name}</p>
+        {confirming ? (
+          <div className="flex shrink-0 gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={busy}>
+              {t("Cancel")}
+            </Button>
+            <Button variant="destructive" size="sm" onClick={disconnect} disabled={busy}>
+              {t("Disconnect")}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setConfirming(true)}
+            className="shrink-0 text-destructive hover:text-destructive"
+          >
+            {t("Disconnect")}
+          </Button>
+        )}
+      </div>
+    </li>
+  );
+}
+
 /**
- * Settings block for AI assistants: a four-step timeline from token to first
- * call. The test step ticks itself once an assistant calls the server.
+ * Settings block for AI assistants: a three-step timeline from adding the
+ * server to the first call, the assistants already connected, and tokens for
+ * scripts. The test step ticks itself once an assistant connects or calls.
  */
 export function AiAssistantsSection() {
   useLanguage();
   const tz = useUserStore((s) => s.user?.timezone) || "UTC";
   const [access, setAccess] = useState<ApiAccessResponse | null>(null);
+  const [apps, setApps] = useState<ConnectedApp[]>([]);
   const [failed, setFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [providerId, setProviderId] = useState<string | null>(null);
   const [ticked, setTicked] = useState<Partial<Record<StepId, boolean>>>({});
   const [openId, setOpenId] = useState<StepId | null>(null);
   const [connected, setConnected] = useState(false);
-  /** Last-used stamps as first seen here, so only a newer call counts as the test. */
+  /** Apps and token stamps as first seen here, so only something newer counts as the test. */
+  const seenApps = useRef<Set<string> | null>(null);
   const seenUse = useRef<Map<string, string | null> | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const next = await getApiAccess();
+      const [next, linked] = await Promise.all([getApiAccess(), listConnectedApps()]);
       seenUse.current ??= new Map(next.tokens.map((token) => [token.id, token.lastUsedAt]));
-      setConnected(
-        next.tokens.some(
-          (token) =>
-            token.lastUsedAt !== null &&
-            token.lastUsedAt !== (seenUse.current?.get(token.id) ?? null),
-        ),
+      seenApps.current ??= new Set(linked.apps.map((app) => app.clientId));
+      const newApp = linked.apps.some((app) => !seenApps.current?.has(app.clientId));
+      const usedToken = next.tokens.some(
+        (token) => token.lastUsedAt !== null && token.lastUsedAt !== (seenUse.current?.get(token.id) ?? null),
       );
+      setConnected(newApp || usedToken);
+      setApps(linked.apps);
       setAccess(next);
       setFailed(false);
     } catch {
@@ -280,37 +328,10 @@ export function AiAssistantsSection() {
   const steps: Step[] = access
     ? [
         {
-          id: "token",
-          title: t("Create a token"),
-          body: t("One token per assistant. It is shown once."),
-          done: tokens.length > 0,
-          manual: false,
-          content: (
-            <>
-              {tokens.length > 0 && (
-                <ul className="divide-y divide-border rounded-xl border border-border bg-card px-3.5">
-                  {tokens.map((token) => (
-                    <TokenRow key={token.id} token={token} tz={tz} onRevoked={load} />
-                  ))}
-                </ul>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCreateOpen(true)}
-                className="self-start rounded-full"
-              >
-                <Plus className="size-3.5" aria-hidden />
-                {t("Create token")}
-              </Button>
-            </>
-          ),
-        },
-        {
           id: "server",
-          title: t("Add the server"),
-          body: t("Add this MCP server in your assistant's settings."),
-          done: ticked.server === true,
+          title: t("Add Zenflow"),
+          body: t("Add this MCP server in your assistant. You sign in and allow access."),
+          done: ticked.server === true || apps.length > 0,
           manual: true,
           content: (
             <>
@@ -325,6 +346,14 @@ export function AiAssistantsSection() {
                     ))}
                   </TabsList>
                 </Tabs>
+              )}
+              {guide?.link && (
+                <Button asChild variant="outline" size="sm" className="self-start rounded-full">
+                  <a href={guide.link.url} target="_blank" rel="noreferrer">
+                    <ExternalLink className="size-3.5" aria-hidden />
+                    {guide.link.label}
+                  </a>
+                </Button>
               )}
               {guide && (
                 <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-[13.5px] leading-snug text-muted-foreground">
@@ -427,7 +456,7 @@ export function AiAssistantsSection() {
             <ol>
               {steps.map((step, index) => {
                 const last = index === steps.length - 1;
-                const open = step.id === "token" || step.id === (openId ?? activeId);
+                const open = step.id === (openId ?? activeId);
                 return (
                   <li key={step.id} className={cn("relative flex gap-3.5", !last && "pb-5")}>
                     {!last && (
@@ -482,6 +511,36 @@ export function AiAssistantsSection() {
                 );
               })}
             </ol>
+
+            {apps.length > 0 && (
+              <div className="mt-5">
+                <p className="mb-1 text-[13px] font-semibold text-muted-foreground">{t("Connected assistants")}</p>
+                <ul className="divide-y divide-border rounded-xl border border-border bg-card px-3.5">
+                  {apps.map((app) => (
+                    <AppRow key={app.clientId} app={app} onChanged={setApps} />
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <details className="mt-5">
+              <summary className="cursor-pointer text-[13px] font-semibold text-muted-foreground">
+                {t("Tokens for scripts")}
+              </summary>
+              <div className="mt-3 flex flex-col gap-3">
+                {tokens.length > 0 && (
+                  <ul className="divide-y divide-border rounded-xl border border-border bg-card px-3.5">
+                    {tokens.map((token) => (
+                      <TokenRow key={token.id} token={token} tz={tz} onRevoked={load} />
+                    ))}
+                  </ul>
+                )}
+                <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)} className="self-start rounded-full">
+                  <Plus className="size-3.5" aria-hidden />
+                  {t("Create token")}
+                </Button>
+              </div>
+            </details>
           </div>
         ) : failed ? (
           <div className="flex items-center justify-between gap-3 px-4 py-3.5">

@@ -35,7 +35,7 @@ export function WithAuth({ children }: { children: React.ReactNode }) {
               return;
             }
           }
-          navigate(`/login?callback=${location.pathname}`);
+          navigate(`/login?callback=${encodeURIComponent(location.pathname + location.search)}`);
         })
         .finally(() => {
           // Always clear the flag — otherwise a failed pre-login `me()` leaves
@@ -54,7 +54,11 @@ export function WithAuth({ children }: { children: React.ReactNode }) {
   // either sets the user or navigates away.
   if (loading || !user) return <BootScreen />;
 
-  if (!user.onboardedAt && location.pathname !== "/onboarding") {
+  if (
+    !user.onboardedAt &&
+    location.pathname !== "/onboarding" &&
+    location.pathname !== "/oauth/consent"
+  ) {
     return <Navigate to="/onboarding" replace />;
   }
 
