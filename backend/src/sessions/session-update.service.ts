@@ -427,7 +427,6 @@ export class SessionUpdateService {
         dto.reminderMinutes !== existing.reminderMinutes;
       if (dto.reminderMinutes !== undefined)
         data.reminderMinutes = dto.reminderMinutes;
-      if (dto.attendees !== undefined) data.attendees = dto.attendees;
 
       if (dto.durationMinutes !== undefined)
         data.durationMinutes = dto.durationMinutes;

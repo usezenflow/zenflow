@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { BadRequestException, HttpException } from "@nestjs/common";
+import { HttpException } from "@nestjs/common";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
@@ -16,9 +16,7 @@ import { UpdateSessionDto } from "../../sessions/dto/update-session.dto";
 import { ReplanService } from "../../sessions/replan.service";
 import { SessionsService } from "../../sessions/sessions.service";
 import { PlacementPlanService } from "../../sessions/placement-plan.service";
-import { GoogleCalendarService } from "../../google-calendar/google-calendar.service";
 import { MAX_BULK_SESSIONS, SESSION_WINDOWS } from "@zenflow/shared";
-import { MAX_ATTENDEES } from "../../common/constants";
 import { MCP_TOOLS } from "./mcp-tool-catalog";
 import { timeInfo } from "./mcp-time";
 import { buildRecap, findFreeSlots } from "./mcp-recap";
@@ -34,17 +32,9 @@ const text = (value: unknown, isError = false): CallToolResult => ({
   isError,
 });
 
-/** Invitations go out through Google only. Refuse rather than save a session that invites nobody. */
-function requireGoogleForInvites(user: User, attendees: unknown): void {
-  if (
-    Array.isArray(attendees) &&
-    attendees.length > 0 &&
-    user.calendarTarget !== "GOOGLE"
-  )
-    throw new BadRequestException(
-      "Invitations need Google Calendar as the calendar target. Connect Google in settings, or remove the attendees.",
-    );
-}
+/** A copy of `obj` without `keys`. */
+const without = (obj: object, ...keys: string[]): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(obj).filter(([k]) => !keys.includes(k)));
 
 /** Runs a tool body; a thrown error becomes a tool error the assistant can read. */
 async function run(body: () => Promise<unknown>): Promise<CallToolResult> {
@@ -92,7 +82,6 @@ async function validated<T extends object>(
 export interface SessionToolServices {
   sessions: SessionsService;
   placement: PlacementPlanService;
-  calendar: GoogleCalendarService;
   replans: ReplanService;
   plans: PlanTokens;
 }
@@ -139,7 +128,7 @@ async function previewThenApply(
  */
 export function registerSessionTools(
   server: McpServer,
-  { sessions, placement, calendar, replans, plans }: SessionToolServices,
+  { sessions, placement, replans, plans }: SessionToolServices,
   user: User,
 ): void {
   const described = (name: string) => {
@@ -151,7 +140,7 @@ export function registerSessionTools(
   server.registerTool(
     "get_time",
     { description: described("get_time"), inputSchema: {} },
-    () => run(async () => timeInfo(user.timezone)),
+    () => run(() => Promise.resolve(timeInfo(user.timezone))),
   );
 
   server.registerTool(
@@ -233,7 +222,6 @@ export function registerSessionTools(
         location: z.string().max(200).nullable().optional(),
         durationMinutes: z.number().int().positive().optional(),
         reminderMinutes: z.number().int().nullable().optional(),
-        attendees: z.array(z.string().max(320)).max(MAX_ATTENDEES).optional(),
         deadline: z.string().optional(),
         notBefore: z.string().nullable().optional(),
         window: z.enum(SESSION_WINDOWS).nullable().optional(),
@@ -258,8 +246,8 @@ export function registerSessionTools(
             ),
           }),
           async () => {
-            const { id, planId: _p, ...changes } = args;
-            requireGoogleForInvites(user, changes.attendees);
+            const { id } = args;
+            const changes = without(args, "id", "planId");
             return sessions.update(
               id,
               await validated(UpdateSessionDto, changes),
@@ -290,7 +278,7 @@ export function registerSessionTools(
     },
     (args) =>
       run(() => {
-        const { planId, ...body } = args;
+        const body = without(args, "planId");
         const del = async (dryRun: boolean) =>
           sessions.bulkDelete(
             await validated(BulkDeleteSessionsDto, { ...body, dryRun }),
@@ -332,12 +320,6 @@ export function registerSessionTools(
   );
 
   server.registerTool(
-    "sync_status",
-    { description: described("sync_status"), inputSchema: {} },
-    () => run(() => calendar.status(user)),
-  );
-
-  server.registerTool(
     "undo_last_change",
     { description: described("undo_last_change"), inputSchema: {} },
     () => run(() => placement.undoLatest(user)),
@@ -357,10 +339,7 @@ export function registerSessionTools(
     },
     (args) =>
       run(() => {
-        args.items.forEach((item) =>
-          requireGoogleForInvites(user, item.attendees),
-        );
-        const { planId, ...body } = args;
+        const body = without(args, "planId");
         const create = async (dryRun: boolean) =>
           sessions.bulkCreate(
             await validated(BulkCreateSessionsDto, { ...body, dryRun }),

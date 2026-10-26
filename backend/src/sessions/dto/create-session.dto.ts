@@ -1,8 +1,5 @@
 import {
-  ArrayMaxSize,
-  IsArray,
   IsDivisibleBy,
-  IsEmail,
   IsIn,
   IsInt,
   IsISO8601,
@@ -12,8 +9,7 @@ import {
   Min,
   ValidateIf,
 } from "class-validator";
-import { Transform } from "class-transformer";
-import { MAX_ATTENDEES, TIME_GRANULARITY } from "../../common/constants";
+import { TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
 import { IsFeasibleTaskWindow } from "../../common/validators/feasible-task-window.decorator";
 import {
@@ -28,29 +24,6 @@ export const INFEASIBLE_POLICIES: InfeasiblePolicy[] = [
   "ACCEPT_CONFLICTS",
   "ACCEPT_LATE_DEADLINE",
 ];
-
-/** Trims and lowercases invitee emails and drops repeats. Other values reach the validators unchanged. */
-export const normalizeAttendees = ({ value }: { value: unknown }): unknown =>
-  Array.isArray(value)
-    ? [
-        ...new Set(
-          (value as unknown[]).map((v) =>
-            typeof v === "string" ? v.trim().toLowerCase() : v,
-          ),
-        ),
-      ]
-    : value;
-
-/** Invitee emails for group study. Pushed to Google only. */
-export function AttendeesField() {
-  return (target: object, key: string) => {
-    IsOptional()(target, key);
-    IsArray()(target, key);
-    ArrayMaxSize(MAX_ATTENDEES)(target, key);
-    IsEmail({}, { each: true })(target, key);
-    Transform(normalizeAttendees)(target, key);
-  };
-}
 
 export const SESSION_TYPES: SessionType[] = [
   "TASK",
@@ -102,9 +75,6 @@ export class CreateSessionDto {
   @ValidateIf((_, v) => v !== null)
   @IsIn(DEFAULT_REMINDER_CHOICES)
   reminderMinutes?: number | null;
-
-  @AttendeesField()
-  attendees?: string[];
 
   /** Session duration in minutes (always a positive multiple of 15, required). */
   @IsInt()

@@ -8,7 +8,7 @@ import { ApiAccessService } from "./api-access.service";
 const USER = { id: "u1", timezone: "UTC" } as unknown as User;
 
 async function make(publicApi = "") {
-  const summary = jest.fn().mockResolvedValue({ mcpUrl: "m" });
+  const summary = jest.fn().mockReturnValue({ mcpUrl: "m" });
   const module: TestingModule = await Test.createTestingModule({
     controllers: [ApiAccessController],
     providers: [
@@ -30,7 +30,7 @@ describe("ApiAccessController", () => {
       get: () => "api.example.com",
     } as unknown as Request;
 
-    const res = await controller.get(req, USER);
+    const res = controller.get(req, USER);
 
     expect(summary).toHaveBeenCalledWith(
       USER,
@@ -48,7 +48,7 @@ describe("ApiAccessController", () => {
       get: () => "internal:8000",
     } as unknown as Request;
 
-    await controller.get(req, USER);
+    controller.get(req, USER);
 
     expect(summary).toHaveBeenCalledWith(
       USER,

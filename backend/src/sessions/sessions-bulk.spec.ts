@@ -2,7 +2,6 @@ import { NotFoundException } from "@nestjs/common";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type { User } from "../../generated/prisma";
 import { API_TOKEN_ROUTE_KEY } from "../api-access/allow-api-token.decorator";
-import { CalendarSyncTrigger } from "../google-calendar/calendar-sync-trigger.service";
 import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service";
 import { ScheduleInfeasibleException } from "../scheduler/schedule-infeasible.exception";
 import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
@@ -54,7 +53,6 @@ async function setup() {
         provide: PlacementChipsService,
         useValue: { forTask: jest.fn().mockResolvedValue([]) },
       },
-      { provide: CalendarSyncTrigger, useValue: { request: jest.fn() } },
     ],
   }).compile();
   return { service: module.get(SessionsService), crud, series };
@@ -109,7 +107,9 @@ describe("SessionsService.bulkCreate", () => {
           proposedStart: "2026-10-26T01:00:00.000Z",
           proposedEnd: "2026-10-26T02:00:00.000Z",
           timezone: USER.timezone,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           localStart: expect.stringContaining("2026-10-26"),
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           warnings: expect.any(Array),
         },
         {

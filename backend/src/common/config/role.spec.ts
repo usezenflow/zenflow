@@ -3,7 +3,6 @@ import {
   getRole,
   runsHttp,
   runsJobs,
-  runsOutbox,
   runsWatcher,
 } from "./role";
 
@@ -71,15 +70,5 @@ describe("getRole", () => {
       expect(consumesQueue("all", q)).toBe(true);
       expect(consumesQueue("worker", q)).toBe(true);
     }
-  });
-});
-
-describe("runsOutbox", () => {
-  it("runs in the default role, the outbox role and the worker, never in api or the watcher", () => {
-    expect(runsOutbox(getRole({}))).toBe(true);
-    expect(runsOutbox("outbox")).toBe(true);
-    expect(runsOutbox("worker")).toBe(true);
-    expect(runsOutbox("api")).toBe(false);
-    expect(runsOutbox("watcher")).toBe(false);
   });
 });

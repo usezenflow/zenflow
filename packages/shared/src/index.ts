@@ -12,7 +12,6 @@ export * from "./prep";
 export * from "./session-resolve";
 export * from "./session-bulk";
 export * from "./placement-chip";
-export * from "./google-calendar";
 export * from "./student";
 export * from "./admin";
 export * from "./api-access";

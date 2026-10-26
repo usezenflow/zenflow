@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { createHmac, randomBytes } from "crypto";
+import { createHmac, randomBytes, randomUUID } from "crypto";
 import type { Response } from "express";
 import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/server/auth/clients.js";
 import {
@@ -22,6 +22,7 @@ import { type OAuthTokenKind } from "../../generated/prisma";
 import { OAUTH_ACCESS_PREFIX } from "../api-access/api-token.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { sealConsentRequest } from "./consent-request";
+import { newUserCode } from "./user-code";
 import {
   ACCESS_TTL_MS,
   CLIENT_REGISTRATION_LIMIT,
@@ -115,20 +116,14 @@ export class OAuthProvider implements OAuthServerProvider {
     },
   };
 
-  /** Hands the validated request to the consent page, which needs a signed-in user. */
+  /** Hands the validated request to the connect page, which shows a code the user approves in the app. */
   async authorize(
     client: OAuthClientInformationFull,
     params: AuthorizationParams,
     res: Response,
   ): Promise<void> {
     const resource = this.resourceFor(params.resource);
-    const { id: nonce } = await this.prisma.oAuthConsent.create({
-      data: {
-        clientId: client.client_id,
-        expiresAt: new Date(Date.now() + CONSENT_TTL_MS),
-      },
-      select: { id: true },
-    });
+    const nonce = randomUUID();
     const request = sealConsentRequest(
       {
         nonce,
@@ -142,8 +137,17 @@ export class OAuthProvider implements OAuthServerProvider {
       this.config.signingSecret,
       CONSENT_TTL_MS,
     );
+    await this.prisma.oAuthConsent.create({
+      data: {
+        id: nonce,
+        clientId: client.client_id,
+        userCode: newUserCode(),
+        request,
+        expiresAt: new Date(Date.now() + CONSENT_TTL_MS),
+      },
+    });
     res.redirect(
-      `${this.config.consentUrl}?request=${encodeURIComponent(request)}`,
+      `${this.config.connectUrl}?request=${encodeURIComponent(request)}`,
     );
   }
 

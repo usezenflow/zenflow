@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-} from "@nestjs/common";
+import { Controller, Get, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { CookieAuthGuard } from "../auth/guards";
 import { PublicUrls } from "../common/config/public-urls";
@@ -25,11 +16,8 @@ export class ApiAccessController {
   ) {}
 
   @Get()
-  async get(@Req() req: Request, @CurrentUser() user: User) {
-    const data = await this.access.summary(
-      user,
-      this.urls.api || apiBaseOf(req),
-    );
+  get(@Req() req: Request, @CurrentUser() user: User) {
+    const data = this.access.summary(user, this.urls.api || apiBaseOf(req));
     return { success: true, data };
   }
 }

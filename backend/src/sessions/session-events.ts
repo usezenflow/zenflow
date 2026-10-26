@@ -62,7 +62,7 @@ export function snapshotOf(row: {
   };
 }
 
-/** A session removed before it started, from the app, Google or the phone. Carries no reward. */
+/** A session removed before it started, from the app or the phone. Carries no reward. */
 export function deleteEventData(args: {
   sessionId: string;
   userId: string;

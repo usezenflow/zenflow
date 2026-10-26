@@ -33,7 +33,6 @@ import {
   consumesQueue,
   envFilePath,
   getRole,
-  runsOutbox,
   runsWatcher,
 } from "./common/config/role";
 import { QueueModule } from "./queue/queue.module";
@@ -45,14 +44,9 @@ import {
   PortalFetchWorkerModule,
 } from "./ingestion/fetch-worker.module";
 import { SchedulerWorkerModule } from "./scheduler/scheduler-worker.module";
-import { DiscoveryPushModule } from "./notifications/discovery-push.module";
 import { HealthModule } from "./health/health.module";
 import { OAuthCleanupModule, OAuthModule } from "./oauth/oauth.module";
-import { GoogleCalendarModule } from "./google-calendar/google-calendar.module";
 import { CalendarBusyModule } from "./calendar-busy/calendar-busy.module";
-import { CalendarWorkerModule } from "./google-calendar/calendar-worker.module";
-import { CalendarSweepModule } from "./google-calendar/calendar-sweep.module";
-import { CalendarOutboxModule } from "./google-calendar/calendar-outbox.module";
 
 const configEnvFile = envFilePath();
 // `<PREFIX>_HOST` / `_PORT` / `_PASSWORD` for one Redis instance (connections.ts).
@@ -77,15 +71,11 @@ const jobModules = [
         ScheduleModule.forRoot(),
         IngestionWorkerModule,
         SchedulerWorkerModule,
-        CalendarSweepModule,
         OAuthCleanupModule,
-        DiscoveryPushModule,
       ]
     : []),
   ...(consumesQueue(role, "notify") ? [NotifyWorkerModule] : []),
   ...(consumesQueue(role, "prep-plan") ? [PrepPlanWorkerModule] : []),
-  ...(consumesQueue(role, "calendar-sync") ? [CalendarWorkerModule] : []),
-  ...(runsOutbox(role) ? [CalendarOutboxModule] : []),
   ...(consumesQueue(role, "portal-fetch") ? [PortalFetchWorkerModule] : []),
   ...(consumesQueue(role, "lms-fetch") ? [LmsFetchWorkerModule] : []),
 ];
@@ -127,15 +117,7 @@ const jobModules = [
           .min(1)
           .default(1),
         CORS_ORIGIN: Joi.string().required(),
-        // Google Calendar sync (google-calendar/). Optional: the feature stays off until all are set.
-        GOOGLE_CLIENT_ID: Joi.string().optional(),
-        GOOGLE_CLIENT_SECRET: Joi.string().optional(),
-        // `GOOGLE_TOKEN_ENCRYPTION_KEY_V<n>` (32-byte hex) encrypts stored Google refresh tokens.
-        GOOGLE_TOKEN_ENCRYPTION_KEY_CURRENT_VERSION: Joi.number()
-          .integer()
-          .min(1)
-          .default(1),
-        // Public API base incl. /api/v1; Google calls back and pushes here.
+        // Public API base incl. /api/v1; OAuth discovery for AI assistants is served here.
         PUBLIC_API_URL: Joi.string().uri().optional(),
         PUBLIC_WEB_URL: Joi.string().uri().optional(),
         // Session/OTP Redis.
@@ -537,12 +519,6 @@ const jobModules = [
             .regex(/^[0-9a-fA-F]+$/, "hex"),
         )
         .pattern(/^API_TOKEN_PEPPER_V\d+$/, Joi.string().min(32))
-        .pattern(
-          /^GOOGLE_TOKEN_ENCRYPTION_KEY_V\d+$/,
-          Joi.string()
-            .length(64)
-            .regex(/^[0-9a-fA-F]+$/, "hex"),
-        )
         .custom((value: unknown, helpers) => {
           const env = value as Record<string, unknown>;
           const version = Number(env.MASTER_KEY_CURRENT_VERSION ?? 1);
@@ -623,7 +599,6 @@ const jobModules = [
     // disables per provider when its FCM_*/APNS_*/VAPID_* env is unset; see
     // devices.module.ts.
     DevicesModule,
-    GoogleCalendarModule,
     CalendarBusyModule,
     OAuthModule,
     HealthModule,

@@ -9,7 +9,7 @@ const PAST_DAYS = 2;
 const AHEAD_DAYS = 120;
 const TITLE_MAX = 200;
 
-export type BusySource = "GOOGLE" | "DEVICE";
+export type BusySource = "DEVICE";
 
 export interface BusyItem {
   /** Stable id within `source`, e.g. `<calendar>:<event>`. */
@@ -32,7 +32,7 @@ export function busyBlock(
 }
 
 /**
- * Busy time from another calendar, kept as read-only `DND` sessions so the
+ * Busy time from the phone calendar, kept as read-only `DND` sessions so the
  * scheduler plans around it. The sync never writes these rows back.
  */
 @Injectable()

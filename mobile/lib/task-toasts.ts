@@ -1,20 +1,13 @@
 import { t } from "./i18n";
-import { format } from "./i18n";
 import type { ToastIcon, useToast } from "@/components/ui/toast";
-import { placementQualifier, zonedDate } from "@zenflow/core";
 import {
   type DisplacedSession,
   type InfeasiblePolicy,
   SCHEDULE_INFEASIBLE_CODE,
   type ScheduleInfeasibleError,
-  type Session,
 } from "@zenflow/shared";
 import { isAxiosError } from "axios";
 import { describeSaveError } from "./save-error";
-
-export interface PlacementToastUser {
-  timezone: string;
-}
 
 export type ToastFn = ReturnType<typeof useToast>["toast"];
 
@@ -72,71 +65,6 @@ export function showErrorToast(
     "destructive",
     icon,
   );
-}
-
-/**
- * Description line for the "Tip" toast shown occasionally after a create/edit,
- * nudging people toward the calendar's press-and-hold sheet (which now moves
- * *and* resizes) instead of always opening the form. Pair it with the title
- * "Tip" and the `"tip"` toast variant; gate every use behind
- * {@link shouldSurfaceRescheduleHint}.
- */
-export const RESCHEDULE_HINT =
-  "Press and hold a session on your calendar to move or resize it.";
-
-// Bumped on every create/edit save this app run. Not persisted: a fresh run
-// starts the cadence over, which is fine for a discovery hint.
-let saveCount = 0;
-
-/**
- * Should the {@link RESCHEDULE_HINT} toast be shown for this save? True on the
- * first save of the app run, then every 5th after — often enough to be seen,
- * rare enough not to annoy.
- */
-export function shouldSurfaceRescheduleHint(): boolean {
-  saveCount += 1;
-  return saveCount === 1 || saveCount % 5 === 0;
-}
-
-/**
- * Compose the create/edit placement toast copy — the mobile "toast surface"
- * for auto-scheduling placement (RN migration Phase 5 / issue #20). The
- * auto-scheduling logic itself, and the richer Phase-2 rationale UI
- * (`pwa/src/components/tasks/rationale-toast.tsx`'s preferred-window /
- * top-cells breakdown), are both out of scope here — this only ports the
- * plain success/conflict messaging `create-task-dialog.tsx` already showed
- * via a one-line `toast.success`/`toast.warning` before any rationale data
- * is available, using the same `placementQualifier` signal (now hoisted to
- * `@zenflow/core` alongside `taskSchema`).
- */
-export function placementToastMessage(
-  task: Session,
-  user: PlacementToastUser,
-): { message: string; variant: "success" | "destructive" } {
-  if (!task.scheduledStartTime) {
-    // `POST /sessions` for a `TASK` runs the placement engine
-    // (`TaskPlacementService.placeOnCreate`) and normally returns a real
-    // `scheduledStartTime`; it comes back null only when the heuristic found
-    // no slot before the deadline. That's not a hard failure — this used to
-    // read as a destructive "couldn't be scheduled before its deadline" and
-    // fired on *every* creation. Mirrors
-    // `pwa/src/components/tasks/create-task-dialog.tsx`.
-    return {
-      message: `${t("Plan created")}\n${t("No time found before its deadline.")}`,
-      variant: "success",
-    };
-  }
-
-  const qualifier = placementQualifier(task, { timezone: user.timezone });
-  const start = zonedDate(task.scheduledStartTime, user.timezone);
-  // Date and time share the title (same shape as showMovedToast), so the date
-  // is not left hanging below as a description.
-  const when = `${format(start, "EEE, MMM d")}, ${format(start, "HH:mm")}`;
-  const title =
-    qualifier === "pastDeadline"
-      ? t("Scheduled late for {when}", { when })
-      : t("Scheduled for {when}", { when });
-  return { message: title, variant: "success" };
 }
 
 const POLICY_LABEL: Record<InfeasiblePolicy, string> = {

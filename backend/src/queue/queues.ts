@@ -144,20 +144,6 @@ export function prepJobId(parentSessionId: string): string {
   return idempotencyKey("prep", parentSessionId);
 }
 
-export type CalendarJobType = "sync" | "pull";
-
-/** One user's Google Calendar work: push their schedule, or read changes made in Google. */
-export interface CalendarJobData {
-  userId: string;
-  type: CalendarJobType;
-}
-
-export const CALENDAR_QUEUE = defineQueue<CalendarJobData>({
-  name: "calendar-sync",
-  concurrency: 3,
-  limiter: { max: 20, duration: 1_000 },
-});
-
 export const ALL_QUEUES = [
   PORTAL_FETCH_QUEUE,
   LMS_FETCH_QUEUE,
@@ -169,5 +155,4 @@ export const ALL_QUEUES = [
   LMS_MONTH_QUEUE,
   NOTIFY_QUEUE,
   PREP_QUEUE,
-  CALENDAR_QUEUE,
 ] as const;

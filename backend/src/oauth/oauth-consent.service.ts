@@ -9,12 +9,24 @@ import { PrismaService } from "../prisma/prisma.service";
 import { openConsentRequest } from "./consent-request";
 import { OAuthConfig } from "./oauth.config";
 import { OAuthProvider } from "./oauth.provider";
+import { normalizeUserCode } from "./user-code";
 
 const EXPIRED = "This request expired. Start again from your assistant.";
 const UNREGISTERED =
   "This assistant cannot redirect there. Start again from your assistant.";
+const CHECK_CODE = "Check the code and try again.";
 
-/** The signed-in half of the flow: the user sees who is asking and approves or refuses. */
+/** What the connect page shows, or what its poll learns. */
+export type ConnectPoll =
+  | { status: "pending" }
+  | { status: "done"; redirectUrl: string }
+  | { status: "expired" };
+
+/**
+ * The two halves of approving an assistant. The browser page shows a code and
+ * waits ({@link waiting}, {@link poll}); the signed-in app enters the code and
+ * approves or refuses ({@link describe}, {@link decide}).
+ */
 @Injectable()
 export class OAuthConsentService {
   constructor(
@@ -23,8 +35,52 @@ export class OAuthConsentService {
     private readonly provider: OAuthProvider,
   ) {}
 
-  async describe(user: User, requestToken: string): Promise<OAuthConsentInfo> {
-    const request = this.open(requestToken);
+  /** The code and assistant name for the browser page; null once the request is gone. */
+  async waiting(
+    requestToken: string,
+  ): Promise<{ code: string; clientName: string } | null> {
+    const request = openConsentRequest(requestToken, this.config.signingSecret);
+    if (!request) return null;
+    const row = await this.prisma.oAuthConsent.findUnique({
+      where: { id: request.nonce },
+      select: { userCode: true, usedAt: true, expiresAt: true },
+    });
+    if (!row || row.usedAt || row.expiresAt <= new Date()) return null;
+    const client = await this.prisma.oAuthClient.findUnique({
+      where: { id: request.clientId },
+    });
+    return {
+      code: row.userCode,
+      clientName: client?.name ?? "An AI assistant",
+    };
+  }
+
+  /** Where the browser page should go next. The redirect is handed out once. */
+  async poll(requestToken: string): Promise<ConnectPoll> {
+    const request = openConsentRequest(requestToken, this.config.signingSecret);
+    if (!request) return { status: "expired" };
+    const row = await this.prisma.oAuthConsent.findUnique({
+      where: { id: request.nonce },
+      select: { redirectUrl: true, expiresAt: true },
+    });
+    if (!row) return { status: "expired" };
+    const redirectUrl = row.redirectUrl;
+    if (redirectUrl) {
+      const { count } = await this.prisma.oAuthConsent.updateMany({
+        where: { id: request.nonce, redirectUrl },
+        data: { redirectUrl: null },
+      });
+      return count === 1
+        ? { status: "done", redirectUrl }
+        : { status: "expired" };
+    }
+    return row.expiresAt > new Date()
+      ? { status: "pending" }
+      : { status: "expired" };
+  }
+
+  async describe(user: User, code: string): Promise<OAuthConsentInfo> {
+    const request = await this.open(code);
     await this.bind(user, request.nonce, {});
     const client = await this.prisma.oAuthClient.findUnique({
       where: { id: request.clientId },
@@ -39,10 +95,10 @@ export class OAuthConsentService {
 
   async decide(
     user: User,
-    requestToken: string,
+    code: string,
     approve: boolean,
   ): Promise<OAuthConsentDecisionResponse> {
-    const request = this.open(requestToken);
+    const request = await this.open(code);
     const client = await this.prisma.oAuthClient.findUnique({
       where: { id: request.clientId },
     });
@@ -62,7 +118,11 @@ export class OAuthConsentService {
       target.searchParams.set("error", "access_denied");
     }
     if (request.state) target.searchParams.set("state", request.state);
-    return { redirectUrl: target.toString() };
+    await this.prisma.oAuthConsent.update({
+      where: { id: request.nonce },
+      data: { redirectUrl: target.toString() },
+    });
+    return { approved: approve };
   }
 
   async apps(user: User): Promise<ConnectedAppsResponse> {
@@ -99,8 +159,17 @@ export class OAuthConsentService {
     return this.apps(user);
   }
 
-  private open(token: string) {
-    const request = openConsentRequest(token, this.config.signingSecret);
+  /** The signed request behind a typed code. */
+  private async open(typed: string) {
+    const code = normalizeUserCode(typed);
+    const row = code
+      ? await this.prisma.oAuthConsent.findUnique({
+          where: { userCode: code },
+          select: { request: true },
+        })
+      : null;
+    if (!row) throw new BadRequestException(CHECK_CODE);
+    const request = openConsentRequest(row.request, this.config.signingSecret);
     if (!request) throw new BadRequestException(EXPIRED);
     return request;
   }

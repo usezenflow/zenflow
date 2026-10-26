@@ -27,7 +27,7 @@ async function setup() {
     pepper: "p".repeat(40),
     peppers: ["p".repeat(40)],
     signingSecret: "s".repeat(40),
-    consentUrl: "https://app.example.com/oauth/consent",
+    connectUrl: "https://api.example.com/api/v1/oauth/connect",
     issuer: new URL("https://api.example.com"),
     mcpUrl: new URL("https://api.example.com/api/v1/mcp"),
   };
@@ -67,7 +67,11 @@ async function register(app: express.Express) {
   return (res.body as { client_id: string }).client_id;
 }
 
-async function authorize(app: express.Express, clientId: string) {
+async function authorize(
+  app: express.Express,
+  fake: ReturnType<typeof fakeOAuthPrisma>,
+  clientId: string,
+) {
   const res = await request(app)
     .get("/authorize")
     .query({
@@ -80,7 +84,26 @@ async function authorize(app: express.Express, clientId: string) {
       scope: MCP_SCOPE,
     })
     .expect(302);
-  return new URL(res.header.location).searchParams.get("request")!;
+  const location = new URL(res.header.location);
+  expect(location.origin + location.pathname).toBe(
+    "https://api.example.com/api/v1/oauth/connect",
+  );
+  const requestToken = location.searchParams.get("request")!;
+  const code = [...fake.consents.values()].at(-1)!.userCode;
+  return { requestToken, code };
+}
+
+/** Approves or refuses, then reads the redirect the browser page is handed. */
+async function decideAndRedirect(
+  consent: OAuthConsentService,
+  user: never,
+  flow: { requestToken: string; code: string },
+  approve: boolean,
+) {
+  await consent.decide(user, flow.code, approve);
+  const polled = await consent.poll(flow.requestToken);
+  if (polled.status !== "done") throw new Error("no redirect");
+  return new URL(polled.redirectUrl);
 }
 
 describe("MCP OAuth flow", () => {
@@ -107,18 +130,29 @@ describe("MCP OAuth flow", () => {
   });
 
   it("runs register, authorize, consent, token and refresh", async () => {
-    const { app, consent } = await setup();
+    const { app, fake, consent } = await setup();
     const clientId = await register(app);
 
-    const requestToken = await authorize(app, clientId);
-    expect(await consent.describe(user, requestToken)).toEqual({
+    const flow = await authorize(app, fake, clientId);
+    expect(await consent.waiting(flow.requestToken)).toEqual({
+      code: flow.code,
+      clientName: "ChatGPT",
+    });
+    expect(await consent.poll(flow.requestToken)).toEqual({
+      status: "pending",
+    });
+    expect(await consent.describe(user, flow.code.toLowerCase())).toEqual({
       clientName: "ChatGPT",
       redirectHost: "chatgpt.com",
       scopes: [MCP_SCOPE],
     });
 
-    const decision = await consent.decide(user, requestToken, true);
-    const back = new URL(decision.redirectUrl);
+    expect(await consent.decide(user, flow.code, true)).toEqual({
+      approved: true,
+    });
+    const polled = await consent.poll(flow.requestToken);
+    if (polled.status !== "done") throw new Error("no redirect");
+    const back = new URL(polled.redirectUrl);
     expect(back.origin + back.pathname).toBe(REDIRECT);
     expect(back.searchParams.get("state")).toBe("xyz");
     const code = back.searchParams.get("code")!;
@@ -154,14 +188,15 @@ describe("MCP OAuth flow", () => {
   });
 
   it("refuses a wrong PKCE verifier", async () => {
-    const { app, consent } = await setup();
+    const { app, fake, consent } = await setup();
     const clientId = await register(app);
-    const decision = await consent.decide(
+    const back = await decideAndRedirect(
+      consent,
       user,
-      await authorize(app, clientId),
+      await authorize(app, fake, clientId),
       true,
     );
-    const code = new URL(decision.redirectUrl).searchParams.get("code")!;
+    const code = back.searchParams.get("code")!;
 
     const res = await request(app)
       .post("/token")
@@ -178,16 +213,16 @@ describe("MCP OAuth flow", () => {
   });
 
   it("sends the browser back with access_denied when the user refuses", async () => {
-    const { app, consent } = await setup();
+    const { app, fake, consent } = await setup();
     const clientId = await register(app);
 
-    const decision = await consent.decide(
+    const back = await decideAndRedirect(
+      consent,
       user,
-      await authorize(app, clientId),
+      await authorize(app, fake, clientId),
       false,
     );
 
-    const back = new URL(decision.redirectUrl);
     expect(back.searchParams.get("error")).toBe("access_denied");
     expect(back.searchParams.get("code")).toBeNull();
     expect(back.searchParams.get("state")).toBe("xyz");
@@ -218,60 +253,71 @@ describe("MCP OAuth flow", () => {
   });
 
   it("rejects an expired or forged consent request", async () => {
-    const { consent } = await setup();
-    await expect(consent.describe(user, "forged.token")).rejects.toThrow(
-      /expired/,
+    const { app, fake, consent } = await setup();
+    const clientId = await register(app);
+    const flow = await authorize(app, fake, clientId);
+
+    await expect(consent.describe(user, "ABCD2345")).rejects.toThrow(
+      /Check the code/,
     );
-    await expect(consent.decide(user, "forged.token", true)).rejects.toThrow(
-      /expired/,
+    await expect(consent.decide(user, "nonsense", true)).rejects.toThrow(
+      /Check the code/,
     );
+    expect(await consent.waiting("forged.token")).toBeNull();
+    expect(await consent.poll("forged.token")).toEqual({ status: "expired" });
+    fake.consents.get([...fake.consents.keys()].at(-1)!)!.expiresAt = new Date(
+      0,
+    );
+    expect(await consent.poll(flow.requestToken)).toEqual({
+      status: "expired",
+    });
+    await expect(consent.describe(user, flow.code)).rejects.toThrow(/expired/);
   });
 
   it("spends a consent request once", async () => {
-    const { app, consent } = await setup();
+    const { app, fake, consent } = await setup();
     const clientId = await register(app);
-    const requestToken = await authorize(app, clientId);
+    const flow = await authorize(app, fake, clientId);
 
-    await consent.decide(user, requestToken, true);
-    await expect(consent.decide(user, requestToken, true)).rejects.toThrow(
+    await consent.decide(user, flow.code, true);
+    await expect(consent.decide(user, flow.code, true)).rejects.toThrow(
       /expired/,
     );
   });
 
   it("finishes a consent request only for the user who opened it", async () => {
-    const { app, consent } = await setup();
+    const { app, fake, consent } = await setup();
     const clientId = await register(app);
-    const requestToken = await authorize(app, clientId);
+    const flow = await authorize(app, fake, clientId);
 
-    await consent.describe(user, requestToken);
-    await expect(consent.decide(other, requestToken, true)).rejects.toThrow(
+    await consent.describe(user, flow.code);
+    await expect(consent.decide(other, flow.code, true)).rejects.toThrow(
       /expired/,
     );
-    await expect(consent.describe(other, requestToken)).rejects.toThrow(
-      /expired/,
-    );
+    await expect(consent.describe(other, flow.code)).rejects.toThrow(/expired/);
   });
 
   it("refuses a redirect the client no longer registers", async () => {
     const { app, fake, consent } = await setup();
     const clientId = await register(app);
-    const requestToken = await authorize(app, clientId);
+    const flow = await authorize(app, fake, clientId);
     fake.clients.get(clientId)!.metadata = { redirect_uris: [] };
 
-    await expect(consent.decide(user, requestToken, true)).rejects.toThrow(
+    await expect(consent.decide(user, flow.code, true)).rejects.toThrow(
       /cannot redirect/,
     );
   });
 
   it("only issues tokens for the MCP endpoint", async () => {
-    const { app, consent } = await setup();
+    const { app, fake, consent } = await setup();
     const clientId = await register(app);
-    const decision = await consent.decide(
+    const back = await decideAndRedirect(
+      consent,
       user,
-      await authorize(app, clientId),
+      await authorize(app, fake, clientId),
       true,
     );
-    const code = new URL(decision.redirectUrl).searchParams.get("code")!;
+    const code = back.searchParams.get("code")!;
 
     await request(app)
       .post("/token")
@@ -317,5 +363,20 @@ describe("MCP OAuth flow", () => {
         token_endpoint_auth_method: "none",
       })
       .expect(400);
+  });
+
+  it("hands the redirect to the browser page once", async () => {
+    const { app, fake, consent } = await setup();
+    const clientId = await register(app);
+    const flow = await authorize(app, fake, clientId);
+
+    await consent.decide(user, flow.code, true);
+
+    const first = await consent.poll(flow.requestToken);
+    expect(first.status).toBe("done");
+    expect(await consent.poll(flow.requestToken)).toEqual({
+      status: "pending",
+    });
+    expect([...fake.consents.values()].at(-1)!.redirectUrl).toBeNull();
   });
 });

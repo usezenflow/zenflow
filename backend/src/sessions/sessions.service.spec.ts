@@ -12,7 +12,6 @@ import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
 import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
-import { CalendarSyncTrigger } from "../google-calendar/calendar-sync-trigger.service";
 import type { Session, SessionSeries, User } from "../../generated/prisma";
 import type { CreateSessionDto } from "./dto/create-session.dto";
 import type { UpdateSessionDto } from "./dto/update-session.dto";
@@ -52,7 +51,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     examCredits: null,
     examRetake: null,
     reminderMinutes: null,
-    attendees: [],
     durationMinutes: 60,
     deadline: new Date("2026-01-05T12:00:00.000Z"),
     notBefore: null,
@@ -143,7 +141,6 @@ async function makeService(
         useValue: { forTask: jest.fn().mockResolvedValue([]) },
       },
       { provide: ConflictResolveService, useValue: {} },
-      { provide: CalendarSyncTrigger, useValue: { request: jest.fn() } },
     ],
   }).compile();
   return module.get<SessionsService>(SessionsService);
@@ -295,7 +292,6 @@ describe("SessionsService.create", () => {
       notBefore: null,
       window: null,
       reminderMinutes: null,
-      attendees: [],
       undoGroupId: expect.any(String),
       title: "Write report",
       note: null,

@@ -33,7 +33,7 @@ async function setup() {
           pepper: "p".repeat(40),
           peppers: ["p".repeat(40)],
           signingSecret: "s",
-          consentUrl: "https://app/oauth/consent",
+          connectUrl: "https://api/oauth/connect",
           mcpUrl: new URL("https://api.example.com/api/v1/mcp"),
         },
       },

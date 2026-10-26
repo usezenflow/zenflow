@@ -19,7 +19,7 @@ import type {
 } from "@zenflow/shared";
 import { TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
-import { AttendeesField, INFEASIBLE_POLICIES } from "./create-session.dto";
+import { INFEASIBLE_POLICIES } from "./create-session.dto";
 import { DEFAULT_REMINDER_CHOICES } from "@zenflow/shared";
 import {} from "@zenflow/shared";
 
@@ -81,11 +81,7 @@ export class UpdateSessionDto implements UpdateSessionInput {
   @IsIn(DEFAULT_REMINDER_CHOICES)
   reminderMinutes?: number | null;
 
-  /** Invitee emails. Omit to leave unchanged; an empty list removes everyone. */
-  @AttendeesField()
-  attendees?: string[];
-
-  /** Where the change was made. Google changes are recorded by the server, not sent here. */
+  /** Where the change was made. */
   @IsOptional()
   @IsIn(["ZENFLOW", "DEVICE"])
   source?: "ZENFLOW" | "DEVICE";

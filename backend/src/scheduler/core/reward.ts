@@ -14,12 +14,12 @@ import {
 
 /** What a delete is graded on, all taken from the delete event and the session. */
 export interface DeleteSignal {
-  /** Who deleted: the user (app, Google or phone), or Zenflow, ingestion or a conflict. */
+  /** Who deleted: the user (app or phone), or Zenflow, ingestion or a conflict. */
   byUser: boolean;
   /** Session type. Only TASK learns from a delete. */
   type: "TASK" | "LECTURE" | "ASSIGNMENT" | "EXAM" | "DND";
   /** Session source. Only sessions the user or the scheduler made count. */
-  source: "USER" | "AUTO" | "LMS" | "PORTAL" | "GOOGLE" | "DEVICE";
+  source: "USER" | "AUTO" | "LMS" | "PORTAL" | "DEVICE";
   /** The LinUCB arm placed it, so the arm (not the preference matrix) learns. */
   placedByLinUcb: boolean;
   everMoved: boolean;

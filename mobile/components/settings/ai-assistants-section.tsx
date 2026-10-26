@@ -1,4 +1,5 @@
 import { getApiAccess } from "@/api/api-access";
+import { AssistantConnect } from "@/components/settings/assistant-connect";
 import { CopyButton } from "@/components/settings/copy-button";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
 import { useBottomSheet } from "@/components/ui/bottom-sheet";
@@ -93,7 +94,7 @@ function AssistantSetup({ guides }: { guides: ApiAccessResponse["setup"] }) {
  * tells an assistant about the tools, and personal tokens. Tokens are created
  * and revoked here; a revoke asks first.
  */
-export function AiAssistantsSection() {
+export function AiAssistantsSection({ connectCode }: { connectCode?: string }) {
   useLanguage();
   const offline = useOffline();
   const [access, setAccess] = useState<ApiAccessResponse | null>(null);
@@ -135,6 +136,8 @@ export function AiAssistantsSection() {
     <>
       <SettingsSectionLabel>{t("AI assistants")}</SettingsSectionLabel>
       <View className="overflow-hidden rounded-2xl border border-border bg-card">
+        <AssistantConnect initialCode={connectCode} />
+        <Divider />
         <EndpointRow label={t("MCP server")} value={access.mcpUrl} testID="api-access.mcp" />
         <Divider />
         <EndpointRow label={t("REST base URL")} value={access.restBaseUrl} testID="api-access.rest" />

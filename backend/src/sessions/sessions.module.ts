@@ -11,15 +11,9 @@ import { PlacementChipsService } from "./placement-chips.service";
 import { PlacementPlanService } from "./placement-plan.service";
 import { ReplanService } from "./replan.service";
 import { ApiTokensModule } from "../api-access/api-tokens.module";
-import { CalendarSyncTriggerModule } from "../google-calendar/calendar-sync-trigger.module";
 
 @Module({
-  imports: [
-    PrismaModule,
-    SchedulerModule,
-    ApiTokensModule,
-    CalendarSyncTriggerModule,
-  ],
+  imports: [PrismaModule, SchedulerModule, ApiTokensModule],
   controllers: [SessionsController],
   providers: [
     SessionsService,

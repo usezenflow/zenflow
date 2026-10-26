@@ -7,7 +7,6 @@ import { PrismaService } from "../prisma/prisma.service";
 import { MS_PER_MINUTE } from "../scheduler/core/slot";
 import { DisplacementService } from "../scheduler/io/displacement.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
-import { CalendarSyncTrigger } from "../google-calendar/calendar-sync-trigger.service";
 import { constraintOf } from "./task-bounds";
 
 /** One replan covers at most this many tasks, so a preview stays fast. */
@@ -46,7 +45,6 @@ export class ReplanService {
     private readonly prisma: PrismaService,
     private readonly placement: TaskPlacementService,
     private readonly displacement: DisplacementService,
-    private readonly calendar: CalendarSyncTrigger,
   ) {}
 
   async plan(
@@ -171,7 +169,6 @@ export class ReplanService {
       (id) => durations.get(id) as number,
       undoGroupId,
     );
-    void this.calendar.request(user.id);
     return { ...plan, undoGroupId };
   }
 }

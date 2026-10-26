@@ -24,8 +24,7 @@ export type SessionSource =
   | "LMS"
   | "PORTAL"
   | "AUTO"
-  /** Busy time imported from the user's Google or phone calendar: read only. */
-  | "GOOGLE"
+  /** Busy time imported from the user's phone calendar: read only. */
   | "DEVICE";
 
 /** Part of the day a flexible task may be placed in (local time): 06 to 12, 12 to 18, 18 to 24. */
@@ -71,8 +70,6 @@ export interface Session {
   scheduledStartTime: string | null;
   /** Minutes before start; `null` uses the user's default, `0` means no alarm. */
   reminderMinutes: number | null;
-  /** Invitee emails. Sent to Google only. */
-  attendees: string[];
   /**
    * Set when this session belongs to a recurring fixed series (`DND` /
    * `ASSIGNMENT` / `EXAM` / `LECTURE`). This `Session` is one *virtual
@@ -350,7 +347,6 @@ export interface UpdateSessionInput {
   title?: string;
   /** Minutes before start; `null` uses the user's default. */
   reminderMinutes?: number | null;
-  attendees?: string[];
   /** Where the change was made. Defaults to `ZENFLOW`. */
   source?: "ZENFLOW" | "DEVICE";
   /** A prep `TASK` only: the lecture occurrence it prepares for (ISO-8601). */

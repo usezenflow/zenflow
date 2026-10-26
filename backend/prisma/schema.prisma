@@ -42,10 +42,10 @@ model User {
   /// User intent for native push
   allowNotifications Boolean @default(true)
 
-  /// Where the schedule is shown: Google Calendar, the phone's calendar or nowhere
-  calendarTarget CalendarTarget @default(NONE)
+  /// Where the schedule is shown: the phone's calendar or nowhere
+  calendarTarget         CalendarTarget @default(NONE)
   /// Alarm before each event; 0 means none. A session's `reminderMinutes` overrides it.
-  defaultReminderMinutes Int @default(30)
+  defaultReminderMinutes Int            @default(30)
 
   preferenceMatrix          Float[]   @default([])
   preferenceMatrixDecayedAt DateTime?
@@ -66,10 +66,8 @@ model User {
 
   banditArmStates BanditArmState[]
 
-  calendarConnection CalendarConnection?
-  calendarLinks      CalendarLink[]
-  oauthTokens        OAuthToken[]
-  oauthConsents      OAuthConsent[]
+  oauthTokens   OAuthToken[]
+  oauthConsents OAuthConsent[]
 
   // which portal sections / Moodle courses this student is confirmed in
   portalSectionEnrollments PortalSectionEnrollment[]
@@ -178,14 +176,12 @@ enum SessionSource {
   PORTAL
   // Placed by the system without a user request, e.g. prep for an exam or assignment.
   AUTO
-  // Busy time imported from the user's other Google or phone calendars; never written back
-  GOOGLE
+  // Busy time imported from the phone calendar; never written back
   DEVICE
 }
 
 enum CalendarTarget {
   NONE
-  GOOGLE
   DEVICE
 }
 
@@ -214,9 +210,7 @@ model Session {
 
   scheduledStartTime DateTime? // fixed types (ASSIGNMENT/EXAM/LECTURE/DND) are always scheduled; TASK is placed by the engine
   // Minutes before start; null uses the user's default, 0 means no alarm
-  reminderMinutes Int?
-  // Invitee emails, pushed to Google only. Set through MCP.
-  attendees String[] @default([])
+  reminderMinutes    Int?
   userId             String
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -365,24 +359,23 @@ enum SessionEventType {
 
 enum SessionEventSource {
   ZENFLOW
-  GOOGLE
   DEVICE
 }
 
 /// Range-partitioned by month on `occurredAt`
 model SessionEvent {
-  id                  BigInt           @default(autoincrement())
+  id                  BigInt             @default(autoincrement())
   eventType           SessionEventType
   oldSnapshot         Json? // { scheduledStartTime, durationMinutes, type }; null on CREATE/START
   newSnapshot         Json
-  rewardScore         Float            @default(0.0) // CREATE 0 · MOVE graded ≤ 0 · START +1 (ADR-0001, ADR-0035)
+  rewardScore         Float              @default(0.0) // CREATE 0 · MOVE graded ≤ 0 · START +1 (ADR-0001, ADR-0035)
   dragDistanceMinutes Int? // signed (new − old start); null unless MOVE — for graded reward later
   policy              SchedulingModel? // attribution once a model is live
-  // Where the change was made: in Zenflow, or in Google or on the phone
+  // Where the change was made: in Zenflow or on the phone
   source              SessionEventSource @default(ZENFLOW)
   // Shared by every row one user action wrote
   groupId             String?
-  occurredAt          DateTime         @default(now())
+  occurredAt          DateTime           @default(now())
 
   // Nullable + SetNull so START / observation-count history survives a session deletion
   sessionId String?
@@ -926,62 +919,6 @@ model LmsCourseSeen {
   @@index([lmsCourseId, scope, fingerprint])
 }
 
-enum CalendarSyncStatus {
-  ACTIVE
-  NEEDS_RECONNECT
-}
-
-/// A user's Google Calendar connection and its sync cursors
-model CalendarConnection {
-  id                String             @id @default(uuid())
-  googleCalendarId  String // the secondary calendar Zenflow writes to
-  refreshTokenEnc   String // encrypted with GOOGLE_TOKEN_ENCRYPTION_KEY
-  status            CalendarSyncStatus @default(ACTIVE)
-  syncToken         String? // `events.list` incremental token
-  channelId         String?            @unique // `events.watch` channel
-  channelResourceId String?
-  channelExpiresAt  DateTime?
-  lastSyncedAt      DateTime?
-  lastError         String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-/// One dirty marker per user: session changes waiting for the calendar outbox (ADR-0040).
-model CalendarSyncOutbox {
-  userId        String    @id
-  dirtyAt       DateTime
-  nextAttemptAt DateTime
-  claimedUntil  DateTime?
-  attempts      Int       @default(0)
-  lastError     String?
-
-  @@index([nextAttemptAt])
-}
-
-/// Maps a session or recurring series to its Google event; no FK so a hard delete can still remove the event
-model CalendarLink {
-  id          String   @id @default(uuid())
-  sessionId   String? // set for a single session
-  seriesId    String? // set for a recurring series
-  eventId     String // Google event id: the session or series id without dashes
-  payloadHash String // hash of the event last written
-  etag        String?
-  // Hash of the start, end and invitees last sent; a change re-sends invitations.
-  inviteKey   String?
-  syncedAt    DateTime @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, eventId])
-  @@index([userId, sessionId])
-  @@index([userId, seriesId])
-}
-
 /// An AI assistant registered through dynamic client registration (RFC 7591)
 model OAuthClient {
   id        String   @id // the client_id
@@ -1023,12 +960,15 @@ model OAuthToken {
   @@index([expiresAt])
 }
 
-/// A pending authorization request; single use, and bound to the user who opened the consent page
+/// A pending authorization request; single use, and bound to the first signed-in user who enters its code
 model OAuthConsent {
-  id        String    @id @default(uuid()) // the nonce inside the signed request
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  id          String    @id @default(uuid()) // the nonce inside the signed request
+  userCode    String    @unique // what the user types in the app to approve
+  request     String // the signed request the app reads
+  redirectUrl String? // where to send the browser once decided; cleared when read
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
 
   clientId String
   client   OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)

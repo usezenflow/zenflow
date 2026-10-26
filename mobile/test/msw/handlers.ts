@@ -62,9 +62,4 @@ export const handlers = [
   http.patch(`${API}/users/me`, () => HttpResponse.json({ data: testUser })),
   http.patch(`${API}/users/update/calendar-target`, () => HttpResponse.json({ data: testUser })),
   http.get(`${API}/oauth/apps`, () => HttpResponse.json({ data: { apps: [] } })),
-  http.get(`${API}/google-calendar`, () =>
-    HttpResponse.json({
-      data: { available: true, target: "NONE", connected: false, state: null, lastSyncedAt: null },
-    }),
-  ),
 ];

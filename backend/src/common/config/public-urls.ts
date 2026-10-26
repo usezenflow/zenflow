@@ -11,7 +11,7 @@ export class PublicUrls {
     return (this.config.get<string>("PUBLIC_API_URL") ?? "").replace(/\/$/, "");
   }
 
-  /** Where the PWA lives; defaults to the first CORS origin. */
+  /** The public website; defaults to the first CORS origin. */
   get web(): string {
     const explicit = this.config.get<string>("PUBLIC_WEB_URL");
     const first = (this.config.get<string>("CORS_ORIGIN") ?? "").split(",")[0];

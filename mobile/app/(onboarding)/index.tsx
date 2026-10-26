@@ -1,6 +1,5 @@
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
-import { getGoogleCalendar } from "@/api/google-calendar";
 import { listIntegrations } from "@/api/integrations";
 import { listConnectedApps } from "@/api/oauth";
 import { updateBasicInfo } from "@/api/users";
@@ -19,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { BusyOr } from "@/components/ui/delayed-spinner";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
+import { useDeviceCalendar } from "@/hooks/use-device-calendar";
 import { useIntegrationStore } from "@/hooks/use-integration-store";
 import { useNotificationToggle } from "@/hooks/use-notification-toggle";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
@@ -102,7 +102,7 @@ export default function OnboardingScreen() {
   const [open, setOpen] = useState<Row | null>("campus");
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
-  const [googleLinked, setGoogleLinked] = useState(false);
+  const phoneCalendar = useDeviceCalendar((s) => s.state.enabled);
   const [assistantLinked, setAssistantLinked] = useState(false);
 
   useEffect(() => {
@@ -114,11 +114,6 @@ export default function OnboardingScreen() {
 
   // Re-read when a row closes: that is when something may have just connected.
   useEffect(() => {
-    getGoogleCalendar()
-      .then((g) =>
-        setGoogleLinked(g.connected && g.state !== "NEEDS_RECONNECT"),
-      )
-      .catch(() => {});
     listConnectedApps()
       .then((r) => setAssistantLinked(r.apps.length > 0))
       .catch(() => {});
@@ -233,7 +228,7 @@ export default function OnboardingScreen() {
             testID="onboarding.row.calendar"
             icon={CalendarDays}
             title={t("Calendar")}
-            done={googleLinked || notif.active}
+            done={phoneCalendar || notif.active}
             open={open === "calendar"}
             onToggle={toggle("calendar")}
           >

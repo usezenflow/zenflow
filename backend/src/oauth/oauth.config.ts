@@ -46,8 +46,9 @@ export class OAuthConfig {
   get mcpUrl(): URL {
     return new URL(`${this.urls.api}/mcp`);
   }
-  get consentUrl(): string {
-    return `${this.urls.web}/oauth/consent`;
+  /** The page that shows the code while the user approves in the app. */
+  get connectUrl(): string {
+    return `${this.urls.api}/oauth/connect`;
   }
   get available(): boolean {
     return !!(this.urls.api && this.pepper);

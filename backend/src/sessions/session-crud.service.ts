@@ -166,7 +166,6 @@ export class SessionCrudService {
         note: dto.note ?? null,
         location: dto.location ?? null,
         reminderMinutes: dto.reminderMinutes ?? null,
-        attendees: dto.attendees ?? [],
         durationMinutes: dto.durationMinutes,
         deadline,
         notBefore: dto.notBefore ? new Date(dto.notBefore) : null,
@@ -304,7 +303,6 @@ export class SessionCrudService {
         note: dto.note,
         location: dto.location,
         reminderMinutes: dto.reminderMinutes,
-        attendees: dto.attendees,
         durationMinutes: dto.durationMinutes,
         scheduledStartTime: repStart,
         seriesId: series.id,
@@ -332,7 +330,6 @@ export class SessionCrudService {
         note: dto.note,
         location: dto.location,
         reminderMinutes: dto.reminderMinutes,
-        attendees: dto.attendees,
         durationMinutes: dto.durationMinutes,
         scheduledStartTime: start,
       });

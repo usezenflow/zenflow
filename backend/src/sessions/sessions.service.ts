@@ -30,7 +30,6 @@ import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
 import { PlacementChipsService } from "./placement-chips.service";
 import { ConflictResolveService } from "../scheduler/io/conflict-resolve.service";
-import { CalendarSyncTrigger } from "../google-calendar/calendar-sync-trigger.service";
 
 /**
  * Thin facade the controller calls — its methods delegate to the collaborator
@@ -54,21 +53,13 @@ export class SessionsService {
     private readonly slotPickService: SlotPickService,
     private readonly chips: PlacementChipsService,
     private readonly conflictResolve: ConflictResolveService,
-    private readonly calendar: CalendarSyncTrigger,
   ) {}
-
-  /** Queues a Google Calendar sync once a write has succeeded. */
-  private async synced<T>(user: User, work: Promise<T>): Promise<T> {
-    const result = await work;
-    void this.calendar.request(user.id);
-    return result;
-  }
 
   async create(
     dto: CreateSessionDto,
     user: User,
   ): Promise<CreateSessionResponse> {
-    return this.synced(user, this.crud.create(dto, user));
+    return this.crud.create(dto, user);
   }
 
   /**
@@ -233,7 +224,7 @@ export class SessionsService {
     user: User,
     origin?: SessionEventSource,
   ): Promise<UpdateSessionResponse> {
-    return this.synced(user, this.updates.update(id, dto, user, origin));
+    return this.updates.update(id, dto, user, origin);
   }
 
   async remove(
@@ -241,7 +232,7 @@ export class SessionsService {
     user: User,
     origin?: SessionEventSource,
   ): Promise<RemoveSessionResponse> {
-    return this.synced(user, this.crud.remove(id, user, origin));
+    return this.crud.remove(id, user, origin);
   }
 
   /** Repacks the flexible sessions that overlap `id`; `id` itself stays put. */
@@ -249,7 +240,7 @@ export class SessionsService {
     id: string,
     user: User,
   ): Promise<SessionResolveConflictsResponse> {
-    return this.synced(user, this.conflictResolve.resolve(user, id));
+    return this.conflictResolve.resolve(user, id);
   }
 
   async slotPick(
@@ -257,7 +248,7 @@ export class SessionsService {
     dto: SlotPickDto,
     user: User,
   ): Promise<SlotPickResponse> {
-    return this.synced(user, this.slotPickService.recordPick(id, dto, user));
+    return this.slotPickService.recordPick(id, dto, user);
   }
 
   async truncateSeriesFrom(
@@ -265,33 +256,27 @@ export class SessionsService {
     fromStartISO: string,
     user: User,
   ): Promise<RemoveSessionSeriesResponse> {
-    return this.synced(
-      user,
-      this.series.truncateFrom(seriesId, fromStartISO, user),
-    );
+    return this.series.truncateFrom(seriesId, fromStartISO, user);
   }
 
   async removeSeries(
     seriesId: string,
     user: User,
   ): Promise<RemoveSessionSeriesResponse> {
-    return this.synced(user, this.series.removeSeries(seriesId, user));
+    return this.series.removeSeries(seriesId, user);
   }
 
   async removeTimetableGroupFrom(
     sessionId: string,
     user: User,
   ): Promise<RemoveTimetableGroupResponse> {
-    return this.synced(
-      user,
-      this.crud.removeTimetableGroupFrom(sessionId, user),
-    );
+    return this.crud.removeTimetableGroupFrom(sessionId, user);
   }
 
   async removeTimetableGroup(
     sessionId: string,
     user: User,
   ): Promise<RemoveTimetableGroupResponse> {
-    return this.synced(user, this.crud.removeTimetableGroup(sessionId, user));
+    return this.crud.removeTimetableGroup(sessionId, user);
   }
 }

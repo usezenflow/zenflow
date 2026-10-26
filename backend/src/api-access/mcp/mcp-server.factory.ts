@@ -2,12 +2,12 @@ import { Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { User } from "../../../generated/prisma";
-import { GoogleCalendarService } from "../../google-calendar/google-calendar.service";
 import { PlacementPlanService } from "../../sessions/placement-plan.service";
 import { ReplanService } from "../../sessions/replan.service";
 import { SessionsService } from "../../sessions/sessions.service";
 import { buildApiAccessPrompt } from "../api-access-prompt";
 import { PublicUrls } from "../../common/config/public-urls";
+import { LOGO_DATA_URI } from "../../common/brand";
 import { readVersionedSecret } from "../../common/config/versioned-secret";
 import { PlanTokens } from "./plan-token";
 import { registerSessionTools } from "./mcp-session-tools";
@@ -20,7 +20,6 @@ export class McpServerFactory {
   constructor(
     private readonly sessions: SessionsService,
     private readonly placement: PlacementPlanService,
-    private readonly calendar: GoogleCalendarService,
     private readonly replans: ReplanService,
     @Optional() config?: ConfigService,
     @Optional() private readonly urls?: PublicUrls,
@@ -39,18 +38,10 @@ export class McpServerFactory {
         title: "Zenflow",
         version: "1.0.0",
         // Clients show this where a connector has no icon of its own.
-        ...(web
-          ? {
-              websiteUrl: web,
-              icons: [
-                {
-                  src: `${web}/pwa-512x512.png`,
-                  mimeType: "image/png",
-                  sizes: ["512x512"],
-                },
-              ],
-            }
-          : {}),
+        icons: [
+          { src: LOGO_DATA_URI, mimeType: "image/svg+xml", sizes: ["any"] },
+        ],
+        ...(web ? { websiteUrl: web } : {}),
       },
       {
         instructions: buildApiAccessPrompt({
@@ -64,7 +55,6 @@ export class McpServerFactory {
       {
         sessions: this.sessions,
         placement: this.placement,
-        calendar: this.calendar,
         replans: this.replans,
         plans: this.plans,
       },

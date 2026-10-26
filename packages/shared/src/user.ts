@@ -24,7 +24,12 @@ export interface UserPreferences {
 }
 
 /** Where a user's schedule is shown outside Zenflow. One at a time. */
-export type CalendarTarget = "NONE" | "GOOGLE" | "DEVICE";
+export type CalendarTarget = "NONE" | "DEVICE";
+
+/** Body of `PATCH /users/update/calendar-target`: turns the phone calendar on or off. */
+export interface SetCalendarTargetInput {
+  target: CalendarTarget;
+}
 
 /** Minutes before an event that the default reminder can be set to; 0 is none. */
 export const DEFAULT_REMINDER_CHOICES = [0, 5, 10, 15, 30, 60] as const;

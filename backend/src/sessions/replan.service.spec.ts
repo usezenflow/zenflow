@@ -1,6 +1,12 @@
 import type { User } from "../../generated/prisma";
 import { ReplanService } from "./replan.service";
 
+interface Proposal {
+  excludeSessionIds: string[];
+  deadline: Date;
+  constraint: { extraOccupied: unknown[] };
+}
+
 const USER = { id: "u1", timezone: "UTC" } as User;
 const NOW = new Date("2026-10-26T00:00:00Z");
 const H = 3_600_000;
@@ -18,12 +24,10 @@ function setup(rows: ReturnType<typeof row>[]) {
   const prisma = { session: { findMany: jest.fn().mockResolvedValue(rows) } };
   const placement = { proposeSingle: jest.fn() };
   const displacement = { applyMoves: jest.fn() };
-  const calendar = { request: jest.fn() };
   const service = new ReplanService(
     prisma as never,
     placement as never,
     displacement as never,
-    calendar as never,
   );
   return { service, placement, displacement, prisma };
 }
@@ -45,16 +49,12 @@ describe("ReplanService", () => {
       NOW,
     );
 
-    expect(placement.proposeSingle.mock.calls[0][0].excludeSessionIds).toEqual([
-      "relaxed",
-      "urgent",
+    const proposed = placement.proposeSingle.mock.calls as [Proposal][];
+    expect(proposed[0][0].excludeSessionIds).toEqual(["relaxed", "urgent"]);
+    expect(proposed[0][0].deadline).toEqual(urgent.deadline);
+    expect(proposed[1][0].constraint.extraOccupied).toEqual([
+      { startMs: NOW.getTime() + H, endMs: NOW.getTime() + 2 * H },
     ]);
-    expect(placement.proposeSingle.mock.calls[0][0].deadline).toEqual(
-      urgent.deadline,
-    );
-    expect(
-      placement.proposeSingle.mock.calls[1][0].constraint.extraOccupied,
-    ).toEqual([{ startMs: NOW.getTime() + H, endMs: NOW.getTime() + 2 * H }]);
     expect(plan.moves.map((m) => m.id)).toEqual(["urgent", "relaxed"]);
   });
 

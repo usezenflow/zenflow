@@ -42,7 +42,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     examCredits: null,
     examRetake: null,
     reminderMinutes: null,
-    attendees: [],
     durationMinutes: 60,
     deadline: null,
     notBefore: null,
@@ -226,7 +225,7 @@ describe("SessionUpdateService — preference-matrix reinforcement (Item 3B3)", 
       "task-1",
       1n,
       60,
-    expect.anything(),
+      expect.anything(),
     );
     expect(schedulingFeedback.reinforcePreferenceMove).toHaveBeenCalledWith(
       user.id,
@@ -388,7 +387,7 @@ describe("SessionUpdateService — preference-matrix reinforcement (Item 3B3)", 
       "task-1",
       1n,
       -60,
-    expect.anything(),
+      expect.anything(),
     );
     expect(schedulingFeedback.reinforcePreferenceMove).toHaveBeenCalledWith(
       user.id,

@@ -39,6 +39,9 @@ export function fakeOAuthPrisma() {
       id: string;
       clientId: string;
       userId: string | null;
+      userCode: string;
+      request: string;
+      redirectUrl: string | null;
       expiresAt: Date;
       usedAt: Date | null;
     }
@@ -46,10 +49,37 @@ export function fakeOAuthPrisma() {
 
   const prisma = {
     oAuthConsent: {
-      create: ({ data }: { data: { clientId: string; expiresAt: Date } }) => {
-        const row = { id: randomUUID(), userId: null, usedAt: null, ...data };
+      create: ({
+        data,
+      }: {
+        data: {
+          id: string;
+          clientId: string;
+          userCode: string;
+          request: string;
+          expiresAt: Date;
+        };
+      }) => {
+        const row = { userId: null, usedAt: null, redirectUrl: null, ...data };
         consents.set(row.id, row);
         return Promise.resolve({ id: row.id });
+      },
+      findUnique: ({ where }: { where: { id?: string; userCode?: string } }) =>
+        Promise.resolve(
+          [...consents.values()].find((c) =>
+            where.id ? c.id === where.id : c.userCode === where.userCode,
+          ) ?? null,
+        ),
+      update: ({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: { redirectUrl: string };
+      }) => {
+        const row = consents.get(where.id)!;
+        Object.assign(row, data);
+        return Promise.resolve(row);
       },
       updateMany: ({
         where,
@@ -57,20 +87,24 @@ export function fakeOAuthPrisma() {
       }: {
         where: {
           id: string;
-          usedAt: null;
-          expiresAt: { gt: Date };
-          OR: { userId: string | null }[];
+          usedAt?: null;
+          expiresAt?: { gt: Date };
+          OR?: { userId: string | null }[];
+          redirectUrl?: string;
         };
-        data: { userId: string; usedAt?: Date };
+        data: { userId?: string; usedAt?: Date; redirectUrl?: null };
       }) => {
         const row = consents.get(where.id);
         const open =
           row &&
-          row.usedAt === null &&
-          row.expiresAt > where.expiresAt.gt &&
-          where.OR.some((c) =>
-            c.userId === null ? row.userId === null : c.userId === row.userId,
-          );
+          (where.usedAt === undefined || row.usedAt === null) &&
+          (!where.expiresAt || row.expiresAt > where.expiresAt.gt) &&
+          (!where.OR ||
+            where.OR.some((c) =>
+              c.userId === null ? row.userId === null : c.userId === row.userId,
+            )) &&
+          (where.redirectUrl === undefined ||
+            row.redirectUrl === where.redirectUrl);
         if (!open) return Promise.resolve({ count: 0 });
         Object.assign(row, data);
         return Promise.resolve({ count: 1 });

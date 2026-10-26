@@ -14,7 +14,6 @@ import { ProfileRow } from "@/components/settings/profile-row";
 import { StudentCard, StudentCardSkeleton } from "@/components/settings/student-card";
 import { useStudent } from "@/hooks/use-student";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
-import { GoogleCalendarSection } from "@/components/settings/google-calendar-section";
 import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
 import { AdvancedSection } from "@/components/settings/advanced-section";
 import { SettingsSkeleton } from "@/components/settings/settings-skeleton";
@@ -61,7 +60,7 @@ export default function SettingsScreen() {
   }>(null);
   const dluY = useRef(0);
   // `?focus=dlu` (the calendar's "Import my timetable") lands on the LMS and portal section.
-  const { focus } = useLocalSearchParams<{ focus?: string }>();
+  const { focus, connect } = useLocalSearchParams<{ focus?: string; connect?: string }>();
   const notif = useNotificationState();
   const integrations = useIntegrationStore((s) => s.integrations);
   const integrationsLoading = useIntegrationStore((s) => s.loading);
@@ -213,9 +212,8 @@ export default function SettingsScreen() {
         ) : (
         <>
         <PreferencesSection />
-        <GoogleCalendarSection />
         <DeviceCalendarSection />
-        <AiAssistantsSection />
+        <AiAssistantsSection connectCode={connect} />
         <View
           onLayout={(e) => {
             dluY.current = e.nativeEvent.layout.y;

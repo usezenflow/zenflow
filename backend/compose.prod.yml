@@ -190,28 +190,6 @@ services:
       retries: 3
       start_period: 30s
 
-  # Drains the calendar outbox: syncs users the Session trigger marked dirty (LISTEN + poll).
-  outbox:
-    extends:
-      service: api
-    profiles: !reset []
-    container_name: zenflow-outbox-prod
-    restart: unless-stopped
-    environment:
-      ROLE: outbox
-      QUEUE_SHUTDOWN_TIMEOUT_MS: "50000"
-    stop_grace_period: 60s
-    deploy:
-      replicas: 1
-    cpus: 0.5
-    mem_limit: 512m
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/health/live').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-
   # Consumes `prep-plan`: sizes and places prep plans through bandit.
   worker-scheduler:
     extends:

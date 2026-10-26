@@ -20,7 +20,7 @@ case "$VAULT_ENV" in dev|staging|prod) ;; *) echo "VAULT_ENV must be dev|staging
 action="${1:?usage: rotate-versioned.sh migrate|rotate PREFIX}"
 prefix="${2:?usage: rotate-versioned.sh migrate|rotate PREFIX}"
 case "$prefix" in
-  API_TOKEN_PEPPER|GOOGLE_TOKEN_ENCRYPTION_KEY) ;;
+  API_TOKEN_PEPPER) ;;
   *) echo "unsupported PREFIX $prefix" >&2; exit 2;;
 esac
 command -v curl >/dev/null && command -v jq >/dev/null && command -v openssl >/dev/null \

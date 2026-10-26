@@ -3,13 +3,12 @@ import { config } from "dotenv";
 /**
  * Process role (ADR-0011, ADR-0007). One image, picked by the `ROLE` env:
  *  - `api`            HTTP only; produces jobs, consumes none, no cron.
- *  - `watcher`        the cron heartbeat (ingestion watcher, calendar sweep,
- *                     matrix decay); enqueues, never consumes.
+ *  - `watcher`        the cron heartbeat (ingestion watcher, matrix decay);
+ *                     enqueues, never consumes.
  *  - `worker-portal`  consumes every `portal-*` queue.
  *  - `worker-lms`     consumes every `lms-*` queue.
- *  - `worker-notify`  consumes `notify` (push) and `calendar-sync` (Google Calendar).
+ *  - `worker-notify`  consumes `notify` (push).
  *  - `worker-scheduler` consumes `prep-plan` (prep plans, sized by bandit).
- *  - `outbox`         drains the Google Calendar outbox (LISTEN + poll); no queue.
  *  - `worker`         watcher + every consumer (the pre-queue single worker).
  *  - `all`            everything incl. HTTP (default; local dev and the test stack).
  * Everything except `api` and `all` serves `/health` and nothing else.
@@ -21,7 +20,6 @@ export type Role =
   | "worker-lms"
   | "worker-notify"
   | "worker-scheduler"
-  | "outbox"
   | "worker"
   | "all";
 
@@ -32,7 +30,6 @@ const ROLES: readonly Role[] = [
   "worker-lms",
   "worker-notify",
   "worker-scheduler",
-  "outbox",
   "worker",
   "all",
 ];
@@ -75,7 +72,6 @@ export type ConsumedQueue =
   | "lms-discovery"
   | "lms-month"
   | "notify"
-  | "calendar-sync"
   | "prep-plan";
 
 /** Serves the API (controllers, sessions, CORS, Swagger). */
@@ -97,17 +93,13 @@ export function consumesQueue(role: Role, queue: ConsumedQueue): boolean {
     case "worker-lms":
       return queue.startsWith("lms-");
     case "worker-notify":
-      return queue === "notify" || queue === "calendar-sync";
+      return queue === "notify";
     case "worker-scheduler":
       return queue === "prep-plan";
     default:
       return false;
   }
 }
-
-/** Drains the calendar outbox (`google-calendar/calendar-outbox.service.ts`). */
-export const runsOutbox = (role: Role): boolean =>
-  role === "outbox" || role === "worker" || role === "all";
 
 /** Any background work at all (a watcher or at least one consumer). */
 export const runsJobs = (role: Role): boolean => role !== "api";

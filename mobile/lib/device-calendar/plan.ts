@@ -78,8 +78,8 @@ export function buildSpecs(sessions: Session[], ctx: PlanContext): DeviceEventSp
     if (!s.scheduledStartTime) continue;
     const start = new Date(s.scheduledStartTime);
     if (start < ctx.from || start > ctx.to) continue;
-    // Busy time imported from another calendar stays where it came from.
-    if (s.source === "GOOGLE" || s.source === "DEVICE") continue;
+    // Busy time imported from the phone stays where it came from.
+    if (s.source === "DEVICE") continue;
     const base = {
       key: s.id,
       title: (TITLE_PREFIX[s.type] ?? "") + s.title,

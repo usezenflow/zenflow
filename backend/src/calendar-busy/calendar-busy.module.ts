@@ -3,7 +3,7 @@ import { PrismaModule } from "../prisma/prisma.module";
 import { BusyBlocksService } from "./busy-blocks.service";
 import { DeviceCalendarController } from "./device-calendar.controller";
 
-/** Busy time from the phone and from Google, shared by the API and the worker. */
+/** Busy time from the phone calendar. */
 @Module({
   imports: [PrismaModule],
   controllers: [DeviceCalendarController],

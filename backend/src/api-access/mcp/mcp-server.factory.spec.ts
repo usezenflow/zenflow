@@ -6,7 +6,6 @@ import type { User } from "../../../generated/prisma";
 import { ReplanService } from "../../sessions/replan.service";
 import { SessionsService } from "../../sessions/sessions.service";
 import { PlacementPlanService } from "../../sessions/placement-plan.service";
-import { GoogleCalendarService } from "../../google-calendar/google-calendar.service";
 import { PublicUrls } from "../../common/config/public-urls";
 import { McpServerFactory } from "./mcp-server.factory";
 
@@ -30,7 +29,6 @@ describe("McpServerFactory", () => {
         McpServerFactory,
         { provide: SessionsService, useValue: {} },
         { provide: PlacementPlanService, useValue: {} },
-        { provide: GoogleCalendarService, useValue: {} },
         { provide: ReplanService, useValue: {} },
       ],
     }).compile();
@@ -40,7 +38,7 @@ describe("McpServerFactory", () => {
   it("builds a server that completes the MCP handshake over an in-memory transport", async () => {
     const { server, client } = await connect(factory);
 
-    expect(client.getServerVersion()).toEqual({
+    expect(client.getServerVersion()).toMatchObject({
       name: "zenflow",
       title: "Zenflow",
       version: "1.0.0",
@@ -63,7 +61,6 @@ describe("McpServerFactory", () => {
       "list_schedule",
       "recap",
       "replan",
-      "sync_status",
       "undo_last_change",
       "update_session",
     ]);
@@ -79,7 +76,6 @@ describe("McpServerFactory write tools", () => {
     findById: jest.fn(),
   };
   const placement = { undoLatest: jest.fn() };
-  const calendar = { status: jest.fn() };
 
   async function connected() {
     const module: TestingModule = await Test.createTestingModule({
@@ -87,7 +83,6 @@ describe("McpServerFactory write tools", () => {
         McpServerFactory,
         { provide: SessionsService, useValue: sessions },
         { provide: PlacementPlanService, useValue: placement },
-        { provide: GoogleCalendarService, useValue: calendar },
         { provide: ReplanService, useValue: {} },
       ],
     }).compile();
@@ -124,7 +119,9 @@ describe("McpServerFactory write tools", () => {
       items: [{ kind: "session", id: "s1" }],
     });
 
-    expect(JSON.parse(res.content[0].text).planId).toEqual(expect.any(String));
+    expect(
+      (JSON.parse(res.content[0].text) as { planId: string }).planId,
+    ).toEqual(expect.any(String));
     expect(sessions.bulkDelete).toHaveBeenCalledTimes(1);
     expect(sessions.bulkDelete).toHaveBeenCalledWith(
       expect.objectContaining({ dryRun: true }),
@@ -138,7 +135,7 @@ describe("McpServerFactory write tools", () => {
     const first = await call(client, "delete_sessions", {
       items: [{ kind: "session", id: "s1" }],
     });
-    const { planId } = JSON.parse(first.content[0].text);
+    const { planId } = JSON.parse(first.content[0].text) as { planId: string };
 
     const res = await call(client, "delete_sessions", {
       items: [{ kind: "session", id: "s2" }],
@@ -248,9 +245,8 @@ describe("McpServerFactory write tools", () => {
   });
 });
 
-describe("McpServerFactory status and undo tools", () => {
+describe("McpServerFactory undo tool", () => {
   const placement = { undoLatest: jest.fn() };
-  const calendar = { status: jest.fn() };
 
   async function connected() {
     const module: TestingModule = await Test.createTestingModule({
@@ -258,7 +254,6 @@ describe("McpServerFactory status and undo tools", () => {
         McpServerFactory,
         { provide: SessionsService, useValue: {} },
         { provide: PlacementPlanService, useValue: placement },
-        { provide: GoogleCalendarService, useValue: calendar },
         { provide: ReplanService, useValue: {} },
       ],
     }).compile();
@@ -266,19 +261,6 @@ describe("McpServerFactory status and undo tools", () => {
   }
 
   beforeEach(() => jest.resetAllMocks());
-
-  it("sync_status returns the Google Calendar status of the signed-in user", async () => {
-    calendar.status.mockResolvedValue({ connected: true, attempts: 0 });
-    const { client } = await connected();
-
-    const res = await client.callTool({ name: "sync_status", arguments: {} });
-
-    expect(calendar.status).toHaveBeenCalledWith(USER);
-    expect(JSON.parse((res.content as { text: string }[])[0].text)).toEqual({
-      connected: true,
-      attempts: 0,
-    });
-  });
 
   it("undo_last_change reverts the newest undoable group", async () => {
     placement.undoLatest.mockResolvedValue({
@@ -312,13 +294,12 @@ describe("McpServerFactory status and undo tools", () => {
 });
 
 describe("McpServerFactory branding", () => {
-  it("advertises the logo and site when the web address is known", async () => {
+  it("advertises the logo, and the site when the web address is known", async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         McpServerFactory,
         { provide: SessionsService, useValue: {} },
         { provide: PlacementPlanService, useValue: {} },
-        { provide: GoogleCalendarService, useValue: {} },
         { provide: ReplanService, useValue: {} },
         { provide: PublicUrls, useValue: { web: "https://app.test" } },
       ],
@@ -327,9 +308,7 @@ describe("McpServerFactory branding", () => {
 
     expect(client.getServerVersion()).toMatchObject({
       websiteUrl: "https://app.test",
-      icons: [
-        { src: "https://app.test/pwa-512x512.png", mimeType: "image/png" },
-      ],
+      icons: [{ mimeType: "image/svg+xml" }],
     });
   });
 });

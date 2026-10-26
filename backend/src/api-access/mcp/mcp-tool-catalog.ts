@@ -52,10 +52,6 @@ export const MCP_TOOLS: readonly McpToolInfo[] = [
       "Xếp lại toàn bộ các việc (TASK) đã có giờ trong khoảng from đến to (YYYY-MM-DD, tối đa 30 ngày, chỉ từ bây giờ trở đi), việc gấp nhất xếp trước. Lịch cố định và DND giữ nguyên. change: balanced (mặc định, giữ gần giờ cũ nếu được) hoặc free (xếp lại tự do). Lần gọi đầu (không có planId) chỉ trả về moves (từ giờ nào sang giờ nào), unplaced và planId. Khi người dùng đồng ý, gọi lại đúng các tham số đó kèm planId. Hoàn tác bằng undo_last_change.",
   },
   {
-    name: "sync_status",
-    description: "Trạng thái đồng bộ Google Calendar và lỗi gần nhất.",
-  },
-  {
     name: "create_tasks",
     description:
       "Tạo tối đa 50 phiên trong items, theo thứ tự. Mỗi phiên có type, title (tối đa 60 ký tự) và durationMinutes (bội số của 15). type là TASK cho việc có hạn chót: đặt deadline (ISO-8601), có thể thêm notBefore (không bắt đầu sớm hơn, ISO-8601) và window (MORNING, AFTERNOON hoặc EVENING) khi việc chỉ làm được vào lúc đó. Việc có giờ cố định (bữa ăn, giờ ngủ, lớp, ca làm, giờ người dùng đã nói) luôn là DND, không phải TASK. type là ASSIGNMENT, EXAM, LECTURE hoặc DND cho lịch cố định: đặt scheduledStartTime (ISO-8601), thêm rrule để lặp (thời khóa biểu, giờ ngủ). Lần gọi đầu (không có planId) chỉ xem trước giờ dự kiến (proposedStart, localStart, warnings nếu giờ lạ, cuối tuần, sát hạn hoặc trùng lịch khác) và trả về planId. Khi người dùng đồng ý, gọi lại đúng các tham số đó kèm planId để tạo thật.",

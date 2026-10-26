@@ -1,20 +1,20 @@
-/** `data` payload for `GET /oauth/consent`. */
+/** `data` payload for `GET /oauth/consent?code=`. */
 export interface OAuthConsentInfo {
   clientName: string;
-  /** Host the browser is sent back to, so the user can see where the code goes. */
+  /** Host the browser is sent back to, so the user can see where the access goes. */
   redirectHost: string;
   scopes: string[];
 }
 
-/** Body of `POST /oauth/consent`. */
+/** Body of `POST /oauth/consent`. `code` is the one the assistant's browser page shows. */
 export interface OAuthConsentDecisionInput {
-  request: string;
+  code: string;
   approve: boolean;
 }
 
-/** `data` payload for `POST /oauth/consent`: where to send the browser next. */
+/** `data` payload for `POST /oauth/consent`. The browser page moves on by itself. */
 export interface OAuthConsentDecisionResponse {
-  redirectUrl: string;
+  approved: boolean;
 }
 
 /** An AI assistant the user has connected through OAuth. */

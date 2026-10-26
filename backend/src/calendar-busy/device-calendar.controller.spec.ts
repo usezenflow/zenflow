@@ -19,7 +19,7 @@ describe("DeviceCalendarController", () => {
       user: {
         findUniqueOrThrow: jest
           .fn()
-          .mockResolvedValue({ calendarTarget: "GOOGLE" }),
+          .mockResolvedValue({ calendarTarget: "NONE" }),
       },
     };
     const busy = { replace: jest.fn() };
