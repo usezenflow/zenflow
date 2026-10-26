@@ -5,7 +5,6 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 - Copy `.env.example` to `.env.{dev,staging,prod,test}`. All vars are validated at boot (`@hapi/joi`).
 - Connections are built from parts (host, port, user, password). No URL vars. Prisma's `DATABASE_URL` comes from `scripts/with-database-url.cjs`.
 - Any variable accepts `FOO_FILE=/path`. Explicit `FOO` wins (`src/common/config/file-secrets.ts`).
-- nginx `client_max_body_size` (`backend/nginx/nginx.{prod,staging}.conf`, 110m) must exceed `UPLOAD_MAX_FILES_PER_REQUEST` x `UPLOAD_MAX_FILE_BYTES` plus multipart overhead.
 - Secrets, rotation and Vault: [secrets.md](../ops/secrets.md). Deploys: [ci-cd.md](../ops/ci-cd.md).
 
 ## Core

@@ -43,13 +43,13 @@
             {
               "type": "value",
               "options": {
-                "1": {
-                  "text": "OK",
-                  "color": "green"
-                },
                 "0": {
                   "text": "FAILED",
                   "color": "red"
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green"
                 }
               }
             },
@@ -186,13 +186,13 @@
             {
               "type": "value",
               "options": {
-                "1": {
-                  "text": "OK",
-                  "color": "green"
-                },
                 "0": {
                   "text": "FAILED",
                   "color": "red"
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green"
                 }
               }
             },
@@ -489,203 +489,6 @@
         }
       ],
       "description": "Age of the last Vault snapshot (taken with every dump, so about 3 h). No data means Vault is not being backed up: check 'Backup output' for a WARN line. The alert fires at 7 h."
-    },
-    {
-      "id": 12,
-      "type": "stat",
-      "title": "Last good files backup",
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 6,
-        "y": 11
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 100800
-              },
-              {
-                "color": "red",
-                "value": 129600
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "orientation": "auto"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "time() - max(zenflow_backup_files_last_success_timestamp_seconds)",
-          "instant": true
-        }
-      ],
-      "description": "Age of the last uploaded-files archive. Prod runs it daily; the alert fires at 36 h. No data means it has not run yet."
-    },
-    {
-      "id": 13,
-      "type": "stat",
-      "title": "Last files backup run",
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 12,
-        "y": 11
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "1": {
-                  "text": "OK",
-                  "color": "green"
-                },
-                "0": {
-                  "text": "FAILED",
-                  "color": "red"
-                }
-              }
-            },
-            {
-              "type": "special",
-              "options": {
-                "match": "null+nan",
-                "result": {
-                  "text": "no data",
-                  "color": "text"
-                }
-              }
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "orientation": "auto"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "min(zenflow_backup_files_last_run_ok)",
-          "instant": true
-        }
-      ],
-      "description": "Result of the most recent files backup job. FAILED: read the error in 'Backup problems' below."
-    },
-    {
-      "id": 14,
-      "type": "stat",
-      "title": "Last files archive size",
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 18,
-        "y": 11
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "orientation": "auto"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "min(zenflow_backup_files_last_size_bytes)",
-          "instant": true
-        }
-      ],
-      "description": "Encrypted size of the last files archive. It re-uploads everything each day, so this is also the daily S3 upload size."
     },
     {
       "id": 7,

@@ -26,7 +26,7 @@ Screens render through `react-native-web` in happy-dom, with the API mocked over
 - Fixtures: `makeSession`, `makeNotification` (`mobile/test/fixtures.ts`).
 - Select by `testID` (`getByTestId`). `className` is not applied in tests.
 - Keep tests out of `mobile/app/`: expo-router treats every file there as a route.
-- Peripheral heavy widgets (the rich-text editor, bottom sheets owned by another screen, floating chrome) are `vi.mock`ed per test file.
+- Peripheral heavy widgets (bottom sheets owned by another screen, floating chrome) are `vi.mock`ed per test file.
 - Screens that depend on "now" freeze only the clock: `vi.useFakeTimers({ toFake: ["Date"] })` plus `vi.setSystemTime(...)`. Faking timers wholesale breaks MSW and `waitFor`.
 - A new native import that breaks the environment usually needs a stub in `test/mocks/` plus an alias.
 

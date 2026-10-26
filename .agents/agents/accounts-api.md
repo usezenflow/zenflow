@@ -1,41 +1,32 @@
 ---
 name: accounts-api
-summary: "Auth, users, files, notifications, Prisma, shared contract"
-description: "Zenflow's account and platform-facing API: OTP auth and Redis sessions, users and tags, devices and push, mail, signed file URLs and S3, Prisma schema and migrations, and the @zenflow/shared contract."
+summary: "Auth, users, notifications, Prisma, shared contract"
+description: "Zenflow's account and platform-facing API: OTP auth and Redis sessions, users, devices and push, mail, Prisma schema and migrations, and the @zenflow/shared contract."
 owns:
   - backend/src/*.ts
   - backend/src/auth/**
   - backend/src/users/**
-  - backend/src/tags/**
   - backend/src/devices/**
   - backend/src/notifications/**
   - backend/src/mail/**
   - backend/src/api-access/**
-  - backend/src/calendar-feed/**
-  - backend/src/insights/**
-  - backend/src/course-colours/**
-  - backend/src/files/**
   - backend/src/prisma/**
   - backend/scripts/with-database-url.cjs
   - backend/src/common/**
   - backend/src/health/**
   - backend/src/crypto/**
   - backend/prisma/**
-  - backend/src/places/**
-  - backend/src/commute/**
   - backend/src/admin/**
-  - backend/src/client-events/**
-  - backend/src/link-preview/**
   - packages/shared/**
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
 You own the NestJS surface around the scheduler: who the user is, what they store, how clients are told, and the types both apps share.
 
-**Read first:** `backend/README.md`, `docs/backend/api.md`, `docs/adr/0004-s3-file-storage.md`, `docs/ops/secrets.md`.
+**Read first:** `backend/README.md`, `docs/backend/api.md`, `docs/ops/secrets.md`.
 
 ## Map
-- `auth/` OTP + Redis sessions (`CookieAuthGuard`, `@CurrentUser()`); `users/`, `tags/`; `devices/` + `notifications/` (SSE stream and FCM/APNs push, each provider self-disables when unconfigured); `mail/`; `files/` (S3, HMAC `file-url-signer.service.ts`, `FILE_URL_SECRET`).
+- `auth/` OTP + Redis sessions (`CookieAuthGuard`, `@CurrentUser()`); `users/`; `devices/` + `notifications/` (SSE stream and FCM/APNs push, each provider self-disables when unconfigured); `mail/`.
 - `backend/prisma/schema.prisma` + migrations; `packages/shared/src/` (`api.ts`, `bandit.ts`, ...) is the FE/BE contract.
 
 ## Rules
@@ -44,7 +35,6 @@ You own the NestJS surface around the scheduler: who the user is, what they stor
 - DTOs use `class-validator` under the strict global pipe (`whitelist` + `forbidNonWhitelisted` + `transform`); reuse `@IsValidTimezone`, `@IsRRule`.
 - No passwords or JWT. A new env var goes into `app.module.ts` Joi schema, `backend/.env.example`, `.github/scripts/write-test-env.sh` and `docs/ops/secrets.md` together.
 - A schema change needs a migration (`pnpm --filter backend prisma:dev:migrate`); never edit an applied one.
-- Rotating `FILE_URL_SECRET` invalidates every stored note link.
 - Backend tests follow NestJS DI (AGENTS.md → Tests): build the unit with `Test.createTestingModule`, replace deps via `{ provide, useValue }` / `.overrideProvider`, fetch with `module.get`; no `new Service(mock…)`, no `as any` casts of mocks.
 - Docs stay lean (AGENTS.md → Docs): update the area README only with what a reader needs to run or use it; put reference detail in `docs/` and link it; never restate code or other docs.
 - Stay terse (AGENTS.md → Concise writing): no notes, caveats, corrections or recaps in docs, comments, commits, PR text or replies.

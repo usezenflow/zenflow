@@ -122,7 +122,7 @@ cd "$path/backend"
 # One Vault set per consumer (docs/ops/vault.md): *_FILE sets for the Node and
 # Bandit images, plain-env sets for the third-party images.
 secret_sets="api bandit"
-plain_sets="postgres minio grafana backup session-redis redis-ratelimit redis-queue redis-killswitch redis-pubsub"
+plain_sets="postgres grafana backup session-redis redis-ratelimit redis-queue redis-killswitch redis-pubsub"
 if [ "$provider" = vault ]; then
   # Bootstrap empty files only where none exist, so Compose can parse the full stack while
   # starting Vault. An existing render is never truncated (a flip/rollback reuses it, and the

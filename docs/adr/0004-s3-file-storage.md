@@ -1,6 +1,6 @@
 # ADR-0004: S3-compatible file storage
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0039](0039-thin-layer-calendar-native.md)
 **Date:** 2026-10-04
 
 ## Context

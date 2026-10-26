@@ -15,14 +15,14 @@ For operators. Self-hosted Vault: KV v2 plus AppRole. Part of [secrets.md](secre
 | Item | Value |
 | --- | --- |
 | KV mount | v2 at `secret/` |
-| Secret sets | `secret/zenflow/<env>/<set>`, one per consumer: `api` (Nest roles and `migrations`), `bandit`, `postgres`, `minio`, `grafana`, `backup`, `session-redis`, `redis-ratelimit`, `redis-queue`, `redis-killswitch`, `redis-pubsub` |
+| Secret sets | `secret/zenflow/<env>/<set>`, one per consumer: `api` (Nest roles and `migrations`), `bandit`, `postgres`, `grafana`, `backup`, `session-redis`, `redis-ratelimit`, `redis-queue`, `redis-killswitch`, `redis-pubsub` |
 | Keys | Secrets only, named by env var. Hosts, ports, users and bucket names live in `backend/env/prod.env` |
-| Shared keys | Written to every set that needs them: `POSTGRES_PASSWORD` (`api`, `postgres`, `backup`), `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` (`api`, `minio`), `BANDIT_SERVICE_TOKEN` (`api`, `bandit`), each `*_REDIS_PASSWORD` (`api` and its own set) |
+| Shared keys | Written to every set that needs them: `POSTGRES_PASSWORD` (`api`, `postgres`, `backup`), `BANDIT_SERVICE_TOKEN` (`api`, `bandit`), each `*_REDIS_PASSWORD` (`api` and its own set) |
 | Policy `zenflow-api-<env>` | `read` on each set path, listed explicitly. A new set needs a line in `policy.hcl` and a re-run of `setup-approle.sh` |
 | AppRole `zenflow-api-<env>` | Token TTL 10 min (max 30), `secret_id` valid 30 days |
 | Rendered files | `/run/zenflow/<env>/<set>/` on host tmpfs: one file per key plus `files.env` |
 | API and Bandit | `files.env` holds `FOO_FILE=/run/secrets/zenflow/FOO`, mounted read-only |
-| Postgres, MinIO, Grafana, backup | Own `files.env` with direct values, injected only into that service |
+| Postgres, Grafana, backup | Own `files.env` with direct values, injected only into that service |
 
 - `render-secrets.sh` logs in and writes the files. `file-secrets.ts` and `docker-entrypoint.sh` read them.
 - Non-secret settings are the committed `backend/env/prod.env`, shipped as `.env.prod` (600). A key in both aborts the deploy.
@@ -54,10 +54,9 @@ Vault uses file storage on `vault_data`, listens on `127.0.0.1:8200` only, and a
    V="docker exec -e VAULT_TOKEN zenflow-vault-prod vault"
    $V secrets enable -path=secret -version=2 kv
    # Secrets only. Read values from a prompt or file, not shell history.
-   $V kv put -mount=secret zenflow/prod/api SESSION_SECRET=... FILE_URL_SECRET=... MASTER_LMS_ENCRYPTION_KEY_V1=... MASTER_PORTAL_ENCRYPTION_KEY_V1=... POSTGRES_PASSWORD=... MAIL_PASSWORD=... S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... PORTAL_API_KEY=... BANDIT_SERVICE_TOKEN=... VAPID_PRIVATE_KEY=...
+   $V kv put -mount=secret zenflow/prod/api SESSION_SECRET=... MASTER_LMS_ENCRYPTION_KEY_V1=... MASTER_PORTAL_ENCRYPTION_KEY_V1=... POSTGRES_PASSWORD=... MAIL_PASSWORD=... S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... PORTAL_API_KEY=... BANDIT_SERVICE_TOKEN=... VAPID_PRIVATE_KEY=...
    $V kv put -mount=secret zenflow/prod/bandit BANDIT_SERVICE_TOKEN=...
    $V kv put -mount=secret zenflow/prod/postgres POSTGRES_PASSWORD=...
-   $V kv put -mount=secret zenflow/prod/minio S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=...
    $V kv put -mount=secret zenflow/prod/grafana GF_SECURITY_ADMIN_PASSWORD=... GF_SMTP_PASSWORD=...
    $V kv put -mount=secret zenflow/prod/backup POSTGRES_PASSWORD=... BACKUP_S3_ACCESS_KEY_ID=... BACKUP_S3_SECRET_ACCESS_KEY=... BACKUP_AGE_IDENTITY=...
    # One Redis password each (openssl rand -hex 24), in `api` and in the instance's own set

@@ -16,7 +16,6 @@ You own `mobile/` and the `mockups/` it is designed from (Expo SDK 58, RN 0.88, 
 ## Rules
 - Cross-app logic comes from `@zenflow/core` and types from `@zenflow/shared`; don't import from `pwa/`.
 - Auth: the session cookie is httpOnly. `api-client.ts` captures `Set-Cookie` once and replays it as a `Cookie` header from SecureStore.
-- Note files embed by signed URL (#89, `backend/src/files/file-url-signer.service.ts`), never data URIs.
 - Durations are 15-minute aligned; reason about time with the same wall-clock-safe helpers as web.
 - Formatter is Biome, not ESLint/Prettier; revert unrelated churn from bulk runs.
 - A screen change updates its mockup; a new screen gets a mockup and an `index.html` entry first.

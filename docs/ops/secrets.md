@@ -10,14 +10,12 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | API, migrations, Postgres, backup (Vault sets `api`, `postgres`, `backup`) | [runbook](#database-password) |
 | `SESSION_SECRET` | Signs the session cookie | [runbook](#session-signing-key-session_secret) |
-| `FILE_URL_SECRET` | HMAC key for signed file URLs (`/files/:id?sig=`) | Change and redeploy. Notes need no rewrite |
 | `API_TOKEN_PEPPER` | Server pepper for hashing personal API tokens (required in production, min 32 chars; Vault sets `api`) | Rotating invalidates all personal API tokens |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret for Calendar sync (Vault sets `api`) | Rotate in Google Cloud, redeploy |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY` | AES key for stored Google refresh tokens, 64 hex (Vault sets `api`) | Rotating forces every user to reconnect Google Calendar |
 | `MASTER_LMS_ENCRYPTION_KEY_V<n>`, `MASTER_PORTAL_ENCRYPTION_KEY_V<n>` | Wrap per-user DEKs for DLU and LMS credentials (`backend/src/crypto`) | [runbook](#crypto-master-keys-master__encryption_key_vn) |
 | `PORTAL_API_KEY` | DLU portal API key | Replace when DLU invalidates it |
 | `MAIL_PASSWORD` | SMTP password | At the SMTP provider |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | File storage and MinIO root (Vault sets `api`, `minio`) | Rotate in MinIO or S3, redeploy |
 | `BANDIT_SERVICE_TOKEN` | Bearer for `POST /v1/place` (both services) | Set the new value on bandit with the old as `BANDIT_SERVICE_TOKEN_PREVIOUS`, then API, then drop `_PREVIOUS` |
 | `FCM_SERVICE_ACCOUNT`, `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` | Push | Firebase or Apple portal |
 | `VAPID_PRIVATE_KEY` | Web Push signing (Vault sets `api`) | Regenerate with `npx web-push generate-vapid-keys` and redeploy. Browsers resubscribe |
@@ -149,7 +147,7 @@ Rotate, assuming compromise:
 2. SMTP credentials at the mail provider.
 3. Prod and staging DB passwords. Confirm the DB is not publicly reachable.
 4. `MASTER_*` V1: compromised-key row above.
-5. `PORTAL_API_KEY`, `S3_*`, `BANDIT_SERVICE_TOKEN`, `FCM_*`, `APNS_*`, `VAPID_PRIVATE_KEY` if ever set there. Rotate S3 keys and refresh the portal key.
+5. `PORTAL_API_KEY`, `BANDIT_SERVICE_TOKEN`, `FCM_*`, `APNS_*`, `VAPID_PRIVATE_KEY` if ever set there. Refresh the portal key.
 6. Optionally purge history with `git filter-repo --path backend/.env --path ... --invert-paths`, force-push and re-clone. Rotation is what counts. Check forks, CI logs and branch `backup/issue-56-pre-cleanup`.
 
 The tree is clean: only `backend/.env.example`, the public `backend/certs/lms-ca.pem`, and a synthetic key in `backend/src/devices/apns.sender.spec.ts` (allowlisted in `.gitleaks.toml`).
