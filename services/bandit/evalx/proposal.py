@@ -80,15 +80,12 @@ METRICS: dict[str, Callable[[Cols, np.ndarray], float]] = {
     "Regret": _sum_ratio("reg", "n"),
     "Kept": _sum_ratio("kept", "n"),
     "Drag (min)": _sum_ratio("drag", "n"),
-    "Adherence": lambda c, i: float(c["adh"][i].mean()),
     "To 60%": lambda c, i: float(c["to60"][i].mean()),
-    "To 90%": lambda c, i: float(c["to90"][i].mean()),
-    "Hours before deadline": lambda c, i: float(np.nanmean(c["margin"][i])),
     "Regret, first 10": _sum_ratio("first_reg", "first_n"),
     "Regret, 40+": _sum_ratio("late_reg", "late_n"),
 }
 # Lower is better for every metric except kept.
-HIGHER_BETTER = {"Kept", "Adherence"}
+HIGHER_BETTER = {"Kept"}
 
 
 def _resamples(students: int, seed: int) -> np.ndarray:
@@ -120,17 +117,17 @@ def paired(
 
 
 def _fmt(metric: str, v: float) -> str:
-    if metric in ("Kept", "Adherence"):
+    if metric == "Kept":
         return f"{100 * v:.1f}%"
     if metric == "Drag (min)":
         return f"{v:.0f}"
-    if metric in ("To 60%", "To 90%", "Hours before deadline"):
+    if metric == "To 60%":
         return f"{v:.1f}"
     return f"{v:.3f}"
 
 
 def _fmt_diff(metric: str, v: float, lo: float, hi: float) -> str:
-    scale = 100 if metric in ("Kept", "Adherence") else 1
+    scale = 100 if metric == "Kept" else 1
     unit = " pts" if scale == 100 else ""
     return f"{scale * v:+.2f}{unit} [{scale * lo:+.2f}, {scale * hi:+.2f}]"
 

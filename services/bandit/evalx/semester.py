@@ -26,7 +26,7 @@ from typing import Any
 
 import numpy as np
 
-from evalx import metrics, student_behavior
+from evalx import l6_arm, metrics, student_behavior
 from evalx import run as core
 from evalx.academic_calendar import WEEKS, Semester, build_semester, week_of
 from evalx.hourly import HourlyArms
@@ -85,6 +85,7 @@ EXTRA_SPEC: dict[str, dict[str, Any]] = {
     "H+K": {"policy": "HEURISTIC", "kernel": True},  # H with the hour kernel
     "L+K": {"policy": "LINUCB", "kernel": True},  # L with the hour kernel
     "L-hourly": {"policy": "HOURLY"},  # 24 hour arms, no kernel
+    "L6": {"policy": "LINUCB6"},  # six band arms, recovered from 38b4afd3
     "L-hourly-K": {"policy": "HOURLY", "kernel": True},  # 24 hour arms, kernel
     # Plan steps 2 to 4, each on top of the one before (step 1 is L-hourly-K).
     "L-hourly-K+S": {"policy": "HOURLY", "kernel": True, "features": True},
@@ -454,9 +455,11 @@ def simulate_arm(
     policy = spec["policy"]
     kern = core.kernel_of(spec)
     cal = sem.calendar
-    state: dict[str, dict[str, list[float]]] = {
-        a: {"A": [], "b": []} for a in HOUR_ARM_IDS
-    }
+    state: dict[str, dict[str, list[float]]] = (
+        l6_arm.init_state()
+        if policy == "LINUCB6"
+        else {a: {"A": [], "b": []} for a in HOUR_ARM_IDS}
+    )
     hourly = (
         HourlyArms(
             default_preference_matrix(),
@@ -506,6 +509,23 @@ def simulate_arm(
                 continue
             lin = res.get("linucb") if res.get("appliedPolicy") == "LINUCB" else None
             start: int | None = lin["startMs"] if lin else res["startMs"]
+        elif policy == "LINUCB6":
+            body = l6_arm.body(
+                task,
+                state,
+                box[0],
+                n,
+                cal,
+                placed,
+                core.CFG["alpha"],
+                core.CFG["ridge"],
+            )
+            res6 = l6_arm.place(body)
+            if res6 is None:
+                rows.append(_unplaced())
+                continue
+            lin = res6.get("linucb") if res6.get("appliedPolicy") == "LINUCB" else None
+            start = lin["startMs"] if lin else res6["startMs"]
         elif policy == "HOURLY":
             assert hourly is not None
             body = core.place_body(task, "LINUCB", state, box[0], n, cal, placed=placed)
@@ -609,7 +629,11 @@ def simulate_arm(
                         None if z is None else np.asarray(z),
                     )
                     if hourly
-                    else core._learn(state, a, x, r, spec)
+                    else (
+                        l6_arm.learn(state, a, x, r, core.CFG["ridge"])
+                        if policy == "LINUCB6"
+                        else core._learn(state, a, x, r, spec)
+                    )
                 ),
             )
         if made is not None and lin and not hourly:
