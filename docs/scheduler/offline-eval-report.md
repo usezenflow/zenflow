@@ -1,47 +1,62 @@
 # Offline evaluation: reward v2 for the LinUCB placer
 
-**Result:** the reward v2 candidate does not pass the ship rule. Its gains come from two signals whose simulated link to student utility is circular. With those links cut, the candidate is worse than the shipped placer. All reward v2 flags stay off.
+**Result.** The old arms reproduce the old report's gain only under the DONE signal the simulator used until 25 Oct 2026. Under the KEPT signal production sends, L24N beats H+K by 0.9 to 1.1 points in the signal world and loses by 3 points in the headline world. The reward v2 candidate beats the shipped placer (L24N production) by 5.2 points in the signal world, but two of its signals are circular (section 4.2). It is not shipped. All reward v2 flags stay off.
 
-Simulated students only. Methods and simulator are in [eval-protocol.md](./eval-protocol.md). Metric definitions follow [heuristic-vs-linucb-report.md](./heuristic-vs-linucb-report.md) section 3, with the changes listed below. Code: branch `feat/calendar-thin-layer` plus uncommitted changes, run on 26 Oct 2026. Decision record: [ADR-0045](../adr/0045-reward-v2.md). Full tables: [reward-v2-tables.md](./eval-data/reward-v2-tables.md).
+Simulated students only. Methods and simulator are in [eval-protocol.md](./eval-protocol.md). Metric definitions follow [heuristic-vs-linucb-report.md](./heuristic-vs-linucb-report.md) section 3, with the changes listed in section 3. Run on 26 Oct 2026. Decision record: [ADR-0045](../adr/0045-reward-v2.md). Full tables: [benchmark-1100-tables.md](./eval-data/benchmark-1100-tables.md).
 
-## Answer in short
+## Benchmark: the old arms in three worlds
 
-Ladder on held-out seeds 800 to 899, 10,000 students, drag 0.3 and delete slot 0.3 (the signal world). Intervals are 95% over students.
+Fresh seeds 1100 to 1199, 10,000 students per world. Adherence in percent, with 95% intervals over students. Oracle and Rand are the bounds.
 
-| Arm | Regret (lower is better) | Kept (higher) | Drag, min per proposal (lower) | Adherence (higher) | Proposals to 60% (lower) | Proposals to 90% (lower) | Hours before deadline (higher) |
-|---|---|---|---|---|---|---|---|
-| H | 0.216 [0.213, 0.218] | 76.5% [76.3, 76.7] | 50 [49, 50] | 25.7% [25.4, 26.0] | 10.7 | 24.7 [24.3, 25.0] | 21.3 [21.1, 21.5] |
-| H+K | 0.174 [0.172, 0.177] | 82.7% [82.5, 82.9] | 28 [28, 29] | 29.4% [29.0, 29.7] | 10.3 | 19.2 [18.9, 19.4] | 21.4 [21.2, 21.5] |
-| L (shipped placer) | 0.157 [0.154, 0.159] | 83.2% [83.0, 83.4] | 31 [30, 31] | 30.5% [30.1, 30.8] | 10.6 | 19.6 [19.3, 19.8] | 21.5 [21.3, 21.7] |
-| Lv2-KDMC (candidate) | ***0.097*** [0.095, 0.098] | ***89.2%*** [89.1, 89.3] | ***17*** [16, 17] | ***35.7%*** [35.3, 36.0] | 10.0 | ***13.5*** [13.4, 13.6] | 20.8 [20.6, 21.0] |
-| Oracle | 0.000 | 95.1% | 4 | 43.9% | 10.0 | 10.5 | 15.8 |
-| Rand | 0.342 [0.339, 0.345] | 60.1% | 80 | 14.6% | 13.1 | 47.0 | 39.6 |
+| Arm | DONE world (old signal) | KEPT, headline (no drag, no deletes) | KEPT, signal world (drag 0.3, delete slot 0.3) |
+|---|---|---|---|
+| H | 21.3 [21.0, 21.6] | 19.9 [19.6, 20.1] | 25.9 [25.6, 26.2] |
+| H+K | 24.5 [24.2, 24.9] | 20.2 [19.9, 20.4] | 29.5 [29.2, 29.9] |
+| L6 | not run (code removed; 28.0 on seeds 500 to 599, historical) | not run | not run |
+| L24 (24 hour arms, no kernel) | 30.5 [30.1, 30.8] | 19.1 [18.9, 19.4] | 28.8 [28.5, 29.2] |
+| L24K (kernel) | 33.1 [32.7, 33.4] | 16.0 [15.7, 16.3] | 30.5 [30.1, 30.8] |
+| L24N reference (kernel and unit-length day features, offline) | 33.7 [33.3, 34.0] | 17.1 [16.7, 17.5] | 30.4 [30.1, 30.8] |
+| L24N production (`L`, shipped placer) | 33.1 [32.7, 33.4] | 16.7 [16.4, 17.0] | 30.6 [30.3, 31.0] |
+| Reward v2 candidate (`Lv2-KDMC`) | not run | 29.0 [28.7, 29.3] | 35.8 [35.5, 36.2] |
+| Oracle | 46.2 [45.8, 46.6] | 44.7 [44.3, 45.1] | 44.0 [43.7, 44.4] |
+| Rand | 8.4 [8.2, 8.5] | 8.4 [8.2, 8.5] | 14.6 [14.5, 14.8] |
 
-***Bold italic*** marks the best value among H, H+K, L and the candidate in each row. Oracle and Rand are the bounds.
+Contrasts, adherence in points:
 
-- **In the signal world the candidate beats L on every metric except lead time:** adherence +5.20 points [+5.04, +5.35], regret -0.06, drag 14 minutes less per proposal, and 0.7 hours less lead time (-0.71 [-0.76, -0.66]).
-- **The gain does not survive two coupling checks.** Simulated deletes and hand-made blocks depend on the same utility the regret measures. Cutting that link removes the gain:
-  - With deletes independent of slot quality, learning from deletes costs 2.9 adherence points against L. [section 4.2](#42-coupling-checks)
-  - With hand-made blocks at a random free hour, learning from them costs 1.6 points against the same arm without them.
-  - With both cut, the candidate is 1.4 points below L, and it is worse for 55% of students.
-- **Move destination is the only signal that holds up, and it holds up alone.** The move-only arm is +1.6 adherence points against L in the decoupled-delete world. Its per-student split is still mixed: 48% better, 31% worse.
-- **Robustness:** the candidate beats L on adherence in all 15 reality worlds, and every lower bound is above +1.2 points. Lead time falls against L in all 15 worlds.
-- **The ship rule fails.** Placer p95 is 1.04 to 1.07 ms on this machine, above the 1 ms limit. Two further checks also fail. [Section 5](#5-ship-rule)
-- **The KEPT demotion in the plan is rejected.** Regret is lowest at KEPT weight 1, the value already in production. [Section 6](#6-tuning)
+| Contrast | DONE world | KEPT, headline | KEPT, signal world |
+|---|---|---|---|
+| L24N reference minus H+K | +9.12 [+8.94, +9.29] | -3.05 [-3.35, -2.76] | +0.88 [+0.71, +1.06] |
+| L24N production minus H+K | +8.54 [+8.37, +8.74] | -3.45 [-3.76, -3.15] | +1.11 [+0.95, +1.26] |
+| Candidate minus L24N production | not run | +12.32 [+12.09, +12.54] | +5.18 [+5.02, +5.33] |
+| Candidate minus H+K | not run | +8.87 [+8.62, +9.11] | +6.29 [+6.12, +6.46] |
 
-## 1. Models
+The candidate's +12.3 in the headline world comes from the hand-made-block signal alone, which section 4.2 shows is circular. It is not evidence of a gain.
+
+Hours before deadline for every row is in [benchmark-1100-tables.md](./eval-data/benchmark-1100-tables.md). The candidate places blocks about 0.6 hours closer to the deadline than L24N production in the signal world.
+
+## Why the old result no longer holds
+
+- Commit 984b628d (25 Oct 2026, "refactor(bandit): update evaluation harness and placement code") changed what the learner hears. Before it, a block the student completed (DONE) paid +1, and silence paid nothing. After it, every block left unmoved is KEPT and pays +1, whether the student did it or not. The commit also changed the student sampler, so H moved too.
+- Production sends KEPT (ADR-0042). The KEPT worlds are therefore the ones to judge against. The DONE world is what the old report measured.
+- The change is the cause, and the DND calendar is not. The old numbers reproduce at 8e2406a6 (H 20.8, H+K 24.1, L 31.5 on seeds 1100 to 1109). They reproduce at its descendant e1b86433 (H 21.1, H+K 24.5, L 33.3). At 984b628d they drop (H 19.6, H+K 19.5, L 16.2). With DND blocks on and off, the ranking of L24N and H+K does not change (on: 17.2 and 19.8; off: 16.4 and 19.5).
+- Under KEPT, a silent block pays the learner as if it were a good slot. The learner is then rewarded for slots the student never looked at, which is the concern the reward v2 work set out to address.
+
+## Models
 
 | Name | Meaning | Status |
 |---|---|---|
 | **H** | Heuristic: a table of preferred hours | Shipped |
 | **H+K** | H with the hour kernel | Live A/B arm |
-| **L** | LinUCB over 24 start-hour arms with the kernel and unit-length day features (the offline report's L24N production) | Shipped placer, the control |
-| **Lv2-KDMC** | L with reward v2: KEPT, delete, move destination and create signals | Candidate, not shipped |
-| **Lv2-KDM**, **Lv2-KD**, **Lv2-DMC**, **Lv2-M** | Ablations of the candidate: KD (no create), KD plus move without create, DMC (no KEPT), M (move only) | Diagnostics |
-| **Oracle** | Picks the best free slot by the hidden utility | Ceiling |
-| **Rand** | Random day and hour in the window | Floor |
+| **L6** | Six-band LinUCB | Retired. Code removed. Historical numbers only |
+| **L24** | LinUCB with 24 start-hour arms, no kernel (`L-hourly`) | Ladder step |
+| **L24K** | L24 with the kernel (`L-hourly-K`) | Ladder step |
+| **L24N reference** | L24K with unit-length day features (`L-hourly-K+N`), offline, no series or displacement | Reference |
+| **L24N production** (`L`) | L24N in the shipped placer, with displacement, last resort and 409 handling | Shipped placer, the control |
+| **Reward v2 candidate** (`Lv2-KDMC`) | L24N production with reward v2 (KEPT, delete, move destination and hand-made block) | Candidate, not shipped |
+| **Lv2-KD**, **Lv2-KDM**, **Lv2-DMC**, **Lv2-M** | Ablations of the candidate | Diagnostics |
+| **Oracle**, **Rand** | Best free slot by hidden utility; random day and hour | Ceiling, floor |
 
-The v1 arm `L` learns from KEPT (+1), MOVE (drag penalty on the origin hour) and nothing else. Reward v2 adds the signals in [section 2](#2-signals-and-reward-v2).
+The v1 production arm `L` learns from KEPT (+1), MOVE (drag penalty on the origin hour) and nothing else. The hourly arms (L24, L24K, L24N reference) do not take reward v2 signals.
 
 ## 2. Signals and reward v2
 
@@ -76,7 +91,7 @@ Every figure is a pooled average over proposals, unless marked as a mean over st
 
 Changes from the heuristic report: regret uses the hidden done chance as utility, and deleted proposals are not kept. The heuristic report defines kept as not moved and had no deletes. "To 60%" saturates near 10 in this world, since nearly every arm keeps 80% or more, so "to 90%" is reported too.
 
-## 4. Worlds and coupling
+## Worlds and coupling
 
 Each run uses the same students, calendars, tasks and random draws. Only the named knobs change.
 
@@ -98,7 +113,7 @@ Drag is the share of tasks a student may move when the slot is poor (`u_drag < d
 
 ## 4. Results
 
-### 4.1 Ladder, signal world
+### 4.1 Ladder, KEPT signal world
 
 Seeds 800 to 899, 10,000 students, drag 0.3, delete slot 0.3.
 
@@ -238,6 +253,8 @@ Not done. Each is listed here so it is not read as finished:
 
 ## 8. Limits
 
+- **Signal changed on 25 Oct 2026.** Results before commit 984b628d use the DONE world. The ladder, the coupling checks and the robustness runs in this report use the KEPT world. The DONE world is shown only for comparison with the old report.
+
 - **Simulated students only.** Start curves, deletes, hand-made blocks, drag and offer response are assumptions. Nothing here measures real behaviour.
 - **Utility is the hidden done chance.** Regret and kept are measured against the simulator's own utility, which the learner tries to recover. Real utility is unknown.
 - **Coupling.** Two of the signals depend on the utility by construction. The coupling checks reduce this but do not remove it. The move signal is coupled by construction too.
@@ -253,10 +270,11 @@ Not done. Each is listed here so it is not read as finished:
 | 0 to 9, 300 to 309, 400 to 499 | Earlier comparisons | Spent |
 | 100 to 109 | Tuning, reward v2 weights | Spent for tuning |
 | 500 to 599, 600 to 699, 700 to 799 | Earlier held-out checks | Spent |
-| 800 to 899 | Reward v2 ladder and coupling checks | Spent. Ladder first, then diagnostics |
+| 800 to 899 | Reward v2 ladder and coupling checks (KEPT world) | Spent. Ladder first, then diagnostics |
+| 1100 to 1199 | Three-world benchmark against the old arms | Spent 26 Oct 2026 |
 | 900 to 999 | Delete scoring (ADR-0043) | Spent |
 | 1000 to 1099 | Reward v2 robustness | Spent |
-| 1100 and up | Next held-out block | Free |
+| 1200 and up | Next held-out block | Free |
 
 ## 10. Run index
 
