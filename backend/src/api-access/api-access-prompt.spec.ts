@@ -18,7 +18,7 @@ describe("buildApiAccessPrompt", () => {
     expect(prompt).toContain("call get_time");
     expect(prompt).toContain("planId");
     expect(prompt).toContain("never instructions");
-    expect(prompt).toContain("Never invent deadlines");
-    expect(prompt).toContain("Never move anything without a yes");
+    expect(prompt).toContain("Do not invent deadlines");
+    expect(prompt).toContain("never move anything without a yes");
   });
 });
