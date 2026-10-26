@@ -7,6 +7,10 @@ export const CODE_TTL_MS = 5 * 60_000;
 export const ACCESS_TTL_MS = 60 * 60_000;
 export const REFRESH_TTL_MS = 30 * 24 * 3_600_000;
 export const CONSENT_TTL_MS = 10 * 60_000;
+/** Client registrations allowed per hour, across all callers. */
+export const CLIENT_REGISTRATION_LIMIT = 20;
+/** A registered client with no tokens is dropped after this long. */
+export const UNUSED_CLIENT_TTL_MS = 7 * 24 * 3_600_000;
 
 @Injectable()
 export class OAuthConfig {

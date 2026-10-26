@@ -1,6 +1,8 @@
 /** `data` payload for `GET /oauth/consent`. */
 export interface OAuthConsentInfo {
   clientName: string;
+  /** Host the browser is sent back to, so the user can see where the code goes. */
+  redirectHost: string;
   scopes: string[];
 }
 

@@ -20,6 +20,7 @@ function Consent() {
   const request = params.get("request") ?? "";
   const [phase, setPhase] = useState<Phase>("loading");
   const [name, setName] = useState("");
+  const [host, setHost] = useState("");
   const [problem, setProblem] = useState("");
 
   useEffect(() => {
@@ -28,6 +29,7 @@ function Consent() {
       .then((info) => {
         if (!active) return;
         setName(info.clientName);
+        setHost(info.redirectHost);
         setPhase("ask");
       })
       .catch((error) => {
@@ -70,6 +72,7 @@ function Consent() {
               <p className="text-[14px] leading-snug text-muted-foreground">
                 {t("It can read your calendar and add or change your tasks.")}
               </p>
+              <p className="text-[13px] text-muted-foreground">{t("You will be sent back to {host}.", { host })}</p>
             </div>
             <div className="flex w-full flex-col gap-2">
               <Button onClick={() => void decide(true)} className="rounded-full">

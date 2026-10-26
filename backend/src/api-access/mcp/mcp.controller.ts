@@ -10,7 +10,7 @@ import {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Request, Response } from "express";
 import type { User } from "../../../generated/prisma";
-import { ApiTokenOnly } from "../allow-api-token.decorator";
+import { AllowOAuth, ApiTokenOnly } from "../allow-api-token.decorator";
 import { ApiTokenGuard } from "../api-token.guard";
 import { McpServerFactory } from "./mcp-server.factory";
 
@@ -22,6 +22,7 @@ import { McpServerFactory } from "./mcp-server.factory";
 @Controller("mcp")
 @UseGuards(ApiTokenGuard)
 @ApiTokenOnly()
+@AllowOAuth()
 export class McpController {
   constructor(private readonly servers: McpServerFactory) {}
 

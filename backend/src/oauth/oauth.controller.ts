@@ -21,11 +21,11 @@ export class OAuthController {
   constructor(private readonly consent: OAuthConsentService) {}
 
   @Get("consent")
-  async describe(@Query("request") request = "") {
+  async describe(@CurrentUser() user: User, @Query("request") request = "") {
     return {
       success: true,
       message: "Authorization request",
-      data: await this.consent.describe(request),
+      data: await this.consent.describe(user, request),
     };
   }
 

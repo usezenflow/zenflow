@@ -1,6 +1,8 @@
 import { openConsentRequest, sealConsentRequest } from "./consent-request";
 
 const request = {
+  nonce: "n",
+  resource: "https://api/api/v1/mcp",
   clientId: "c",
   redirectUri: "https://x/cb",
   codeChallenge: "ch",

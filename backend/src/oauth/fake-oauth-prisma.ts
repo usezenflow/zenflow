@@ -19,7 +19,7 @@ interface TokenRow {
 export function fakeOAuthPrisma() {
   const clients = new Map<
     string,
-    { id: string; name: string | null; metadata: unknown }
+    { id: string; name: string | null; metadata: unknown; createdAt?: Date }
   >();
   let tokens: TokenRow[] = [];
   const matches = (row: TokenRow, where: Record<string, unknown>) =>
@@ -31,8 +31,56 @@ export function fakeOAuthPrisma() {
       return have === want;
     });
 
+  const consents = new Map<
+    string,
+    {
+      id: string;
+      clientId: string;
+      userId: string | null;
+      expiresAt: Date;
+      usedAt: Date | null;
+    }
+  >();
+
   const prisma = {
+    oAuthConsent: {
+      create: ({ data }: { data: { clientId: string; expiresAt: Date } }) => {
+        const row = { id: randomUUID(), userId: null, usedAt: null, ...data };
+        consents.set(row.id, row);
+        return Promise.resolve({ id: row.id });
+      },
+      updateMany: ({
+        where,
+        data,
+      }: {
+        where: {
+          id: string;
+          usedAt: null;
+          expiresAt: { gt: Date };
+          OR: { userId: string | null }[];
+        };
+        data: { userId: string; usedAt?: Date };
+      }) => {
+        const row = consents.get(where.id);
+        const open =
+          row &&
+          row.usedAt === null &&
+          row.expiresAt > where.expiresAt.gt &&
+          where.OR.some((c) =>
+            c.userId === null ? row.userId === null : c.userId === row.userId,
+          );
+        if (!open) return Promise.resolve({ count: 0 });
+        Object.assign(row, data);
+        return Promise.resolve({ count: 1 });
+      },
+    },
     oAuthClient: {
+      count: ({ where }: { where: { createdAt: { gt: Date } } }) =>
+        Promise.resolve(
+          [...clients.values()].filter(
+            (c) => (c.createdAt ?? new Date(0)) > where.createdAt.gt,
+          ).length,
+        ),
       findUnique: ({ where }: { where: { id: string } }) =>
         Promise.resolve(clients.get(where.id) ?? null),
       findMany: ({ where }: { where: { id: { in: string[] } } }) =>
@@ -44,8 +92,9 @@ export function fakeOAuthPrisma() {
       }: {
         data: { id: string; name: string | null; metadata: unknown };
       }) => {
-        clients.set(data.id, data);
-        return Promise.resolve(data);
+        const row = { ...data, createdAt: new Date() };
+        clients.set(data.id, row);
+        return Promise.resolve(row);
       },
     },
     oAuthToken: {
@@ -112,5 +161,5 @@ export function fakeOAuthPrisma() {
       },
     },
   };
-  return { prisma, tokens: () => tokens, clients };
+  return { prisma, tokens: () => tokens, clients, consents };
 }

@@ -2,11 +2,15 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 /** What the consent page needs to finish an authorization the SDK has already validated. */
 export interface ConsentRequest {
+  /** The `OAuthConsent` row that makes this request single use. */
+  nonce: string;
   clientId: string;
   redirectUri: string;
   codeChallenge: string;
   state?: string;
   scopes: string[];
+  /** The protected resource the token is for (RFC 8707). */
+  resource: string;
 }
 
 const sign = (payload: string, secret: string) =>

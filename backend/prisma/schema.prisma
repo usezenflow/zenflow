@@ -70,6 +70,7 @@ model User {
   calendarConnection CalendarConnection?
   calendarLinks      CalendarLink[]
   oauthTokens        OAuthToken[]
+  oauthConsents      OAuthConsent[]
 
   // which portal sections / Moodle courses this student is confirmed in
   portalSectionEnrollments PortalSectionEnrollment[]
@@ -997,7 +998,8 @@ model OAuthClient {
   metadata  Json // the registered client metadata, redirect_uris included
   createdAt DateTime @default(now())
 
-  tokens OAuthToken[]
+  tokens   OAuthToken[]
+  consents OAuthConsent[]
 }
 
 enum OAuthTokenKind {
@@ -1015,6 +1017,7 @@ model OAuthToken {
   scope         String         @default("")
   codeChallenge String? // PKCE, codes only
   redirectUri   String? // codes only
+  resource      String? // the MCP URL the token was issued for (RFC 8707)
   expiresAt     DateTime
   usedAt        DateTime? // set once a code or refresh token is spent
   createdAt     DateTime       @default(now())
@@ -1029,3 +1032,17 @@ model OAuthToken {
   @@index([expiresAt])
 }
 
+/// A pending authorization request; single use, and bound to the user who opened the consent page
+model OAuthConsent {
+  id        String    @id @default(uuid()) // the nonce inside the signed request
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  clientId String
+  client   OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId   String?
+  user     User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}

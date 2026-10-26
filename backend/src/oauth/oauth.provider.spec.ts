@@ -11,6 +11,7 @@ const request = (over: Record<string, unknown> = {}) => ({
   redirectUri: "https://chatgpt.com/cb",
   codeChallenge: "challenge",
   scopes: ["schedule"],
+  resource: "https://api.example.com/api/v1/mcp",
   ...over,
 });
 
@@ -32,6 +33,7 @@ async function setup() {
           pepper: "p".repeat(40),
           signingSecret: "s",
           consentUrl: "https://app/oauth/consent",
+          mcpUrl: new URL("https://api.example.com/api/v1/mcp"),
         },
       },
     ],

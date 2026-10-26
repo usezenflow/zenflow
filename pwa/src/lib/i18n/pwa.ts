@@ -78,6 +78,7 @@ export default {
   "Tokens for scripts": "Token cho script",
   "Allow {name}?": "Cho phép {name}?",
   "It can read your calendar and add or change your tasks.": "Trợ lý có thể đọc lịch và thêm hoặc sửa công việc của bạn.",
+  "You will be sent back to {host}.": "Bạn sẽ được chuyển về {host}.",
   "Allow": "Cho phép",
   "This request expired. Start again from your assistant.": "Yêu cầu đã hết hạn. Hãy bắt đầu lại từ trợ lý.",
   "Google Calendar": "Google Calendar",

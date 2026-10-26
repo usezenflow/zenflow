@@ -11,6 +11,8 @@ import { OAuthConfig } from "./oauth.config";
 import { OAuthProvider } from "./oauth.provider";
 
 const EXPIRED = "This request expired. Start again from your assistant.";
+const UNREGISTERED =
+  "This assistant cannot redirect there. Start again from your assistant.";
 
 /** The signed-in half of the flow: the user sees who is asking and approves or refuses. */
 @Injectable()
@@ -21,14 +23,16 @@ export class OAuthConsentService {
     private readonly provider: OAuthProvider,
   ) {}
 
-  async describe(requestToken: string): Promise<OAuthConsentInfo> {
+  async describe(user: User, requestToken: string): Promise<OAuthConsentInfo> {
     const request = this.open(requestToken);
+    await this.bind(user, request.nonce, {});
     const client = await this.prisma.oAuthClient.findUnique({
       where: { id: request.clientId },
     });
     if (!client) throw new BadRequestException(EXPIRED);
     return {
       clientName: client.name ?? "An AI assistant",
+      redirectHost: new URL(request.redirectUri).host,
       scopes: request.scopes,
     };
   }
@@ -39,6 +43,15 @@ export class OAuthConsentService {
     approve: boolean,
   ): Promise<OAuthConsentDecisionResponse> {
     const request = this.open(requestToken);
+    const client = await this.prisma.oAuthClient.findUnique({
+      where: { id: request.clientId },
+    });
+    // Metadata can change after the request was sealed; check it again before redirecting.
+    const registered = (client?.metadata as { redirect_uris?: string[] } | null)
+      ?.redirect_uris;
+    if (!registered?.includes(request.redirectUri))
+      throw new BadRequestException(UNREGISTERED);
+    await this.bind(user, request.nonce, { usedAt: new Date() });
     const target = new URL(request.redirectUri);
     if (approve) {
       target.searchParams.set(
@@ -90,5 +103,27 @@ export class OAuthConsentService {
     const request = openConsentRequest(token, this.config.signingSecret);
     if (!request) throw new BadRequestException(EXPIRED);
     return request;
+  }
+
+  /**
+   * Binds an open request to the first signed-in user who touches it, and
+   * spends it when `data.usedAt` is set. Any later attempt fails, so a
+   * request is single use and only its owner can finish it.
+   */
+  private async bind(
+    user: User,
+    nonce: string,
+    data: { usedAt?: Date },
+  ): Promise<void> {
+    const { count } = await this.prisma.oAuthConsent.updateMany({
+      where: {
+        id: nonce,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+        OR: [{ userId: null }, { userId: user.id }],
+      },
+      data: { userId: user.id, ...data },
+    });
+    if (count !== 1) throw new BadRequestException(EXPIRED);
   }
 }

@@ -9,7 +9,11 @@ import { Reflector } from "@nestjs/core";
 import { Request, Response } from "express";
 import { assertCookieSession } from "../auth/guards/cookie-auth.guard";
 import { isEmailDomainAllowed } from "../auth/utils/email-domain";
-import { API_TOKEN_ROUTE_KEY } from "./allow-api-token.decorator";
+import {
+  API_TOKEN_ROUTE_KEY,
+  OAUTH_ROUTE_KEY,
+} from "./allow-api-token.decorator";
+import { OAUTH_ACCESS_PREFIX } from "./api-token.util";
 import { getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { OAuthConfig } from "../oauth/oauth.config";
 import { ApiTokensService } from "./api-tokens.service";
@@ -43,6 +47,14 @@ export class ApiTokenGuard implements CanActivate {
     }
     if (!mode) {
       throw new ForbiddenException("API tokens cannot call this route");
+    }
+    const oauthRoute = this.reflector.getAllAndOverride<boolean | undefined>(
+      OAUTH_ROUTE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    // An OAuth token is only valid on the MCP endpoint; elsewhere it is refused like any bad bearer.
+    if (bearer[1].startsWith(OAUTH_ACCESS_PREFIX) && !oauthRoute) {
+      throw this.challenge(context);
     }
     const user = await this.tokens.authenticate(bearer[1]);
     if (!user || !isEmailDomainAllowed(user.email)) {

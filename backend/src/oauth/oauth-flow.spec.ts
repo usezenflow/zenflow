@@ -18,6 +18,9 @@ const REDIRECT = "https://chatgpt.com/connector/callback";
 const verifier = randomBytes(32).toString("base64url");
 const challenge = createHash("sha256").update(verifier).digest("base64url");
 
+const user = { id: "user-1" } as never;
+const other = { id: "user-2" } as never;
+
 async function setup() {
   const fake = fakeOAuthPrisma();
   const config = {
@@ -46,7 +49,7 @@ async function setup() {
       clientRegistrationOptions: { clientSecretExpirySeconds: 0 },
     }),
   );
-  return { app, consent: module.get(OAuthConsentService) };
+  return { app, fake, consent: module.get(OAuthConsentService) };
 }
 
 async function register(app: express.Express) {
@@ -107,16 +110,13 @@ describe("MCP OAuth flow", () => {
     const clientId = await register(app);
 
     const requestToken = await authorize(app, clientId);
-    expect(await consent.describe(requestToken)).toEqual({
+    expect(await consent.describe(user, requestToken)).toEqual({
       clientName: "ChatGPT",
+      redirectHost: "chatgpt.com",
       scopes: [MCP_SCOPE],
     });
 
-    const decision = await consent.decide(
-      { id: "user-1" } as never,
-      requestToken,
-      true,
-    );
+    const decision = await consent.decide(user, requestToken, true);
     const back = new URL(decision.redirectUrl);
     expect(back.origin + back.pathname).toBe(REDIRECT);
     expect(back.searchParams.get("state")).toBe("xyz");
@@ -156,7 +156,7 @@ describe("MCP OAuth flow", () => {
     const { app, consent } = await setup();
     const clientId = await register(app);
     const decision = await consent.decide(
-      { id: "user-1" } as never,
+      user,
       await authorize(app, clientId),
       true,
     );
@@ -181,7 +181,7 @@ describe("MCP OAuth flow", () => {
     const clientId = await register(app);
 
     const decision = await consent.decide(
-      { id: "user-1" } as never,
+      user,
       await authorize(app, clientId),
       false,
     );
@@ -218,9 +218,103 @@ describe("MCP OAuth flow", () => {
 
   it("rejects an expired or forged consent request", async () => {
     const { consent } = await setup();
-    await expect(consent.describe("forged.token")).rejects.toThrow(/expired/);
-    await expect(
-      consent.decide({ id: "u" } as never, "forged.token", true),
-    ).rejects.toThrow(/expired/);
+    await expect(consent.describe(user, "forged.token")).rejects.toThrow(
+      /expired/,
+    );
+    await expect(consent.decide(user, "forged.token", true)).rejects.toThrow(
+      /expired/,
+    );
+  });
+
+  it("spends a consent request once", async () => {
+    const { app, consent } = await setup();
+    const clientId = await register(app);
+    const requestToken = await authorize(app, clientId);
+
+    await consent.decide(user, requestToken, true);
+    await expect(consent.decide(user, requestToken, true)).rejects.toThrow(
+      /expired/,
+    );
+  });
+
+  it("finishes a consent request only for the user who opened it", async () => {
+    const { app, consent } = await setup();
+    const clientId = await register(app);
+    const requestToken = await authorize(app, clientId);
+
+    await consent.describe(user, requestToken);
+    await expect(consent.decide(other, requestToken, true)).rejects.toThrow(
+      /expired/,
+    );
+    await expect(consent.describe(other, requestToken)).rejects.toThrow(
+      /expired/,
+    );
+  });
+
+  it("refuses a redirect the client no longer registers", async () => {
+    const { app, fake, consent } = await setup();
+    const clientId = await register(app);
+    const requestToken = await authorize(app, clientId);
+    fake.clients.get(clientId)!.metadata = { redirect_uris: [] };
+
+    await expect(consent.decide(user, requestToken, true)).rejects.toThrow(
+      /cannot redirect/,
+    );
+  });
+
+  it("only issues tokens for the MCP endpoint", async () => {
+    const { app, consent } = await setup();
+    const clientId = await register(app);
+    const decision = await consent.decide(
+      user,
+      await authorize(app, clientId),
+      true,
+    );
+    const code = new URL(decision.redirectUrl).searchParams.get("code")!;
+
+    await request(app)
+      .post("/token")
+      .type("form")
+      .send({
+        grant_type: "authorization_code",
+        client_id: clientId,
+        code,
+        code_verifier: verifier,
+        redirect_uri: REDIRECT,
+        resource: "https://evil.example/mcp",
+      })
+      .expect(400);
+  });
+
+  it("sends the browser back with invalid_target for another resource", async () => {
+    const { app } = await setup();
+    const clientId = await register(app);
+
+    const res = await request(app)
+      .get("/authorize")
+      .query({
+        response_type: "code",
+        client_id: clientId,
+        redirect_uri: REDIRECT,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        resource: "https://evil.example/mcp",
+      })
+      .expect(302);
+    expect(new URL(res.header.location).searchParams.get("error")).toBe(
+      "invalid_target",
+    );
+  });
+
+  it("rejects a redirect URI with a fragment", async () => {
+    const { app } = await setup();
+    await request(app)
+      .post("/register")
+      .send({
+        client_name: "Fragment",
+        redirect_uris: ["https://chatgpt.com/cb#x"],
+        token_endpoint_auth_method: "none",
+      })
+      .expect(400);
   });
 });

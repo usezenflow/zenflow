@@ -5,6 +5,7 @@ import type { OAuthRegisteredClientsStore } from "@modelcontextprotocol/sdk/serv
 import {
   InvalidClientMetadataError,
   InvalidGrantError,
+  InvalidTargetError,
   InvalidTokenError,
 } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import type {
@@ -23,6 +24,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { sealConsentRequest } from "./consent-request";
 import {
   ACCESS_TTL_MS,
+  CLIENT_REGISTRATION_LIMIT,
   CODE_TTL_MS,
   CONSENT_TTL_MS,
   MCP_SCOPE,
@@ -42,6 +44,30 @@ const newSecret = (kind: OAuthTokenKind) =>
 function isLoopback(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
 }
+
+/** Throws unless the URI is absolute, has no fragment, and is https or loopback http. */
+function checkRedirectUri(uri: string): void {
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch {
+    throw new InvalidClientMetadataError("redirect_uris must be absolute URLs");
+  }
+  if (url.hash)
+    throw new InvalidClientMetadataError(
+      "redirect_uris must not have a fragment",
+    );
+  if (
+    url.protocol !== "https:" &&
+    !(url.protocol === "http:" && isLoopback(url.hostname))
+  )
+    throw new InvalidClientMetadataError("redirect_uris must use https");
+}
+
+/** Clients compare equal with a trailing slash or fragment ignored, as the SDK does. */
+const sameResource = (a: string, b: string): boolean =>
+  a.replace(/#.*$/, "").replace(/\/$/, "") ===
+  b.replace(/#.*$/, "").replace(/\/$/, "");
 
 /**
  * The authorization server behind the MCP endpoint (OAuth 2.1, PKCE, dynamic
@@ -70,15 +96,14 @@ export class OAuthProvider implements OAuthServerProvider {
     },
     registerClient: async (client) => {
       const info = client as OAuthClientInformationFull;
-      for (const uri of info.redirect_uris) {
-        const url = new URL(uri);
-        if (
-          url.protocol !== "https:" &&
-          !(url.protocol === "http:" && isLoopback(url.hostname))
-        ) {
-          throw new InvalidClientMetadataError("redirect_uris must use https");
-        }
-      }
+      info.redirect_uris.forEach(checkRedirectUri);
+      const recent = await this.prisma.oAuthClient.count({
+        where: { createdAt: { gt: new Date(Date.now() - 3_600_000) } },
+      });
+      if (recent >= CLIENT_REGISTRATION_LIMIT)
+        throw new InvalidClientMetadataError(
+          "Too many clients registered. Try again later.",
+        );
       await this.prisma.oAuthClient.create({
         data: {
           id: info.client_id,
@@ -91,18 +116,28 @@ export class OAuthProvider implements OAuthServerProvider {
   };
 
   /** Hands the validated request to the consent page, which needs a signed-in user. */
-  authorize(
+  async authorize(
     client: OAuthClientInformationFull,
     params: AuthorizationParams,
     res: Response,
   ): Promise<void> {
+    const resource = this.resourceFor(params.resource);
+    const { id: nonce } = await this.prisma.oAuthConsent.create({
+      data: {
+        clientId: client.client_id,
+        expiresAt: new Date(Date.now() + CONSENT_TTL_MS),
+      },
+      select: { id: true },
+    });
     const request = sealConsentRequest(
       {
+        nonce,
         clientId: client.client_id,
         redirectUri: params.redirectUri,
         codeChallenge: params.codeChallenge,
         state: params.state,
         scopes: params.scopes?.length ? params.scopes : [MCP_SCOPE],
+        resource,
       },
       this.config.signingSecret,
       CONSENT_TTL_MS,
@@ -110,7 +145,6 @@ export class OAuthProvider implements OAuthServerProvider {
     res.redirect(
       `${this.config.consentUrl}?request=${encodeURIComponent(request)}`,
     );
-    return Promise.resolve();
   }
 
   /** Issues the one-time code once the user approves. Returns the code. */
@@ -121,6 +155,7 @@ export class OAuthProvider implements OAuthServerProvider {
       redirectUri: string;
       codeChallenge: string;
       scopes: string[];
+      resource: string;
     },
   ): Promise<string> {
     const secret = newSecret("CODE");
@@ -132,6 +167,7 @@ export class OAuthProvider implements OAuthServerProvider {
         scope: request.scopes.join(" "),
         codeChallenge: request.codeChallenge,
         redirectUri: request.redirectUri,
+        resource: request.resource,
         expiresAt: new Date(Date.now() + CODE_TTL_MS),
         clientId: request.clientId,
         userId,
@@ -156,6 +192,7 @@ export class OAuthProvider implements OAuthServerProvider {
     code: string,
     _verifier?: string,
     redirectUri?: string,
+    resource?: URL,
   ): Promise<OAuthTokens> {
     const row = await this.find("CODE", code);
     if (!row || row.clientId !== client.client_id)
@@ -169,6 +206,8 @@ export class OAuthProvider implements OAuthServerProvider {
       throw new InvalidGrantError("Authorization code expired");
     if (row.redirectUri && redirectUri !== row.redirectUri)
       throw new InvalidGrantError("redirect_uri does not match");
+    if (resource && !this.issuedFor(row, resource))
+      throw new InvalidGrantError("resource does not match");
     await this.spend(row.id);
     return this.issueTokens(row);
   }
@@ -176,6 +215,8 @@ export class OAuthProvider implements OAuthServerProvider {
   async exchangeRefreshToken(
     client: OAuthClientInformationFull,
     refreshToken: string,
+    _scopes?: string[],
+    resource?: URL,
   ): Promise<OAuthTokens> {
     const row = await this.find("REFRESH", refreshToken);
     if (!row || row.clientId !== client.client_id)
@@ -186,6 +227,8 @@ export class OAuthProvider implements OAuthServerProvider {
     }
     if (row.expiresAt <= new Date())
       throw new InvalidGrantError("Refresh token expired");
+    if (resource && !this.issuedFor(row, resource))
+      throw new InvalidGrantError("resource does not match");
     await this.spend(row.id);
     return this.issueTokens(row);
   }
@@ -199,6 +242,7 @@ export class OAuthProvider implements OAuthServerProvider {
       clientId: row.clientId,
       scopes: row.scope ? row.scope.split(" ") : [],
       expiresAt: Math.floor(row.expiresAt.getTime() / 1000),
+      resource: new URL(row.resource ?? this.config.mcpUrl.href),
       extra: { userId: row.userId },
     };
   }
@@ -224,6 +268,19 @@ export class OAuthProvider implements OAuthServerProvider {
       .digest("hex");
   }
 
+  /** Only the MCP endpoint is a protected resource, so anything else is refused. */
+  private resourceFor(resource: URL | undefined): string {
+    const expected = this.config.mcpUrl.href;
+    if (resource && !sameResource(resource.href, expected))
+      throw new InvalidTargetError("resource must be the Zenflow MCP endpoint");
+    return expected;
+  }
+
+  /** Rows from before `resource` was stored were all issued for the MCP endpoint. */
+  private issuedFor(row: { resource: string | null }, resource: URL): boolean {
+    return sameResource(resource.href, row.resource ?? this.config.mcpUrl.href);
+  }
+
   private find(kind: OAuthTokenKind, secret: string) {
     if (!secret.startsWith(PREFIX[kind])) return Promise.resolve(null);
     return this.prisma.oAuthToken.findFirst({
@@ -245,6 +302,7 @@ export class OAuthProvider implements OAuthServerProvider {
     clientId: string;
     userId: string;
     scope: string;
+    resource: string | null;
   }): Promise<OAuthTokens> {
     const access = newSecret("ACCESS");
     const refresh = newSecret("REFRESH");
@@ -268,6 +326,7 @@ export class OAuthProvider implements OAuthServerProvider {
         clientId: from.clientId,
         userId: from.userId,
         scope: from.scope,
+        resource: from.resource ?? this.config.mcpUrl.href,
       })),
     });
     return {
