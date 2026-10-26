@@ -1,62 +1,85 @@
+import { getGoogleCalendar } from "@/api/google-calendar";
 import { listIntegrations } from "@/api/integrations";
-import { getApiAccess } from "@/api/me";
+import { listConnectedApps } from "@/api/oauth";
 import { updateBasicInfo } from "@/api/users";
 import { SunriseBackdrop } from "@/components/brand/sunrise-backdrop";
 import { Button } from "@/components/ui/button";
-import { Glass } from "@/components/ui/glass";
-import { languageOption } from "@/lib/languages";
 import { BusyOr } from "@/components/ui/delayed-spinner";
+import { Glass } from "@/components/ui/glass";
 import { useUserStore } from "@/hooks/use-user-store";
-import { getLanguage, t, useLanguage } from "@/lib/i18n";
+import { t, useLanguage } from "@/lib/i18n";
 import { errorToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { IntegrationStatus } from "@zenflow/shared";
 import {
-  AlertCircle,
-  Bell,
+  CalendarDays,
   Check,
-  ChevronLeft,
+  ChevronDown,
   GraduationCap,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
+import { AssistantsStep } from "./assistants-step";
+import { CalendarStep } from "./calendar-step";
 import { CampusConnectStep } from "./campus-connect-step";
-import {
-  canGoBack,
-  FIRST_STEP,
-  nextStep,
-  type OnboardingStep,
-  prevStep,
-  stepProgress,
-} from "./onboarding-steps";
+import { saveRow, savedRow, type OnboardingRow } from "./onboarding-steps";
 
-const STEP_ICON: Partial<Record<OnboardingStep, LucideIcon>> = {
-  campus: GraduationCap,
-  notifications: Bell,
-  assistants: Sparkles,
-};
-
-function languageLabel(): string {
-  const l = languageOption(getLanguage());
-  return `${l.flag} ${l.label}`;
-}
-
-/** Card whose rows are separated by hairlines. */
-function Group({ children }: { children: ReactNode }) {
+/** One connect row: tap to open its setup in place. */
+function Row({
+  icon: Icon,
+  title,
+  done,
+  open,
+  onToggle,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  done: boolean;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card/60">
-      {children}
-    </div>
+    <Glass
+      frosted
+      className="rounded-2xl border p-1 shadow-lg shadow-primary/5"
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left"
+      >
+        <span
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            done
+              ? "bg-primary text-primary-foreground"
+              : "bg-primary/10 text-primary",
+          )}
+        >
+          {done ? <Check className="size-5" /> : <Icon className="size-5" />}
+        </span>
+        <span className="flex-1 text-[17px] font-semibold">{title}</span>
+        <ChevronDown
+          className={cn(
+            "size-5 text-muted-foreground transition-transform duration-200",
+            open && "rotate-180",
+          )}
+          aria-hidden
+        />
+      </button>
+      {open && <div className="animate-rise-in px-3 pb-3 pt-1">{children}</div>}
+    </Glass>
   );
 }
 
 /**
- * First-run setup: focus, campus connect, notifications, then a summary.
- * Each step can be skipped; skipped items are listed on the summary with a
- * "Set up" link that returns to them.
+ * First-run setup on one screen: campus, calendar and assistant rows that open
+ * in place. Every row is optional; the button leaves the screen either way.
  */
 export function OnboardingFlow() {
   useLanguage();
@@ -64,82 +87,37 @@ export function OnboardingFlow() {
   const user = useUserStore((s) => s.user);
   const setUser = useUserStore((s) => s.setUser);
 
-  const [step, setStep] = useState<OnboardingStep>(FIRST_STEP);
-  // Set when a skipped step is reopened from the summary: finishing, skipping
-  // or going back returns to the summary.
-  const [fromSummary, setFromSummary] = useState(false);
+  const [open, setOpen] = useState<OnboardingRow | null>(savedRow);
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
+  const [googleLinked, setGoogleLinked] = useState(false);
+  const [assistantLinked, setAssistantLinked] = useState(false);
 
-  const [aiConnected, setAiConnected] = useState(false);
+  useEffect(() => saveRow(open), [open]);
 
+  // Re-read when a row closes: that is when something may have just connected.
   useEffect(() => {
     listIntegrations()
       .then(setIntegrations)
       .catch(() => {});
-  }, []);
-
-  // The summary checks for a real assistant call, so it is read on arrival.
-  useEffect(() => {
-    if (step !== "done") return;
-    getApiAccess()
-      .then((access) => setAiConnected(access.tokens.some((token) => token.lastUsedAt !== null)))
+    getGoogleCalendar()
+      .then((g) =>
+        setGoogleLinked(g.connected && g.state !== "NEEDS_RECONNECT"),
+      )
       .catch(() => {});
-  }, [step]);
+    listConnectedApps()
+      .then((r) => setAssistantLinked(r.apps.length > 0))
+      .catch(() => {});
+  }, [open]);
 
   const campusConnected = integrations.some((i) => i.connected);
   const notificationsOn = user?.allowNotifications === true;
 
-  function go() {
-    if (fromSummary) {
-      setFromSummary(false);
-      setStep("done");
-    } else {
-      setStep((s) => nextStep(s));
-    }
-  }
-
-  function goBack() {
-    setBlocked(false);
-    if (fromSummary) {
-      setFromSummary(false);
-      setStep("done");
-    } else {
-      setStep((s) => prevStep(s));
-    }
-  }
-
-  function skip() {
-    setBlocked(false);
-    go();
-  }
-
   function saveFailed() {
-    errorToast(t("Couldn't save"), { description: t("Try again in a moment.") });
-  }
-
-  /** Runs a save; advances unless it returns `false`. A throw keeps the step. */
-  async function run(fn: () => Promise<boolean | void>) {
-    setBusy(true);
-    try {
-      if ((await fn()) !== false) go();
-    } catch {
-      saveFailed();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function setNotifications(allow: boolean) {
-    setBusy(true);
-    try {
-      setUser(await updateBasicInfo({ allowNotifications: allow }));
-    } catch {
-      saveFailed();
-    } finally {
-      setBusy(false);
-    }
+    errorToast(t("Couldn't save"), {
+      description: t("Try again in a moment."),
+    });
   }
 
   /** Asks the browser for permission, then records the preference. */
@@ -157,7 +135,6 @@ export function OnboardingFlow() {
         }
       }
       setUser(await updateBasicInfo({ allowNotifications: true }));
-      go();
     } catch {
       saveFailed();
     } finally {
@@ -177,303 +154,77 @@ export function OnboardingFlow() {
     }
   }
 
-  const progress = stepProgress(step);
-
-  const primary = (label: string, onClick: () => void, disabled = false) => (
-    <Button
-      type="button"
-      size="lg"
-      className="h-12 w-full rounded-full text-base"
-      disabled={busy || disabled}
-      onClick={onClick}
-    >
-      <BusyOr busy={busy} className="size-4">
-        {label}
-      </BusyOr>
-    </Button>
-  );
-
-  const ghost = (label: string, onClick: () => void) => (
-    <Button
-      type="button"
-      variant="ghost"
-      className="w-full text-muted-foreground"
-      disabled={busy}
-      onClick={onClick}
-    >
-      {label}
-    </Button>
-  );
-
-  let title = "";
-  let body = "";
-  let content: ReactNode = null;
-  let footer: ReactNode = null;
-
-  switch (step) {
-    case "campus": {
-      title = t("Connect your LMS or portal");
-      body = t(
-        "Zenflow keeps an eye on your timetable, exams and assignments, so they land on your calendar. Your login is only used to check your LMS and portal for you.",
-      );
-      content = (
-        <div className="flex flex-col gap-4">
-          <CampusConnectStep
-            statuses={integrations}
-            onConnected={(status) =>
-              setIntegrations((prev) => [
-                ...prev.filter((s) => s.provider !== status.provider),
-                status,
-              ])
-            }
-          />
-          <p className="px-1 text-[12px] leading-snug text-muted-foreground">
-            {t("Your password is stored encrypted. Disconnect in Settings to delete it.")}
-          </p>
-          <p className="px-1 text-[12px] leading-snug text-muted-foreground">
-            {t("You can also do this later in Settings, under Connect your LMS or portal.")}
-          </p>
-        </div>
-      );
-      footer = (
-        <>
-          {primary(t("Continue"), go)}
-          {!campusConnected && ghost(t("Skip for now"), skip)}
-        </>
-      );
-      break;
-    }
-    case "notifications": {
-      title = t("Stay ahead of deadlines");
-      body = t(
-        "Get a nudge when a session is near or your schedule changes. We'll ask for permission next.",
-      );
-      content = (
-        <div className="flex flex-col gap-5">
-          <Group>
-            <div className="flex items-center gap-3.5 px-4 py-3.5">
-              <span className="flex size-[38px] shrink-0 items-center justify-center rounded-xl bg-muted">
-                <Bell className="size-[18px]" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-semibold">
-                  {t("Allow notifications")}
-                </span>
-                <span className="mt-0.5 block text-[13px] text-muted-foreground">
-                  {t("Reminders and schedule changes")}
-                </span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={notificationsOn}
-                aria-label={t("Allow notifications")}
-                disabled={busy}
-                onClick={() =>
-                  notificationsOn
-                    ? void setNotifications(false)
-                    : void enableNotifications()
-                }
-                className={cn(
-                  "flex h-[26px] w-[46px] shrink-0 items-center rounded-full px-[3px] transition",
-                  notificationsOn ? "justify-end bg-primary" : "justify-start bg-muted",
-                )}
-              >
-                <span className="size-5 rounded-full bg-card shadow" />
-              </button>
-            </div>
-          </Group>
-          <ul className="flex flex-col gap-3 px-1">
-            {[
-              t("Reminder before each study session"),
-              t("Alert when the timetable or an exam changes"),
-              t("New LMS assignments, scheduled for you"),
-            ].map((line) => (
-              <li key={line} className="flex items-start gap-2.5 text-[13.5px] text-muted-foreground">
-                <Check className="mt-0.5 size-4 shrink-0 text-primary" />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-          {blocked && (
-            <div className="flex gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
-              <AlertCircle className="size-5 shrink-0 text-destructive" />
-              <div>
-                <p className="text-[13.5px] font-semibold">
-                  {t("Notifications are blocked")}
-                </p>
-                <p className="mt-1 text-[13.5px] leading-snug text-muted-foreground">
-                  {t("Turn them on in your browser settings to get reminders. For now, they stay off.")}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-      footer = (
-        <>
-          {notificationsOn || blocked
-            ? primary(t("Continue"), go)
-            : primary(t("Turn on notifications"), () => void enableNotifications())}
-          {!notificationsOn &&
-            ghost(t("Not now"), () =>
-              run(async () => {
-                setUser(await updateBasicInfo({ allowNotifications: false }));
-              }),
-            )}
-        </>
-      );
-      break;
-    }
-    case "assistants": {
-      title = t("Connect an AI assistant");
-      body = t("Let an assistant read and plan your calendar. You can also do this later in Settings.");
-      content = <AiAssistantsSection />;
-      footer = (
-        <>
-          {primary(t("Continue"), go)}
-          {ghost(t("Skip for now"), skip)}
-        </>
-      );
-      break;
-    }
-    case "done": {
-      title = t("You’re all set");
-      body = t("Skipped steps are waiting for you in Settings.");
-      const rows: {
-        key: string;
-        value: string;
-        skipped: boolean;
-        step?: OnboardingStep;
-      }[] = [
-        { key: t("Language"), value: languageLabel(), skipped: false },
-        { key: t("Name"), value: user?.name ?? "", skipped: false },
-        {
-          key: t("LMS & portal"),
-          value: campusConnected ? t("Connected") : t("Skipped"),
-          skipped: !campusConnected,
-          step: "campus",
-        },
-        {
-          key: t("Notifications"),
-          value: notificationsOn ? t("On") : t("Skipped"),
-          skipped: !notificationsOn,
-          step: "notifications",
-        },
-        {
-          key: t("AI assistant"),
-          value: aiConnected ? t("Connected") : t("Skipped"),
-          skipped: !aiConnected,
-          step: "assistants",
-        },
-      ];
-      content = (
-        <Group>
-          {rows.map((r) => (
-            <div key={r.key} className="flex items-center justify-between px-4 py-3">
-              <span className="text-[14.5px] font-medium">{r.key}</span>
-              <span className="flex items-center gap-2.5">
-                <span className="text-[13px] text-muted-foreground">{r.value}</span>
-                {r.skipped && r.step ? (
-                  <button
-                    type="button"
-                    className="text-[13px] font-semibold text-primary hover:underline"
-                    onClick={() => {
-                      setFromSummary(true);
-                      setStep(r.step as OnboardingStep);
-                    }}
-                  >
-                    {t("Set up")}
-                  </button>
-                ) : (
-                  <Check className="size-4 text-primary" />
-                )}
-              </span>
-            </div>
-          ))}
-        </Group>
-      );
-      footer = primary(t("Open my calendar"), () => void finish());
-      break;
-    }
-  }
-
-  const Hero = STEP_ICON[step];
-  const isDone = step === "done";
+  const toggle = (row: OnboardingRow) => () =>
+    setOpen((cur) => (cur === row ? null : row));
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-background">
       <SunriseBackdrop />
       <div className="relative mx-auto flex min-h-svh w-full max-w-xl flex-col px-6 py-8">
-        {!isDone && (
-          <div className="flex items-center gap-3">
-            {canGoBack(step) ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={t("Back")}
-                disabled={busy}
-                onClick={goBack}
-              >
-                <ChevronLeft />
-              </Button>
-            ) : (
-              <span className="size-9" />
-            )}
-            <div className="flex flex-1 gap-1.5">
-              {Array.from({ length: progress.total }, (_, i) => (
-                <span
-                  key={i}
-                  className={cn(
-                    "h-1 flex-1 rounded-full transition-colors duration-200",
-                    i < progress.index ? "bg-primary" : "bg-muted",
-                  )}
-                />
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="font-semibold text-muted-foreground"
-              disabled={busy}
-              onClick={skip}
-            >
-              {t("Skip")}
-            </Button>
-          </div>
-        )}
+        <h1 className="mt-6 animate-rise-in text-[28px] leading-tight font-bold tracking-tight">
+          {t("Connect your apps")}
+        </h1>
 
-        <Glass
-          frosted
-          className="mt-8 flex flex-col rounded-3xl border p-[18px] shadow-xl shadow-primary/10"
-        >
-        <div
-          key={step}
-          className={cn("flex animate-rise-in flex-col", isDone && "items-center text-center")}
-        >
-          {isDone ? (
-            <span className="mb-5 flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Check className="size-8" />
-            </span>
-          ) : (
-            Hero && (
-              <span className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <Hero className="size-6" />
-              </span>
-            )
-          )}
-          <h1 className="text-[26px] leading-tight font-bold tracking-tight">{title}</h1>
-          <p className="mt-2 text-[14.5px] leading-relaxed text-muted-foreground">{body}</p>
+        <div className="mt-6 flex flex-col gap-3">
+          <Row
+            icon={GraduationCap}
+            title={t("Campus")}
+            done={campusConnected}
+            open={open === "campus"}
+            onToggle={toggle("campus")}
+          >
+            <CampusConnectStep
+              statuses={integrations}
+              onConnected={(status) => {
+                setIntegrations((prev) => [
+                  ...prev.filter((s) => s.provider !== status.provider),
+                  status,
+                ]);
+                setOpen(null);
+              }}
+            />
+          </Row>
+          <Row
+            icon={CalendarDays}
+            title={t("Calendar")}
+            done={googleLinked || notificationsOn}
+            open={open === "calendar"}
+            onToggle={toggle("calendar")}
+          >
+            <CalendarStep
+              notificationsOn={notificationsOn}
+              blocked={blocked}
+              busy={busy}
+              onEnableNotifications={() => void enableNotifications()}
+              onBeforeRedirect={() => saveRow("calendar")}
+            />
+          </Row>
+          <Row
+            icon={Sparkles}
+            title={t("Assistant")}
+            done={assistantLinked}
+            open={open === "assistants"}
+            onToggle={toggle("assistants")}
+          >
+            <AssistantsStep />
+          </Row>
         </div>
 
-        <div key={step} className="mt-6 animate-rise-in">{content}</div>
-        </Glass>
-
-        <div className="mt-auto flex flex-col gap-1 pt-6">{footer}</div>
+        <div className="mt-auto pt-8">
+          <Button
+            type="button"
+            size="lg"
+            variant={campusConnected ? "default" : "outline"}
+            className="h-12 w-full rounded-full text-base"
+            disabled={busy}
+            onClick={() => void finish()}
+          >
+            <BusyOr busy={busy} className="size-4">
+              {campusConnected ? t("Open my calendar") : t("Skip for now")}
+            </BusyOr>
+          </Button>
+        </div>
       </div>
     </div>
   );
 }
-

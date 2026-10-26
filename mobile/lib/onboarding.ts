@@ -1,49 +1,9 @@
 import { t } from "./i18n";
 
 /**
- * Pure routing + step-state logic for first-run onboarding (issue #88).
+ * Pure routing logic for first-run onboarding (issue #88).
  * RN-free so it can be unit-tested (`lib/__tests__/onboarding.test.ts`).
  */
-
-export const ONBOARDING_STEPS = [
-  "dlu",
-  "notifications",
-  "assistants",
-  "done",
-] as const;
-export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
-
-export const FIRST_STEP: OnboardingStep = "dlu";
-
-/** Next step, clamped at "done". */
-export function nextStep(step: OnboardingStep): OnboardingStep {
-  const i = ONBOARDING_STEPS.indexOf(step);
-  return ONBOARDING_STEPS[Math.min(i + 1, ONBOARDING_STEPS.length - 1)];
-}
-
-/** Previous step, clamped at the first (Back is hidden there). */
-export function prevStep(step: OnboardingStep): OnboardingStep {
-  const i = ONBOARDING_STEPS.indexOf(step);
-  return ONBOARDING_STEPS[Math.max(i - 1, 0)];
-}
-
-export function canGoBack(step: OnboardingStep): boolean {
-  return step !== FIRST_STEP && step !== "done";
-}
-
-/** 1-based progress over the actionable steps (excludes "done"). */
-export function stepProgress(step: OnboardingStep): {
-  index: number;
-  total: number;
-} {
-  return {
-    index: Math.min(
-      ONBOARDING_STEPS.indexOf(step) + 1,
-      ONBOARDING_STEPS.length - 1,
-    ),
-    total: ONBOARDING_STEPS.length - 1,
-  };
-}
 
 /** Where the auth gate should send the current session; null = stay put. */
 export type AuthRoute = "/(auth)/login" | "/(onboarding)" | "/(app)/settings";

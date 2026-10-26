@@ -54,6 +54,7 @@ export default {
   "Not now": "Để sau",
   Notifications: "Thông báo",
   "Notifications are blocked": "Thông báo đang bị chặn",
+  "Connect your apps": "Kết nối ứng dụng",
   "Open my calendar": "Mở lịch thôi",
   Password: "Mật khẩu",
   Preferences: "Tùy chọn",

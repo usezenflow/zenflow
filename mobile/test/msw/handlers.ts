@@ -28,7 +28,6 @@ export const handlers = [
           { id: "chatgpt", label: "ChatGPT", steps: ["Mở ChatGPT, vào Settings."] },
           { id: "claude", label: "Claude", steps: ["Mở claude.ai, vào Customize."] },
         ],
-        tokens: [],
       },
     }),
   ),
@@ -61,4 +60,11 @@ export const handlers = [
   http.get(`${API}/tags`, () => HttpResponse.json({ data: { tags: [] } })),
   http.patch(`${API}/users/update/basic-info`, () => HttpResponse.json({ data: testUser })),
   http.patch(`${API}/users/me`, () => HttpResponse.json({ data: testUser })),
+  http.patch(`${API}/users/update/calendar-target`, () => HttpResponse.json({ data: testUser })),
+  http.get(`${API}/oauth/apps`, () => HttpResponse.json({ data: { apps: [] } })),
+  http.get(`${API}/google-calendar`, () =>
+    HttpResponse.json({
+      data: { available: true, target: "NONE", connected: false, state: null, lastSyncedAt: null },
+    }),
+  ),
 ];

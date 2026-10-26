@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  canGoBack,
   filterTimezones,
-  nextStep,
   pendingSetupItems,
-  prevStep,
   routeForSession,
   utcOffsetMinutes,
 } from "../onboarding";
@@ -27,21 +24,6 @@ describe("routeForSession", () => {
     expect(routeForSession(u, "(onboarding)")).toBe("/(app)/settings");
   });
 });
-
-describe("step navigation", () => {
-  it("walks forward and clamps", () => {
-    expect(nextStep("dlu")).toBe("notifications");
-    expect(nextStep("notifications")).toBe("assistants");
-    expect(nextStep("assistants")).toBe("done");
-    expect(nextStep("done")).toBe("done");
-  });
-  it("walks back and clamps; no back on first/done", () => {
-    expect(prevStep("dlu")).toBe("dlu");
-    expect(canGoBack("dlu")).toBe(false);
-    expect(canGoBack("done")).toBe(false);
-  });
-});
-
 
 describe("pendingSetupItems", () => {
   it("derives from real state", () => {

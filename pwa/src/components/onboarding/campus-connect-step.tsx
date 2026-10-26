@@ -1,13 +1,13 @@
 import { connectIntegration } from "@/api/integrations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DelayedSpinner } from "@/components/ui/delayed-spinner";
+import { SettingsSheet } from "@/components/settings/settings-ui";
+import { ConnectTile } from "./connect-tile";
 import { t, useLanguage } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
 import type { IntegrationProvider, IntegrationStatus } from "@zenflow/shared";
 import { isAxiosError } from "axios";
-import { BookOpen, Check, Lock, School, UserRound, type LucideIcon } from "lucide-react";
+import { BookOpen, School, type LucideIcon } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 const PROVIDERS: IntegrationProvider[] = ["LMS", "PORTAL"];
@@ -38,8 +38,8 @@ function connectError(error: unknown, provider: IntegrationProvider): string {
 }
 
 /**
- * One card per LMS and portal. Connecting probes a live login on the server
- * before anything is stored; this step does not sync or disconnect.
+ * One tile per LMS and portal. Tapping asks one question at a time (ID, then
+ * password) in a sheet; the server probes a live login before storing anything.
  */
 export function CampusConnectStep({
   statuses,
@@ -48,133 +48,113 @@ export function CampusConnectStep({
   statuses: IntegrationStatus[];
   onConnected: (status: IntegrationStatus) => void;
 }) {
+  useLanguage();
+  const [active, setActive] = useState<IntegrationProvider | null>(null);
   return (
     <div className="flex flex-col gap-3">
-      {PROVIDERS.map((provider) => (
-        <ProviderCard
-          key={provider}
-          provider={provider}
-          connected={
-            statuses.find((s) => s.provider === provider)?.connected ?? false
-          }
-          onConnected={onConnected}
+      {PROVIDERS.map((provider) => {
+        const connected =
+          statuses.find((s) => s.provider === provider)?.connected ?? false;
+        return (
+          <ConnectTile
+            key={provider}
+            icon={PROVIDER_VISUAL[provider].Icon}
+            title={providerLabel(provider)}
+            hint={connected ? t("Connected") : undefined}
+            state={connected ? "done" : "idle"}
+            onClick={() => setActive(provider)}
+          />
+        );
+      })}
+      {active && (
+        <LoginSheet
+          provider={active}
+          onClose={() => setActive(null)}
+          onConnected={(status) => {
+            onConnected(status);
+            setActive(null);
+          }}
         />
-      ))}
+      )}
     </div>
   );
 }
 
-function ProviderCard({
+function LoginSheet({
   provider,
-  connected,
+  onClose,
   onConnected,
 }: {
   provider: IntegrationProvider;
-  connected: boolean;
+  onClose: () => void;
   onConnected: (status: IntegrationStatus) => void;
 }) {
-  useLanguage();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [asking, setAsking] = useState<"id" | "password">("id");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const id = provider.toLowerCase();
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!username.trim() || !password) return;
+    if (asking === "id") {
+      if (username.trim()) setAsking("password");
+      return;
+    }
+    if (!password) return;
     setBusy(true);
     setError(null);
     try {
-      const status = await connectIntegration({
-        provider,
-        username: username.trim(),
-        password,
-      });
-      setPassword("");
-      onConnected(status);
+      onConnected(
+        await connectIntegration({
+          provider,
+          username: username.trim(),
+          password,
+        }),
+      );
     } catch (err) {
       setError(connectError(err, provider));
-    } finally {
       setBusy(false);
     }
   }
 
-  const { Icon } = PROVIDER_VISUAL[provider];
-
+  const isId = asking === "id";
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex items-center gap-3 px-3.5 py-3">
-        <span
-          className={cn(
-            "flex size-[38px] shrink-0 items-center justify-center rounded-xl",
-            connected ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary",
-          )}
+    <SettingsSheet
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={providerLabel(provider)}
+    >
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <p className="text-[18px] font-semibold">
+          {isId ? t("Your student ID?") : t("And your password?")}
+        </p>
+        <Input
+          key={asking}
+          autoFocus
+          inputMode={isId ? "numeric" : undefined}
+          type={isId ? "text" : "password"}
+          autoComplete={isId ? "username" : "current-password"}
+          aria-label={isId ? t("Student ID") : t("Password")}
+          value={isId ? username : password}
+          disabled={busy}
+          onChange={(e) =>
+            isId ? setUsername(e.target.value) : setPassword(e.target.value)
+          }
+          className="h-12 rounded-full px-5 text-base"
+        />
+        {error && (
+          <p className="text-[13px] font-medium text-destructive">{error}</p>
+        )}
+        <Button
+          type="submit"
+          className="h-12 w-full rounded-full text-base"
+          disabled={busy || (isId ? !username.trim() : !password)}
         >
-          {connected ? <Check className="size-[18px]" /> : <Icon className="size-[18px]" />}
-        </span>
-        <span className="min-w-0 flex-1 text-[15px] font-semibold">
-          {providerLabel(provider)}
-        </span>
-        <span
-          className={cn(
-            "rounded-full px-2.5 py-1 text-[12px] font-semibold",
-            connected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-          )}
-        >
-          {connected ? t("Connected") : t("Not connected")}
-        </span>
-      </div>
-      {!connected && (
-        <form
-          onSubmit={submit}
-          className="grid grid-cols-2 gap-2.5 border-t border-border p-3"
-        >
-          <div className="relative">
-            <Label htmlFor={`${id}-username`} className="sr-only">
-              {t("Student ID")}
-            </Label>
-            <UserRound className="pointer-events-none absolute top-1/2 left-3.5 size-[18px] -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id={`${id}-username`}
-              inputMode="numeric"
-              autoComplete="username"
-              placeholder={t("Student ID")}
-              value={username}
-              disabled={busy}
-              onChange={(e) => setUsername(e.target.value)}
-              className="h-11 rounded-full pl-10 text-base"
-            />
-          </div>
-          <div className="relative">
-            <Label htmlFor={`${id}-password`} className="sr-only">
-              {t("Password")}
-            </Label>
-            <Lock className="pointer-events-none absolute top-1/2 left-3.5 size-[18px] -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id={`${id}-password`}
-              type="password"
-              autoComplete="current-password"
-              placeholder={t("Password")}
-              value={password}
-              disabled={busy}
-              onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-full pl-10 text-base"
-            />
-          </div>
-          {error && (
-            <p className="col-span-2 text-[13px] font-medium text-destructive">{error}</p>
-          )}
-          <Button
-            type="submit"
-            className="col-span-2 h-11 w-full rounded-full text-base"
-            disabled={busy || !username.trim() || !password}
-          >
-            <DelayedSpinner busy={busy} className="size-4" />
-            {busy ? t("Connecting…") : t("Connect")}
-          </Button>
-        </form>
-      )}
-    </div>
+          <DelayedSpinner busy={busy} className="size-4" />
+          {busy ? t("Connecting…") : isId ? t("Next") : t("Connect")}
+        </Button>
+      </form>
+    </SettingsSheet>
   );
 }

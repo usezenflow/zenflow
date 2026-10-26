@@ -1,43 +1,33 @@
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
+import { getGoogleCalendar } from "@/api/google-calendar";
 import { listIntegrations } from "@/api/integrations";
+import { listConnectedApps } from "@/api/oauth";
 import { updateBasicInfo } from "@/api/users";
 import {
-  AlertCircle,
-  Bell,
+  CalendarDays,
   Check,
-  ChevronLeft,
+  ChevronDown,
   GraduationCap,
-  LocateFixed,
   Sliders,
   Sparkles,
-  User,
 } from "@/components/Icons";
-import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
-import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
+import { AssistantsStep } from "@/components/onboarding/assistants-step";
+import { CalendarStep } from "@/components/onboarding/calendar-step";
+import { CampusStep } from "@/components/onboarding/campus-step";
 import { Button } from "@/components/ui/button";
+import { BusyOr } from "@/components/ui/delayed-spinner";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
 import { useIntegrationStore } from "@/hooks/use-integration-store";
 import { useNotificationToggle } from "@/hooks/use-notification-toggle";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useUserStore } from "@/hooks/use-user-store";
-import {
-  FIRST_STEP,
-  type OnboardingStep,
-  canGoBack,
-  nextStep,
-  prevStep,
-  stepProgress,
-} from "@/lib/onboarding";
-import { LANGUAGES } from "@/lib/preferences";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
-import { BusyOr } from "@/components/ui/delayed-spinner";
 import {
   AppState,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -45,152 +35,75 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-/**
- * Placeholder English copy, centralized so #78 (localization) can swap it for
- * translation keys in one place.
- */
-const COPY = {
-  get skip() {
-    return t("Skip");
-  },
-  get skipForNow() {
-    return t("Skip for now");
-  },
-  get continue() {
-    return t("Continue");
-  },
-  get back() {
-    return t("Back");
-  },
-  dlu: {
-    get title() {
-      return t("Connect your LMS or portal");
-    },
-    get body() {
-      return t(
-        "Zenflow keeps an eye on your timetable, exams and assignments, so they land on your calendar. Your login is only used to check your LMS and portal for you.",
-      );
-    },
-    get hint() {
-      return t(
-        "You can also do this later in Settings, under Connect your LMS or portal.",
-      );
-    },
-    get trust() {
-      return t(
-        "Your password is stored encrypted. Disconnect in Settings to delete it.",
-      );
-    },
-  },
-  notifications: {
-    get title() {
-      return t("Stay ahead of deadlines");
-    },
-    get body() {
-      return t(
-        "Get a nudge when a session is near or your schedule changes. We'll ask for permission next.",
-      );
-    },
-    get rowTitle() {
-      return t("Allow notifications");
-    },
-    get rowBody() {
-      return t("Reminders and schedule changes");
-    },
-    bullets: [
-      "Reminder before each study session",
-      "Alert when the timetable or an exam changes",
-      "New LMS assignments, scheduled for you",
-    ],
-    get enable() {
-      return t("Turn on notifications");
-    },
-    get notNow() {
-      return t("Not now");
-    },
-    get blockedTitle() {
-      return t("Notifications are blocked");
-    },
-    get blockedBody() {
-      return t(
-        "Turn them on in system settings to get reminders. For now, they stay off.",
-      );
-    },
-    get openSettings() {
-      return t("Open system settings");
-    },
-  },
-  assistants: {
-    get title() {
-      return t("Connect an AI assistant");
-    },
-    get body() {
-      return t("Let an assistant read and plan your calendar. You can also do this later in Settings.");
-    },
-  },
-  done: {
-    get title() {
-      return t("You’re all set");
-    },
-    get body() {
-      return t("Skipped steps are waiting for you in Settings.");
-    },
-    get open() {
-      return t("Open my calendar");
-    },
-  },
-  get saveFailed() {
-    return {
-      title: t("Couldn't save"),
-      description: t("Try again in a moment."),
-      variant: "destructive",
-      icon: Sliders,
-    } as const;
-  },
-} as const;
+type Row = "campus" | "calendar" | "assistants";
 
-const STEP_ICON: Partial<Record<OnboardingStep, typeof User>> = {
-  dlu: GraduationCap,
-  notifications: Bell,
-  assistants: Sparkles,
-};
-
-/** Rounded card whose children are separated by hairlines. */
-function Group({ children }: { children: React.ReactNode }) {
-  useLanguage();
-  const items = (Array.isArray(children) ? children : [children]).flat();
+/** One connect row: tap to open its setup in place. */
+function ConnectRow({
+  icon: Icon,
+  title,
+  done,
+  open,
+  onToggle,
+  testID,
+  children,
+}: {
+  icon: typeof GraduationCap;
+  title: string;
+  done: boolean;
+  open: boolean;
+  onToggle: () => void;
+  testID: string;
+  children: React.ReactNode;
+}) {
   return (
     <View className="overflow-hidden rounded-2xl border border-border bg-card">
-      {items.filter(Boolean).map((child, i) => (
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={onToggle}
+        className="flex-row items-center gap-3 px-3 py-3"
+      >
         <View
-          // biome-ignore lint/suspicious/noArrayIndexKey: static ordering
-          key={i}
-          className={cn(i > 0 && "border-t border-border")}
+          className={cn(
+            "size-10 items-center justify-center rounded-xl",
+            done ? "bg-primary" : "bg-primary/10",
+          )}
         >
-          {child}
+          {done ? (
+            <Check size={20} className="text-primary-foreground" />
+          ) : (
+            <Icon size={20} className="text-primary" />
+          )}
         </View>
-      ))}
+        <Text className="flex-1 text-[17px] font-semibold">{title}</Text>
+        <ChevronDown
+          size={20}
+          className={cn("text-muted-foreground", open && "rotate-180")}
+        />
+      </Pressable>
+      {open ? <View className="px-3 pb-3 pt-1">{children}</View> : null}
     </View>
   );
 }
 
+/**
+ * First-run setup on one screen: campus, calendar and assistant rows that open
+ * in place. Every row is optional; the button leaves the screen either way.
+ */
 export default function OnboardingScreen() {
   useLanguage();
   const insets = useSafeAreaInsets();
   const { toast } = useToast();
-  const user = useUserStore((s) => s.user);
   const updateUser = useUserStore((s) => s.updateUser);
   const { setIntegrations, setLoading, integrations } = useIntegrationStore();
   const notif = useNotificationToggle();
-  const { prefs, update } = notif;
 
-  // Local UI step index only; every value below is persisted server-side.
-  const [step, setStep] = useState<OnboardingStep>(FIRST_STEP);
-  // Set when a skipped step is reopened from the done summary: finishing,
-  // skipping or going back returns straight to the summary.
-  const [fromSummary, setFromSummary] = useState(false);
+  const [open, setOpen] = useState<Row | null>("campus");
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [googleLinked, setGoogleLinked] = useState(false);
+  const [assistantLinked, setAssistantLinked] = useState(false);
 
   useEffect(() => {
     listIntegrations()
@@ -198,6 +111,18 @@ export default function OnboardingScreen() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [setIntegrations, setLoading]);
+
+  // Re-read when a row closes: that is when something may have just connected.
+  useEffect(() => {
+    getGoogleCalendar()
+      .then((g) =>
+        setGoogleLinked(g.connected && g.state !== "NEEDS_RECONNECT"),
+      )
+      .catch(() => {});
+    listConnectedApps()
+      .then((r) => setAssistantLinked(r.apps.length > 0))
+      .catch(() => {});
+  }, [open]);
 
   // Returning from system settings with permission granted clears the hint.
   useEffect(() => {
@@ -210,42 +135,19 @@ export default function OnboardingScreen() {
     return () => sub.remove();
   }, []);
 
-  const go = () => {
-    if (fromSummary) {
-      setFromSummary(false);
-      setStep("done");
-    } else {
-      setStep((s) => nextStep(s));
-    }
-  };
-  const goBack = () => {
-    setBlocked(false);
-    if (fromSummary) {
-      setFromSummary(false);
-      setStep("done");
-    } else {
-      setStep((s) => prevStep(s));
-    }
-  };
-  const dluConnected = integrations.some((i) => i.connected);
-
-  async function run(fn: () => Promise<undefined | false>) {
-    setBusy(true);
-    try {
-      if ((await fn()) !== false) go();
-    } catch {
-      toast(COPY.saveFailed);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const advance = () => go();
+  const campusConnected = integrations.some((i) => i.connected);
+  const saveFailed = () =>
+    toast({
+      title: t("Couldn't save"),
+      description: t("Try again in a moment."),
+      variant: "destructive",
+      icon: Sliders,
+    });
 
   /**
    * Turn notifications on. "saved" = the preference is on but this device
-   * couldn't register (simulator / no FCM) — a quiet success, retried next
-   * launch. A failed preference save is NOT that: it stays on the step.
+   * couldn't register (simulator / no FCM): a quiet success, retried next
+   * launch. A failed preference save is NOT that.
    */
   async function turnOnNotifications(): Promise<
     "on" | "saved" | "blocked" | "failed"
@@ -256,7 +158,7 @@ export default function OnboardingScreen() {
     if (useUserStore.getState().user?.allowNotifications === true) {
       return "saved";
     }
-    toast(COPY.saveFailed);
+    saveFailed();
     return "failed";
   }
 
@@ -271,33 +173,11 @@ export default function OnboardingScreen() {
     try {
       const result = await turnOnNotifications();
       setBusy(false);
-      if (result === "on" || result === "saved") go();
-      else setBlocked(result === "blocked");
+      setBlocked(result === "blocked");
     } finally {
       notifPending.current = false;
       setBusy(false);
     }
-  }
-
-  async function toggleNotifications() {
-    if (notifPending.current) return;
-    notifPending.current = true;
-    setBusy(true);
-    try {
-      if (notif.active) {
-        await notif.setEnabled(false);
-        return;
-      }
-      setBlocked((await turnOnNotifications()) === "blocked");
-    } finally {
-      notifPending.current = false;
-      setBusy(false);
-    }
-  }
-
-  async function notNow() {
-    await notif.setEnabled(false);
-    go();
   }
 
   async function finish() {
@@ -306,324 +186,96 @@ export default function OnboardingScreen() {
       // Idempotent; the root AuthGate then routes to the app.
       updateUser(await updateBasicInfo({ onboarded: true }));
     } catch {
-      toast(COPY.saveFailed);
+      saveFailed();
       setBusy(false);
     }
   }
 
-  const progress = stepProgress(step);
-  const primary = (label: string, onPress: () => void, disabled = false) => (
-    <Button
-      size="lg"
-      className="rounded-full"
-      testID="onboarding.primary"
-      disabled={busy || disabled}
-      onPress={onPress}
-    >
-      <BusyOr busy={busy} testID="onboarding.busy" tone="onPrimary">
-        <Text className="font-semibold text-primary-foreground">{label}</Text>
-      </BusyOr>
-    </Button>
-  );
-  const ghost = (label: string, onPress: () => void) => (
-    <Pressable
-      testID="onboarding.secondary"
-      onPress={onPress}
-      disabled={busy}
-      className="items-center py-3"
-    >
-      <Text className="text-[14px] font-medium text-muted-foreground">
-        {label}
-      </Text>
-    </Pressable>
-  );
-
-  let title = "";
-  let body = "";
-  let content: React.ReactNode = null;
-  let footer: React.ReactNode = null;
-
-  switch (step) {
-    case "dlu":
-      ({ title, body } = COPY.dlu);
-      content = (
-        <View>
-          <DluAccountsSection hideLabel />
-          <Text className="mt-3.5 px-1 text-[12px] leading-snug text-muted-foreground">
-            {COPY.dlu.trust}
-          </Text>
-          <Text className="mt-1.5 px-1 text-[12px] leading-snug text-muted-foreground">
-            {COPY.dlu.hint}
-          </Text>
-        </View>
-      );
-      footer = (
-        <>
-          {primary(COPY.continue, advance)}
-          {!dluConnected && ghost(COPY.skipForNow, advance)}
-        </>
-      );
-      break;
-    case "notifications":
-      ({ title, body } = COPY.notifications);
-      content = (
-        <View>
-          <Group>
-            <View className="flex-row items-center gap-[13px] px-4 py-3.5">
-              <View className="size-[38px] items-center justify-center rounded-xl bg-muted">
-                <Bell size={18} className="text-foreground" />
-              </View>
-              <View className="min-w-0 flex-1">
-                <Text className="text-[15px] font-semibold">
-                  {COPY.notifications.rowTitle}
-                </Text>
-                <Text className="mt-0.5 text-[13px] text-muted-foreground">
-                  {COPY.notifications.rowBody}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => void toggleNotifications()}
-                disabled={busy}
-                hitSlop={8}
-                role="switch"
-                aria-checked={notif.active}
-                accessibilityLabel={COPY.notifications.rowTitle}
-                testID="onboarding.notifications-switch"
-                className={cn(
-                  "h-[26px] w-[46px] justify-center rounded-full px-[3px]",
-                  busy && "opacity-60",
-                  notif.active
-                    ? "items-end bg-primary"
-                    : "items-start bg-muted",
-                )}
-              >
-                <View
-                  className={cn(
-                    "size-5 rounded-full shadow",
-                    notif.active ? "bg-white" : "bg-card",
-                  )}
-                />
-              </Pressable>
-            </View>
-          </Group>
-          <View className="mt-4 gap-3 px-1">
-            {COPY.notifications.bullets.map((b) => (
-              <View key={t(b)} className="flex-row items-start gap-2.5">
-                <Check size={16} className="mt-0.5 text-primary" />
-                <Text className="flex-1 text-[13.5px] text-muted-foreground">
-                  {t(b)}
-                </Text>
-              </View>
-            ))}
-          </View>
-          {blocked && (
-            <View className="mt-5 flex-row gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
-              <AlertCircle size={20} className="text-destructive" />
-              <View className="flex-1">
-                <Text className="text-[13.5px] font-semibold">
-                  {COPY.notifications.blockedTitle}
-                </Text>
-                <Text className="mt-1 text-[13.5px] leading-snug text-muted-foreground">
-                  {COPY.notifications.blockedBody}
-                </Text>
-                <Pressable
-                  onPress={() => void Linking.openSettings()}
-                  className="mt-2"
-                >
-                  <Text className="text-[13.5px] font-semibold text-primary">
-                    {COPY.notifications.openSettings}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        </View>
-      );
-      footer = (
-        <>
-          {primary(
-            notif.active
-              ? COPY.continue
-              : blocked
-                ? COPY.notifications.openSettings
-                : COPY.notifications.enable,
-            notif.active
-              ? advance
-              : blocked
-                ? () => void Linking.openSettings()
-                : enableNotifications,
-          )}
-          {!notif.active &&
-            ghost(COPY.notifications.notNow, blocked ? advance : notNow)}
-        </>
-      );
-      break;
-    case "assistants":
-      ({ title, body } = COPY.assistants);
-      content = <AiAssistantsSection />;
-      footer = (
-        <>
-          {primary(COPY.continue, advance)}
-          {ghost(COPY.skipForNow, advance)}
-        </>
-      );
-      break;
-    case "done": {
-      ({ title, body } = COPY.done);
-      const rows: {
-        k: string;
-        v: string;
-        skipped?: boolean;
-        step?: OnboardingStep;
-      }[] = [
-        {
-          k: t("Language"),
-          v: LANGUAGES.find((l) => l.value === prefs.language)?.label ?? "",
-        },
-        { k: t("Name"), v: user?.name ?? "" },
-        {
-          k: t("LMS & portal"),
-          v: dluConnected ? t("Connected") : t("Skipped"),
-          skipped: !dluConnected,
-          step: "dlu",
-        },
-        {
-          k: t("Notifications"),
-          v: notif.active ? t("On") : t("Skipped"),
-          skipped: !notif.active,
-          step: "notifications",
-        },
-      ];
-      content = (
-        <Group>
-          {rows.map((r) => (
-            <View
-              key={r.k}
-              className="flex-row items-center justify-between px-4 py-3"
-            >
-              <Text className="text-[14.5px] font-medium">{r.k}</Text>
-              <View className="flex-row items-center gap-2.5">
-                <Text className="text-[13px] text-muted-foreground">{r.v}</Text>
-                {r.skipped && r.step ? (
-                  <Pressable
-                    onPress={() => {
-                      setFromSummary(true);
-                      setStep(r.step as OnboardingStep);
-                    }}
-                  >
-                    <Text className="text-[13px] font-semibold text-primary">
-                      {t("Set up")}
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <Check size={16} className="text-brand-lime" />
-                )}
-              </View>
-            </View>
-          ))}
-        </Group>
-      );
-      footer = primary(COPY.done.open, finish);
-      break;
-    }
-  }
-
-  const Hero = STEP_ICON[step];
+  const toggle = (row: Row) => () =>
+    setOpen((cur) => (cur === row ? null : row));
 
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-background"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {step !== "done" ? (
-        <View
-          className="flex-row items-center gap-3 px-3 pb-3"
-          style={{ paddingTop: insets.top + 6 }}
-        >
-          {canGoBack(step) ? (
-            <Pressable
-              onPress={goBack}
-              hitSlop={8}
-              accessibilityLabel={COPY.back}
-              className="size-[38px] items-center justify-center rounded-xl"
-            >
-              <ChevronLeft size={22} className="text-foreground" />
-            </Pressable>
-          ) : (
-            <View className="size-[38px]" />
-          )}
-          <View className="flex-1 flex-row gap-1.5">
-            {Array.from({ length: progress.total }, (_, i) => (
-              <View
-                // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length bar
-                key={i}
-                className={cn(
-                  "h-1 flex-1 rounded-full",
-                  i < progress.index ? "bg-primary" : "bg-muted",
-                )}
-              />
-            ))}
-          </View>
-          <Pressable
-            onPress={() => {
-              setBlocked(false);
-              void advance();
-            }}
-            hitSlop={8}
-            disabled={busy}
-            className="px-2"
-          >
-            <Text className="text-[14px] font-semibold text-muted-foreground">
-              {COPY.skip}
-            </Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={{ paddingTop: insets.top + 10 }} />
-      )}
       <ScrollView
         className="flex-1"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 24 }}
       >
-        <View
-          className={cn("px-6 pt-3", step === "done" && "items-center pt-8")}
-        >
-          {step === "done" ? (
-            <View className="mb-5 size-16 items-center justify-center rounded-full bg-primary">
-              <Check size={30} className="text-primary-foreground" />
-            </View>
-          ) : Hero ? (
-            <View className="mb-4 size-12 items-center justify-center rounded-2xl bg-primary/10">
-              <Hero size={24} className="text-primary" />
-            </View>
-          ) : null}
-          <Text
-            className={cn(
-              "text-[26px] font-bold leading-tight tracking-tight",
-              step === "done" && "text-center",
-            )}
-          >
-            {title}
-          </Text>
-          <Text
-            className={cn(
-              "mt-2 text-[14.5px] leading-relaxed text-muted-foreground",
-              step === "done" && "text-center",
-            )}
-          >
-            {body}
+        <View className="px-6 pt-3" style={{ paddingTop: insets.top + 24 }}>
+          <Text className="text-[28px] font-bold leading-tight tracking-tight">
+            {t("Connect your apps")}
           </Text>
         </View>
-        <View className="px-5 mt-6">
-          {content}
+        <View className="mt-6 gap-3 px-5">
+          <ConnectRow
+            testID="onboarding.row.campus"
+            icon={GraduationCap}
+            title={t("Campus")}
+            done={campusConnected}
+            open={open === "campus"}
+            onToggle={toggle("campus")}
+          >
+            <CampusStep
+              statuses={integrations}
+              onConnected={(status) => {
+                setIntegrations([
+                  ...integrations.filter((i) => i.provider !== status.provider),
+                  status,
+                ]);
+                setOpen(null);
+              }}
+            />
+          </ConnectRow>
+          <ConnectRow
+            testID="onboarding.row.calendar"
+            icon={CalendarDays}
+            title={t("Calendar")}
+            done={googleLinked || notif.active}
+            open={open === "calendar"}
+            onToggle={toggle("calendar")}
+          >
+            <CalendarStep
+              notificationsOn={notif.active}
+              blocked={blocked}
+              busy={busy}
+              onEnableNotifications={() => void enableNotifications()}
+            />
+          </ConnectRow>
+          <ConnectRow
+            testID="onboarding.row.assistants"
+            icon={Sparkles}
+            title={t("Assistant")}
+            done={assistantLinked}
+            open={open === "assistants"}
+            onToggle={toggle("assistants")}
+          >
+            <AssistantsStep />
+          </ConnectRow>
         </View>
       </ScrollView>
-      <View
-        className="gap-1 px-5 pt-3"
-        style={{ paddingBottom: insets.bottom + 12 }}
-      >
-        {footer}
+      <View className="px-5 pt-3" style={{ paddingBottom: insets.bottom + 12 }}>
+        <Button
+          size="lg"
+          className="rounded-full"
+          variant={campusConnected ? "default" : "outline"}
+          testID="onboarding.primary"
+          disabled={busy}
+          onPress={() => void finish()}
+        >
+          <BusyOr busy={busy} testID="onboarding.busy" tone="onPrimary">
+            <Text
+              className={cn(
+                "font-semibold",
+                campusConnected ? "text-primary-foreground" : "text-foreground",
+              )}
+            >
+              {campusConnected ? t("Open my calendar") : t("Skip for now")}
+            </Text>
+          </BusyOr>
+        </Button>
       </View>
     </KeyboardAvoidingView>
   );

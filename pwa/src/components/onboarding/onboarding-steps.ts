@@ -1,43 +1,24 @@
+/** The connect rows of first-run onboarding, one screen. */
+export const ONBOARDING_ROWS = ["campus", "calendar", "assistants"] as const;
+export type OnboardingRow = (typeof ONBOARDING_ROWS)[number];
 
-/**
- * Step order and pure helpers for first-run onboarding. Ported from
- * `mobile/lib/onboarding.ts`.
- */
+const OPEN_KEY = "zenflow:onboarding-open";
 
-export const ONBOARDING_STEPS = [
-  "campus",
-  "notifications",
-  "assistants",
-  "done",
-] as const;
-export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
-
-export const FIRST_STEP: OnboardingStep = "campus";
-
-export function nextStep(step: OnboardingStep): OnboardingStep {
-  const i = ONBOARDING_STEPS.indexOf(step);
-  return ONBOARDING_STEPS[Math.min(i + 1, ONBOARDING_STEPS.length - 1)];
+/** The row to reopen after a reload or the Google redirect. */
+export function savedRow(): OnboardingRow | null {
+  try {
+    const saved = sessionStorage.getItem(OPEN_KEY) as OnboardingRow | null;
+    return saved && ONBOARDING_ROWS.includes(saved) ? saved : null;
+  } catch {
+    return null;
+  }
 }
 
-export function prevStep(step: OnboardingStep): OnboardingStep {
-  const i = ONBOARDING_STEPS.indexOf(step);
-  return ONBOARDING_STEPS[Math.max(i - 1, 0)];
-}
-
-export function canGoBack(step: OnboardingStep): boolean {
-  return step !== FIRST_STEP && step !== "done";
-}
-
-/** 1-based progress over the actionable steps (excludes "done"). */
-export function stepProgress(step: OnboardingStep): {
-  index: number;
-  total: number;
-} {
-  return {
-    index: Math.min(
-      ONBOARDING_STEPS.indexOf(step) + 1,
-      ONBOARDING_STEPS.length - 1,
-    ),
-    total: ONBOARDING_STEPS.length - 1,
-  };
+export function saveRow(row: OnboardingRow | null): void {
+  try {
+    if (row) sessionStorage.setItem(OPEN_KEY, row);
+    else sessionStorage.removeItem(OPEN_KEY);
+  } catch {
+    // Resume is a convenience.
+  }
 }
