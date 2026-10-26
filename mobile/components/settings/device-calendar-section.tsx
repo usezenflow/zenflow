@@ -36,7 +36,7 @@ export function DeviceCalendarSection() {
     if (result === "ok") return;
     const failure = {
       denied: [t("Calendar access is off"), t("Allow it in your phone's settings to use this.")],
-      google: [t("Google Calendar is in use"), t("Disconnect it on the web first.")],
+      google: [t("Google Calendar is in use"), t("Disconnect it above first.")],
       failed: [t("Couldn't turn this on"), t("Try again in a moment.")],
     }[result];
     toast({ title: failure[0], description: failure[1], variant: "destructive", icon: CalendarDays });
@@ -54,8 +54,8 @@ export function DeviceCalendarSection() {
             <Text className="text-[16px] font-semibold">{t("Show in my calendar app")}</Text>
             <Text className="text-[13px] leading-[18px] text-muted-foreground">
               {googleOwned
-                ? t("Google Calendar shows your schedule. Disconnect it on the web to use this.")
-                : t("Skip this if Google Calendar on your phone already shows Zenflow.")}
+                ? t("Google Calendar is on. Disconnect it above to use this.")
+                : t("Skip this if Google Calendar already shows Zenflow.")}
             </Text>
           </View>
           <Switch

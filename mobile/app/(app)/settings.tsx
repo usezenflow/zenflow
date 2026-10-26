@@ -14,6 +14,8 @@ import { ProfileRow } from "@/components/settings/profile-row";
 import { StudentCard, StudentCardSkeleton } from "@/components/settings/student-card";
 import { useStudent } from "@/hooks/use-student";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
+import { GoogleCalendarSection } from "@/components/settings/google-calendar-section";
+import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
 import { AdvancedSection } from "@/components/settings/advanced-section";
 import { SettingsSkeleton } from "@/components/settings/settings-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -211,7 +213,9 @@ export default function SettingsScreen() {
         ) : (
         <>
         <PreferencesSection />
+        <GoogleCalendarSection />
         <DeviceCalendarSection />
+        <AiAssistantsSection />
         <View
           onLayout={(e) => {
             dluY.current = e.nativeEvent.layout.y;

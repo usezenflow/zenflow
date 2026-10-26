@@ -7,7 +7,11 @@ import {
   startGoogleCalendar,
   syncGoogleCalendar,
 } from "@/api/google-calendar";
-import { IconTile, SettingsCard, SettingsLabel } from "@/components/settings/settings-ui";
+import {
+  IconTile,
+  SettingsCard,
+  SettingsLabel,
+} from "@/components/settings/settings-ui";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUserStore } from "@/hooks/use-user-store";
@@ -44,13 +48,15 @@ export function GoogleCalendarSection() {
   const tz = useUserStore((s) => s.user?.timezone) || "UTC";
   const [status, setStatus] = useState<GoogleCalendarStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setStatus(await getGoogleCalendar());
+      setFailed(false);
     } catch {
-      setStatus(null);
+      setFailed(true);
     }
   }, []);
 
@@ -61,7 +67,10 @@ export function GoogleCalendarSection() {
     void load();
   }, [load]);
 
-  async function run(work: () => Promise<GoogleCalendarStatus | void>, failure: string) {
+  async function run(
+    work: () => Promise<GoogleCalendarStatus | void>,
+    failure: string,
+  ) {
     setBusy(true);
     try {
       const next = await work();
@@ -78,7 +87,7 @@ export function GoogleCalendarSection() {
       window.location.assign((await startGoogleCalendar()).url);
     }, t("Couldn't connect Google Calendar"));
 
-  if (status && !status.available) return null;
+  const unavailable = !!status && !status.available;
 
   const needsReconnect = status?.state === "NEEDS_RECONNECT";
 
@@ -90,28 +99,57 @@ export function GoogleCalendarSection() {
           <IconTile icon={CalendarDays} />
           <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold">
-              {status?.connected && !needsReconnect
-                ? t("Your schedule is in Google Calendar.")
-                : t("See your schedule in Google Calendar and on your phone.")}
+              {unavailable
+                ? t("Not available")
+                : status?.connected && !needsReconnect
+                  ? t("Synced to Google Calendar")
+                  : t(
+                      "See your schedule in Google Calendar and on your phone.",
+                    )}
             </p>
             {status?.connected && !needsReconnect && (
-              <p className="mt-0.5 text-[13px] text-muted-foreground">{lastSyncLabel(status, tz)}</p>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
+                {lastSyncLabel(status, tz)}
+              </p>
             )}
             {needsReconnect && (
-              <p className="mt-0.5 text-[13px] text-destructive">{t("The link stopped working. Connect again.")}</p>
+              <p className="mt-0.5 text-[13px] text-destructive">
+                {t("Connection lost")}
+              </p>
             )}
           </div>
         </div>
 
-        {status ? (
+        {unavailable ? null : failed ? (
+          <div className="px-4 pb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void load()}
+              className="rounded-full"
+            >
+              {t("Try again")}
+            </Button>
+          </div>
+        ) : status ? (
           <div className="flex flex-wrap gap-2 px-4 pb-4">
             {!status.connected || needsReconnect ? (
-              <Button size="sm" onClick={() => void connect()} disabled={busy} className="rounded-full">
+              <Button
+                size="sm"
+                onClick={() => void connect()}
+                disabled={busy}
+                className="rounded-full"
+              >
                 {needsReconnect ? t("Connect again") : t("Connect")}
               </Button>
             ) : confirming ? (
               <>
-                <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={busy}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirming(false)}
+                  disabled={busy}
+                >
                   {t("Cancel")}
                 </Button>
                 <Button
@@ -135,13 +173,20 @@ export function GoogleCalendarSection() {
                   variant="outline"
                   size="sm"
                   disabled={busy}
-                  onClick={() => void run(syncGoogleCalendar, t("Couldn't start the sync"))}
+                  onClick={() =>
+                    void run(syncGoogleCalendar, t("Couldn't start the sync"))
+                  }
                   className="rounded-full"
                 >
                   <RefreshCw className="size-3.5" aria-hidden />
                   {t("Sync now")}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setConfirming(true)} className="rounded-full">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirming(true)}
+                  className="rounded-full"
+                >
                   {t("Disconnect")}
                 </Button>
               </>

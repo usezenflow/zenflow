@@ -7,7 +7,7 @@ export function SettingsPage({ focusLms = false }: { focusLms?: boolean }) {
   useLanguage();
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-md px-4 pb-16 pt-6">
+    <main className="mx-auto min-h-dvh w-full max-w-md px-4 pb-16 pt-6 lg:max-w-6xl lg:px-8">
       <header className="flex items-center gap-3">
         <Logo className="size-9" />
         <h1 className="text-xl font-semibold">{t("Settings")}</h1>
