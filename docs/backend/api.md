@@ -27,19 +27,17 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | GET | `/users/me/preference-matrix` | 168-float matrix for the Insights heatmap |
 | GET | `/users/me/student` | DLU profile (`StudentResponse`); `profile` is null until the first fetch lands |
 | GET | `/users/me/marks` | Marks grouped by term, newest first; names are clean and `noCredit` flags the portal's red star (`StudentMarksResponse`) |
-| GET | `/users/me/api-access` | `mcpUrl`, `restBaseUrl`, assistant `prompt` and the user's tokens (`ApiAccessResponse`) |
-| POST | `/users/me/api-access/tokens` | `{ name }`. Returns `{ token, secret }`; the secret is shown once |
-| DELETE | `/users/me/api-access/tokens/:id` | Revoke at once. `{ revoked: true }` |
+| GET | `/users/me/api-access` | `mcpUrl`, `restBaseUrl`, assistant `prompt` and setup steps (`ApiAccessResponse`) |
 
 ## AI assistants (`/mcp`)
 
-[ADR-0038](../adr/0038-personal-api-access.md), [ADR-0041](../adr/0041-mcp-oauth.md). Assistants sign in through OAuth; scripts can use a personal token from `/users/me/api-access` (`Authorization: Bearer zf_...`). OAuth access tokens are `zo_...`.
+[ADR-0038](../adr/0038-personal-api-access.md), [ADR-0041](../adr/0041-mcp-oauth.md), [ADR-0044](../adr/0044-mcp-planning-tools.md). Assistants sign in through OAuth. Access tokens are `zo_...`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/mcp` | Streamable HTTP MCP, stateless. Bearer only; a 401 carries `WWW-Authenticate: Bearer resource_metadata=...`. GET and DELETE answer 405 |
 
-- Tools: `list_schedule`, `get_session`, `update_session`, `delete_sessions` (`dryRun` first), `create_tasks` (`dryRun` first; returns `proposedStart`, `proposedEnd`, `timezone`), `undo_last_change`, `sync_status`. Each calls the same service as the REST route and relays its error code.
+- Tools: `get_time`, `list_schedule`, `recap`, `find_free_slots`, `get_session`, `create_tasks`, `update_session`, `delete_sessions`, `replan`, `undo_last_change`, `sync_status`. Writes first return a preview and a `planId`; repeating the call with it applies the change. Each tool calls the same service as the REST route and relays its error code.
 - Bearer tokens are refused (403) on routes not marked for them. Cookie sessions are unchanged.
 - Management routes above take the cookie only.
 

@@ -26,4 +26,4 @@ Students want an assistant to read their schedule and add tasks. A third-party a
 - Prisma: `ApiToken` (`id`, `name`, `hash`, `createdAt`, `lastUsedAt`, `revokedAt`, `userId`), migration `20261023100000_personal_api_access`.
 - Env: `API_TOKEN_PEPPER`.
 
-**Addendum (2026-10-25, ADR-0041):** assistants sign in through OAuth. Personal tokens remain for scripts.
+**Addendum (2026-10-27, ADR-0044):** personal tokens, their routes, the `ApiToken` table and the settings UI are removed. Assistants use OAuth only (ADR-0041). `GET /users/me/api-access` remains.

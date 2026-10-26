@@ -13,8 +13,8 @@
 - Public clients with PKCE `S256`. Redirect URIs must be https or loopback. Registration is open and rate limited by the SDK.
 - `authorize` sends the browser to the PWA consent screen (`/oauth/consent`), which reuses the OTP session. Approving issues a one-time code (5 min).
 - Tokens are opaque and stored as HMAC with `API_TOKEN_PEPPER`. Access tokens (`zo_`) last 1 hour; refresh tokens (`zr_`) 30 days and rotate. A replayed code or spent refresh token revokes its whole family (`OAuthToken.familyId`).
-- `ApiTokenGuard` accepts `zo_` tokens beside personal `zf_` tokens, and answers a 401 with `WWW-Authenticate: Bearer resource_metadata=...` so clients can find the server.
-- Users list and disconnect assistants in settings (`/oauth/apps`). Personal tokens stay for scripts.
+- `ApiTokenGuard` accepts `zo_` tokens and answers a 401 with `WWW-Authenticate: Bearer resource_metadata=...` so clients can find the server.
+- Users list and disconnect assistants in settings (`/oauth/apps`). Personal `zf_` tokens are removed (ADR-0044).
 - Models: `OAuthClient`, `OAuthToken`. Env: `PUBLIC_API_URL`.
 
 ## Consequences

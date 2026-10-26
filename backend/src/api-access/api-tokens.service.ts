@@ -1,160 +1,43 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  ServiceUnavailableException,
-} from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type {
-  ApiTokenSummary,
-  CreateApiTokenInput,
-  CreateApiTokenResponse,
-  RevokeApiTokenResponse,
-} from "@zenflow/shared";
-import { type ApiToken, type User } from "../../generated/prisma";
+import { type User } from "../../generated/prisma";
 import { readVersionedSecret } from "../common/config/versioned-secret";
 import { PrismaService } from "../prisma/prisma.service";
-import {
-  API_TOKEN_PREFIX,
-  OAUTH_ACCESS_PREFIX,
-  generateApiTokenSecret,
-  hashApiToken,
-} from "./api-token.util";
-
-/** `lastUsedAt` is written at most once per this window. */
-export const LAST_USED_WRITE_INTERVAL_MS = 5 * 60_000;
-
-export function toApiTokenSummary(row: ApiToken): ApiTokenSummary {
-  return {
-    id: row.id,
-    name: row.name,
-    createdAt: row.createdAt.toISOString(),
-    lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
-  };
-}
+import { OAUTH_ACCESS_PREFIX, hashApiToken } from "./api-token.util";
 
 /**
- * Personal API tokens. The secret is shown once; only its peppered HMAC is
- * stored. With no `API_TOKEN_PEPPER` the feature is off: create answers 503,
- * authenticate answers no user.
+ * Resolves the user behind an OAuth access token an AI assistant was given.
+ * Tokens are stored as a peppered HMAC; with no `API_TOKEN_PEPPER` nothing
+ * authenticates.
  */
 @Injectable()
 export class ApiTokensService {
-  private readonly logger = new Logger(ApiTokensService.name);
-  /** Current pepper, used to hash new tokens. */
-  private readonly pepper: string | undefined;
-  /** Every configured pepper: a token is found under any of them. */
+  /** Every configured pepper: a token is found under any of them, so rotation keeps old ones valid. */
   private readonly peppers: string[];
 
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService,
   ) {
-    const { current, values } = readVersionedSecret(
+    const { values } = readVersionedSecret(
       (key) => config.get<string>(key),
       "API_TOKEN_PEPPER",
     );
-    this.pepper = values.get(current);
     this.peppers = [...values.values()];
   }
 
-  async list(user: User): Promise<ApiTokenSummary[]> {
-    const rows = await this.prisma.apiToken.findMany({
-      where: { userId: user.id, revokedAt: null },
-      orderBy: { createdAt: "desc" },
-    });
-    return rows.map(toApiTokenSummary);
-  }
-
-  async create(
-    user: User,
-    input: CreateApiTokenInput,
-  ): Promise<CreateApiTokenResponse> {
-    if (!this.pepper) {
-      throw new ServiceUnavailableException("API access is not configured");
-    }
-    const secret = generateApiTokenSecret();
-    const row = await this.prisma.apiToken.create({
-      data: {
-        name: input.name,
-        hash: hashApiToken(secret, this.pepper),
-        userId: user.id,
-      },
-    });
-    return { token: toApiTokenSummary(row), secret };
-  }
-
-  async revoke(user: User, id: string): Promise<RevokeApiTokenResponse> {
-    const row = await this.prisma.apiToken.findFirst({
-      where: { id, userId: user.id },
-    });
-    if (!row) throw new NotFoundException("API token not found");
-    if (!row.revokedAt) {
-      await this.prisma.apiToken.update({
-        where: { id },
-        data: { revokedAt: new Date() },
-      });
-    }
-    return { revoked: true };
-  }
-
-  /**
-   * The owner of a live token, or `null` for a malformed, unknown, revoked or
-   * wrong-pepper secret. Stamps `lastUsedAt` at most once per interval.
-   */
+  /** The owner of a live access token, or `null` for a malformed, unknown, expired or wrong-pepper secret. */
   async authenticate(secret: string, now = new Date()): Promise<User | null> {
-    if (this.pepper && secret.startsWith(OAUTH_ACCESS_PREFIX)) {
-      return this.authenticateOAuth(secret, now);
-    }
-    if (!this.pepper || !secret.startsWith(API_TOKEN_PREFIX)) return null;
-    const row = await this.prisma.apiToken.findFirst({
-      where: { hash: { in: this.hashes(secret) } },
-      include: { user: true },
-    });
-    if (!row || row.revokedAt) return null;
-    await this.touch(row.id, row.lastUsedAt, now);
-    return row.user;
-  }
-
-  /** The stored form of a secret under each configured pepper, so tokens survive a rotation. */
-  private hashes(secret: string): string[] {
-    return this.peppers.map((pepper) => hashApiToken(secret, pepper));
-  }
-
-  /** The user behind a live OAuth access token an AI assistant was given. */
-  private async authenticateOAuth(
-    secret: string,
-    now: Date,
-  ): Promise<User | null> {
+    if (!this.peppers.length || !secret.startsWith(OAUTH_ACCESS_PREFIX))
+      return null;
     const row = await this.prisma.oAuthToken.findFirst({
       where: {
-        hash: { in: this.hashes(secret) },
+        hash: { in: this.peppers.map((p) => hashApiToken(secret, p)) },
         kind: "ACCESS",
         expiresAt: { gt: now },
       },
       include: { user: true },
     });
     return row?.user ?? null;
-  }
-
-  /** Conditional write, so concurrent requests stamp at most one update. */
-  private async touch(
-    id: string,
-    lastUsedAt: Date | null,
-    now: Date,
-  ): Promise<void> {
-    const staleBefore = new Date(now.getTime() - LAST_USED_WRITE_INTERVAL_MS);
-    if (lastUsedAt && lastUsedAt > staleBefore) return;
-    try {
-      await this.prisma.apiToken.updateMany({
-        where: {
-          id,
-          OR: [{ lastUsedAt: null }, { lastUsedAt: { lte: staleBefore } }],
-        },
-        data: { lastUsedAt: now },
-      });
-    } catch (err) {
-      this.logger.warn(`api token lastUsedAt not stamped: ${String(err)}`);
-    }
   }
 }

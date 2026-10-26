@@ -38,11 +38,11 @@ describe("buildAssistantSetup", () => {
     expect(guides.find((g) => g.id === "chatgpt")!.steps[0]).toMatch(/Free/);
   });
 
-  it("puts the MCP URL in the Claude Code command and the token example", () => {
-    const code = guides.find((g) => g.id === "other")?.code ?? "";
-    expect(code).toContain(
+  it("gives Claude Code one command and no token step", () => {
+    const other = guides.find((g) => g.id === "other")!;
+    expect(other.code).toBe(
       `claude mcp add --transport http zenflow ${MCP_URL}`,
     );
-    expect(code).toContain(`curl ${MCP_URL}`);
+    expect(other.steps.join(" ")).not.toMatch(/token|Bearer|zf_/i);
   });
 });

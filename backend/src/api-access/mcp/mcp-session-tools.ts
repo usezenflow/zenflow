@@ -13,12 +13,16 @@ import {
   SESSION_TYPES,
 } from "../../sessions/dto/list-sessions.dto";
 import { UpdateSessionDto } from "../../sessions/dto/update-session.dto";
+import { ReplanService } from "../../sessions/replan.service";
 import { SessionsService } from "../../sessions/sessions.service";
 import { PlacementPlanService } from "../../sessions/placement-plan.service";
 import { GoogleCalendarService } from "../../google-calendar/google-calendar.service";
-import { MAX_BULK_SESSIONS } from "@zenflow/shared";
+import { MAX_BULK_SESSIONS, SESSION_WINDOWS } from "@zenflow/shared";
 import { MAX_ATTENDEES } from "../../common/constants";
 import { MCP_TOOLS } from "./mcp-tool-catalog";
+import { timeInfo } from "./mcp-time";
+import { buildRecap, findFreeSlots } from "./mcp-recap";
+import type { PlanTokens } from "./plan-token";
 
 const text = (value: unknown, isError = false): CallToolResult => ({
   content: [
@@ -89,6 +93,44 @@ export interface SessionToolServices {
   sessions: SessionsService;
   placement: PlacementPlanService;
   calendar: GoogleCalendarService;
+  replans: ReplanService;
+  plans: PlanTokens;
+}
+
+const PLAN_ID = z
+  .string()
+  .max(200)
+  .optional()
+  .describe(
+    "Leave empty to preview. To apply, repeat the same call with the planId from the preview, after the user agrees.",
+  );
+
+/**
+ * Writes only after a preview: without a valid `planId` the call runs as a
+ * preview and returns one; with it, the same arguments are applied.
+ */
+async function previewThenApply(
+  plans: PlanTokens,
+  user: User,
+  tool: string,
+  { planId, ...args }: { planId?: string } & Record<string, unknown>,
+  preview: () => Promise<unknown>,
+  apply: () => Promise<unknown>,
+): Promise<unknown> {
+  if (planId === undefined) {
+    const result = await preview();
+    return {
+      preview: result,
+      planId: plans.issue(user.id, tool, args),
+      next: "Nothing changed yet. Describe this to the user, and if they agree repeat the same call with this planId.",
+    };
+  }
+  if (!plans.verify(planId, user.id, tool, args)) {
+    throw new Error(
+      "planId is expired or does not match these arguments. Call again without planId to preview.",
+    );
+  }
+  return apply();
 }
 
 /**
@@ -97,7 +139,7 @@ export interface SessionToolServices {
  */
 export function registerSessionTools(
   server: McpServer,
-  { sessions, placement, calendar }: SessionToolServices,
+  { sessions, placement, calendar, replans, plans }: SessionToolServices,
   user: User,
 ): void {
   const described = (name: string) => {
@@ -105,6 +147,12 @@ export function registerSessionTools(
     if (!tool) throw new Error(`Unknown MCP tool ${name}`);
     return tool.description;
   };
+
+  server.registerTool(
+    "get_time",
+    { description: described("get_time"), inputSchema: {} },
+    () => run(async () => timeInfo(user.timezone)),
+  );
 
   server.registerTool(
     "list_schedule",
@@ -131,6 +179,42 @@ export function registerSessionTools(
   );
 
   server.registerTool(
+    "recap",
+    {
+      description: described("recap"),
+      inputSchema: { from: z.iso.date(), to: z.iso.date() },
+    },
+    ({ from, to }) =>
+      run(async () => {
+        const { sessions: list } = await sessions.list(
+          plainToInstance(ListSessionsDto, { from, to }),
+          user,
+        );
+        return buildRecap(list, from, to, user.timezone, user.preferenceMatrix);
+      }),
+  );
+
+  server.registerTool(
+    "find_free_slots",
+    {
+      description: described("find_free_slots"),
+      inputSchema: {
+        from: z.iso.date(),
+        to: z.iso.date(),
+        durationMinutes: z.number().int().min(15).max(480),
+      },
+    },
+    ({ from, to, durationMinutes }) =>
+      run(async () => {
+        const { sessions: list } = await sessions.list(
+          plainToInstance(ListSessionsDto, { from, to }),
+          user,
+        );
+        return findFreeSlots(list, from, to, durationMinutes, user.timezone);
+      }),
+  );
+
+  server.registerTool(
     "get_session",
     {
       description: described("get_session"),
@@ -151,19 +235,39 @@ export function registerSessionTools(
         reminderMinutes: z.number().int().nullable().optional(),
         attendees: z.array(z.string().max(320)).max(MAX_ATTENDEES).optional(),
         deadline: z.string().optional(),
+        notBefore: z.string().nullable().optional(),
+        window: z.enum(SESSION_WINDOWS).nullable().optional(),
         scheduledStartTime: z.string().optional(),
         scope: z.enum(["occurrence", "following", "series"]).optional(),
+        planId: PLAN_ID,
       },
     },
-    ({ id, ...changes }) =>
-      run(async () => {
-        requireGoogleForInvites(user, changes.attendees);
-        return sessions.update(
-          id,
-          await validated(UpdateSessionDto, changes),
+    (args) =>
+      run(() =>
+        previewThenApply(
+          plans,
           user,
-        );
-      }),
+          "update_session",
+          args,
+          async () => ({
+            current: await sessions.findById(args.id, user),
+            requested: Object.fromEntries(
+              Object.entries(args).filter(
+                ([k, v]) => k !== "id" && k !== "planId" && v !== undefined,
+              ),
+            ),
+          }),
+          async () => {
+            const { id, planId: _p, ...changes } = args;
+            requireGoogleForInvites(user, changes.attendees);
+            return sessions.update(
+              id,
+              await validated(UpdateSessionDto, changes),
+              user,
+            );
+          },
+        ),
+      ),
   );
 
   server.registerTool(
@@ -171,7 +275,7 @@ export function registerSessionTools(
     {
       description: described("delete_sessions"),
       inputSchema: {
-        dryRun: z.boolean().optional(),
+        planId: PLAN_ID,
         items: z
           .array(
             z.object({
@@ -185,8 +289,45 @@ export function registerSessionTools(
       },
     },
     (args) =>
-      run(async () =>
-        sessions.bulkDelete(await validated(BulkDeleteSessionsDto, args), user),
+      run(() => {
+        const { planId, ...body } = args;
+        const del = async (dryRun: boolean) =>
+          sessions.bulkDelete(
+            await validated(BulkDeleteSessionsDto, { ...body, dryRun }),
+            user,
+          );
+        return previewThenApply(
+          plans,
+          user,
+          "delete_sessions",
+          args,
+          () => del(true),
+          () => del(false),
+        );
+      }),
+  );
+
+  server.registerTool(
+    "replan",
+    {
+      description: described("replan"),
+      inputSchema: {
+        from: z.iso.date(),
+        to: z.iso.date(),
+        change: z.enum(["free", "balanced"]).optional(),
+        planId: PLAN_ID,
+      },
+    },
+    (args) =>
+      run(() =>
+        previewThenApply(
+          plans,
+          user,
+          "replan",
+          args,
+          () => replans.plan(user, args.from, args.to, args.change),
+          () => replans.apply(user, args.from, args.to, args.change),
+        ),
       ),
   );
 
@@ -207,7 +348,7 @@ export function registerSessionTools(
     {
       description: described("create_tasks"),
       inputSchema: {
-        dryRun: z.boolean().optional(),
+        planId: PLAN_ID,
         items: z
           .array(z.record(z.string(), z.unknown()))
           .min(1)
@@ -215,13 +356,23 @@ export function registerSessionTools(
       },
     },
     (args) =>
-      run(async () => {
+      run(() => {
         args.items.forEach((item) =>
           requireGoogleForInvites(user, item.attendees),
         );
-        return sessions.bulkCreate(
-          await validated(BulkCreateSessionsDto, args),
+        const { planId, ...body } = args;
+        const create = async (dryRun: boolean) =>
+          sessions.bulkCreate(
+            await validated(BulkCreateSessionsDto, { ...body, dryRun }),
+            user,
+          );
+        return previewThenApply(
+          plans,
           user,
+          "create_tasks",
+          args,
+          () => create(true),
+          () => create(false),
         );
       }),
   );

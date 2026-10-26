@@ -10,7 +10,7 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | API, migrations, Postgres, backup (Vault sets `api`, `postgres`, `backup`) | [runbook](#database-password) |
 | `SESSION_SECRET` | Signs the session cookie | [runbook](#session-signing-key-session_secret) |
-| `API_TOKEN_PEPPER_V<n>` | Server pepper for hashing personal and OAuth tokens (required in production, min 32 chars; Vault sets `api`) | [runbook](#versioned-secrets) |
+| `API_TOKEN_PEPPER_V<n>` | Server pepper for hashing OAuth tokens and signing MCP plan tokens (required in production, min 32 chars; Vault sets `api`) | [runbook](#versioned-secrets) |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret for Calendar sync (Vault sets `api`) | Rotate in Google Cloud, redeploy |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY_V<n>` | AES key for stored Google refresh tokens, 64 hex (Vault sets `api`) | [runbook](#versioned-secrets) |
 | `MASTER_LMS_ENCRYPTION_KEY_V<n>`, `MASTER_PORTAL_ENCRYPTION_KEY_V<n>` | Wrap per-user DEKs for DLU and LMS credentials (`backend/src/crypto`) | [runbook](#crypto-master-keys-master__encryption_key_vn) |

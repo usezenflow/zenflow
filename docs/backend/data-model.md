@@ -22,6 +22,7 @@ For: developers changing the schema or reading Session data. Source of truth: [`
 
 - `type`: `TASK` (engine-placed), `ASSIGNMENT`, `EXAM`, `LECTURE`, `DND` (user-pinned).
 - `source`: `USER`, `LMS`, `PORTAL`.
+- `notBefore` and `window` (`MORNING`, `AFTERNOON`, `EVENING`) bound where a `TASK` may start ([ADR-0044](../adr/0044-mcp-planning-tools.md)).
 - `deleted` is a soft-delete flag. Every scheduling and calendar read filters it, except the materializer's idempotency lookup.
 - `scheduledStartTime` is never null on a live `TASK` ([never unplaced](scheduler.md#python-authoritative-placement)).
 - `skipped` is the skipped state of a non-TASK session. Skipping writes no event. A recurring occurrence keeps its state in `SessionOccurrenceState` instead of being materialized, so series-wide edits still reach it.

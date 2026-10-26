@@ -66,7 +66,6 @@ model User {
 
   banditArmStates BanditArmState[]
 
-  apiTokens          ApiToken[]
   calendarConnection CalendarConnection?
   calendarLinks      CalendarLink[]
   oauthTokens        OAuthToken[]
@@ -165,22 +164,6 @@ model UserDevice {
 }
 
 /// Personal API access token
-model ApiToken {
-  id         String    @id @default(uuid())
-  name       String    @db.VarChar(60)
-  /// HMAC-SHA256(secret, API_TOKEN_PEPPER), hex. Lookup key.
-  hash       String    @unique
-  createdAt  DateTime  @default(now())
-  /// Throttled to one write per 5 minutes.
-  lastUsedAt DateTime?
-  revokedAt  DateTime?
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
 enum SessionType {
   TASK
   ASSIGNMENT

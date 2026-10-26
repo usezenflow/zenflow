@@ -9,6 +9,7 @@ import { PrismaModule } from "../prisma/prisma.module";
 import { SchedulerModule } from "../scheduler/scheduler.module";
 import { PlacementChipsService } from "./placement-chips.service";
 import { PlacementPlanService } from "./placement-plan.service";
+import { ReplanService } from "./replan.service";
 import { ApiTokensModule } from "../api-access/api-tokens.module";
 import { CalendarSyncTriggerModule } from "../google-calendar/calendar-sync-trigger.module";
 
@@ -28,7 +29,8 @@ import { CalendarSyncTriggerModule } from "../google-calendar/calendar-sync-trig
     SlotPickService,
     PlacementChipsService,
     PlacementPlanService,
+    ReplanService,
   ],
-  exports: [SessionsService, PlacementPlanService],
+  exports: [SessionsService, PlacementPlanService, ReplanService],
 })
 export class SessionsModule {}

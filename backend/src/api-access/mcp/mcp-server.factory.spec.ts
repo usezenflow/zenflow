@@ -3,9 +3,11 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ConflictException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import type { User } from "../../../generated/prisma";
+import { ReplanService } from "../../sessions/replan.service";
 import { SessionsService } from "../../sessions/sessions.service";
 import { PlacementPlanService } from "../../sessions/placement-plan.service";
 import { GoogleCalendarService } from "../../google-calendar/google-calendar.service";
+import { PublicUrls } from "../../common/config/public-urls";
 import { McpServerFactory } from "./mcp-server.factory";
 
 const USER = { id: "u1", timezone: "UTC" } as User;
@@ -29,6 +31,7 @@ describe("McpServerFactory", () => {
         { provide: SessionsService, useValue: {} },
         { provide: PlacementPlanService, useValue: {} },
         { provide: GoogleCalendarService, useValue: {} },
+        { provide: ReplanService, useValue: {} },
       ],
     }).compile();
     factory = module.get(McpServerFactory);
@@ -39,6 +42,7 @@ describe("McpServerFactory", () => {
 
     expect(client.getServerVersion()).toEqual({
       name: "zenflow",
+      title: "Zenflow",
       version: "1.0.0",
     });
     await client.close();
@@ -53,8 +57,12 @@ describe("McpServerFactory", () => {
     expect(tools.map((t) => t.name).sort()).toEqual([
       "create_tasks",
       "delete_sessions",
+      "find_free_slots",
       "get_session",
+      "get_time",
       "list_schedule",
+      "recap",
+      "replan",
       "sync_status",
       "undo_last_change",
       "update_session",
@@ -68,6 +76,7 @@ describe("McpServerFactory write tools", () => {
   const sessions = {
     update: jest.fn(),
     bulkDelete: jest.fn(),
+    findById: jest.fn(),
   };
   const placement = { undoLatest: jest.fn() };
   const calendar = { status: jest.fn() };
@@ -79,6 +88,7 @@ describe("McpServerFactory write tools", () => {
         { provide: SessionsService, useValue: sessions },
         { provide: PlacementPlanService, useValue: placement },
         { provide: GoogleCalendarService, useValue: calendar },
+        { provide: ReplanService, useValue: {} },
       ],
     }).compile();
     return connect(module.get(McpServerFactory));
@@ -92,6 +102,53 @@ describe("McpServerFactory write tools", () => {
       content: { text: string }[];
     }>;
 
+  /** Previews, then repeats the call with the planId, as an assistant must. */
+  async function applied(
+    client: Client,
+    name: string,
+    args: Record<string, unknown>,
+  ) {
+    const preview = await call(client, name, args);
+    if (preview.isError) return preview;
+    const { planId } = JSON.parse(preview.content[0].text) as {
+      planId: string;
+    };
+    return call(client, name, { ...args, planId });
+  }
+
+  it("a write without a planId only previews", async () => {
+    sessions.bulkDelete.mockResolvedValue({ dryRun: true, results: [] });
+    const { client } = await connected();
+
+    const res = await call(client, "delete_sessions", {
+      items: [{ kind: "session", id: "s1" }],
+    });
+
+    expect(JSON.parse(res.content[0].text).planId).toEqual(expect.any(String));
+    expect(sessions.bulkDelete).toHaveBeenCalledTimes(1);
+    expect(sessions.bulkDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ dryRun: true }),
+      USER,
+    );
+  });
+
+  it("a planId for other arguments is refused", async () => {
+    sessions.bulkDelete.mockResolvedValue({ dryRun: true, results: [] });
+    const { client } = await connected();
+    const first = await call(client, "delete_sessions", {
+      items: [{ kind: "session", id: "s1" }],
+    });
+    const { planId } = JSON.parse(first.content[0].text);
+
+    const res = await call(client, "delete_sessions", {
+      items: [{ kind: "session", id: "s2" }],
+      planId,
+    });
+
+    expect(res.isError).toBe(true);
+    expect(sessions.bulkDelete).toHaveBeenCalledTimes(1);
+  });
+
   it("update_session moves a session as the signed-in user", async () => {
     sessions.update.mockResolvedValue({
       id: "s1",
@@ -99,11 +156,13 @@ describe("McpServerFactory write tools", () => {
     });
     const { client } = await connected();
 
-    const res = await call(client, "update_session", {
+    const args = {
       id: "s1",
       scheduledStartTime: "2026-11-05T11:00:00.000Z",
       durationMinutes: 90,
-    });
+    };
+    sessions.findById.mockResolvedValue({ id: "s1" });
+    const res = await applied(client, "update_session", args);
 
     expect(res.isError).toBeFalsy();
     expect(sessions.update).toHaveBeenCalledWith(
@@ -119,7 +178,7 @@ describe("McpServerFactory write tools", () => {
   it("update_session rejects an off-grid duration before touching the service", async () => {
     const { client } = await connected();
 
-    const res = await call(client, "update_session", {
+    const res = await applied(client, "update_session", {
       id: "s1",
       durationMinutes: 50,
     });
@@ -137,7 +196,7 @@ describe("McpServerFactory write tools", () => {
     );
     const { client } = await connected();
 
-    const res = await call(client, "update_session", {
+    const res = await applied(client, "update_session", {
       id: "s1",
       title: "New",
     });
@@ -152,7 +211,7 @@ describe("McpServerFactory write tools", () => {
     sessions.bulkDelete.mockResolvedValue({ dryRun: false, results: [] });
     const { client } = await connected();
 
-    const res = await call(client, "delete_sessions", {
+    const res = await applied(client, "delete_sessions", {
       items: [
         { kind: "session", id: "s1" },
         { kind: "series", id: "ser1" },
@@ -180,7 +239,7 @@ describe("McpServerFactory write tools", () => {
   it("delete_sessions rejects an unknown kind before touching the service", async () => {
     const { client } = await connected();
 
-    const res = await call(client, "delete_sessions", {
+    const res = await applied(client, "delete_sessions", {
       items: [{ kind: "everything", id: "x" }],
     });
 
@@ -200,6 +259,7 @@ describe("McpServerFactory status and undo tools", () => {
         { provide: SessionsService, useValue: {} },
         { provide: PlacementPlanService, useValue: placement },
         { provide: GoogleCalendarService, useValue: calendar },
+        { provide: ReplanService, useValue: {} },
       ],
     }).compile();
     return connect(module.get(McpServerFactory));
@@ -248,5 +308,28 @@ describe("McpServerFactory status and undo tools", () => {
     });
 
     expect(res.isError).toBe(true);
+  });
+});
+
+describe("McpServerFactory branding", () => {
+  it("advertises the logo and site when the web address is known", async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        McpServerFactory,
+        { provide: SessionsService, useValue: {} },
+        { provide: PlacementPlanService, useValue: {} },
+        { provide: GoogleCalendarService, useValue: {} },
+        { provide: ReplanService, useValue: {} },
+        { provide: PublicUrls, useValue: { web: "https://app.test" } },
+      ],
+    }).compile();
+    const { client } = await connect(module.get(McpServerFactory));
+
+    expect(client.getServerVersion()).toMatchObject({
+      websiteUrl: "https://app.test",
+      icons: [
+        { src: "https://app.test/pwa-512x512.png", mimeType: "image/png" },
+      ],
+    });
   });
 });
