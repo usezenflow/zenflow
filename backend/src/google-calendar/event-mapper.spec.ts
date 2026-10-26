@@ -70,6 +70,12 @@ describe("event mapper", () => {
     expect(sessionEvent(session, { ...ctx, defaultReminderMinutes: 60 }).reminders).toEqual(popup(60));
   });
 
+  it("gives each session type its own colour", () => {
+    const types = ["TASK", "ASSIGNMENT", "EXAM", "LECTURE", "DND"] as const;
+    const colours = types.map((type) => sessionEvent({ ...session, type }, ctx).colorId);
+    expect(new Set(colours).size).toBe(types.length);
+  });
+
   it("omits an empty location", () => {
     expect(
       sessionEvent({ ...session, location: null }, ctx),

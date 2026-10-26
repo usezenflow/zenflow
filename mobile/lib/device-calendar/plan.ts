@@ -26,6 +26,12 @@ export interface DeviceLink {
 
 export type DeviceLinks = Record<string, DeviceLink>;
 
+/** The phone has one calendar colour, so these types carry their label in the title. */
+const TITLE_PREFIX: Partial<Record<Session["type"], string>> = {
+  EXAM: "Exam: ",
+  ASSIGNMENT: "Assignment: ",
+};
+
 export interface PlanContext {
   timeZone: string;
   /** The alarm for sessions without their own `reminderMinutes`. */
@@ -74,7 +80,7 @@ export function buildSpecs(sessions: Session[], ctx: PlanContext): DeviceEventSp
     if (s.source === "GOOGLE" || s.source === "DEVICE") continue;
     const base = {
       key: s.id,
-      title: s.title,
+      title: (TITLE_PREFIX[s.type] ?? "") + s.title,
       startDate: start,
       endDate: new Date(start.getTime() + s.durationMinutes * 60_000),
       timeZone: ctx.timeZone,

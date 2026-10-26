@@ -8,7 +8,7 @@ export const eventIdOf = (id: string): string =>
 const COLOR_BY_TYPE: Record<SessionType, string> = {
   TASK: "9",
   ASSIGNMENT: "11",
-  EXAM: "11",
+  EXAM: "3",
   LECTURE: "10",
   DND: "8",
 };

@@ -98,6 +98,14 @@ describe("buildSpecs", () => {
     expect(task.notes).toMatch(/^Due /);
   });
 
+  it("prefixes exam and assignment titles with their type", () => {
+    const titles = buildSpecs(
+      [session("e", { type: "EXAM", title: "Calc" }), session("a", { type: "ASSIGNMENT", title: "Essay" }), session("t", { title: "Read" })],
+      ctx,
+    ).map((s) => s.title);
+    expect(titles).toEqual(["Exam: Calc", "Assignment: Essay", "Read"]);
+  });
+
   it("changes the hash with anything the phone shows", () => {
     const hash = (over: Partial<Session>) => buildSpecs([session("a", over)], ctx)[0].hash;
     const base = hash({});
