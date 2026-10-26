@@ -308,7 +308,7 @@ def test_passive_zero_drag_never_moves() -> None:
     for i, t in enumerate(make_tasks(random.Random(2), 4, 3)):
         start = t.arrival_ms + (i % 24) * 3_600_000
         _, signal, applied, _ = s.react(t, start, Calendar({}))
-        assert signal in (None, "DONE", "SKIP") and applied == start
+        assert signal in (None, "KEPT") and applied == start
 
 
 def test_passive_population_is_seeded_and_mixed() -> None:
@@ -473,11 +473,11 @@ def test_feedback_gates_delays_and_defaults_to_passthrough() -> None:
 
     try:
         feed = Feedback([(0.5, 0.5)])
-        assert feed.seen(0, "DONE") == "DONE" and feed.seen(0, None) is None
+        assert feed.seen(0, "KEPT") == "KEPT" and feed.seen(0, None) is None
         harness.configure({"detect": 0.4})
-        assert feed.seen(0, "DONE") is None
+        assert feed.seen(0, "KEPT") is None
         harness.configure({"detect": 1.0, "false_start": 0.6})
-        assert feed.seen(0, None) == "DONE" and feed.seen(0, "MOVE") == "MOVE"
+        assert feed.seen(0, "MOVE") == "MOVE"
         harness.configure({"false_start": 0.0, "delay": 2})
         hits: list[int] = []
         feed.defer(0, lambda: hits.append(0))

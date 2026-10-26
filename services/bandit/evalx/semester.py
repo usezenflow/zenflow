@@ -3,7 +3,7 @@
 Each student gets the same semester (timetable, assignments, exams) and the same
 random draws under every arm, so arms differ only by placement. Placed blocks
 occupy the calendar for later placements, as in production. Learning follows
-``run.py``: DONE +1, SKIP -1, MOVE by distance, pairwise rewards as the backend.
+``run.py``: KEPT +1, MOVE by distance, pairwise rewards as the backend.
 
 Arms
   H, L, L-cold      as in ``run.py``

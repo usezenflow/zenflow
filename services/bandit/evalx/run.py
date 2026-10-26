@@ -3,7 +3,7 @@
 The production placer and the production update run in-process (``tests/test_evalx.py``
 pins the placer to ``/v1/place``). Every student gets the same tasks and random
 draws under every arm (common random numbers), so arms differ only by placement.
-Rewards follow ADR-0035: START +1, MOVE negative by drag, pairwise pick of
+Rewards follow ADR-0035: KEPT +1, MOVE negative by drag, pairwise pick of
 LinUCB's option +0.5, kept heuristic option over LinUCB's -0.2, no LAPSED.
 
 Arms (``ARM_SPEC``)
