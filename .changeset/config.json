@@ -5,7 +5,6 @@
   "fixed": [
     [
       "backend",
-      "pwa",
       "mobile",
       "@zenflow/shared",
       "@zenflow/core"

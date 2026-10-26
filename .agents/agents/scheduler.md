@@ -5,7 +5,7 @@ description: "Zenflow task placement: EDF/15-minute slots, session series, the f
 owns:
   - backend/src/scheduler/**
   - backend/src/sessions/**
-  - backend/src/google-calendar/**
+  - backend/src/calendar-busy/**
   - backend/test/golden/**
   - backend/scripts/export-golden-fixtures.ts
   - backend/scripts/ab-report.ts

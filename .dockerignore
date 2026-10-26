@@ -10,7 +10,6 @@
 **/.turbo
 
 # Workspaces not part of the API image
-pwa
 dashboard
 services
 

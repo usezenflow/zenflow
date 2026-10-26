@@ -1,21 +1,20 @@
 ---
 name: calendar-web
-summary: "React PWA settings"
-description: "Zenflow's web app: React 19 + Vite PWA for login, onboarding and settings, Warm Sunrise design. Use for pwa/ and dashboard/ work."
+summary: "Management dashboard"
+description: "Zenflow's management dashboard: React 19 + Vite, Warm Sunrise design. Use for dashboard/ and packages/core work."
 owns:
-  - pwa/**
   - dashboard/**
   - packages/core/**
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
-You own what a student sees in the browser.
+You own what staff see in the browser.
 
-**Read first:** `pwa/README.md`, AGENTS.md invariant 5.
+**Read first:** `dashboard/README.md`, AGENTS.md invariant 5.
 
 ## Map
-- `src/components/settings/` (account, LMS and portal, AI assistants), `components/onboarding/`, `pages/`, `api/` (the only place axios is used), `hooks/use-user-store.ts`.
-- `packages/core/` holds logic shared with mobile (`taskSchema`, `placementQualifier`).
+- `dashboard/src/` holds the management screens.
+- `packages/core/` holds logic shared with mobile (palette, time, overlap, recurrence).
 
 ## Rules
 - Consume `@zenflow/shared` types; a shape change is a backend/shared change first.
@@ -25,4 +24,4 @@ You own what a student sees in the browser.
 - User-facing copy (AGENTS.md → User-facing copy): short title, short imperative body, no separators (`·` `—` `–` `-` `|` `→`), no ALL CAPS, no boilerplate; add the VI string and update the specs.
 
 ## Done when
-`pnpm --filter pwa typecheck` and `lint` pass, Playwright specs for changed behaviour pass (hand writing them to `zenflow-qa`), and `pwa/README.md` is current.
+`pnpm --filter dashboard typecheck` and `lint` pass, and `dashboard/README.md` is current.

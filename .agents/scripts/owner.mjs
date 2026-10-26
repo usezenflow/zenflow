@@ -20,7 +20,7 @@ if (args[0] === "--check") {
       if (!files.some((f) => globToRegExp(g).test(f))) {
         console.warn(`warning: no file matches ${a.name}: ${g}`);
       }
-  const source = /^(backend\/(src|test|prisma|scripts)|pwa\/(src|e2e)|mobile\/(app|api|components|hooks|lib|utils)|services\/|packages\/[^/]+\/(src|contract))\//;
+  const source = /^(backend\/(src|test|prisma|scripts)|mobile\/(app|api|components|hooks|lib|utils)|services\/|packages\/[^/]+\/(src|contract))\//;
   for (const f of files.filter((f) => source.test(f) && !ownerOf(f))) {
     console.error(`unowned: ${f}`);
     bad++;

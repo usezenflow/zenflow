@@ -16,7 +16,6 @@ Closes #
 
 <!-- Tick what this PR changes. -->
 
-- [ ] `pwa/` (React PWA)
 - [ ] `mobile/` (Expo app)
 - [ ] `backend/` (NestJS API + EDF scheduler)
 - [ ] `packages/shared/` (`@zenflow/shared` — the FE/BE API contract)

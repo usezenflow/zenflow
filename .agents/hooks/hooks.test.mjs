@@ -21,7 +21,7 @@ test("subagent may edit inside its owns globs", () => {
 });
 
 test("subagent is denied outside its owns globs and told who owns it", () => {
-  const r = run("enforce-owner.mjs", edit("pwa/src/App.tsx", { agent_type: "scheduler" }));
+  const r = run("enforce-owner.mjs", edit("dashboard/src/main.tsx", { agent_type: "scheduler" }));
   assert.equal(r.status, 2);
   assert.match(r.stderr, /calendar-web/);
 });
