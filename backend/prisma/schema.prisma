@@ -973,6 +973,8 @@ model CalendarSyncOutbox {
   claimedUntil  DateTime?
   attempts      Int       @default(0)
   lastError     String?
+
+  @@index([nextAttemptAt])
 }
 
 /// Maps a session or recurring series to its Google event; no FK so a hard delete can still remove the event
