@@ -10,7 +10,6 @@ export const CHIP_EVIDENCE_MIN = 5;
 export const CHIP_BUCKET_SHARE = 0.6;
 
 const MS_PER_MINUTE = 60_000;
-const DAY_MS = 24 * 60 * MS_PER_MINUTE;
 const COLD_START_COPY = "Learning your rhythm. Move it if it does not fit.";
 
 export type PartOfDay = "morning" | "afternoon" | "evening" | "night";

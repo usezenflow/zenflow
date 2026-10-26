@@ -7,17 +7,17 @@ function fakes(summary: unknown) {
   const counts: number[] = [];
   const prisma = {
     $executeRaw: jest.fn(
-      async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      (strings: TemplateStringsArray, ...values: unknown[]) => {
         executed.push({
           sql: strings.join("?").replace(/\s+/g, " ").trim(),
           values,
         });
-        return counts.shift() ?? 1;
+        return Promise.resolve(counts.shift() ?? 1);
       },
     ),
   };
   const sync = {
-    syncUser: jest.fn(async () => summary),
+    syncUser: jest.fn(() => Promise.resolve(summary)),
   };
   const service = new CalendarOutboxService(
     prisma as never,

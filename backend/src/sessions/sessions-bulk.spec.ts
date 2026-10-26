@@ -251,31 +251,31 @@ describe("SessionsService.bulkDelete", () => {
 });
 
 describe("SessionsController API token routes", () => {
-  const modeOf = (fn: unknown) =>
-    Reflect.getMetadata(API_TOKEN_ROUTE_KEY, fn as object) as
-      | string
-      | undefined;
+  const modeOf = (name: keyof SessionsController) =>
+    Reflect.getMetadata(
+      API_TOKEN_ROUTE_KEY,
+      Object.getOwnPropertyDescriptor(SessionsController.prototype, name)
+        ?.value as object,
+    ) as string | undefined;
 
   it("lets bearer tokens read sessions", () => {
-    const proto = SessionsController.prototype;
-    expect(modeOf(proto.list)).toBe("allow");
-    expect(modeOf(proto.findOne)).toBe("allow");
+    expect(modeOf("list")).toBe("allow");
+    expect(modeOf("findOne")).toBe("allow");
   });
 
   it("accepts bearer only on the bulk create and bulk delete", () => {
-    expect(modeOf(SessionsController.prototype.bulkCreate)).toBe("only");
-    expect(modeOf(SessionsController.prototype.bulkDelete)).toBe("only");
+    expect(modeOf("bulkCreate")).toBe("only");
+    expect(modeOf("bulkDelete")).toBe("only");
   });
 
   it("refuses bearer tokens on every other route", () => {
-    const proto = SessionsController.prototype;
-    for (const fn of [
-      proto.create,
-      proto.update,
-      proto.remove,
-      proto.undoPlacement,
-    ]) {
-      expect(modeOf(fn)).toBeUndefined();
+    for (const name of [
+      "create",
+      "update",
+      "remove",
+      "undoPlacement",
+    ] as const) {
+      expect(modeOf(name)).toBeUndefined();
     }
   });
 });

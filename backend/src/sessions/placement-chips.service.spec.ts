@@ -144,7 +144,7 @@ describe("PlacementChipsService personal evidence", () => {
     expect(chips[0].text).toBe("Before your Monday 18:00 deadline, no clashes");
   });
 
-  it("buckets weekend hours separately", async () => {
+  it("buckets weekend hours separately", () => {
     expect(partOfDay(4)).toBe("night");
     expect(partOfDay(5)).toBe("morning");
     expect(partOfDay(12)).toBe("afternoon");

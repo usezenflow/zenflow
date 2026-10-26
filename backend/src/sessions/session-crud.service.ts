@@ -14,12 +14,7 @@ import type {
   SessionSuggestionsResponse,
   SessionsListResponse,
 } from "@zenflow/shared";
-import {
-  Prisma,
-  type SessionType,
-  type User,
-  SessionEventType,
-} from "../../generated/prisma";
+import { Prisma, type SessionType, type User } from "../../generated/prisma";
 import { minutesToUtc } from "../common/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { TagsService } from "../tags/tags.service";
