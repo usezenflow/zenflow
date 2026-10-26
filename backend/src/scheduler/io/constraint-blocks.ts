@@ -4,8 +4,8 @@ import type { PlacementConstraint } from "../types/placement.types";
 
 /**
  * The part of one local day a task may not start in, as extra occupied time.
- * Feeding the placer blocked intervals keeps its contract and the frozen TS
- * fallback unchanged. `overhangMs` also blocks the next morning for an
+ * Feeding the placer blocked intervals keeps its contract unchanged; the TS
+ * fallback applies the same blocks. `overhangMs` also blocks the next morning for an
  * evening window, so a late start cannot run past midnight into it.
  * shortcut: a task displaced while placing another ignores its own bounds; add
  * them to the flexible wire if that shows up.
