@@ -37,7 +37,12 @@ from evalx.student_behavior import (
     sample_student,
 )
 from evalx.world import HOUR_MS, Calendar, Task, busy_minutes
-from src.core.constants import DAY_MS, KEPT_REWARD, MS_PER_MINUTE
+from src.core.constants import (
+    DAY_MS,
+    KEPT_REWARD,
+    MS_PER_MINUTE,
+    PREFERENCE_KEPT_WEIGHT,
+)
 from src.core.preference import default_preference_matrix
 from src.core.reward import drag_distance_reward
 from src.schemas import HOUR_ARM_IDS
@@ -54,7 +59,26 @@ HEADLINE = (
     "Rand",
 )
 # Arms the semester adds to ``run.ARM_SPEC``: baselines that test what L and H earn.
+# Delete scoring (ADR-0043). An LinUCB arm learns the delete reward; a
+# heuristic arm updates its matrix with PREFERENCE_KEPT_WEIGHT times the same reward.
+DELETE_ARMS: dict[str, dict[str, Any]] = {
+    **{
+        f"L+D{r:g}": {"policy": "LINUCB", "delete_reward": r}
+        for r in (-0.1, -0.25, -0.5)
+    },
+    **{
+        f"{name}+M{r * PREFERENCE_KEPT_WEIGHT:g}": {
+            "policy": "HEURISTIC",
+            "delete_weight": r * PREFERENCE_KEPT_WEIGHT,
+            **({"kernel": True} if name == "H+K" else {}),
+        }
+        for name in ("H", "H+K")
+        for r in (-0.125, -0.25, -0.5)
+    },
+}
+
 EXTRA_SPEC: dict[str, dict[str, Any]] = {
+    **DELETE_ARMS,
     "H-frozen": {"policy": "HEURISTIC", "frozen": True},  # H that never learns
     "L-flat": {"policy": "LINUCB", "context": "none"},  # LinUCB with no features
     "ASAP": {"policy": "ASAP"},  # earliest free slot, as an EDF queue would
@@ -293,6 +317,10 @@ class Feedback:
         self.noise = noise
         self.queue: list[tuple[int, Callable[[], None]]] = []
 
+    def delete_draw(self, n: int) -> float:
+        """The student's delete draw for task ``n``. 1 (never deletes) without noise."""
+        return self.noise[n][1] if self.noise else 1.0
+
     def seen(self, n: int, signal: str | None) -> str | None:
         u_detect = self.noise[n][0] if self.noise else 0.0
         if signal == "KEPT":
@@ -413,11 +441,12 @@ def simulate_arm(
         if start is None:
             rows.append(_unplaced())
             continue
-        done, signal, applied, p = s.react(task, start, cal)
+        done, signal, applied, p = s.react(task, start, cal, feed.delete_draw(n))
         row = _row(task, applied, done, p, cal, placed)
         row["mov"] = float(signal == "MOVE")
         rows.append(row)
-        _occupy(placed, applied, task.duration_min)
+        if signal != "DELETE":  # a deleted block frees its slot
+            _occupy(placed, applied, task.duration_min)
         heard = feed.seen(n, signal)
         reward: float | None = None
         if hourly and hourly.start_model and lin:
@@ -443,6 +472,16 @@ def simulate_arm(
                     0, core._moved(box[0], o, a, d, kern)
                 ),
             )
+        elif heard == "DELETE":
+            # Only arms that declare a delete signal learn from it.
+            reward = spec.get("delete_reward")
+            if spec.get("delete_weight") is not None:
+                feed.defer(
+                    n,
+                    lambda a=applied, w=spec["delete_weight"]: box.__setitem__(
+                        0, core._deleted(box[0], a, w, kern)
+                    ),
+                )
         if lin and reward is not None:
             slot = lin.get("slot")
             feed.defer(
@@ -568,6 +607,8 @@ def reality(s: PassiveStudent, seed: int, idx: int) -> PassiveStudent:
         timing=cfg["timing"],
         respond=min(1.0, s.respond * cfg["tap_scale"]),
         attention=min(1.0, s.attention * cfg["attention_scale"]),
+        delete_noise=cfg["delete_noise"],
+        delete_slot=cfg["delete_slot"],
     )
     if cfg["shape"]:
         rng = random.Random(f"shape:{seed}:{idx}")

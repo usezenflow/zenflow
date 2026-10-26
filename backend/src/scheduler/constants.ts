@@ -97,6 +97,21 @@ export const PAIRWISE_KEEP_PREFERENCE_WEIGHT =
   PREFERENCE_KEPT_WEIGHT * PAIRWISE_WIN_REWARD;
 
 /**
+ * Reward for the LinUCB arm when the user deletes a placed TASK at least an hour
+ * before it starts (`core/reward.ts` `deleteReward`). A delete says "not needed",
+ * weaker than a move, so it equals a 60 minute move (60 / MOVE_REWARD_SCALE_MINUTES).
+ * A prior, not a measurement: see docs/adr/0043-delete-signal.md for the shadow-mode rollout.
+ */
+export const DELETE_REWARD = -0.25;
+/** Off until the offline evaluation passes. While off, the event stores the reward but the arm does not learn from it. */
+export const DELETE_REWARD_ENABLED = false;
+/**
+ * Preference-matrix weight on the deleted slot. The matrix variant exists only in
+ * the simulator (`services/bandit/evalx`), so production keeps it at 0.
+ */
+export const PREFERENCE_DELETE_WEIGHT = 0;
+
+/**
  * Disjoint LinUCB scheduling parameters
  * (`docs/adr/0001-linucb-model-design.md` §10). `BANDIT_ALPHA` is the
  * exploration coefficient on `α·√(xᵀA⁻¹x)`; `BANDIT_RIDGE` is the ridge `λ`

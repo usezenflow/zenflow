@@ -77,6 +77,10 @@ class PassiveStudent:
     # Shapes the learner was not built around (misspecification worlds).
     second_offset_h: float = 0.0  # a second peak this far from the first, 0 for none
     weekday_shift: tuple[float, ...] = ()  # peak offset per weekday, Monday first
+    # Delete behaviour (ADR-0043): noise that ignores the slot, and extra
+    # chance for a slot the student dislikes.
+    delete_noise: float = 0.0
+    delete_slot: float = 0.0
 
     def at(self, ms: int) -> PassiveStudent:
         """The student at instant ``ms``. Routines do not change in a semester."""
@@ -124,19 +128,28 @@ class PassiveStudent:
         """How good a start looks, -1..1: what the student sees on an offer."""
         return 2 * self.fit(start_ms) - 1
 
+    def delete_chance(self, start_ms: int) -> float:
+        """Chance the student deletes a placed block that starts at ``start_ms``.
+
+        ``delete_slot`` scales with the utility gap: 0 in the best hour, 1 in the worst.
+        """
+        gap = (1 - self.utility(start_ms)) / 2
+        return min(1.0, self.delete_noise + self.delete_slot * gap)
+
     def sees_offer(self, task: Task) -> bool:
         """Whether the student opens and acts on a pairwise offer."""
         return task.u_see < self.respond
 
     def react(
-        self, task: Task, start_ms: int, cal: Calendar
+        self, task: Task, start_ms: int, cal: Calendar, u_delete: float = 1.0
     ) -> tuple[bool, str | None, int, float]:
         """(done, signal, applied start, done chance) for a block at ``start_ms``.
 
         ``done`` is the latent outcome. A student with drag first moves a poorly
         timed block to a better free hour that day; the signal is then MOVE.
         Any other block stays put and is KEPT, whether or not it suited the
-        student, as in production.
+        student, as in production. A TASK that stays put can instead be DELETED
+        before it starts, when ``u_delete`` falls under :meth:`delete_chance`.
         """
         applied, signal = start_ms, "KEPT"
         if self.drag > 0 and task.u_drag < self.drag and self.fit(start_ms) < FIT_GOOD:
@@ -144,6 +157,13 @@ class PassiveStudent:
             if moved is not None:
                 applied, signal = moved, "MOVE"
         p = self.done_chance(task, applied, cal)
+        # Placed blocks can be deleted; exams are fixed events and cannot.
+        if (
+            signal == "KEPT"
+            and task.kind != "EXAM"
+            and u_delete < self.delete_chance(applied)
+        ):
+            return False, "DELETE", applied, p
         done = task.u_open < p
         return done, signal, applied, p
 

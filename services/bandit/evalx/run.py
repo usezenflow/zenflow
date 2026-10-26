@@ -153,6 +153,9 @@ CFG: dict[str, Any] = {
     "kernel_sd": 0.75,  # arms marked "kernel": hour kernel width (production)
     "kernel_pool": 1.0,  # arms marked "kernel": same-group weekdays (production)
     "kept_weight": PREFERENCE_KEPT_WEIGHT,
+    # Delete behaviour of the students (semester): noise, and the slot-dependent part.
+    "delete_noise": 0.0,
+    "delete_slot": 0.0,
 }
 _PRODUCTION = {
     "gap": consts.LINUCB_GAP_WEIGHT,
@@ -387,6 +390,15 @@ def _kept(matrix: Any, start: int, kern: tuple[float, float] = NO_KERNEL) -> Any
     """The heuristic's table after the student keeps or starts a slot."""
     return reinforce_preference_smooth(
         matrix, start, "UTC", CFG["kept_weight"], CFG["pref_rate"], *kern
+    )
+
+
+def _deleted(
+    matrix: Any, start: int, weight: float, kern: tuple[float, float] = NO_KERNEL
+) -> Any:
+    """The heuristic's table after a delete: a kept update with a negative weight."""
+    return reinforce_preference_smooth(
+        matrix, start, "UTC", weight, CFG["pref_rate"], *kern
     )
 
 
