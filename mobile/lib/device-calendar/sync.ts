@@ -1,6 +1,8 @@
 import type { Session } from "@zenflow/shared";
 import {
   buildSpecs,
+  CALENDAR_KINDS,
+  type CalendarKind,
   planSync,
   type DeviceEventSpec,
   type DeviceLinks,
@@ -13,16 +15,16 @@ import type { BusyEvent } from "./busy";
 export interface CalendarAdapter {
   /** Asks for access; true when granted. */
   requestPermission(): Promise<boolean>;
-  /** The id of the Zenflow calendar, creating it when `existingId` is missing or gone. */
-  ensureCalendar(existingId: string | null): Promise<string>;
+  /** The id of the Zenflow calendar for `kind`, creating it when `existingId` is missing or gone. */
+  ensureCalendar(kind: CalendarKind, existingId: string | null): Promise<string>;
   createEvent(calendarId: string, spec: DeviceEventSpec): Promise<string>;
   /**
    * Start, end and first alarm of an event as the phone holds it. Null when it
    * is gone; undefined when it could not be read this time.
    */
   readEvent(eventId: string): Promise<PhoneTimes | null | undefined>;
-  /** The phone's timed, busy events in the window, outside the Zenflow calendar. */
-  listBusy(from: Date, to: Date, ignoreCalendarId: string | null): Promise<BusyEvent[]>;
+  /** The phone's timed, busy events in the window, outside the Zenflow calendars. */
+  listBusy(from: Date, to: Date, ignoreCalendarIds: string[]): Promise<BusyEvent[]>;
   /** Rejects when the event no longer exists. */
   updateEvent(eventId: string, spec: DeviceEventSpec): Promise<void>;
   deleteEvent(eventId: string): Promise<void>;
@@ -31,7 +33,7 @@ export interface CalendarAdapter {
 
 export interface DeviceCalendarState {
   enabled: boolean;
-  calendarId: string | null;
+  calendarIds: Record<CalendarKind, string | null>;
   links: DeviceLinks;
   /** Epoch ms of the last completed sync. */
   syncedAt: number | null;
@@ -39,7 +41,7 @@ export interface DeviceCalendarState {
 
 export const EMPTY_STATE: DeviceCalendarState = {
   enabled: false,
-  calendarId: null,
+  calendarIds: { TASK: null, EXAM: null, ASSIGNMENT: null, LECTURE: null },
   links: {},
   syncedAt: null,
 };
@@ -64,15 +66,31 @@ export async function syncDeviceCalendar(
   ctx: PlanContext,
   now = Date.now(),
 ): Promise<SyncResult> {
-  const calendarId = await adapter.ensureCalendar(state.calendarId);
-  // A new calendar id means the old one was deleted on the phone, and its events with it.
-  const links: DeviceLinks = calendarId === state.calendarId ? { ...state.links } : {};
-  const plan = planSync(buildSpecs(sessions, ctx), links, ctx);
+  const calendarIds: Record<CalendarKind, string> = { TASK: "", EXAM: "", ASSIGNMENT: "", LECTURE: "" };
+  const links: DeviceLinks = { ...state.links };
+  for (const kind of CALENDAR_KINDS) {
+    const before = state.calendarIds[kind];
+    calendarIds[kind] = await adapter.ensureCalendar(kind, before);
+    // A new calendar id means the old one was deleted on the phone, and its events with it.
+    if (before && before !== calendarIds[kind]) {
+      for (const [key, l] of Object.entries(links)) if ((l.kind ?? "TASK") === kind) delete links[key];
+    }
+  }
+  const specs = buildSpecs(sessions, ctx);
+  // Exams and assignments used to share the task calendar: move them to their own.
+  for (const spec of specs) {
+    const old = links[spec.key];
+    if (!old || (old.kind ?? "TASK") === spec.kind) continue;
+    await adapter.deleteEvent(old.eventId).catch(() => undefined);
+    delete links[spec.key];
+  }
+  const plan = planSync(specs, links, ctx);
   const result = { created: 0, updated: 0, removed: 0, failed: 0 };
 
   const link = (spec: DeviceEventSpec, eventId: string) => {
     links[spec.key] = {
       eventId,
+      kind: spec.kind,
       hash: spec.hash,
       startMs: spec.startDate.getTime(),
       endMs: spec.endDate.getTime(),
@@ -80,7 +98,7 @@ export async function syncDeviceCalendar(
     };
   };
   const create = async (spec: DeviceEventSpec) => {
-    link(spec, await adapter.createEvent(calendarId, spec));
+    link(spec, await adapter.createEvent(calendarIds[spec.kind], spec));
     result.created++;
   };
 
@@ -115,7 +133,7 @@ export async function syncDeviceCalendar(
     result.removed++;
   }
 
-  return { ...result, state: { ...state, calendarId, links, syncedAt: now } };
+  return { ...result, state: { ...state, calendarIds, links, syncedAt: now } };
 }
 
 /** Turns the sync off and takes the Zenflow calendar, with its events, off the phone. */
@@ -123,9 +141,10 @@ export async function removeDeviceCalendar(
   adapter: CalendarAdapter,
   state: DeviceCalendarState,
 ): Promise<DeviceCalendarState> {
-  if (state.calendarId) {
+  for (const id of Object.values(state.calendarIds)) {
+    if (!id) continue;
     try {
-      await adapter.deleteCalendar(state.calendarId);
+      await adapter.deleteCalendar(id);
     } catch {
       // Gone already.
     }

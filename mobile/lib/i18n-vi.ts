@@ -361,6 +361,10 @@ export default {
   "Back online to manage AI assistants.":
     "Có mạng lại để quản lý trợ lý AI.",
   "Phone calendar": "Lịch trên điện thoại",
+  Exams: "Bài thi",
+  Assignments: "Bài tập",
+  Lectures: "Bài giảng",
+  "Due {when}": "Hạn {when}",
   "Show in my calendar app": "Hiện trong ứng dụng lịch",
   "Calendar access is off": "Chưa cho phép truy cập lịch",
   "Allow it in your phone's settings to use this.": "Hãy cho phép trong cài đặt điện thoại để dùng tính năng này.",

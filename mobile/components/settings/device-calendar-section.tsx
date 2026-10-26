@@ -68,10 +68,14 @@ export function DeviceCalendarSection() {
             className="flex-row items-center gap-2 border-t border-border px-4 py-3 active:opacity-70"
           >
             <RefreshCw size={16} className="text-primary" />
-            <Text className="flex-1 text-[14px] font-semibold text-primary">
-              {syncing ? t("Syncing") : t("Sync now")}
-            </Text>
-            <Text className="text-[12px] text-muted-foreground">{lastSyncLabel(state.syncedAt, timeZone)}</Text>
+            <View className="min-w-0 flex-1">
+              <Text className="text-[14px] font-semibold text-primary">
+                {syncing ? t("Syncing") : t("Sync now")}
+              </Text>
+              <Text className="text-[12px] text-muted-foreground" numberOfLines={1}>
+                {lastSyncLabel(state.syncedAt, timeZone)}
+              </Text>
+            </View>
           </Pressable>
         ) : null}
       </View>

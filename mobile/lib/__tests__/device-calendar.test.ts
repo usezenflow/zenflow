@@ -1,6 +1,6 @@
 import type { Session } from "@zenflow/shared";
 import { describe, expect, it } from "vitest";
-import { buildSpecs, planSync, type PlanContext } from "../device-calendar/plan";
+import { buildSpecs, listRanges, noteText, planSync, type PlanContext } from "../device-calendar/plan";
 import { createDeviceCalendarStore } from "../device-calendar/store";
 import {
   EMPTY_STATE,
@@ -37,7 +37,7 @@ function fakePhone() {
   let seq = 0;
   const adapter: CalendarAdapter = {
     requestPermission: () => Promise.resolve(true),
-    ensureCalendar: (existing) => {
+    ensureCalendar: (_kind, existing) => {
       if (existing && calendars.has(existing)) return Promise.resolve(existing);
       const id = `cal-${++seq}`;
       calendars.add(id);
@@ -99,12 +99,12 @@ describe("buildSpecs", () => {
     expect(task.notes).toMatch(/^Due /);
   });
 
-  it("prefixes exam and assignment titles with their type", () => {
-    const titles = buildSpecs(
+  it("sends exams and assignments to their own calendar without a title prefix", () => {
+    const specs = buildSpecs(
       [session("e", { type: "EXAM", title: "Calc" }), session("a", { type: "ASSIGNMENT", title: "Essay" }), session("t", { title: "Read" })],
       ctx,
-    ).map((s) => s.title);
-    expect(titles).toEqual(["Exam: Calc", "Assignment: Essay", "Read"]);
+    );
+    expect(specs.map((s) => [s.kind, s.title])).toEqual([["EXAM", "Calc"], ["ASSIGNMENT", "Essay"], ["TASK", "Read"]]);
   });
 
   it("changes the hash with anything the phone shows", () => {
@@ -128,13 +128,24 @@ describe("planSync", () => {
 });
 
 describe("syncDeviceCalendar", () => {
+  it("moves a legacy exam event out of the task calendar", async () => {
+    const phone = fakePhone();
+    const first = await syncDeviceCalendar(phone.adapter, enabled, [session("x", { type: "EXAM" })], ctx);
+    const legacy = { ...first.state, links: { x: { ...first.state.links.x, kind: undefined } } };
+    const next = await syncDeviceCalendar(phone.adapter, legacy, [session("x", { type: "EXAM" })], ctx);
+
+    expect(next).toMatchObject({ created: 1, failed: 0 });
+    expect(phone.events.size).toBe(1);
+    expect(next.state.links.x.kind).toBe("EXAM");
+  });
+
   it("creates the calendar and an event per session", async () => {
     const phone = fakePhone();
     const res = await syncDeviceCalendar(phone.adapter, enabled, [session("a"), session("b")], ctx, 1000);
 
     expect(res).toMatchObject({ created: 2, updated: 0, removed: 0, failed: 0 });
     expect(phone.events.size).toBe(2);
-    expect(res.state.calendarId).toBe("cal-1");
+    expect(res.state.calendarIds.TASK).toBe("cal-1");
     expect(Object.keys(res.state.links).sort()).toEqual(["a", "b"]);
     expect(res.state.syncedAt).toBe(1000);
   });
@@ -183,7 +194,7 @@ describe("syncDeviceCalendar", () => {
     const next = await syncDeviceCalendar(phone.adapter, first.state, [session("a")], ctx);
 
     expect(next.created).toBe(1);
-    expect(next.state.calendarId).not.toBe(first.state.calendarId);
+    expect(next.state.calendarIds.TASK).not.toBe(first.state.calendarIds.TASK);
   });
 
   it("keeps going when one event fails", async () => {
@@ -224,9 +235,9 @@ describe("device calendar store", () => {
 
   it("keeps state per user", () => {
     const store = createDeviceCalendarStore(memoryKv());
-    store.save("u1", { ...EMPTY_STATE, enabled: true, calendarId: "cal-1" });
+    store.save("u1", { ...EMPTY_STATE, enabled: true, calendarIds: { ...EMPTY_STATE.calendarIds, TASK: "cal-1" } });
 
-    expect(store.load("u1").calendarId).toBe("cal-1");
+    expect(store.load("u1").calendarIds.TASK).toBe("cal-1");
     expect(store.load("u2")).toEqual(EMPTY_STATE);
     store.clear("u1");
     expect(store.load("u1")).toEqual(EMPTY_STATE);
@@ -240,5 +251,25 @@ describe("device calendar store", () => {
 
     expect(store.load("u1")).toEqual(EMPTY_STATE);
     expect(store.load("u2")).toEqual(EMPTY_STATE);
+  });
+});
+
+describe("listRanges", () => {
+  it("covers the window in requests of at most 30 days", () => {
+    const from = new Date("2026-10-25T10:00:00Z");
+    const to = new Date("2026-12-09T10:00:00Z");
+    const ranges = listRanges(from, to, 30);
+    expect(ranges).toHaveLength(2);
+    expect(ranges[0][0]).toEqual(from);
+    expect(ranges[1][1]).toEqual(to);
+    for (const [a, b] of ranges) expect((b.getTime() - a.getTime()) / 86_400_000).toBeLessThan(30);
+    expect(ranges[1][0].getTime()).toBeGreaterThan(ranges[0][1].getTime());
+  });
+});
+
+describe("noteText", () => {
+  it("turns LMS html into plain text", () => {
+    expect(noteText("<p>Read <b>ch. 3</b> &amp; reply</p><p>Bring ID</p>")).toBe("Read ch. 3 & reply\nBring ID");
+    expect(noteText(null)).toBe("");
   });
 });

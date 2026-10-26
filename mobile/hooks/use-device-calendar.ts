@@ -1,14 +1,16 @@
 import type { Session } from "@zenflow/shared";
-import { addDays, addMonths } from "date-fns";
+import { addDays } from "date-fns";
 import { useEffect } from "react";
 import { AppState } from "react-native";
 import { create } from "zustand";
 import { listSessions, updateSession } from "@/api/tasks";
 import { putDeviceBusy, setCalendarTarget } from "@/api/device-calendar";
 import { useConnectivity } from "@/lib/connectivity";
+import { debugLog } from "@/lib/debug-log";
+import { locale, t } from "@/lib/i18n";
 import { expoCalendarAdapter } from "@/lib/device-calendar/expo-adapter";
 import { reviewDeviceEvents, type PhoneTimes } from "@/lib/device-calendar/moves";
-import type { DeviceLinks } from "@/lib/device-calendar/plan";
+import { listRanges, type DeviceLinks } from "@/lib/device-calendar/plan";
 import {
   EMPTY_STATE,
   removeDeviceCalendar,
@@ -25,6 +27,8 @@ const AHEAD_DAYS = 45;
 const MIN_INTERVAL_MS = 2 * 60_000;
 /** Edits arrive in bursts; sync once after they settle. */
 const EDIT_DEBOUNCE_MS = 3_000;
+/** The server lists at most this many days (both ends included) per request. */
+const LIST_MAX_DAYS = 30;
 /** The server takes at most this many busy blocks in one request. */
 const BUSY_MAX = 2000;
 
@@ -41,9 +45,9 @@ type Store = {
 };
 
 /** Sends the phone's other busy time, so the scheduler plans around it. Failures wait for the next sync. */
-async function uploadBusy(zenflowCalendarId: string | null, now: Date): Promise<void> {
+async function uploadBusy(zenflowCalendarIds: string[], now: Date): Promise<void> {
   try {
-    const events = await expoCalendarAdapter.listBusy(addDays(now, -BACK_DAYS), addDays(now, AHEAD_DAYS), zenflowCalendarId);
+    const events = await expoCalendarAdapter.listBusy(addDays(now, -BACK_DAYS), addDays(now, AHEAD_DAYS), zenflowCalendarIds);
     await putDeviceBusy(
       events.slice(0, BUSY_MAX).map((e) => ({
         externalKey: e.externalKey,
@@ -57,9 +61,10 @@ async function uploadBusy(zenflowCalendarId: string | null, now: Date): Promise<
   }
 }
 
-/** This month and the next, deduped: enough to cover the sync window. */
-async function fetchWindow(now: Date): Promise<Session[]> {
-  const pages = await Promise.all([listSessions("month", now), listSessions("month", addMonths(now, 1))]);
+/** The whole sync window, in requests of at most `LIST_MAX_DAYS` days, deduped. */
+export async function fetchWindow(now: Date): Promise<Session[]> {
+  const ranges = listRanges(addDays(now, -BACK_DAYS), addDays(now, AHEAD_DAYS), LIST_MAX_DAYS);
+  const pages = await Promise.all(ranges.map(([from, to]) => listSessions(from, to)));
   const byId = new Map<string, Session>();
   for (const page of pages) for (const s of page.sessions) byId.set(s.id, s);
   return [...byId.values()];
@@ -111,6 +116,8 @@ export const useDeviceCalendar = create<Store>((set, get) => {
           defaultReminderMinutes: user.defaultReminderMinutes,
           from: addDays(now, -BACK_DAYS),
           to: addDays(now, AHEAD_DAYS),
+          locale: locale(),
+          dueText: (when: string) => t("Due {when}", { when }),
         };
         const before = get().state;
         let sessions = await fetchWindow(now);
@@ -163,9 +170,10 @@ export const useDeviceCalendar = create<Store>((set, get) => {
           ctx,
         );
         persist(result.state);
-        await uploadBusy(result.state.calendarId, now);
-      } catch {
+        await uploadBusy(Object.values(result.state.calendarIds).filter((id): id is string => !!id), now);
+      } catch (error) {
         // Offline or permission revoked: the next trigger tries again.
+        debugLog("device-calendar sync failed", String(error));
       } finally {
         set({ syncing: false });
       }

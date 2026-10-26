@@ -11,8 +11,12 @@ export function createDeviceCalendarStore(kv: KV) {
       const raw = kv.getString(key(userId));
       if (!raw) return { ...EMPTY_STATE };
       try {
-        const parsed = JSON.parse(raw) as { v: number; state: DeviceCalendarState };
-        return parsed.v === VERSION ? { ...EMPTY_STATE, ...parsed.state } : { ...EMPTY_STATE };
+        const parsed = JSON.parse(raw) as { v: number; state: DeviceCalendarState & { calendarId?: string | null } };
+        if (parsed.v !== VERSION) return { ...EMPTY_STATE };
+        // Saved before there was one calendar per type: the single calendar is the task one.
+        const { calendarId, ...rest } = parsed.state;
+        const calendarIds = { ...EMPTY_STATE.calendarIds, ...(calendarId ? { TASK: calendarId } : {}), ...rest.calendarIds };
+        return { ...EMPTY_STATE, ...rest, calendarIds };
       } catch {
         return { ...EMPTY_STATE };
       }

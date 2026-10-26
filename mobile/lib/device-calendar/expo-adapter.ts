@@ -1,14 +1,22 @@
 import { Platform } from "react-native";
 import * as Calendar from "expo-calendar";
-import type { DeviceEventSpec } from "./plan";
+import { t } from "@/lib/i18n";
+import type { CalendarKind, DeviceEventSpec } from "./plan";
 import type { BusyEvent } from "./busy";
 import type { CalendarAdapter } from "./sync";
 
 /** The phone says "not found" for an event that was deleted; anything else is a read that failed. */
 const GONE = /not found|does not exist|no such/i;
 
-const CALENDAR_TITLE = "Zenflow";
-const CALENDAR_COLOR = "#FF6900";
+/** The phone colours a calendar, so each type gets its own. Colours follow the app's session tokens. */
+const CALENDARS: Record<CalendarKind, { title: string; color: string }> = {
+  TASK: { title: "Zenflow", color: "#FF6900" },
+  EXAM: { title: "Exams", color: "#14A09B" },
+  ASSIGNMENT: { title: "Assignments", color: "#F0B101" },
+  LECTURE: { title: "Lectures", color: "#3B82C4" },
+};
+/** The calendar's name on the phone, in the app language. */
+const calendarTitle = (kind: CalendarKind) => t(CALENDARS[kind].title);
 
 function details(spec: DeviceEventSpec) {
   return {
@@ -30,24 +38,27 @@ export const expoCalendarAdapter: CalendarAdapter = {
     return res.granted;
   },
 
-  async ensureCalendar(existingId) {
+  async ensureCalendar(kind, existingId) {
+    const { color } = CALENDARS[kind];
+    const title = calendarTitle(kind);
     const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
+    // Only the task calendar is adopted by name: "Exams" may be the person's own calendar, which turning sync off would delete.
     const found =
       calendars.find((c) => c.id === existingId) ??
-      calendars.find((c) => c.title === CALENDAR_TITLE && c.allowsModifications);
+      (kind === "TASK" ? calendars.find((c) => c.title === CALENDARS.TASK.title && c.allowsModifications) : undefined);
     if (found) return found.id;
 
     const source =
       Platform.OS === "ios"
         ? Calendar.getDefaultCalendarSync().source
-        : { isLocalAccount: true, name: CALENDAR_TITLE, type: Calendar.SourceType.LOCAL };
+        : { isLocalAccount: true, name: title, type: Calendar.SourceType.LOCAL };
     const created = await Calendar.createCalendar({
-      title: CALENDAR_TITLE,
-      color: CALENDAR_COLOR,
+      title,
+      color,
       entityType: Calendar.EntityTypes.EVENT,
       source,
-      name: CALENDAR_TITLE,
-      ownerAccount: CALENDAR_TITLE,
+      name: title,
+      ownerAccount: title,
       accessLevel: Calendar.CalendarAccessLevel.OWNER,
     });
     return created.id;
@@ -74,9 +85,9 @@ export const expoCalendarAdapter: CalendarAdapter = {
     }
   },
 
-  async listBusy(from, to, ignoreCalendarId) {
+  async listBusy(from, to, ignoreCalendarIds) {
     const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
-    const ids = calendars.map((c) => c.id).filter((id) => id !== ignoreCalendarId);
+    const ids = calendars.map((c) => c.id).filter((id) => !ignoreCalendarIds.includes(id));
     if (ids.length === 0) return [];
     const events = await Calendar.getEventsAsync(ids, from, to);
     return events

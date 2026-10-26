@@ -15,7 +15,6 @@ import type {
   SlotPickResponse,
   UpdateSessionInput,
   UpdateSessionResponse,
-  ViewMode,
 } from "@zenflow/shared";
 import { format } from "date-fns";
 import { api } from "./base";
@@ -28,11 +27,11 @@ import { SAVE_TIMEOUT_MS } from "@/lib/save-error";
  * over the returned `tasks` array.
  */
 export async function listSessions(
-  view: ViewMode,
-  date: Date,
+  from: Date,
+  to: Date,
 ): Promise<SessionsListResponse> {
   const { data } = await api.get("/sessions", {
-    params: { view, date: format(date, "yyyy-MM-dd") },
+    params: { from: format(from, "yyyy-MM-dd"), to: format(to, "yyyy-MM-dd") },
   });
   return data.data;
 }
