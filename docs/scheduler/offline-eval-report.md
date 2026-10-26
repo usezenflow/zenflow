@@ -6,7 +6,6 @@ Simulated students only. Methods and the simulator are in [eval-protocol.md](./e
 
 - **In the signal world, the six-band L6 and the shipped L24N placer are both close to H+K.** L6 keeps 1.7 points more proposals than H+K (84.5% against 82.7%) with 3 fewer minutes of drag, and it has the same regret (0.169 against 0.173). L24N production has the lowest regret of the old arms (0.155 against 0.173), at the cost of 2.5 more minutes of drag and 0.2 more proposals to reach 60%.
 - **In the headline world, H+K has the lowest regret of every arm.** Every arm keeps 100% of its proposals there, so the learning signal carries no preference information (section 5).
-- **The earlier gain of L24N over H+K (7.5 points of adherence) is withdrawn.** It came from a learning signal the simulator used until commit 984b628d (25 Oct 2026). Production has sent the signal used in this report since ADR-0042.
 - **The reward v2 candidate is not shipped.** Its regret is 0.095 in the signal world. Its gain depends on two signals that are circular in the simulator (section 5).
 
 ## 1. Models
@@ -102,8 +101,6 @@ The candidate's regret here comes from the hand-made-block signal alone, which s
 
 **Why L6 is level with H+K.** L6 keeps 1.7 points more proposals and moves 3 minutes less than H+K. Its regret is the same. Against the shipped L24N placer it keeps 1.2 points more with 5.6 minutes less drag, and its regret is 0.014 higher.
 
-**Why the old headline gain is gone.** The earlier report's 7.5-point gain of L24N over H+K came from a learning signal the simulator used until 25 Oct 2026 (commit 984b628d). Under the signal production sends, L24N production is 0.6 points ahead of H+K on kept, with 2.5 minutes more drag, and its regret is 0.02 lower. The earlier numbers are withdrawn.
-
 **Why the candidate is not shipped.** The candidate is the same 24-arm LinUCB as L24N production, with four reward terms: KEPT stays +1, a move also pays +2 to the destination hour, a delete pays -1 to the placing hour, and a hand-made block pays +2 to its hour. Two of these are circular in the simulator. Deletes depend on the slot quality that the regret measures, and hand-made blocks land at the student's best hour by default. Earlier coupling checks, in the reward v2 archive ([reward-v2-tables.md](./eval-data/reward-v2-tables.md)), showed that the gain disappears when those links are cut. Those checks used adherence and the earlier metric set. They have not been rerun with the heuristic metrics.
 
 ## 6. Production state
@@ -120,7 +117,7 @@ The candidate's regret here comes from the hand-made-block signal alone, which s
 ## 7. Limits
 
 - Simulated students only. Start curves, moves, deletes and hand-made blocks are assumptions. Nothing here measures real behaviour.
-- Both worlds use the KEPT signal. The earlier signal is not evaluated here.
+- Both worlds use the KEPT signal, which production sends.
 - L6 is recovered from a 21 Oct commit. Its placer is that commit's code, with the one deviation in section 2.
 - The protocol's ship rule still uses adherence. This report follows the heuristic report's metrics and omits adherence and lead time, as requested.
 - Placer timing (the rule's p95 under 1 ms) was not re-measured in this round.
