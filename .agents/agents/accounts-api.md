@@ -10,6 +10,7 @@ owns:
   - backend/src/notifications/**
   - backend/src/mail/**
   - backend/src/api-access/**
+  - backend/src/oauth/**
   - backend/src/prisma/**
   - backend/scripts/with-database-url.cjs
   - backend/src/common/**

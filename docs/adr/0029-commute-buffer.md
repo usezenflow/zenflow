@@ -1,6 +1,6 @@
 # ADR-0029: Commute buffer
 
-**Status:** accepted
+**Status:** superseded by [ADR-0039](0039-thin-layer-calendar-native.md)
 **Date:** 2026-10-19
 **Issue:** none
 

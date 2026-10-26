@@ -28,7 +28,7 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
 
 ## Displacement and undo (ADR-0028)
 
-- Every flexible `TASK` moves freely unless frozen. Nest sends each flexible item of the infeasible context with its id, duration, deadline and start.
+- Every flexible `TASK` moves freely unless frozen. A `TASK` the user moved by hand is fixed: `isFlexible` skips rows with `lastMovedAt`. Nest sends each flexible item of the infeasible context with its id, duration, deadline and start.
 - Every write one request makes shares a `SessionEvent.groupId`. `PlacementPlanService.undo` reverts a group, newest first.
 - The plan store (`PlacementPlan`, `NEEDS_CONFIRMATION`, `confirm`) is unreachable and slated for removal.
 
@@ -53,7 +53,7 @@ The scheduler places one `TASK` (or one series) into an empty slot and never mov
 | Timeout/retry/breaker HTTP client | `scheduler/io/placement-client.service.ts`, `common/circuit-breaker.ts` |
 | `TASK` series lifecycle | `sessions/series.service.ts` |
 | Plan storage, confirm, undo | `scheduler/io/task-placement.service.ts` (stores), `sessions/placement-plan.service.ts` |
-| Reward (first `MOVE`, `START`) | `scheduler/io/scheduling-feedback.service.ts`, `sessions/session-start.service.ts` ([ADR-0035](../adr/0035-start-and-move-only-signals.md)) |
+| Reward (`MOVE`, `KEPT`) | `scheduler/io/scheduling-feedback.service.ts`, `scheduler/io/kept-sweep.service.ts` ([ADR-0042](../adr/0042-kept-and-moved-signals.md)) |
 | `primaryPolicy` 50/50, pairwise draw, `SlotProposal` write | `experiments/experiment.service.ts` |
 | Fallback tuning constants | `scheduler/constants.ts` |
 | Python's ranking core | `services/bandit/src/core/*` |

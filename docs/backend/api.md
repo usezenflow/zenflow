@@ -39,7 +39,7 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | --- | --- | --- |
 | POST | `/mcp` | Streamable HTTP MCP, stateless. Bearer only; a 401 carries `WWW-Authenticate: Bearer resource_metadata=...`. GET and DELETE answer 405 |
 
-- Tools: `list_schedule`, `get_session`, `create_tasks` (`dryRun` first), `update_session`, `delete_session`. Each calls the same service as the REST route and relays its error code.
+- Tools: `list_schedule`, `get_session`, `update_session`, `delete_sessions` (`dryRun` first), `create_tasks` (`dryRun` first; returns `proposedStart`, `proposedEnd`, `timezone`), `undo_last_change`, `sync_status`. Each calls the same service as the REST route and relays its error code.
 - Bearer tokens are refused (403) on routes not marked for them. Cookie sessions are unchanged.
 - Management routes above take the cookie only.
 

@@ -1,6 +1,6 @@
 # ADR-0035: Learn from START and MOVE only
 
-**Status:** accepted
+**Status:** superseded by [ADR-0042](0042-kept-and-moved-signals.md)
 **Date:** 2026-10-21
 **Supersedes:** ADR-0023, ADR-0025, ADR-0030
 
