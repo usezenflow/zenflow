@@ -1,6 +1,6 @@
 # Releasing (beta)
 
-[Changesets](https://github.com/changesets/changesets) manage versions. `backend`, `pwa`, `mobile`, `@zenflow/shared` and `@zenflow/core` share one version in prerelease mode (`beta`, `.changeset/pre.json`), for example `0.1.0-beta.0`.
+[Changesets](https://github.com/changesets/changesets) manage versions. `backend`, `mobile`, `@zenflow/shared` and `@zenflow/core` share one version in prerelease mode (`beta`, `.changeset/pre.json`), for example `0.1.0-beta.0`.
 
 ## Day to day
 

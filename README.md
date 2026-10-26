@@ -10,7 +10,7 @@ Tell Zenflow **what** needs doing (a study task with a duration and deadline, or
 - Personalised scheduling: a time-of-day preference heuristic and a per-student LinUCB bandit, run as a live A/B experiment.
 - Moodle LMS and university portal sync: deadlines, timetable and exams land on the calendar.
 - Push notifications.
-- Tasks arrive through AI assistants over MCP. Web (PWA) handles login, onboarding and settings; the mobile app stays.
+- Tasks arrive through AI assistants over MCP. The mobile app handles login, setup and the phone calendar.
 
 ## Quick start
 
@@ -24,7 +24,7 @@ docker compose -f compose.dev.yml up -d   # Postgres, Redis, mail catcher
 pnpm prisma:dev:migrate
 pnpm start:dev                            # API http://localhost:8000, Swagger /api
 
-cd ../pwa && pnpm dev                # http://localhost:5173
+cd ../mobile && pnpm dev                  # Expo dev client
 ```
 
 Env: see each app's `.env.example`. Details: [backend/README.md](backend/README.md).
@@ -33,12 +33,11 @@ Env: see each app's `.env.example`. Details: [backend/README.md](backend/README.
 
 | Path | What | Docs |
 | --- | --- | --- |
-| `pwa/` | React 19 + Vite PWA | [README](pwa/README.md) |
 | `mobile/` | Expo + React Native app | [README](mobile/README.md) |
 | `backend/` | NestJS API, scheduler, ingestion | [README](backend/README.md) |
 | `services/bandit/` | FastAPI placement and LinUCB service | [README](services/bandit/README.md) |
 | `packages/shared/` | `@zenflow/shared` API contract types | |
-| `packages/core/` | `@zenflow/core` logic shared by both clients | |
+| `packages/core/` | `@zenflow/core` logic shared by the clients | |
 | `mockups/` | Static HTML mobile screens | [index](mockups/index.html) |
 | `loadtest/` | k6 load tests | [README](loadtest/README.md) |
 | `docs/` | ADRs, backend reference, scheduler design, ops, benchmarks | [adr](docs/adr/), [backend](docs/backend/), [scheduler](docs/scheduler/), [ops](docs/ops/) |

@@ -3,7 +3,7 @@
 Diagram-first companion to [README.md](README.md), for contributors placing a change before reading the detail.
 
 - Conventions and invariants: [AGENTS.md](AGENTS.md)
-- Per-app detail: [backend](backend/README.md), [pwa](pwa/README.md), [bandit service](services/bandit/README.md)
+- Per-app detail: [backend](backend/README.md), [mobile](mobile/README.md), [bandit service](services/bandit/README.md)
 - Backend reference: [docs/backend/](docs/backend/)
 - Sequence flows: [docs/architecture/scheduler-flows.md](docs/architecture/scheduler-flows.md)
 - Decisions behind this shape: [docs/adr/](docs/adr/)
@@ -13,7 +13,7 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 
 ![Zenflow C4 container diagram](docs/architecture/c4-container.svg)
 
-- Students use the Web PWA or the mobile app; both call one NestJS API over REST and SSE.
+- Students use the mobile app, which calls one NestJS API over REST and SSE. AI assistants call the same API over MCP.
 - One backend image runs as several processes, picked by `ROLE` ([ADR-0011](docs/adr/0011-separate-api-worker-processes.md)):
   - `api`: HTTP only, scales by replicas, no cron.
   - `watcher`: exactly one, the only cron runner. It enqueues and consumes nothing.
@@ -24,17 +24,12 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - Ingestion pulls from the university's Portal, DKHP and Moodle systems; native push goes out to FCM/APNs.
 - Production also runs an edge proxy and an observability stack (OTel → Tempo, Loki, Prometheus, Grafana).
 
-## Calendar sync
+## Calendar
 
-![Zenflow calendar sync component diagram](docs/architecture/calendar-sync-components.svg)
-
-- Google to Zenflow: Google calls `POST /google-calendar/webhook`, which checks the channel and queues a pull. `calendar-pull.service` reads changes by `syncToken` and writes them to sessions with origin `GOOGLE`. A 410 drops the token and lists the calendar again.
-- Zenflow to Google: a session change marks the user dirty in `CalendarSyncOutbox`. `calendar-sync.processor` holds a per-user lock and runs `calendar-sync.service`, which writes events with `If-Match` on the stored etag.
-- Phone to Zenflow: on foreground, `use-device-calendar` compares each phone event with what Zenflow last wrote. Moves and reminders of scheduled TASKs are sent as session updates with origin `DEVICE`; other phone edits are overwritten on the next write.
 - Zenflow to phone: `planSync` creates, updates and deletes Zenflow events on the phone calendar through `expo-adapter`. Only Zenflow-owned types are written.
-- Busy time: other calendars are imported as `Session` rows of type `DND`, from the Google pull (`GOOGLE`) or `PUT /device-calendar/busy` (`DEVICE`). They are never written back.
-- One calendar target per user (`User.calendarTarget`): `GOOGLE` or `DEVICE` is written, never both.
-- `calendar-sweep` enqueues a pull and a sync for every user every 5 minutes.
+- Phone to Zenflow: on foreground, `use-device-calendar` compares each phone event with what Zenflow last wrote. Moves and reminders of scheduled TASKs are sent as session updates with origin `DEVICE`; other phone edits are overwritten on the next write.
+- Busy time: the phone's other events go to `PUT /device-calendar/busy` and become `Session` rows of type `DND` with source `DEVICE`. They are never written back.
+- One calendar target per user (`User.calendarTarget`): `DEVICE` or `NONE`.
 
 ## Scheduler components
 
@@ -56,13 +51,13 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - `MaterializerService` is the single writer of ingested `Session` rows. A student's own move or delete wins over upstream; a removal soft-deletes.
 - The cross-student occurrence cache and fan-out are off by default.
 - A materializer write creates one `Notification` row, then `announce()` fans it out twice: Redis pub/sub for live SSE, and one `notify` push job per provider.
-- Reminders are not sent by Zenflow. The reminder is written onto the Google or phone calendar event, and that calendar fires it ([ADR-0039](docs/adr/0039-thin-layer-calendar-native.md)).
+- Reminders are not sent by Zenflow. The reminder is written onto the phone calendar event, and that calendar fires it ([ADR-0039](docs/adr/0039-thin-layer-calendar-native.md)).
 
 ## Queue design
 
 ![Zenflow queue design](docs/architecture/queue-design.svg)
 
-- Eleven queues in five groups: portal ingestion, LMS ingestion, notify, prep-plan and calendar-sync. Each has a dead-letter queue, on a `noeviction` + AOF Redis.
+- Ten queues in four groups: portal ingestion, LMS ingestion, notify and prep-plan. Each has a dead-letter queue, on a `noeviction` + AOF Redis.
 - The job id is the idempotency key; every producer call is time-bounded.
 - Retries use exponential backoff; an open upstream breaker parks a job without using an attempt.
 
@@ -71,5 +66,5 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 ![Zenflow ERD](docs/architecture/data-model-erd.svg)
 
 - Source of truth is [`schema.prisma`](backend/prisma/schema.prisma); table notes are in [docs/backend/data-model.md](docs/backend/data-model.md).
-- Four areas: account and access, sessions with calendar sync (`CalendarConnection`, `CalendarLink`, `CalendarSyncOutbox`), the learning loop (`SlotProposal`, `SessionEvent`, `BanditArmState`), and ingestion with the portal and LMS catalog.
+- Four areas: account and access, sessions, the learning loop (`SlotProposal`, `SessionEvent`, `BanditArmState`), and ingestion with the portal and LMS catalog.
 - The diagram shows key columns only; the full set is in `schema.prisma`.

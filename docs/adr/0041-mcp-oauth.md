@@ -1,6 +1,6 @@
 # ADR-0041: OAuth for AI assistants
 
-**Status:** accepted
+**Status:** accepted, consent screen superseded by ADR-0046
 **Date:** 2026-10-25
 **Issue:** none
 

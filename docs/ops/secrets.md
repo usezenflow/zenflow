@@ -11,8 +11,6 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | `POSTGRES_PASSWORD` | API, migrations, Postgres, backup (Vault sets `api`, `postgres`, `backup`) | [runbook](#database-password) |
 | `SESSION_SECRET` | Signs the session cookie | [runbook](#session-signing-key-session_secret) |
 | `API_TOKEN_PEPPER_V<n>` | Server pepper for hashing OAuth tokens and signing MCP plan tokens (required in production, min 32 chars; Vault sets `api`) | [runbook](#versioned-secrets) |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret for Calendar sync (Vault sets `api`) | Rotate in Google Cloud, redeploy |
-| `GOOGLE_TOKEN_ENCRYPTION_KEY_V<n>` | AES key for stored Google refresh tokens, 64 hex (Vault sets `api`) | [runbook](#versioned-secrets) |
 | `MASTER_LMS_ENCRYPTION_KEY_V<n>`, `MASTER_PORTAL_ENCRYPTION_KEY_V<n>` | Wrap per-user DEKs for DLU and LMS credentials (`backend/src/crypto`) | [runbook](#crypto-master-keys-master__encryption_key_vn) |
 | `PORTAL_API_KEY` | DLU portal API key | Replace when DLU invalidates it |
 | `MAIL_PASSWORD` | SMTP password | At the SMTP provider |
@@ -27,7 +25,7 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `SOPS_AGE_KEY`, `SECRETS_COMMAND` | CI deploy (GitHub Environment secrets) | Yearly or on offboarding |
 | `GITHUB_TOKEN` | Image push and pull | Automatic |
 
-Not secrets: `GOOGLE_CLIENT_ID`, `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `VITE_*`, `EXPO_PUBLIC_*`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`, `backend/certs/lms-ca.pem`, `CORS_ORIGIN`, hosts, ports, usernames, database and bucket names, URLs without credentials. They go in the non-secret env file (`backend/env/prod.env` for prod), never in Vault. A name must not be in both.
+Not secrets: `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `VITE_*`, `EXPO_PUBLIC_*`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`, `backend/certs/lms-ca.pem`, `CORS_ORIGIN`, hosts, ports, usernames, database and bucket names, URLs without credentials. They go in the non-secret env file (`backend/env/prod.env` for prod), never in Vault. A name must not be in both.
 
 ## How secrets reach the app
 
@@ -137,23 +135,22 @@ Add a version (config only):
 
 ### Versioned secrets
 
-Code: `backend/src/common/config/versioned-secret.ts`. Covers `API_TOKEN_PEPPER` and `GOOGLE_TOKEN_ENCRYPTION_KEY`, both now `_V<n>` like the master keys.
+Code: `backend/src/common/config/versioned-secret.ts`. Covers `API_TOKEN_PEPPER`, now `_V<n>` like the master keys.
 
 - A version stays readable until its var is removed. A pepper version verifies the tokens hashed under it. A key version opens the rows sealed under it (the value's `v<n>.` prefix).
 - Rotating a pepper does not revoke tokens while the old version stays. Removing the old version revokes them.
-- No re-seal job: a Google refresh token keeps its old key version until the user reconnects or the row is rewritten.
 
 Rotate in Vault, then deploy:
 
-1. `VAULT_ADDR=... VAULT_TOKEN=... VAULT_ENV=prod ./ops/vault/rotate-versioned.sh rotate API_TOKEN_PEPPER` (or `GOOGLE_TOKEN_ENCRYPTION_KEY`). It writes a new random `_V<n+1>` to the `api` set and prints the next step.
+1. `VAULT_ADDR=... VAULT_TOKEN=... VAULT_ENV=prod ./ops/vault/rotate-versioned.sh rotate API_TOKEN_PEPPER`. It writes a new random `_V<n+1>` to the `api` set and prints the next step.
 2. Set `<PREFIX>_CURRENT_VERSION=<n+1>` in `backend/env/prod.env`, commit, deploy.
 
-Move production from the unversioned names (once, both prefixes):
+Move production from the unversioned name (once):
 
 1. Record the current `api` set version, `vault kv metadata get -mount=secret zenflow/prod/api`, for rollback.
-2. Run `migrate` for each prefix, with `VAULT_ENV=prod` and the ops token. It writes `<PREFIX>_V1` and removes `<PREFIX>`.
+2. Run `migrate API_TOKEN_PEPPER`, with `VAULT_ENV=prod` and the ops token. It writes `API_TOKEN_PEPPER_V1` and removes `API_TOKEN_PEPPER`.
 3. Deploy the release that reads `_V1` right after step 2. The deploy renders secrets from Vault, so an old release restarted in between would not find the unversioned names. Production refuses to boot without the current pepper version.
-4. Check: an existing personal API token still authenticates, and a connected Google Calendar still syncs.
+4. Check: an existing personal API token still authenticates.
 
 If the deploy fails, roll back the `api` set (`vault kv rollback -mount=secret -version=<recorded> zenflow/prod/api`), then redeploy the previous release. Do not leave a half-migrated set.
 

@@ -7,7 +7,6 @@ For operators. Public hosts, the DNS records behind them and the cutover to `use
 | Host | Serves | Record | Certificate (`nginx/init-cert.sh`) |
 | --- | --- | --- | --- |
 | `api.usezenflow.com` | Nest API | `A` to the VPS, DNS only | default (`api.usezenflow.com`) |
-| `app.usezenflow.com` | Web PWA (Cloudflare Workers) | Custom domain on the `pwa` Worker | Cloudflare |
 | `dashboard.usezenflow.com` | Management dashboard (Cloudflare Workers) | Custom domain on the `dashboard` Worker | Cloudflare |
 | `grafana.usezenflow.com` | Grafana | `A` to the VPS, DNS only | `DOMAIN=grafana.usezenflow.com` |
 
@@ -33,12 +32,11 @@ Records at `usezenflow.com`:
 
 1. Lower the TTL on `zenflow.alphatrann.com` a day ahead.
 2. Create the `A` records for `api` and `grafana`.
-3. Attach `app.usezenflow.com` to the `pwa` Worker as a custom domain and wait for it to go active.
-4. On the VPS, with the current nginx running, issue the new certificates (table above).
-5. Mailgun: add domain `usezenflow.com`, publish SPF and DKIM, wait for verified. Create the SMTP password for `postmaster@usezenflow.com`.
-6. Write it to Vault: `MAIL_PASSWORD` in `api` and `GF_SMTP_PASSWORD` in `grafana` ([vault.md](vault.md)).
-7. Cloudflare Email Routing for `privacy@` ([inbox-email.md](inbox-email.md)), then publish DMARC.
-8. Deploy the backend (nginx, `backend/env/prod.env`, Grafana). Check each host over HTTPS and send a login code to a `dlu.edu.vn` inbox.
-9. Deploy the web app to Cloudflare Workers (`pwa/wrangler.jsonc`, `dashboard/wrangler.jsonc`), then cut a mobile release (it defaults to `api.usezenflow.com`).
-10. Remove the `zenflow.alphatrann.com` record and its certificate (`certbot delete --cert-name zenflow.alphatrann.com` in the `certbot` service). APKs built before the move stop working.
-11. Remove the `grafana.alphatrann.com` record and its certificate (`certbot delete --cert-name grafana.alphatrann.com` in the `certbot` service).
+3. On the VPS, with the current nginx running, issue the new certificates (table above).
+4. Mailgun: add domain `usezenflow.com`, publish SPF and DKIM, wait for verified. Create the SMTP password for `postmaster@usezenflow.com`.
+5. Write it to Vault: `MAIL_PASSWORD` in `api` and `GF_SMTP_PASSWORD` in `grafana` ([vault.md](vault.md)).
+6. Cloudflare Email Routing for `privacy@` ([inbox-email.md](inbox-email.md)), then publish DMARC.
+7. Deploy the backend (nginx, `backend/env/prod.env`, Grafana). Check each host over HTTPS and send a login code to a `dlu.edu.vn` inbox.
+8. Deploy the dashboard to Cloudflare Workers (`dashboard/wrangler.jsonc`), then cut a mobile release (it defaults to `api.usezenflow.com`).
+9. Remove the `zenflow.alphatrann.com` record and its certificate (`certbot delete --cert-name zenflow.alphatrann.com` in the `certbot` service). APKs built before the move stop working.
+10. Remove the `grafana.alphatrann.com` record and its certificate (`certbot delete --cert-name grafana.alphatrann.com` in the `certbot` service).

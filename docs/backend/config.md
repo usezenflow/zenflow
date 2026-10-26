@@ -26,14 +26,11 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `MASTER_LMS_ENCRYPTION_KEY_V1` / `MASTER_PORTAL_ENCRYPTION_KEY_V1` | none | Required. 64 hex chars (`openssl rand -hex 32`). Add `_V<n>` and set `MASTER_KEY_CURRENT_VERSION` to rotate. |
 | `MASTER_KEY_CURRENT_VERSION` | `1` | Master-key version used for new wraps; its `_V<n>` keys must exist. |
 | `API_TOKEN_PEPPER_V<n>`, `API_TOKEN_PEPPER_CURRENT_VERSION` | `1` | Pepper for OAuth token HMACs and MCP plan tokens, 32+ chars. The current version hashes new tokens; older ones still verify until removed. Required in production. |
-| `PUBLIC_API_URL` | none | API base incl. `/api/v1`, e.g. `https://api.usezenflow.com/api/v1`. Turns on OAuth for AI assistants ([ADR-0041](../adr/0041-mcp-oauth.md)) and is the base of Google's redirect and push URLs. |
-| `PUBLIC_WEB_URL` | first `CORS_ORIGIN` | Where the PWA lives: the consent screen and the page Google returns to. |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | none | Google OAuth client for Calendar sync ([ADR-0040](../adr/0040-google-calendar-sync.md)). Redirect URI `<PUBLIC_API_URL>/google-calendar/callback`, scopes `calendar.events` and `calendar.calendarlist.readonly`. |
-| `GOOGLE_TOKEN_ENCRYPTION_KEY_V<n>`, `GOOGLE_TOKEN_ENCRYPTION_KEY_CURRENT_VERSION` | `1` | 64 hex chars each (`openssl rand -hex 32`). AES-256-GCM keys for stored Google refresh tokens; each sealed value records its version. Sync is off until the three Google vars and `PUBLIC_API_URL` are set. |
-| `GOOGLE_WEBHOOK_SECRET` | none | Keys the Google push channel tokens. Set it to any long random string; Google Calendar stays off without it. |
+| `PUBLIC_API_URL` | none | API base incl. `/api/v1`, e.g. `https://api.usezenflow.com/api/v1`. Turns on OAuth for AI assistants ([ADR-0041](../adr/0041-mcp-oauth.md)) and is where the assistant's browser page lives (`/oauth/connect`). |
+| `PUBLIC_WEB_URL` | first `CORS_ORIGIN` | The public website, advertised as the MCP server's `websiteUrl`. |
 
 | `PORT` | 8000 | |
-| `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` (push and `calendar-sync`) / `worker-scheduler` one consumer each, `outbox` the calendar outbox (LISTEN plus poll, no queue), `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, one `outbox`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |
+| `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` (push) / `worker-scheduler` one consumer each, `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |
 | `NODE_ENV` | `development` | `production` requires `BANDIT_SERVICE_URL` and turns Swagger (`/api`) off. |
 | `SWAGGER_ENABLED` | unset | `true` keeps Swagger on under `NODE_ENV=production` (staging only). |
 

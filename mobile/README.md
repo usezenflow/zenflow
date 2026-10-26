@@ -99,7 +99,7 @@ Task composer is `components/tasks/composer/` (fields in `composer-fields.tsx`);
 
 ## Phone calendar
 
-Settings has a "Phone calendar" switch ([ADR-0039](../docs/adr/0039-thin-layer-calendar-native.md)). On, `lib/device-calendar/` writes the schedule into a local "Zenflow" calendar through `expo-calendar`: on launch, on return to the app and after edits. Zenflow is the source of truth; the plan (`plan.ts`) and sync (`sync.ts`) are pure and unit tested, `expo-adapter.ts` is the only code that touches the OS. Event reminders use the account's default reminder. Turn it off if Google Calendar on the phone already shows Zenflow.
+Settings has a "Phone calendar" switch ([ADR-0039](../docs/adr/0039-thin-layer-calendar-native.md)). On, `lib/device-calendar/` writes the schedule into a local "Zenflow" calendar through `expo-calendar`: on launch, on return to the app and after edits. Zenflow is the source of truth; the plan (`plan.ts`) and sync (`sync.ts`) are pure and unit tested, `expo-adapter.ts` is the only code that touches the OS. Event reminders use the account's default reminder.
 
 ## Push and live notifications
 

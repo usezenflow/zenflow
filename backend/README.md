@@ -69,7 +69,7 @@ backend/
 ├── src/
 │   ├── main.ts            # /api/v1 prefix, CORS, ValidationPipe, Redis session, Swagger
 │   ├── auth/  users/  devices/  mail/  crypto/  oauth/
-│   ├── google-calendar/   # two-way sync with the Zenflow calendar; calendar-busy/ imports other calendars
+│   ├── calendar-busy/     # busy time the phone sends
 │   ├── sessions/          # session CRUD; a create or edit places one TASK (or series)
 │   ├── scheduler/         # core/ (pure), io/ (Prisma + bandit HTTP), types/
 │   ├── bandit/            # HTTP client for services/bandit + per-user (A,b) repo

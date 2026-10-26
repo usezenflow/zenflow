@@ -220,7 +220,7 @@ docker compose -f compose.prod.yml start vault        # unseal with the SAME sha
 | Redis password | Patch `api` and the instance's set, deploy. Brief outage, see [secrets.md](secrets.md#redis-passwords) |
 | Database password | Run `ALTER USER`, patch `POSTGRES_PASSWORD` in `api`, `postgres` and `backup`, deploy |
 | Crypto master keys | Patch in `MASTER_*_ENCRYPTION_KEY_V2`, set `MASTER_KEY_CURRENT_VERSION=2` in `backend/env/prod.env`, deploy |
-| `API_TOKEN_PEPPER`, `GOOGLE_TOKEN_ENCRYPTION_KEY` | `ops/vault/rotate-versioned.sh rotate <PREFIX>`, set `<PREFIX>_CURRENT_VERSION` in `backend/env/prod.env`, deploy. Runbook: [secrets.md](secrets.md#versioned-secrets) |
+| `API_TOKEN_PEPPER` | `ops/vault/rotate-versioned.sh rotate <PREFIX>`, set `<PREFIX>_CURRENT_VERSION` in `backend/env/prod.env`, deploy. Runbook: [secrets.md](secrets.md#versioned-secrets) |
 | VAPID private key | Patch `VAPID_PRIVATE_KEY` in `api`, deploy. The public key is not in Vault: it lives in `backend/env/prod.env` and in the web build as `VITE_VAPID_PUBLIC_KEY`. A new pair means rebuilding the web app, and browsers resubscribe. See [ADR-0033](../adr/0033-web-push.md) |
 
 Never `kv put` over a set that holds V1 keys: it replaces all keys, and V1 must stay while rows reference it.

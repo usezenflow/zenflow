@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1660 874" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Zenflow data model: the tables that hold sessions, calendar sync, learning signals and ingestion">
-  <title>Zenflow data model: the tables that hold sessions, calendar sync, learning signals and ingestion</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1660 874" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Zenflow data model: the tables that hold sessions, learning signals and ingestion">
+  <title>Zenflow data model: the tables that hold sessions, learning signals and ingestion</title>
   <defs><marker id="erd-end" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8A817C"/></marker></defs>
   <rect width="1660" height="874" fill="#FCFBFA"/>
   <text x="30" y="34" font-size="21" font-weight="700" fill="#2B2724">Zenflow — data model</text>
@@ -56,7 +56,7 @@
   <text x="326" y="173" font-size="10.5" fill="#2B2724" opacity="0.85">userId  FK</text>
   <text x="326" y="188" font-size="10.5" fill="#2B2724" opacity="0.85">title, type, source</text>
   <text x="326" y="203" font-size="10.5" fill="#2B2724" opacity="0.85">scheduledStartTime, durationMinutes</text>
-  <text x="326" y="218" font-size="10.5" fill="#2B2724" opacity="0.85">deleted, reminderMinutes, attendees</text>
+  <text x="326" y="218" font-size="10.5" fill="#2B2724" opacity="0.85">deleted, reminderMinutes</text>
   <text x="326" y="233" font-size="10.5" fill="#2B2724" opacity="0.85">seriesId  FK</text>
   <text x="326" y="248" font-size="10.5" fill="#2B2724" opacity="0.85">externalKey  UK (userId)</text>
   <rect x="316" y="281" width="262" height="79" rx="6" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.2"/>
@@ -66,31 +66,6 @@
   <text x="326" y="319" font-size="10.5" fill="#2B2724" opacity="0.85">id  PK</text>
   <text x="326" y="334" font-size="10.5" fill="#2B2724" opacity="0.85">userId  FK</text>
   <text x="326" y="349" font-size="10.5" fill="#2B2724" opacity="0.85">type, rrule, exdates</text>
-  <rect x="316" y="382" width="262" height="109" rx="6" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.2"/>
-  <rect x="316" y="382" width="262" height="26" rx="6" fill="#3B7EA1"/>
-  <rect x="316" y="402" width="262" height="6" fill="#3B7EA1"/>
-  <text x="326" y="399" font-size="12.5" font-weight="700" fill="#FFFFFF">CalendarLink</text>
-  <text x="326" y="420" font-size="10.5" fill="#2B2724" opacity="0.85">id  PK</text>
-  <text x="326" y="435" font-size="10.5" fill="#2B2724" opacity="0.85">userId  FK</text>
-  <text x="326" y="450" font-size="10.5" fill="#2B2724" opacity="0.85">sessionId / seriesId  FK</text>
-  <text x="326" y="465" font-size="10.5" fill="#2B2724" opacity="0.85">eventId  UK (userId)</text>
-  <text x="326" y="480" font-size="10.5" fill="#2B2724" opacity="0.85">payloadHash, etag, syncedAt</text>
-  <rect x="316" y="513" width="262" height="109" rx="6" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.2"/>
-  <rect x="316" y="513" width="262" height="26" rx="6" fill="#3B7EA1"/>
-  <rect x="316" y="533" width="262" height="6" fill="#3B7EA1"/>
-  <text x="326" y="530" font-size="12.5" font-weight="700" fill="#FFFFFF">CalendarConnection</text>
-  <text x="326" y="551" font-size="10.5" fill="#2B2724" opacity="0.85">id  PK</text>
-  <text x="326" y="566" font-size="10.5" fill="#2B2724" opacity="0.85">userId  FK, UK</text>
-  <text x="326" y="581" font-size="10.5" fill="#2B2724" opacity="0.85">googleCalendarId, syncToken</text>
-  <text x="326" y="596" font-size="10.5" fill="#2B2724" opacity="0.85">channelId, channelExpiresAt</text>
-  <text x="326" y="611" font-size="10.5" fill="#2B2724" opacity="0.85">status, lastError</text>
-  <rect x="316" y="644" width="262" height="79" rx="6" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.2"/>
-  <rect x="316" y="644" width="262" height="26" rx="6" fill="#3B7EA1"/>
-  <rect x="316" y="664" width="262" height="6" fill="#3B7EA1"/>
-  <text x="326" y="661" font-size="12.5" font-weight="700" fill="#FFFFFF">CalendarSyncOutbox</text>
-  <text x="326" y="682" font-size="10.5" fill="#2B2724" opacity="0.85">userId  PK</text>
-  <text x="326" y="697" font-size="10.5" fill="#2B2724" opacity="0.85">dirtyAt, nextAttemptAt</text>
-  <text x="326" y="712" font-size="10.5" fill="#2B2724" opacity="0.85">claimedUntil, attempts</text>
   <rect x="608" y="120" width="262" height="109" rx="6" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.2"/>
   <rect x="608" y="120" width="262" height="26" rx="6" fill="#F0B100"/>
   <rect x="608" y="140" width="262" height="6" fill="#F0B100"/>
