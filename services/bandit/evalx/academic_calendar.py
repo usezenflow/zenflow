@@ -59,6 +59,77 @@ class Semester:
     weak: float  # 0 strong, 1 weak: scales prep length and lead
 
 
+@dataclass(frozen=True)
+class DndKind:
+    """A recurring commitment a student keeps clear, as production's DND blocks do.
+
+    Prevalence, timing and length are assumptions, not survey data. Each student
+    draws whether they have it, which weekdays, and a habitual start and length.
+    """
+
+    name: str
+    share: float  # chance the student has it at all
+    days_per_week: tuple[int, int]
+    weekdays: tuple[int, ...]  # eligible weekdays, Monday is 0
+    starts: tuple[tuple[float, float], ...]  # habitual start windows, in hours
+    minutes: tuple[int, int]
+    skip: float = 0.1  # chance one occurrence does not happen
+
+
+DND_KINDS = (
+    DndKind("nap", 0.35, (7, 7), tuple(range(7)), ((12.0, 15.0),), (20, 45)),
+    DndKind(
+        "workout",
+        0.5,
+        (2, 4),
+        tuple(range(7)),
+        ((6.0, 8.0), (17.0, 19.5)),
+        (45, 90),
+    ),
+    DndKind("weekend break", 0.6, (1, 1), (5, 6), ((10.0, 14.0),), (180, 360)),
+    DndKind("part-time job", 0.15, (2, 3), (0, 1, 2, 3, 4), ((9.0, 13.0),), (240, 300)),
+    DndKind("dinner", 0.8, (7, 7), tuple(range(7)), ((18.0, 19.5),), (45, 75)),
+    DndKind(
+        "club or society", 0.25, (1, 1), tuple(range(7)), ((17.0, 20.0),), (90, 120)
+    ),
+)
+
+
+def _dnd(rng: random.Random, days: int) -> dict[int, list[tuple[int, int]]]:
+    """The student's DND blocks per day, as minutes from midnight."""
+    busy: dict[int, list[tuple[int, int]]] = {}
+    for kind in DND_KINDS:
+        if rng.random() >= kind.share:
+            continue
+        weekdays = set(rng.sample(kind.weekdays, rng.randint(*kind.days_per_week)))
+        start_h = rng.uniform(*rng.choice(kind.starts))
+        length = rng.randint(*kind.minutes)
+        for day in range(days):
+            if (day + 3) % 7 not in weekdays or rng.random() < kind.skip:
+                continue
+            begin = max(0, round(start_h * 60 + rng.gauss(0, 10)))
+            end = min(24 * 60, begin + round(length * rng.uniform(0.9, 1.1)))
+            if end > begin:
+                busy.setdefault(day, []).append((begin, end))
+    return {day: _merge(blocks) for day, blocks in busy.items()}
+
+
+def _merge(blocks: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    merged: list[tuple[int, int]] = []
+    for a, b in sorted(blocks):
+        if merged and a <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+        else:
+            merged.append((a, b))
+    return merged
+
+
+def _union(
+    a: dict[int, list[tuple[int, int]]], b: dict[int, list[tuple[int, int]]]
+) -> dict[int, list[tuple[int, int]]]:
+    return {d: _merge([*a.get(d, []), *b.get(d, [])]) for d in {*a, *b}}
+
+
 def _lectures(rng: random.Random) -> Calendar:
     """The weekly timetable, lightened in midterm weeks and empty in finals."""
     base = build_calendar(rng, DAYS + TAIL_DAYS)
@@ -147,4 +218,7 @@ def build_semester(rng: random.Random, weak: float | None = None) -> Semester:
         )
 
     tasks.sort(key=lambda t: (t.arrival_ms, t.deadline_ms))
+    # Drawn last, so the timetable and tasks above are the same as without DND.
+    dnd = _dnd(rng, DAYS + TAIL_DAYS)
+    calendar = Calendar(_union(calendar.busy, dnd), lectures=calendar.busy, dnd=dnd)
     return Semester(calendar, tasks, weak)

@@ -252,12 +252,14 @@ def test_semester_lectures_follow_the_season() -> None:
     from evalx.academic_calendar import DAYS, build_semester, season_of
 
     cal = build_semester(random.Random("sem:3")).calendar
-    assert all(not cal.busy[d] for d in range(DAYS) if season_of(d) == "final")
+    assert all(
+        not cal.lecture_blocks(d) for d in range(DAYS) if season_of(d) == "final"
+    )
     assert all(
         end <= 11 * 60 + 15
         for d in range(DAYS)
         if season_of(d) == "midterm"
-        for _, end in cal.busy[d]
+        for _, end in cal.lecture_blocks(d)
     )
 
 

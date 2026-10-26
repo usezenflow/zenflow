@@ -157,12 +157,9 @@ class PassiveStudent:
             if moved is not None:
                 applied, signal = moved, "MOVE"
         p = self.done_chance(task, applied, cal)
-        # Placed blocks can be deleted; exams are fixed events and cannot.
-        if (
-            signal == "KEPT"
-            and task.kind != "EXAM"
-            and u_delete < self.delete_chance(applied)
-        ):
+        # Placed plans can be deleted, exam and assignment prep included. Synced
+        # exams and assignments are fixed and never reach this method.
+        if signal == "KEPT" and u_delete < self.delete_chance(applied):
             return False, "DELETE", applied, p
         done = task.u_open < p
         return done, signal, applied, p
@@ -211,7 +208,9 @@ def fatigue(cal: Calendar, start_ms: int) -> float:
     day = start_ms // DAY_MS
     minute = (start_ms % DAY_MS) // MS_PER_MINUTE
     lo = minute - FATIGUE_LOOKBACK_MIN
-    taught = sum(max(0, min(b, minute) - max(a, lo)) for a, b in cal.busy.get(day, []))
+    taught = sum(
+        max(0, min(b, minute) - max(a, lo)) for a, b in cal.lecture_blocks(day)
+    )
     drop = FATIGUE_MAX_DROP * FATIGUE_SCALE
     return 1 - drop * min(1.0, taught / FATIGUE_LOOKBACK_MIN)
 

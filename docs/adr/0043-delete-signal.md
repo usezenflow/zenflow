@@ -19,5 +19,5 @@
 ## Consequences
 - The learner stays unchanged until the gate passes. Shadow data shows the delete rate by timing bucket before any reward is applied.
 - The `DELETE` change-log row (Phase 3, `SessionEventType.DELETE`) becomes the evidence source. Its fields must be stored from the first write.
-- The simulator's semester tasks are assignments and exams. Only exams are excluded from deletes, since they are fixed events.
+- Students move and delete placed plans, including exam and assignment prep. Synced timetable items, exams and assignments are fixed. The simulator never moves or deletes them.
 - Migration: none beyond the change log. Existing `SessionEvent` rows keep `reward` as null.

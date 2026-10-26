@@ -73,15 +73,13 @@ def test_react_keeps_a_block_without_the_knob() -> None:
     )
 
 
-def test_react_never_deletes_an_exam() -> None:
+def test_react_deletes_exam_prep_as_a_plan() -> None:
     s = replace(student, delete_noise=1.0)
-    assert (
-        s.react(task("EXAM"), DAY0 + 10 * HOUR_MS, empty_calendar(), 0.0)[1] == "KEPT"
-    )
-    assert (
-        s.react(task("ASSIGNMENT"), DAY0 + 10 * HOUR_MS, empty_calendar(), 0.0)[1]
-        == "DELETE"
-    )
+    for kind in ("EXAM", "ASSIGNMENT"):
+        assert (
+            s.react(task(kind), DAY0 + 10 * HOUR_MS, empty_calendar(), 0.0)[1]
+            == "DELETE"
+        )
 
 
 def test_a_negative_weight_lowers_the_cell_and_clamps_at_minus_one() -> None:

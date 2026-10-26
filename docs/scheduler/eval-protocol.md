@@ -21,7 +21,7 @@ For readers from traditional ML. Each entry says what the term means here.
 - **Bandit.** A decision problem where you pick one action per round and observe the reward only for that action. Here the action is a start slot for a study block.
 - **Contextual bandit.** A bandit where each round comes with features (the context) that describe the options. Here the context describes each candidate day.
 - **Arm.** One action choice in the bandit. In the six-band model an arm is a band of the day (morning, midday, and so on). In the hour model an arm is one start hour (24 arms).
-- **Reward.** The signal after a placement. Here a start is +1, a move is negative in proportion to how far the block moved, and an offer pick is a smaller positive or negative value.
+- **Reward.** The signal after a placement. Here a block left in place (KEPT) is +1, whether or not the student started it. A move is negative in proportion to how far the block moved, and an offer pick is a smaller positive or negative value. With delete scoring on ([ADR-0043](../adr/0043-delete-signal.md)), a delete of a placed block that was never moved is -0.25 for the LinUCB arm, and the heuristic's matrix weight is -0.0625.
 - **Exploration and exploitation.** Exploitation picks the arm with the best estimate. Exploration picks arms that are uncertain, so the learner gains information. The bonus for uncertainty below is how the method explores.
 - **Cold start.** Behaviour before any data. The prior decides it.
 
@@ -99,10 +99,19 @@ Names are explicit. Code names are in parentheses where they differ.
 One student lives through one 15-week semester. Every method sees the same semester and the same random draws.
 
 - **Timetable.** A weekly lecture timetable. Weeks 7 and 8 keep morning lectures only. Weeks 14 and 15 have none.
+- **Personal commitments (DND).** Each student keeps some recurring blocks clear, as production's DND blocks do. Prevalence, timing and length are assumptions, not survey data. Each student draws which apply, their weekdays and a habitual start and length, and each occurrence jitters by about 10 minutes and is skipped 10% of the time.
+  - **Nap:** 35% of students, daily, 20 to 45 minutes, starting 12:00 to 15:00.
+  - **Workout:** 50%, 2 to 4 days a week, 45 to 90 minutes, mornings (6:00 to 8:00) or evenings (17:00 to 19:30).
+  - **Weekend break:** 60%, one weekend day a week, 3 to 6 hours, starting 10:00 to 14:00.
+  - **Part-time job:** 15%, 2 to 3 weekdays, 4 to 5 hours, starting 9:00 to 13:00.
+  - **Dinner:** 80%, daily, 45 to 75 minutes, starting 18:00 to 19:30.
+  - **Club or society:** 25%, one evening a week, 1.5 to 2 hours, starting 17:00 to 20:00.
+
+  DND blocks stop a start from being placed in them. They do not change a student's start chance or the fatigue from lectures.
 - **Courses and tasks.** 4 to 6 courses, each with 10 to 15 assignments, plus 4 to 6 exams. Each assignment or exam gets one prep block, sized as the production app sizes it.
 - **Student.** Peak hour (chronotype), willingness to start, extra willingness close to a deadline, and a chance to answer offers (30% never do).
 - **Start chance.** The start probability is the willingness times how well the hour fits the student's curve, times a factor for recent lectures, times a factor for the weekend, times the deadline boost. A block starts when a fixed random draw falls under that probability.
-- **Signals.** Two signals reach the learner: a start, and an offer answer. These match the production signals.
+- **Signals.** The learner hears KEPT for a block left in place, MOVE when the student drags it, and an offer answer. These match the production signals. KEPT stands in for a start only in the sense that the block was not changed; whether it was started is latent and never shown to the learner. With delete scoring on, a DELETE also reaches the learner.
 - **Two placement paths.** H, H+K and L24N production run through the production placer (`run_place` in `evalx/run.py`). L24, L24K and the L24N reference run offline in `evalx/hourly.py`, which has no series, displacement, last-resort or 409 rules.
 
 Full equations are in [section 5](#5-formal-model).
@@ -111,7 +120,8 @@ Full equations are in [section 5](#5-formal-model).
 
 | Measure | Definition | Tag |
 |---|---|---|
-| **Adherence** | Share of a student's tasks started. Unplaced tasks count as not started. Averaged over students. | MAIN |
+| **Adherence** | Share of a student's tasks started. Unplaced and deleted tasks count as not started. Averaged over students. | MAIN |
+| **Deleted** | Share of a student's tasks deleted before they started. Zero unless delete scoring is on. | APPX |
 | **Hours before deadline** | Block end to deadline, averaged over placed blocks. | MAIN |
 | **Last-day share** | Share of placed blocks ending within 24 hours of the deadline, over tasks with a window of 3 days or more. | MAIN |
 | **Conflict free** | Share of placed blocks clear of lectures and earlier blocks. | APPX |
@@ -132,6 +142,8 @@ $$\phi(s)=1-0.5\min\!\big(1,\tau/300\big),\qquad \tau=\text{lecture minutes in t
 $$p(s)=\min\!\Big(1,\;\alpha_i\,\mathrm{fit}(s)\,\phi(s)\cdot 0.7^{[\text{weekend}]}\cdot(1+\iota_i)^{[T-s\le 2\text{ days}]}\Big)$$
 
 The student starts when $u<p(s)$, with $u\sim U(0,1)$ fixed per task and shared by every method.
+
+With delete scoring on, a placed block that was never moved is deleted when $u_{\rm del}<p_{\rm del}(s)=\delta_0+\delta_1(1-\mathrm{fit}(s))$. Here $\delta_0$ is `delete_noise`, $\delta_1$ is `delete_slot`, and $\mathrm{fit}(s)\in[0,1]$ is how well the hour suits the student. $u_{\rm del}$ is a second draw per task, shared by every method. A deleted block is not started. Students can move and delete placed plans, including exam and assignment prep. Synced timetable items, exams and assignments are fixed and never moved or deleted. With both knobs at 0, no block is deleted.
 
 | Trait | Draw |
 |---|---|
