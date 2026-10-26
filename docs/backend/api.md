@@ -122,33 +122,6 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 - Search returns `{ sessions, nextCursor }`; pass `nextCursor` with the same `direction`. Recurring series add occurrences up to a year past the cursor once stored rows run out. Unscheduled rows are skipped.
 - **Skipped:** every `Session` carries `skipped`. Skip routes return `SessionSkipResponse` (`{ session }`) and accept an occurrence id. The representative row id of a recurring series is a 400. Learning signals are START and MOVE only ([ADR-0035](../adr/0035-start-and-move-only-signals.md)).
 
-## Tags and files
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/tags` | The user's tags |
-| POST | `/tags/bulk` | Idempotent bulk create |
-| GET | `/course-colours` | The user's course colour picks (`CourseColoursResponse`) |
-| PUT | `/course-colours/:courseKey` | Save a pick, `{ swatch }` 0 to 11. Key is `lms:<id>` or `portal:<id>`, URL-encoded |
-| DELETE | `/course-colours/:courseKey` | Drop the pick; the course returns to its automatic colour |
-| GET | `/files/limits` | `maxFileBytes`, `maxFilesPerRequest`, `userQuotaBytes` |
-| GET | `/files/usage` | Limits plus `usedBytes` |
-| POST | `/files/upload` | Multipart. Default 20 MB x 5 files, 150 MB per user. 413 `File too large` or `Storage full`. [ADR-0021](../adr/0021-upload-limits.md) |
-| POST | `/files/remove` | Delete a file |
-| GET | `/files/metadata/:id` | Metadata |
-| GET | `/files/:id` | Download (API proxies S3) |
-
-- Bytes live in an S3-compatible bucket (`S3_*`). `File.path` is `<userId>/<uuid>`. Uploads buffer to `UPLOAD_TMP_DIR`, stream to S3, then are removed. [ADR-0004](../adr/0004-s3-file-storage.md).
-- **Notes:** `Session.note` stores refs as `/api/v1/files/<id>` without `sig`. Responses add `?sig=`. `POST` and `PATCH` strip it and neutralise refs to files the caller does not own.
-
-## Link preview (`/link-preview`)
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/link-preview?url=` | Open Graph card of an http(s) page as `LinkPreview`, or `data: null` when the page has none or cannot be fetched. Successes cached for 1 h |
-
-- Public addresses only, checked on the connected address. Ports 80 and 443, at most 3 redirects, 5 s timeout, 256 KB read, `text/html` only.
-
 ## Integrations (`/integrations`)
 
 A student's LMS or portal login for ingestion. Credentials are never returned.

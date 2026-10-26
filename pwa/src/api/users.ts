@@ -23,7 +23,7 @@ export async function getPreferenceMatrix(): Promise<PreferenceMatrixResponse> {
   return data.data;
 }
 
-/** Partial update of the name, timezone, language, reminder, transport, home or notification intent. */
+/** Partial update of the name, timezone, language or notification intent. */
 export async function updateBasicInfo(input: UpdateUserInput): Promise<User> {
   const { data } = await api.patch("/users/update/basic-info", input);
   return data.data;

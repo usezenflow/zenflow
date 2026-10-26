@@ -13,7 +13,6 @@ import {
   Sparkles,
   User,
 } from "@/components/Icons";
-import { ImportedTimetable } from "@/components/onboarding/imported-timetable";
 import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
 import { Button } from "@/components/ui/button";
@@ -81,25 +80,6 @@ const COPY = {
       return t(
         "Your password is stored encrypted. Disconnect in Settings to delete it.",
       );
-    },
-  },
-  commute: {
-    get title() {
-      return t("Plan your commute");
-    },
-    get body() {
-      return t(
-        "Share where you leave from and how you travel. We'll add buffer time before sessions on campus.",
-      );
-    },
-    get useLocation() {
-      return t("Use my location");
-    },
-    get useLocationBody() {
-      return t("Set your home to where you are now");
-    },
-    get openSettings() {
-      return t("Open settings");
     },
   },
   notifications: {
@@ -369,7 +349,6 @@ export default function OnboardingScreen() {
       content = (
         <View>
           <DluAccountsSection hideLabel />
-          {dluConnected && <ImportedTimetable />}
           <Text className="mt-3.5 px-1 text-[12px] leading-snug text-muted-foreground">
             {COPY.dlu.trust}
           </Text>

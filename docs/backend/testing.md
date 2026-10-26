@@ -20,7 +20,7 @@ One spec, with `.env.test` loaded: `pnpm --filter backend exec jest --config ./t
 
 Two spec styles:
 
-- **In-process Nest** (`notifications`, `devices`, `tags-onboarding`, `push-delivery`): `Test.createTestingModule` with the real module under test and the externals overridden (FCM, APNs and Web Push senders, auth guard, an in-memory Prisma stub in the older ones).
+- **In-process Nest** (`notifications`, `devices`, `push-delivery`): `Test.createTestingModule` with the real module under test and the externals overridden (FCM, APNs and Web Push senders, auth guard, an in-memory Prisma stub in the older ones).
 - **Real processes** (everything else): `test/queue/support/stack.ts` starts `dist/main.js` per role plus the fake DLU server, logs in via OTP (code from Mailpit) and drives the API with supertest.
   - Helpers: `startRole(role, extraEnv)`, `signUp`, `connect`, `openSse`, `until`.
   - `support/db.ts`: Prisma client for assertions.
@@ -36,7 +36,7 @@ Two spec styles:
 | `ingestion-materialize` | what a sync does to the calendar and inbox: first sync, re-sync, student deletion, withdrawn items, sync conflicts and "reschedule them all" |
 | `queue/queue-flow` | connect jobs, 5 s watcher, week and month jobs, profile and marks, retries, breaker, manual sync, SSE and push job fan-out, graceful shutdown |
 | `push-delivery` | which devices get a push, language, dead-token pruning, when a job must retry |
-| `notifications`, `devices`, `tags-onboarding`, `rate-limit`, `backup/` | the matching endpoints and the backup service |
+| `notifications`, `devices`, `rate-limit`, `backup/` | the matching endpoints and the backup service |
 
 ## Rules
 

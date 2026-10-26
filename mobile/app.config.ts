@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import type { ConfigContext, ExpoConfig } from "@expo/config";
-import type { WithAndroidWidgetsParams } from "react-native-android-widget";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const withAndroidBuildFixes = require("./plugins/withAndroidBuildFixes");
@@ -24,25 +23,6 @@ const googleServicesFile = existsSync("./google-services.json")
 const fullVersion: string = require("./package.json").version;
 const [appVersion, prerelease] = fullVersion.split("-");
 const betaNumber = Number(prerelease?.split(".")[1] ?? 0);
-
-const widgetConfig: WithAndroidWidgetsParams = {
-  fonts: [
-    "../packages/brand/fonts/Geist-Regular.ttf",
-    "../packages/brand/fonts/Geist-Medium.ttf",
-    "../packages/brand/fonts/Geist-SemiBold.ttf",
-  ],
-  widgets: [
-    {
-      name: "NextUpMedium",
-      label: "Zenflow month",
-      minWidth: "260dp",
-      minHeight: "110dp",
-      targetCellWidth: 4,
-      targetCellHeight: 2,
-      updatePeriodMillis: 1_800_000,
-    },
-  ],
-};
 
 // Android only installs an update whose versionCode is higher, so it must grow with the
 // version: major.minor.patch.beta packs into one number, and a stable release (no `-beta.N`)
@@ -122,7 +102,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     ["expo-router"],
-    ["react-native-android-widget", widgetConfig],
     "@react-native-community/datetimepicker",
     // Adds the iOS push entitlement (`aps-environment`) + the Android
     // notification permission / channel wiring. Raw FCM/APNs tokens come from
@@ -146,21 +125,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-asset",
     "expo-font",
     "expo-secure-store",
-    [
-      "expo-image-picker",
-      {
-        photosPermission: "Allow Zenflow to attach photos to your tasks",
-        // Camera/microphone are never used (library picker only).
-        cameraPermission: false,
-        microphonePermission: false,
-      },
-    ],
-    [
-      "expo-location",
-      {
-        locationWhenInUsePermission: "Allow Zenflow to use your location as the start of a route",
-      },
-    ],
     [
       "expo-splash-screen",
       {

@@ -7,8 +7,6 @@ Screens in `dashboard/mockups/`. Each field is named after a source that exists 
 | Shown | Source | Gap |
 | --- | --- | --- |
 | Daily and weekly active | `ActiveUsersService`, Redis HyperLogLog per UTC day | Counts expire after 8 days; the line chart spans 8 days |
-| Weekly retention | `User.createdAt` cohorts, `ClientEvent` APP_OPEN per week | Needs an aggregate query |
-| Current streaks | Consecutive UTC days with an APP_OPEN | Needs a daily snapshot table for history |
 
 ## Learning quality
 

@@ -57,7 +57,7 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 | Language      | TypeScript (strict, `@/*` alias)                                              |
 | State / forms | Zustand; React Hook Form + Zod                                                |
 | HTTP          | axios (`api/`), cookie session                                                |
-| UI libs       | `@gorhom/bottom-sheet` v5, `@react-native-community/datetimepicker`, `@10play/tentap-editor` (rich text) |
+| UI libs       | `@gorhom/bottom-sheet` v5, `@react-native-community/datetimepicker` |
 | Formatter     | Biome                                                                         |
 
 ## Structure

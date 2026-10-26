@@ -42,7 +42,7 @@ Covered now, by file in `mobile/test/screens/`:
 | `month` | grid and adjacent days, pills, month navigation, "Jump to today", load-failure toast |
 | `task-new` | defaults and route-param prefill, validation, `POST /sessions` payload, landing on the placed day, no-slot, infeasible policies and retry, divergent hand-off, error |
 | `task-edit` | read-only view, edit and `PATCH`, validation, infeasible retry, delete (one-off, recurring scopes, task sittings) and failure |
-| `settings`, `settings-sections`, `preferences-section`, `dlu-accounts` | sign-out; profile edit; finish-setup card; tags; language, timezone, reminder and notification toggle; connect, sync, update and disconnect LMS and portal accounts |
+| `settings`, `settings-sections`, `preferences-section`, `dlu-accounts` | sign-out; profile edit; finish-setup card; language, timezone, reminder and notification toggle; connect, sync, update and disconnect LMS and portal accounts |
 | `notifications` | empty, list, open row, dismiss, select and clear all, sync-conflict "Reschedule them all" |
 | `tab-bar` | labels, tab press events, no navigation on the focused tab |
 | `components/session-detail-sheet` | details on open, note off the peek snap and loaded at full, empty note, Edit route with the session id |

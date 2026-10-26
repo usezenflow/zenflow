@@ -77,7 +77,6 @@ backend/
 │   ├── lms/  portal/      # Moodle and portal/DKHP clients
 │   ├── integrations/      # encrypted DLU credentials + login probe + manual sync
 │   ├── notifications/     # ingestion inbox, SSE stream, push
-│   ├── files/             # multipart upload/download, S3-compatible storage
 │   ├── observability/     # metrics, tracing helpers (see tracing.ts)
 │   ├── prisma/            # PrismaService + error-code map
 │   └── common/            # constants, utils, dto, redis/, rate-limit/, circuit breakers
