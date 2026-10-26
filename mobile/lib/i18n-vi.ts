@@ -358,6 +358,7 @@ export default {
   "All set": "Xong",
   "This phone": "Điện thoại này",
   "Reminders": "Nhắc nhở",
+  "Open ntfy": "Mở ntfy",
   "Blocked": "Bị chặn",
   "Link copied": "Đã sao chép",
   "Waiting": "Đang chờ",

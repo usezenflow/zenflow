@@ -13,22 +13,22 @@ import {
   pushChannelId,
   pushSoundFile,
 } from "@zenflow/shared";
-import * as Device from "expo-device";
+import Constants from "expo-constants";
+import * as Crypto from "expo-crypto";
+import * as SecureStore from "expo-secure-store";
 import * as Notifications from "expo-notifications";
 import type { Href } from "expo-router";
 import { sessionEditHref } from "@/lib/session-detail";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
+import { NTFY_STORE_URL, ntfySubscribeUrl, topicFromBytes } from "./ntfy";
 import { t } from "./i18n";
 
 /**
- * Native push plumbing for the direct-FCM/APNs backend (`backend/src/devices/`).
+ * Delivery runs through ntfy: the backend publishes to this device's topic and
+ * the ntfy app shows it. `expo-notifications` stays for permission, Android
+ * channels and the notifications the SSE stream posts while the app runs.
  *
- * We take the **raw** device token (`getDevicePushTokenAsync`), not an Expo
- * push token — the backend talks to FCM / APNs itself and never goes through
- * Expo's push service. That token is what `POST /devices` stores.
- *
- * All of this is a no-op on web (no native push) and on a simulator without a
- * push capability; every entry point fails soft.
+ * Everything is a no-op on web and fails soft.
  */
 
 /**
@@ -228,37 +228,54 @@ export async function requestPermission(): Promise<PushPermission | null> {
   }
 }
 
+const TOPIC_KEY = "zenflow.ntfy.topic";
+
+/** This device's ntfy topic: random, created once, kept in SecureStore. */
+export async function getTopic(): Promise<string> {
+  const saved = await SecureStore.getItemAsync(TOPIC_KEY);
+  if (saved) return saved;
+  const topic = topicFromBytes(Crypto.getRandomBytes(24));
+  await SecureStore.setItemAsync(TOPIC_KEY, topic);
+  return topic;
+}
+
+const ntfyBaseUrl = (): string =>
+  process.env.EXPO_PUBLIC_NTFY_BASE_URL ??
+  (Constants.expoConfig?.extra?.ntfyBaseUrl as string | undefined) ??
+  "";
+
+/** Open the ntfy app on this device's topic, or its store page when missing. */
+export async function openNtfy(): Promise<void> {
+  const url = ntfySubscribeUrl(ntfyBaseUrl(), await getTopic());
+  try {
+    await Linking.openURL(url);
+  } catch {
+    await Linking.openURL(
+      Platform.OS === "ios" ? NTFY_STORE_URL.ios : NTFY_STORE_URL.android,
+    );
+  }
+}
+
 /**
- * Register (upsert) this device. Requires permission to already be granted —
- * never prompts. Returns true on success. `isCurrent` is re-checked after the
- * (slow) token fetch, right before `POST /devices`, so a registration that was
- * invalidated meanwhile (toggle off / logout) never re-adds the token.
+ * Register (upsert) this device's topic. Requires permission to already be
+ * granted, never prompts. Returns true on success. `isCurrent` is re-checked
+ * right before `POST /devices`, so a registration invalidated meanwhile
+ * (toggle off / logout) never re-adds the topic.
  */
 export async function registerThisDevice(
   isCurrent: () => boolean = () => true,
 ): Promise<boolean> {
   if (Platform.OS === "web") return false;
-  if (Platform.OS === "ios" && !Device.isDevice) {
-    debugLog("push", "skipped: iOS simulator has no APNs");
-    return false;
-  }
   try {
     await ensureAndroidChannel();
-    // The native token fetch can stall forever (no Play Services / FCM); bound it.
-    const t = await Promise.race([
-      Notifications.getDevicePushTokenAsync(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("push token timed out")), 15_000),
-      ),
-    ]);
-    const platform: DevicePlatform = t.type === "ios" ? "IOS" : "ANDROID";
-    const token = String(t.data);
+    const platform: DevicePlatform = Platform.OS === "ios" ? "IOS" : "ANDROID";
+    const topic = await getTopic();
     if (!isCurrent()) {
       debugLog("push", "register cancelled (superseded)");
       return false;
     }
-    await registerDevice(platform, token);
-    debugLog("push", `registered ${platform} token …${token.slice(-6)}`);
+    await registerDevice(platform, topic);
+    debugLog("push", `registered ${platform} topic …${topic.slice(-6)}`);
     return true;
   } catch (err) {
     debugLog("push", `register failed: ${String(err)}`);
@@ -268,13 +285,12 @@ export async function registerThisDevice(
 
 /**
  * Unregister this device (toggle off, or logout before the session cookie is
- * cleared). Best-effort — never blocks sign-out.
+ * cleared). Best-effort, never blocks sign-out.
  */
 export async function dropPushRegistration(): Promise<void> {
   if (Platform.OS === "web") return;
   try {
-    const t = await Notifications.getDevicePushTokenAsync();
-    await unregisterDevice(String(t.data));
+    await unregisterDevice(await getTopic());
     debugLog("push", "unregistered this device");
   } catch (err) {
     debugLog("push", `unregister skipped: ${String(err)}`);

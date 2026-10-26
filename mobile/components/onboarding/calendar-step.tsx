@@ -4,6 +4,7 @@ import { useDeviceCalendar } from "@/hooks/use-device-calendar";
 import { useLanguage } from "@/hooks/use-language";
 import { deviceCalendarSupported } from "@/lib/device-calendar/supported";
 import { t } from "@/lib/i18n";
+import { openNtfy } from "@/lib/push";
 import { Linking, View } from "react-native";
 import { ConnectTile } from "./connect-tile";
 
@@ -50,6 +51,14 @@ export function CalendarStep({
         state={notificationsOn ? "done" : busy ? "busy" : "idle"}
         onPress={blocked ? () => void Linking.openSettings() : onEnableNotifications}
       />
+      {notificationsOn ? (
+        <ConnectTile
+          testID="onboarding.open-ntfy"
+          icon={Bell}
+          title={t("Open ntfy")}
+          onPress={() => void openNtfy()}
+        />
+      ) : null}
     </View>
   );
 }

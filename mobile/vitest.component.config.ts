@@ -28,6 +28,7 @@ export default defineConfig({
       { find: /^react-native-gesture-handler\/ReanimatedSwipeable$/, replacement: path.resolve(__dirname, "test/mocks/swipeable.tsx") },
       { find: /^expo-notifications$/, replacement: path.resolve(__dirname, "test/mocks/expo-notifications.ts") },
       { find: /^expo-calendar$/, replacement: path.resolve(__dirname, "test/mocks/expo-calendar.ts") },
+      { find: /^expo-crypto$/, replacement: path.resolve(__dirname, "test/mocks/expo-crypto.ts") },
       { find: /^expo-device$/, replacement: path.resolve(__dirname, "test/mocks/expo-device.ts") },
       { find: /^expo-clipboard$/, replacement: path.resolve(__dirname, "test/mocks/expo-clipboard.ts") },
       { find: /^@\//, replacement: `${path.resolve(__dirname)}/` },

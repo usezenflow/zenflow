@@ -16,6 +16,7 @@ import {
 } from "@/components/settings/option-sheet";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
 import { useNotificationState } from "@/hooks/use-notification-toggle";
+import { openNtfy } from "@/lib/push";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
@@ -214,6 +215,14 @@ export function PreferencesSection() {
           </View>
           <Switch checked={active} onCheckedChange={toggleNotifications} />
         </View>
+        {active ? (
+          <Row
+            Icon={Bell}
+            title={t("Open ntfy")}
+            value=""
+            onPress={() => void openNtfy()}
+          />
+        ) : null}
       </View>
 
       <OptionSheet

@@ -5,10 +5,8 @@ import type {
 import { api } from "./base";
 
 /**
- * Register (or refresh) this device for native push. Idempotent on the
- * backend — it upserts on `pushToken`, so calling it on every launch / token
- * refresh is fine. `pushToken` is the raw FCM (Android) / APNs (iOS) token
- * from `expo-notifications`' `getDevicePushTokenAsync()`.
+ * Register (or refresh) this device. Idempotent on the backend: it upserts on
+ * `pushToken`, which is this device's ntfy topic (`lib/push.ts`).
  */
 export async function registerDevice(
   platform: DevicePlatform,

@@ -1,8 +1,6 @@
 /** OS notification APIs: permission is granted, nothing is scheduled or presented. */
 export const getPermissionsAsync = async () => ({ status: "granted", granted: true, canAskAgain: true });
 export const requestPermissionsAsync = getPermissionsAsync;
-export const getExpoPushTokenAsync = async () => ({ data: "ExponentPushToken[test]" });
-export const getDevicePushTokenAsync = async () => ({ data: "device-token", type: "fcm" });
 export const setNotificationHandler = () => {};
 export const addNotificationReceivedListener = () => ({ remove() {} });
 export const addNotificationResponseReceivedListener = () => ({ remove() {} });
