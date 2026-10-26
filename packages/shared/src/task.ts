@@ -24,7 +24,7 @@ export type SessionSource = "USER" | "LMS" | "PORTAL" | "AUTO";
 export interface Session {
   id: string;
   title: string;
-  /** HTML. File refs are stored as `/api/v1/files/<id>`; responses add `?sig=`. */
+  /** HTML. */
   note: string | null;
   /**
    * Free-text location (room / building / campus), or `null`. Set directly by
@@ -46,7 +46,6 @@ export interface Session {
   /** ISO-8601 start of the prepared lecture occurrence, or `null` when not a recurring lecture. */
   prepForOccurrenceStart: string | null;
   /** Free-form labels. */
-  tags: string[];
   /**
    * ISO-8601 instant, or null when unscheduled. For fixed types it is set
    * directly by the client; for `TASK` the engine places it, and drag/resize
@@ -74,7 +73,7 @@ export interface Session {
   /**
    * The course this session belongs to, or `null`: `lms:<Moodle course id>`
    * for an LMS item, `portal:<ScheduleStudyUnitID>` for a portal meeting or
-   * exam. The key a {@link CourseColour} is stored under.
+   * exam.
    */
   courseKey: string | null;
   /**
@@ -258,7 +257,6 @@ export interface CreateTaskInput {
   durationMinutes: number;
   /** ISO-8601 deadline — required for a `TASK`; shared by every session of a series. */
   deadline: string;
-  tags?: string[];
   /** The lecture, exam or assignment this task prepares for. A recurring lecture occurrence id pins that occurrence. */
   prepForSessionId?: string;
   /** Answer to a prior 409 {@link ScheduleInfeasibleError}; omit on the first attempt. */
@@ -282,7 +280,6 @@ export interface CreateFixedSessionInput {
    * recurring lab session).
    */
   rrule?: string | null;
-  tags?: string[];
 }
 
 /** Create a do-not-disturb block, optionally recurring. */
@@ -296,7 +293,6 @@ export interface CreateDndInput {
   scheduledStartTime: string;
   /** RFC 5545 RRULE; omit for a one-off block. */
   rrule?: string | null;
-  tags?: string[];
 }
 
 export type CreateSessionInput =
@@ -331,7 +327,6 @@ export interface UpdateSessionInput {
   durationMinutes?: number;
   /** ISO-8601 deadline (TASK only). Omit to leave unchanged. */
   deadline?: string;
-  tags?: string[];
   scheduledStartTime?: string | null;
   /**
    * RFC 5545 RRULE — for a recurring fixed session (`DND` / `ASSIGNMENT` /

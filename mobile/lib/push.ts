@@ -5,14 +5,11 @@ import {
   type DevicePlatform,
   type PushDataPayload,
   type PushTone,
-  PUSH_ACTION_DONE,
   PUSH_ACTION_KEEP,
-  PUSH_ACTION_NOT_THIS_TIME,
   PUSH_ACTION_PREFER,
   PUSH_ACTION_RESCHEDULE,
   PUSH_CATEGORY_CONFLICT,
   PUSH_CATEGORY_PLAN_OFFER,
-  PUSH_CATEGORY_SESSION_END,
   pushChannelId,
   pushSoundFile,
 } from "@zenflow/shared";
@@ -148,8 +145,7 @@ export async function ensureAndroidChannel(): Promise<void> {
 
 /**
  * iOS action buttons, run in the background: the sync-conflict push gets one
- * "Reschedule", a plan offer gets its two times, a session end gets "Done" and
- * "Not this time". Android shows no buttons on
+ * "Reschedule", a plan offer gets its two times. Android shows no buttons on
  * FCM notification messages, so a tap there opens the inbox instead (see
  * `use-push-registration.ts`).
  */
@@ -174,21 +170,6 @@ export async function registerPushCategories(): Promise<void> {
         options: { opensAppToForeground: false },
       },
     ]);
-    await Notifications.setNotificationCategoryAsync(
-      PUSH_CATEGORY_SESSION_END,
-      [
-        {
-          identifier: PUSH_ACTION_DONE,
-          buttonTitle: t("Done"),
-          options: { opensAppToForeground: false },
-        },
-        {
-          identifier: PUSH_ACTION_NOT_THIS_TIME,
-          buttonTitle: t("Not this time"),
-          options: { opensAppToForeground: false },
-        },
-      ],
-    );
   }
 }
 

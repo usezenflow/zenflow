@@ -11,7 +11,6 @@ import SettingsScreen from "@/app/(app)/settings";
 // Heavy sections with their own coverage/ownership — not under test here.
 vi.mock("@/components/settings/dlu-accounts-section", () => ({ DluAccountsSection: () => null }));
 vi.mock("@/components/settings/finish-setup-card", () => ({ FinishSetupCard: () => null }));
-vi.mock("@/components/settings/tags-row", () => ({ TagsRow: () => null }));
 vi.mock("@/components/settings/preferences-section", () => ({ PreferencesSection: () => null }));
 vi.mock("@/components/settings/profile-row", () => ({ ProfileRow: () => null }));
 vi.mock("@/hooks/use-notification-toggle", () => ({

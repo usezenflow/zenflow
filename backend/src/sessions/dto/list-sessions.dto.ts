@@ -57,14 +57,6 @@ export class ListSessionsDto {
   @IsIn(SESSION_TYPES, { each: true })
   types?: (typeof SESSION_TYPES)[number][];
 
-  /** Tag names; a session matches if it carries any of them. */
-  @IsOptional()
-  @Transform(csv)
-  @IsArray()
-  @IsString({ each: true })
-  @MaxLength(60, { each: true })
-  tags?: string[];
-
   @IsOptional()
   @Type(() => Number)
   @IsInt()

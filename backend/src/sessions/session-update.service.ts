@@ -7,7 +7,6 @@ import { randomUUID } from "crypto";
 import type { InfeasiblePolicy, UpdateSessionResponse } from "@zenflow/shared";
 import { Prisma, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { wouldConflict } from "../scheduler/io/conflict-check";
@@ -21,7 +20,7 @@ import {
 import { MAX_SCAN_DAYS } from "../scheduler/constants";
 import { DAY_MS } from "../scheduler/core/slot";
 import { UpdateSessionDto } from "./dto/update-session.dto";
-import { SessionRow, WITH_TAGS_AND_SERIES } from "./types/session-row";
+import { SessionRow, WITH_SERIES } from "./types/session-row";
 import {
   NO_SLOT_PROPOSAL,
   slotProposalFieldsOf,
@@ -85,7 +84,6 @@ interface FieldDiffResult {
 export class SessionUpdateService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tagsService: TagsService,
     private readonly taskPlacement: TaskPlacementService,
     private readonly schedulingFeedback: SchedulingFeedbackService,
     private readonly series: SeriesService,
@@ -348,7 +346,7 @@ export class SessionUpdateService {
     return this.prisma.$transaction(async (tx): Promise<FieldDiffResult> => {
       const existing = await tx.session.findFirst({
         where: { id, userId: user.id, deleted: false },
-        include: WITH_TAGS_AND_SERIES,
+        include: WITH_SERIES,
       });
       if (!existing)
         throw new NotFoundException(`Cannot find session with id ${id}`);
@@ -394,16 +392,6 @@ export class SessionUpdateService {
         nextStart !== undefined &&
         (nextStart?.getTime() ?? null) !==
           (existing.scheduledStartTime?.getTime() ?? null);
-
-      if (dto.tags !== undefined) {
-        const cleanTags = dto.tags.map((t) => t.trim()).filter(Boolean);
-        const tagIds = await this.tagsService.resolveTagIds(
-          tx,
-          user.id,
-          cleanTags,
-        );
-        data.tags = { set: tagIds.map((tagId) => ({ id: tagId })) };
-      }
 
       const orphanedSeriesId = await this.applyRecurrenceLifecycle(
         tx,
@@ -459,7 +447,7 @@ export class SessionUpdateService {
       const row = await tx.session.update({
         where: { id },
         data,
-        include: WITH_TAGS_AND_SERIES,
+        include: WITH_SERIES,
       });
       if (orphanedSeriesId) {
         await tx.sessionSeries.delete({ where: { id: orphanedSeriesId } });

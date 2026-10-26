@@ -13,7 +13,6 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     source: "USER",
     prepForSessionId: null,
     prepForOccurrenceStart: null,
-    tags: [],
     scheduledStartTime: "2026-10-15T03:00:00.000Z",
     seriesId: null,
     rrule: null,

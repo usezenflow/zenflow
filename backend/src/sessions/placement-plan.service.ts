@@ -15,7 +15,7 @@ import { MS_PER_MINUTE } from "../scheduler/core/slot";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { SessionCrudService } from "./session-crud.service";
 import { toSessionDto } from "./session-mapper";
-import { WITH_TAGS_AND_SERIES, type SessionRow } from "./types/session-row";
+import { WITH_SERIES, type SessionRow } from "./types/session-row";
 import { PlacementStaleException } from "./placement-plan.exception";
 import { alternativeStartOf } from "./slot-pick.service";
 
@@ -168,24 +168,20 @@ export class PlacementPlanService {
         );
         placed = await tx.session.findFirstOrThrow({
           where: { id: subject.id },
-          include: WITH_TAGS_AND_SERIES,
+          include: WITH_SERIES,
         });
       } else {
-        const cleanTags = (createInput?.tags ?? [])
-          .map((t) => t.trim())
-          .filter(Boolean);
         const inserted = await this.crud.insertSingleTask(
           tx,
           user,
           createInput as CreateSessionDto,
-          cleanTags,
           new Date(createInput?.deadline as string),
           groupId,
         );
         placed = await tx.session.update({
           where: { id: inserted.id },
           data: { scheduledStartTime: plan.startAt },
-          include: WITH_TAGS_AND_SERIES,
+          include: WITH_SERIES,
         });
       }
       await this.runWrites(

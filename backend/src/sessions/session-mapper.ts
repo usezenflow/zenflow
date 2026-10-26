@@ -9,10 +9,6 @@ import type {
 import type { PlacementResult } from "../scheduler/types/placement.types";
 import type { SessionRow } from "./types/session-row";
 
-/** Sort tag names for stable wire output. */
-const sortedTagNames = (row: SessionRow): string[] =>
-  row.tags.map((t) => t.name).sort((a, b) => a.localeCompare(b));
-
 /** A scheduled TASK that ends after its deadline (user accepted a late deadline). */
 export function isLate(row: SessionRow): boolean {
   return (
@@ -69,7 +65,6 @@ export function toSessionDto(row: SessionRow): SharedSession {
     source: row.source,
     prepForSessionId: row.prepForSessionId,
     prepForOccurrenceStart: row.prepForOccurrenceStart?.toISOString() ?? null,
-    tags: sortedTagNames(row),
     scheduledStartTime: row.scheduledStartTime
       ? row.scheduledStartTime.toISOString()
       : null,
@@ -127,7 +122,7 @@ export function toUpdateSessionResponse(
   return { ...toSessionDto(row), ...slotProposal };
 }
 
-/** The `{ scheduledStartTime, durationMinutes, type, tags }` snapshot stored on a
+/** The `{ scheduledStartTime, durationMinutes, type }` snapshot stored on a
  * `SessionEvent` (`CREATE`). */
 export function toSessionSnapshot(row: SessionRow): Prisma.InputJsonValue {
   return {
@@ -136,6 +131,5 @@ export function toSessionSnapshot(row: SessionRow): Prisma.InputJsonValue {
       : null,
     durationMinutes: row.durationMinutes,
     type: row.type,
-    tags: sortedTagNames(row),
   };
 }

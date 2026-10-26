@@ -1,7 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SessionCrudService } from "./session-crud.service";
 import { SeriesService } from "./series.service";
@@ -33,7 +32,6 @@ async function makeService(prisma: unknown): Promise<SessionCrudService> {
     providers: [
       SessionCrudService,
       { provide: PrismaService, useValue: prisma },
-      { provide: TagsService, useValue: { resolveTagIds: jest.fn() } },
       {
         provide: TaskPlacementService,
         useValue: { preflightTask: jest.fn(), canPlaceSeries: jest.fn() },

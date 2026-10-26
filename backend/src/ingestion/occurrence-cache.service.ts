@@ -749,9 +749,7 @@ export class OccurrenceCacheService {
   /**
    * The LMS blocks for `courseIds` inside `window`.
    *
-   * Loads the catalog rows too, because a course's `fullName` becomes a tag on
-   * the session — a cache-served student would otherwise silently lose the tag a
-   * walked student gets.
+   * Loads the catalog rows too, so a cache-served block matches a walked one.
    */
   async lmsBlocks(
     courseIds: readonly number[],

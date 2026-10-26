@@ -1,14 +1,11 @@
 /**
  * Read-only A/B report, HEURISTIC vs LINUCB (docs/scheduler/ab-testing.md §6).
- * Per primary policy: proposals, the offer funnel (offered, shown, tapped,
- * started) and which side the user picked, plus the settled outcome of each
- * session. Also per week, per observation bucket, and the activity-alignment
- * proxy against a 12-hour shifted baseline. PYTHON placements only.
+ * Per primary policy: proposals, the offer funnel (offered, tapped) and which
+ * side the user picked, plus the moves of each due session. Also per week and
+ * per observation bucket. PYTHON placements only.
  *
  *   pnpm --filter backend ab:report [--since 2026-10-01] [--csv <file>]
- *
- * Times are compared in UTC; the alignment is a proxy for fit to routine, not a
- * learning outcome (ADR-0025).
+
  */
 import { writeFileSync } from "node:fs";
 import { NestFactory } from "@nestjs/core";
@@ -67,28 +64,13 @@ async function main(): Promise<void> {
     tables.funnel = (await prisma.$queryRaw`
       SELECT p."primaryPolicy" AS policy,
              count(*) FILTER (WHERE p."pairwiseShown")::int AS offered,
-             count(*) FILTER (WHERE p."pairwiseShown" AND EXISTS (
-               SELECT 1 FROM "ClientEvent" e
-               WHERE e."slotProposalId" = p.id AND e.kind = 'OFFER_SHOWN'))::int AS shown,
              count(*) FILTER (WHERE p."pairwiseShown" AND p."chosenByUser" IS NOT NULL)::int AS tapped,
-             count(*) FILTER (WHERE p."pairwiseShown" AND p."chosenByUser" = 'LINUCB')::int AS picked_linucb,
-             count(*) FILTER (WHERE p."pairwiseShown" AND p."chosenByUser" IS NOT NULL AND EXISTS (
-               SELECT 1 FROM "SessionEvent" s
-               WHERE s."sessionId" = p."sessionId" AND s."eventType" = 'START'))::int AS started
+             count(*) FILTER (WHERE p."pairwiseShown" AND p."chosenByUser" = 'LINUCB')::int AS picked_linucb
       FROM "SlotProposal" p
       WHERE p."placementSource" = 'PYTHON' AND p."timestamp" >= ${since}
       GROUP BY 1 ORDER BY 1`) as Row[];
     console.log("Offer funnel by primary policy");
     console.table(tables.funnel);
-
-    tables.channels = (await prisma.$queryRaw`
-      SELECT COALESCE(e.channel, 'NONE') AS channel,
-             count(DISTINCT e."slotProposalId")::int AS offers_shown
-      FROM "ClientEvent" e
-      WHERE e.kind = 'OFFER_SHOWN' AND e."occurredAt" >= ${since}
-      GROUP BY 1 ORDER BY 1`) as Row[];
-    console.log("Offers shown by channel");
-    console.table(tables.channels);
 
     tables.weeks = (await prisma.$queryRaw`
       SELECT date_trunc('week', "timestamp")::date AS week,
@@ -115,36 +97,7 @@ async function main(): Promise<void> {
     console.log("Offers by observation count (cold-start bucket)");
     console.table(tables.observations);
 
-    tables.alignment = (await prisma.$queryRaw`
-      WITH placed AS (
-        SELECT p."primaryPolicy" AS policy, p."userId",
-               p."proposedStartTime" AS t,
-               p."proposedStartTime" + interval '12 hours' AS t_shifted
-        FROM "SlotProposal" p
-        WHERE p."placementSource" = 'PYTHON' AND p."proposedStartTime" IS NOT NULL
-          AND p."timestamp" >= ${since}
-      )
-      SELECT policy,
-             count(*)::int AS proposals,
-             count(*) FILTER (WHERE EXISTS (
-               SELECT 1 FROM "ClientEvent" e
-               WHERE e."userId" = pl."userId" AND e.kind = 'APP_OPEN'
-                 AND e."occurredAt"::date <> pl.t::date
-                 AND abs(extract(epoch FROM (e."occurredAt"::time - pl.t::time))) <= 3600
-             ))::int AS aligned,
-             count(*) FILTER (WHERE EXISTS (
-               SELECT 1 FROM "ClientEvent" e
-               WHERE e."userId" = pl."userId" AND e.kind = 'APP_OPEN'
-                 AND e."occurredAt"::date <> pl.t_shifted::date
-                 AND abs(extract(epoch FROM (e."occurredAt"::time - pl.t_shifted::time))) <= 3600
-             ))::int AS aligned_shifted_12h
-      FROM placed pl
-      GROUP BY 1 ORDER BY 1`) as Row[];
-    console.log("Activity alignment (leave-one-day-out, +-60 min, UTC; shifted baseline)");
-    console.table(tables.alignment);
-
-    // Start rate: placed sessions whose slot has passed, and how many of them
-    // have a START (ADR-0035). A session still ahead has no outcome yet.
+    // Due sessions: placed sessions whose slot has passed, and how many were moved.
     tables.outcomes = (await prisma.$queryRaw`
       WITH latest AS (
         SELECT DISTINCT ON ("sessionId") "sessionId", "primaryPolicy"
@@ -160,14 +113,11 @@ async function main(): Promise<void> {
       )
       SELECT d."primaryPolicy" AS policy,
              count(DISTINCT d."sessionId")::int AS due,
-             count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'START')::int AS started,
-             count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'MOVE')::int AS moved,
-             round((count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'START'))::numeric
-               / nullif(count(DISTINCT d."sessionId"), 0), 3)::float AS "startRate"
+             count(DISTINCT e."sessionId") FILTER (WHERE e."eventType" = 'MOVE')::int AS moved
       FROM due d
       LEFT JOIN "SessionEvent" e ON e."sessionId" = d."sessionId"
       GROUP BY 1 ORDER BY 1`) as Row[];
-    console.log("Start rate by primary policy (due sessions only)");
+    console.log("Moved sessions by primary policy (due sessions only)");
     console.table(tables.outcomes);
 
     tables.learning = (await prisma.$queryRaw`

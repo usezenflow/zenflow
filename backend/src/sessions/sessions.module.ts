@@ -6,7 +6,6 @@ import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
 import { SessionsController } from "./sessions.controller";
 import { PrismaModule } from "../prisma/prisma.module";
-import { TagsModule } from "../tags/tags.module";
 import { SchedulerModule } from "../scheduler/scheduler.module";
 import { PlacementChipsService } from "./placement-chips.service";
 import { PlacementPlanService } from "./placement-plan.service";
@@ -16,7 +15,6 @@ import { CalendarSyncTriggerModule } from "../google-calendar/calendar-sync-trig
 @Module({
   imports: [
     PrismaModule,
-    TagsModule,
     SchedulerModule,
     ApiTokensModule,
     CalendarSyncTriggerModule,

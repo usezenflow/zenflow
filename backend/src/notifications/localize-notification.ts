@@ -114,11 +114,6 @@ export function localizeNotification<
     content = content
       .replace(/^See what changed\.$/, "Xem có gì thay đổi.")
       .replace(/^Check your timetable\.$/, "Xem lại thời khóa biểu của bạn.");
-  } else if (row.eventName === "session_end.ask") {
-    content = content.replace(
-      /^Did you get it done\?$/,
-      "Bạn đã làm xong chưa?",
-    );
   } else if (row.eventName.startsWith("sync_conflict.")) {
     const label = (value: string) =>
       value === "your timetable"
@@ -145,58 +140,4 @@ export function localizeNotification<
     );
   }
   return { ...row, title, content };
-}
-
-/** Daily brief counts and the first item of the day (issue #255). */
-export interface DailyBriefCopyInput {
-  classes: number;
-  blocks: number;
-  firstTitle: string;
-  /** `HH:mm` in the user's timezone. */
-  firstTime: string;
-}
-
-/** Morning brief push: counts as the title, the first item as the body. */
-export function dailyBriefCopy(
-  input: DailyBriefCopyInput,
-  lang?: string,
-): { title: string; body: string } {
-  const { classes, blocks, firstTitle, firstTime } = input;
-  if (lang === "VI_VN") {
-    const parts = [
-      classes > 0 ? `${classes} tiết học` : null,
-      blocks > 0 ? `${blocks} buổi học tập` : null,
-    ].filter(Boolean);
-    return {
-      title: parts.join(", "),
-      body: `Tiếp theo: ${firstTitle} lúc ${firstTime}`,
-    };
-  }
-  const parts = [
-    classes > 0 ? `${classes} ${classes === 1 ? "class" : "classes"}` : null,
-    blocks > 0
-      ? `${blocks} ${blocks === 1 ? "study block" : "study blocks"}`
-      : null,
-  ].filter(Boolean);
-  return {
-    title: parts.join(", "),
-    body: `First up: ${firstTitle} at ${firstTime}`,
-  };
-}
-
-/** Evening check-in push: the action buttons carry the choice, so the copy only asks. */
-export function dailyCheckinCopy(lang?: string): {
-  title: string;
-  body: string;
-} {
-  if (lang === "VI_VN") {
-    return {
-      title: "Kiểm tra hôm nay",
-      body: "Xem lại các buổi hôm nay.",
-    };
-  }
-  return {
-    title: "Check in on today",
-    body: "Look over today's sessions.",
-  };
 }

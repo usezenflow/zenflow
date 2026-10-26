@@ -39,11 +39,10 @@ export interface ParsedBlock {
   note: string | null;
 }
 
-/** A {@link ParsedBlock} from the Moodle calendar, tagged with its course. */
+/** A {@link ParsedBlock} from the Moodle calendar, with its course. */
 export interface ParsedLmsItem extends ParsedBlock {
   /**
-   * The Moodle course this item belongs to — its `fullName` becomes a tag on
-   * the session. Null when the event carried no usable `course` block.
+   * The Moodle course this item belongs to. Null when the event carried no usable `course` block.
    */
   lmsCourse: ParsedLmsCourse | null;
   /**
@@ -61,7 +60,7 @@ export interface ParsedLmsCourse {
   shortName: string | null;
 }
 
-/** A {@link ParsedBlock} from the portal, tagged with its course section. */
+/** A {@link ParsedBlock} from the portal, with its course section. */
 export interface ParsedPortalItem extends ParsedBlock {
   /** Portal `ScheduleStudyUnitID`; joins to `PortalSection.scheduleStudyUnitId`. */
   scheduleStudyUnitId: string | null;

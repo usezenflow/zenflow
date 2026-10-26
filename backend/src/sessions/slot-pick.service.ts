@@ -8,7 +8,7 @@ import { SchedulingModel, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { PAIRWISE_KEEP_PREFERENCE_WEIGHT } from "../scheduler/constants";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
-import { WITH_TAGS_AND_SERIES } from "./types/session-row";
+import { WITH_SERIES } from "./types/session-row";
 import { toSessionDto } from "./session-mapper";
 import { moveEventData, recordUserMove } from "./session-events";
 import { SlotPickDto } from "./dto/slot-pick.dto";
@@ -199,7 +199,7 @@ export class SlotPickService {
   ): Promise<AppliedAlternative | null> {
     const existing = await this.prisma.session.findFirst({
       where: { id: sessionId, userId: user.id, deleted: false },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     if (!existing?.scheduledStartTime) return null;
     if (existing.scheduledStartTime.getTime() === newStart.getTime()) {
@@ -235,7 +235,7 @@ export class SlotPickService {
           scheduledStartTime: newStart,
           lastMovedAt: new Date(),
         },
-        include: WITH_TAGS_AND_SERIES,
+        include: WITH_SERIES,
       });
       return [updated, event] as const;
     });
@@ -286,7 +286,7 @@ export class SlotPickService {
   ): Promise<SharedSession> {
     const row = await this.prisma.session.findFirst({
       where: { id: sessionId, userId: user.id, deleted: false },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     if (!row)
       throw new NotFoundException(`Cannot find session with id ${sessionId}`);

@@ -2,7 +2,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { ScheduleInfeasibleException } from "../scheduler/schedule-infeasible.exception";
@@ -14,7 +13,7 @@ import { SeriesService } from "./series.service";
 import { SessionUpdateService } from "./session-update.service";
 import { SlotPickService } from "./slot-pick.service";
 import { CalendarSyncTrigger } from "../google-calendar/calendar-sync-trigger.service";
-import type { Tag, Session, SessionSeries, User } from "../../generated/prisma";
+import type { Session, SessionSeries, User } from "../../generated/prisma";
 import type { CreateSessionDto } from "./dto/create-session.dto";
 import type { UpdateSessionDto } from "./dto/update-session.dto";
 
@@ -25,7 +24,7 @@ import type { UpdateSessionDto } from "./dto/update-session.dto";
  * telemetry emitted when a user drags/resizes a scheduled TASK.
  */
 
-type SessionRow = Session & { tags: Tag[]; series: SessionSeries | null };
+type SessionRow = Session & { series: SessionSeries | null };
 
 interface CreateCall {
   data: Record<string, unknown>;
@@ -54,7 +53,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     examRetake: null,
     durationMinutes: 60,
     deadline: new Date("2026-01-05T12:00:00.000Z"),
-    tags: [],
     series: null,
     type: "TASK",
     source: "USER",
@@ -64,8 +62,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     submittedAt: null,
     prepForSessionId: null,
     prepForOccurrenceStart: null,
-    syncConfirmedAt: null,
-    syncMissedAt: null,
     placementReason: null,
     placementReasonStartAt: null,
     deleted: false,
@@ -77,24 +73,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     ...overrides,
-  };
-}
-
-function tagRow(name: string): Tag {
-  return {
-    id: `tag-${name}`,
-    name,
-    userId: user.id,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  };
-}
-
-function fakeTagsService() {
-  return {
-    resolveTagIds: jest.fn(
-      (_tx: unknown, _userId: string, names: string[]): Promise<string[]> =>
-        Promise.resolve(names.map((n) => `tag-${n}`)),
-    ),
   };
 }
 
@@ -142,7 +120,6 @@ function fakeSchedulingFeedback() {
  */
 async function makeService(
   prisma: unknown,
-  tags: unknown,
   placement: unknown = fakeTaskPlacement(),
   feedback: unknown = fakeSchedulingFeedback(),
 ): Promise<SessionsService> {
@@ -154,7 +131,6 @@ async function makeService(
       SessionUpdateService,
       SlotPickService,
       { provide: PrismaService, useValue: prisma },
-      { provide: TagsService, useValue: tags },
       { provide: TaskPlacementService, useValue: placement },
       { provide: SchedulingFeedbackService, useValue: feedback },
       {
@@ -202,7 +178,6 @@ describe("SessionsService.create", () => {
       });
       const service = await makeService(
         prisma,
-        fakeTagsService(),
         fakeTaskPlacement(),
         fakeSchedulingFeedback(),
       );
@@ -262,7 +237,6 @@ describe("SessionsService.create", () => {
       title: "Write report",
       durationMinutes: 30,
       deadline: new Date("2026-06-10T17:00:00.000Z"),
-      tags: [tagRow("work")],
     });
     const sessionCreate = jest.fn((args: CreateCall): Promise<SessionRow> => {
       void args;
@@ -273,11 +247,9 @@ describe("SessionsService.create", () => {
       session: { create: sessionCreate },
       sessionEvent: { create: eventCreate },
     });
-    const tagsService = fakeTagsService();
     const placement = fakeTaskPlacement();
     const service = await makeService(
       prisma,
-      tagsService,
       placement,
       fakeSchedulingFeedback(),
     );
@@ -287,7 +259,6 @@ describe("SessionsService.create", () => {
       title: "Write report",
       durationMinutes: 30,
       deadline: "2026-06-10T17:00:00.000Z",
-      tags: ["work"],
     } as CreateSessionDto;
     const result = await service.create(dto, user);
 
@@ -296,7 +267,6 @@ describe("SessionsService.create", () => {
     expect(createArgs.data.deadline).toEqual(
       new Date("2026-06-10T17:00:00.000Z"),
     );
-    expect(createArgs.data.tags).toEqual({ connect: [{ id: "tag-work" }] });
 
     expect(eventCreate).toHaveBeenCalledTimes(1);
     expect(eventCreate.mock.calls[0][0].data.eventType).toBe("CREATE");
@@ -326,7 +296,6 @@ describe("SessionsService.create", () => {
       source: "USER",
       prepForSessionId: null,
       prepForOccurrenceStart: null,
-      tags: ["work"],
       scheduledStartTime: null,
       seriesId: null,
       rrule: null,
@@ -360,7 +329,6 @@ describe("SessionsService.create", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       placement,
       fakeSchedulingFeedback(),
     );
@@ -389,7 +357,6 @@ describe("SessionsService.create", () => {
     );
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       placement,
       fakeSchedulingFeedback(),
     );
@@ -425,7 +392,6 @@ describe("SessionsService.create", () => {
     const placement = fakeTaskPlacement();
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       placement,
       fakeSchedulingFeedback(),
     );
@@ -473,7 +439,6 @@ describe("SessionsService.create", () => {
     const placement = fakeTaskPlacement();
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       placement,
       fakeSchedulingFeedback(),
     );
@@ -524,7 +489,6 @@ describe("SessionsService.create", () => {
     const placement = fakeTaskPlacement();
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       placement,
       fakeSchedulingFeedback(),
     );
@@ -558,7 +522,6 @@ describe("SessionsService.list", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -601,7 +564,6 @@ describe("SessionsService.list", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -636,7 +598,6 @@ describe("SessionsService.list", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -682,7 +643,6 @@ describe("SessionsService.list", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -709,7 +669,6 @@ describe("SessionsService.list", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -749,7 +708,6 @@ describe("SessionsService.list", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -798,7 +756,6 @@ describe("SessionsService.suggestions", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -832,7 +789,6 @@ describe("SessionsService.suggestions", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -862,7 +818,6 @@ describe("SessionsService.suggestions", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -884,7 +839,6 @@ describe("SessionsService.findById", () => {
         .mockResolvedValueOnce(exam);
       const service = await makeService(
         { session: { findFirst, findMany: jest.fn().mockResolvedValue([]) } },
-        fakeTagsService(),
         fakeTaskPlacement(),
         fakeSchedulingFeedback(),
       );
@@ -913,7 +867,6 @@ describe("SessionsService.findById", () => {
         .mockResolvedValueOnce(lecture);
       const service = await makeService(
         { session: { findFirst, findMany: jest.fn().mockResolvedValue([]) } },
-        fakeTagsService(),
         fakeTaskPlacement(),
         fakeSchedulingFeedback(),
       );
@@ -930,7 +883,6 @@ describe("SessionsService.findById", () => {
       const findFirst = jest.fn().mockResolvedValue(session({ id: "s-1" }));
       const service = await makeService(
         { session: { findFirst, findMany: jest.fn().mockResolvedValue([]) } },
-        fakeTagsService(),
         fakeTaskPlacement(),
         fakeSchedulingFeedback(),
       );
@@ -980,7 +932,6 @@ describe("SessionsService.findById", () => {
       };
       const service = await makeService(
         prisma,
-        fakeTagsService(),
         fakeTaskPlacement(),
         fakeSchedulingFeedback(),
       );
@@ -1006,7 +957,6 @@ describe("SessionsService.findById", () => {
     const prisma = { session: { findFirst, findMany } };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1029,7 +979,6 @@ describe("SessionsService.findById", () => {
     const prisma = { session: { findFirst } };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1066,7 +1015,7 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     const placement = fakeTaskPlacement();
     const boom = new Error("placement blew up");
     placement.placeOnCreate.mockRejectedValue(boom);
-    const service = await makeService(prisma, fakeTagsService(), placement);
+    const service = await makeService(prisma, placement);
 
     await expect(
       service.create(
@@ -1101,7 +1050,7 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
       sessionEvent: { create: jest.fn() },
       slotProposal: { findFirst: () => Promise.resolve(null) },
     });
-    const service = await makeService(prisma, fakeTagsService());
+    const service = await makeService(prisma);
 
     await expect(
       service.update("session-1", { scheduledStartTime: null }, user),
@@ -1120,11 +1069,9 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
       sessionEvent: { create: eventCreate },
       slotProposal: { findFirst: () => Promise.resolve(null) },
     });
-    const tagsService = fakeTagsService();
     const placement = fakeTaskPlacement();
     const service = await makeService(
       prisma,
-      tagsService,
       placement,
       fakeSchedulingFeedback(),
     );
@@ -1134,7 +1081,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
 
     expect(update.mock.calls[0][0].data).toEqual({ title: "New title" });
     expect(eventCreate).not.toHaveBeenCalled();
-    expect(tagsService.resolveTagIds).not.toHaveBeenCalled();
     expect(placement.placeOnDeadlineChange).not.toHaveBeenCalled();
     expect(result.title).toBe("New title");
   });
@@ -1158,7 +1104,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1193,7 +1138,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1221,7 +1165,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1253,7 +1196,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     const placement = fakeTaskPlacement();
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       placement,
       fakeSchedulingFeedback(),
     );
@@ -1286,7 +1228,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     const placement = fakeTaskPlacement();
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       placement,
       fakeSchedulingFeedback(),
     );
@@ -1308,7 +1249,6 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1330,7 +1270,6 @@ describe("SessionsService.remove", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1352,7 +1291,6 @@ describe("SessionsService.remove", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1377,7 +1315,6 @@ describe("SessionsService.remove", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1409,7 +1346,6 @@ describe("SessionsService.remove", () => {
     };
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1432,7 +1368,6 @@ describe("SessionsService.removeSeries", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1456,7 +1391,6 @@ describe("SessionsService.removeSeries", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1491,7 +1425,6 @@ describe("SessionsService.truncateSeriesFrom", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1540,7 +1473,6 @@ describe("SessionsService.truncateSeriesFrom", () => {
     });
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       fakeTaskPlacement(),
       fakeSchedulingFeedback(),
     );
@@ -1572,7 +1504,6 @@ describe("SessionsService.update — deadline edit feasibility guard (#62 E)", (
     const placement = fakeTaskPlacement();
     const service = await makeService(
       prisma,
-      fakeTagsService(),
       placement,
       fakeSchedulingFeedback(),
     );

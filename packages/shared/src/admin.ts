@@ -12,29 +12,11 @@ export interface ActiveDay {
   dau: number;
 }
 
-/**
- * Users grouped by the `User.createdAt` week. `weeks[n]` is the share of the
- * cohort with an APP_OPEN in week n after joining, `null` while that week is ahead.
- */
-export interface RetentionCohort {
-  cohortWeek: string;
-  size: number;
-  weeks: (number | null)[];
-}
-
-/** Users by the length of their current run of consecutive UTC days with an APP_OPEN. */
-export interface StreakBucket {
-  days: string;
-  users: number;
-}
-
 /** `GET /admin/engagement` */
 export interface EngagementResponse {
   dau: number;
   wau: number;
   activeDays: ActiveDay[];
-  retention: RetentionCohort[];
-  streaks: StreakBucket[];
 }
 
 /**

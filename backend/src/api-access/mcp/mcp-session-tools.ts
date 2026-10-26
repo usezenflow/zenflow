@@ -93,7 +93,6 @@ export function registerSessionTools(
         to: z.iso.date(),
         q: z.string().max(200).optional(),
         types: z.array(z.enum(SESSION_TYPES)).optional(),
-        tags: z.array(z.string().max(60)).optional(),
         minDuration: z.number().int().min(15).max(1440).optional(),
         maxDuration: z.number().int().min(15).max(1440).optional(),
         deadlineFrom: z.iso.date().optional(),

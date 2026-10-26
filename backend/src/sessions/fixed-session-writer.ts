@@ -3,7 +3,7 @@ import type {
   SessionSource,
   SessionType,
 } from "../../generated/prisma";
-import { WITH_TAGS_AND_SERIES, type SessionRow } from "./types/session-row";
+import { WITH_SERIES, type SessionRow } from "./types/session-row";
 import { createEventData, recordCreateEvent } from "./session-events";
 
 /**
@@ -54,12 +54,11 @@ export interface FixedSessionInput {
   scheduleStudyUnitId?: string | null;
   /** Moodle course id for an LMS-ingested ASSIGNMENT / EXAM; null/absent otherwise. */
   lmsCourseId?: number | null;
-  tagIds?: readonly string[];
 }
 
 /**
  * Insert the session and its `CREATE` `SessionEvent` inside `tx`, returning the
- * row with tags + series loaded (a {@link SessionRow}, ready for
+ * row with its series loaded (a {@link SessionRow}, ready for
  * `toSessionDto`).
  */
 export async function insertFixedSession(
@@ -82,10 +81,9 @@ export async function insertFixedSession(
       seriesId: input.seriesId ?? null,
       scheduleStudyUnitId: input.scheduleStudyUnitId ?? null,
       lmsCourseId: input.lmsCourseId ?? null,
-      tags: { connect: (input.tagIds ?? []).map((id) => ({ id })) },
       userId: input.userId,
     },
-    include: WITH_TAGS_AND_SERIES,
+    include: WITH_SERIES,
   });
   await tx.sessionEvent.create({ data: createEventData(row, input.userId) });
   recordCreateEvent();

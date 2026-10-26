@@ -11,7 +11,6 @@ import { PREP_QUEUE, prepJobId } from "../queue/queues";
 import { QueueService } from "../queue/queue.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { insertFixedSession } from "../sessions/fixed-session-writer";
-import { TagsService } from "../tags/tags.service";
 import { monthsFrom, resolveSemester } from "./core/semester";
 import { digestNotifications, SyncDigest } from "./core/sync-digest";
 import { prepTargetOf } from "./core/prep-target";
@@ -55,16 +54,6 @@ export interface MaterializeOutcome {
 export interface ReconcileOutcome {
   /** Soft-deleted because a fetch no longer lists them. */
   deleted: number;
-}
-
-/**
- * Tag names to hang on the session. Today that is the LMS course's full name
- * (portal timetable blocks carry their section metadata in `note`/`location`
- * instead) — an empty list for anything without one.
- */
-function tagNamesOf(block: ParsedBlock): string[] {
-  const course = (block as Partial<ParsedLmsItem>).lmsCourse;
-  return course ? [course.fullName] : [];
 }
 
 /** A created/updated block as a digest entry. */
@@ -186,7 +175,6 @@ export class MaterializerService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tagsService: TagsService,
     private readonly notifications: NotificationsService,
     private readonly queues: QueueService,
     config: ConfigService,
@@ -499,11 +487,6 @@ export class MaterializerService {
     try {
       let newId: string | null = null;
       await this.prisma.$transaction(async (tx) => {
-        const tagIds = await this.tagsService.resolveTagIds(
-          tx,
-          userId,
-          tagNamesOf(block),
-        );
         const row = await insertFixedSession(tx, {
           userId,
           type: block.type,
@@ -514,7 +497,6 @@ export class MaterializerService {
           ...examFieldsOf(block),
           durationMinutes: block.durationMinutes,
           scheduledStartTime: block.scheduledStartTime,
-          tagIds,
           externalKey: block.externalKey,
           scheduleStudyUnitId: (block as Partial<ParsedPortalItem>)
             .scheduleStudyUnitId,
@@ -551,7 +533,7 @@ export class MaterializerService {
    * `SessionReminder.sessionId` rows pointing at it, and announce every
    * student's entire timetable as cancelled and re-created.
    *
-   * Renaming in place instead keeps the row id, its tags and its reminders, and
+   * Renaming in place instead keeps the row id and its reminders, and
    * raises nothing: the row then goes through the ordinary diff, so it is
    * reported `unchanged` unless the payload genuinely differs too. A
    * soft-deleted legacy row is renamed as well, so "the student deleted this

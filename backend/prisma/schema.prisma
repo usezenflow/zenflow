@@ -51,7 +51,6 @@ model User {
   // Relations
   sessions      Session[]
   sessionEvents SessionEvent[]
-  tags          Tag[]
 
   encryptionKeys UserEncryptionKey[]
   devices        UserDevice[]
@@ -59,11 +58,9 @@ model User {
   integrations   Integration[]
   notifications  Notification[]
   slotProposals  SlotProposal[]
-  clientEvents   ClientEvent[]
 
   banditArmStates BanditArmState[]
 
-  courseColours      CourseColour[]
   apiTokens          ApiToken[]
   calendarConnection CalendarConnection?
   calendarLinks      CalendarLink[]
@@ -178,22 +175,6 @@ model ApiToken {
   @@index([userId])
 }
 
-model Tag {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Implicit many-to-many with Session.
-  sessions Session[]
-  // GET /sessions/search uses the `Tag_name_unaccent_idx` expression index, which lives in migrations
-
-  @@unique([userId, name])
-  @@index([userId])
-}
-
 enum SessionType {
   TASK
   ASSIGNMENT
@@ -240,20 +221,12 @@ model Session {
   // Set on insert; the daily cap on automatic prep plans counts rows by it.
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  // Two-consecutive-run confirmation gate for ingested rows
-  syncConfirmedAt DateTime?
-  // Set to a run's `now` the first time a *confirmed* item is missing from that run's upstream listing
-  syncMissedAt    DateTime?
-
   // First time an LMS calendar showed the assignment without its "add submission" action
   submittedAt DateTime?
 
   // Why the scheduler picked the start
   placementReason        PlacementReason?
   placementReasonStartAt DateTime?
-
-  // Per-user labels (implicit many-to-many).
-  tags Tag[]
 
   events SessionEvent[]
 
@@ -304,21 +277,6 @@ model SessionSeries {
   @@index([userId])
 }
 
-/// A user's own colour pick for one course
-model CourseColour {
-  id        String   @id @default(uuid())
-  courseKey String   @db.VarChar(120)
-  /// Index into the 12-swatch set (`COURSE_COLOUR_SWATCH_COUNT`).
-  swatch    Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, courseKey])
-}
-
 enum SlotProposalEvent {
   CREATE
   DEADLINE_CHANGE
@@ -328,11 +286,6 @@ enum SlotProposalEvent {
 enum SchedulingModel {
   HEURISTIC
   LINUCB
-}
-
-enum SlotProposalFeedback {
-  LIKE
-  DISLIKE
 }
 
 // A/B experiment record for the heuristic-vs-model scheduling comparison
@@ -353,7 +306,6 @@ model SlotProposal {
   modelProposal     Json? // model proposal — null until the model is wired
   modelVersion      String?
   proposedStartTime DateTime? // primary policy's concrete pick for this session
-  appliedStartTime  DateTime?
 
   // The length-`d` LinUCB context vector for the selected day and the arm behind the chosen slot, kept
   featureVector   Float[]        @default([])
@@ -376,8 +328,6 @@ model SlotProposal {
   pairwisePositions Json?
   chosenByUser      SchedulingModel?
 
-  feedback   SlotProposalFeedback? // explicit 👍/👎 (later)
-  feedbackAt DateTime?
 
   timestamp DateTime @default(now())
 
@@ -412,7 +362,7 @@ enum SessionEventType {
 model SessionEvent {
   id                  BigInt           @default(autoincrement())
   eventType           SessionEventType
-  oldSnapshot         Json? // { scheduledStartTime, durationMinutes, tags[], type }; null on CREATE/START
+  oldSnapshot         Json? // { scheduledStartTime, durationMinutes, type }; null on CREATE/START
   newSnapshot         Json
   rewardScore         Float            @default(0.0) // CREATE 0 · MOVE graded ≤ 0 · START +1 (ADR-0001, ADR-0035)
   dragDistanceMinutes Int? // signed (new − old start); null unless MOVE — for graded reward later
@@ -586,15 +536,6 @@ model LmsCourse {
   fullName    String
   shortName   String?
 
-  // Cache coverage of this course's occurrences
-  occurrencesRefreshedAt DateTime?
-  occurrencesThroughDate DateTime?
-
-  // Detects two Moodle views of one course disagreeing
-  occurrencesFingerprint      String?
-  occurrencesFingerprintBy    String?
-  occurrencesPriorFingerprint String?
-
   occurrences LmsCourseOccurrence[]
   enrollments LmsCourseEnrollment[]
 
@@ -717,9 +658,6 @@ model LmsCourseEnrollment {
 
   discoveredAt DateTime
   droppedAt    DateTime?
-
-  // This student's own last live view of the course
-  seenFingerprint String?
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
@@ -973,27 +911,6 @@ model LmsCourseSeen {
   @@id([userId, lmsCourseId, scope])
   // Fan-out direction: who last saw this exact view.
   @@index([lmsCourseId, scope, fingerprint])
-}
-
-enum ClientEventKind {
-  OFFER_SHOWN // a two-time offer was shown to the student
-  APP_OPEN // the app came to the foreground
-}
-
-/// Passive exposure from the app
-model ClientEvent {
-  id             String          @id @default(uuid())
-  kind           ClientEventKind
-  channel        String? // "PUSH" | "INBOX" | "TOAST" for OFFER_SHOWN
-  slotProposalId String?
-  sessionId      String?
-  occurredAt     DateTime        @default(now())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, occurredAt])
-  @@index([slotProposalId])
 }
 
 enum CalendarSyncStatus {

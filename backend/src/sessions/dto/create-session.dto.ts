@@ -1,5 +1,4 @@
 import {
-  IsArray,
   IsDivisibleBy,
   IsIn,
   IsInt,
@@ -91,11 +90,6 @@ export class CreateSessionDto {
   @ValidateIf((o: CreateSessionDto) => o.type !== "TASK" && o.rrule != null)
   @IsRRule()
   rrule?: string | null;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  tags?: string[];
 
   /**
    * The lecture, exam or assignment this `TASK` prepares for. A recurring

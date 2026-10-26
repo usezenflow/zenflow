@@ -1,8 +1,6 @@
 export * from "./tz";
 export * from "./time";
-export * from "./tasks";
 export * from "./constants";
-export * from "./blocks";
 export * from "./overlap";
 export * from "./task-card";
 export * from "./recurrence";
@@ -10,5 +8,4 @@ export * from "./session-time";
 export * from "./session-type";
 export * from "./location";
 export * from "./palette";
-export * from "./course-colour";
 export * from "./today";

@@ -6,7 +6,6 @@ import type {
 } from "@zenflow/shared";
 import { type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { wouldConflict } from "../scheduler/io/conflict-check";
 import {
@@ -18,7 +17,7 @@ import {
 } from "../scheduler/core/recurrence";
 import { MAX_SCAN_DAYS } from "../scheduler/constants";
 import { DAY_MS } from "../scheduler/core/slot";
-import { WITH_TAGS_AND_SERIES } from "./types/session-row";
+import { WITH_SERIES } from "./types/session-row";
 import { toSessionDto } from "./session-mapper";
 import { createEventData, recordCreateEvent } from "./session-events";
 
@@ -42,7 +41,6 @@ export const NO_FEASIBLE_SLOT_MESSAGE =
 export class SeriesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tagsService: TagsService,
     private readonly taskPlacement: TaskPlacementService,
   ) {}
 
@@ -123,7 +121,7 @@ export class SeriesService {
     const rep = await this.prisma.session.findFirst({
       where: { seriesId, userId: user.id, deleted: false },
       orderBy: { createdAt: "asc" },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     if (!rep)
       throw new NotFoundException(`Cannot find recurring series ${seriesId}`);
@@ -140,10 +138,9 @@ export class SeriesService {
           durationMinutes: change.durationMinutes,
           deadline: null,
           scheduledStartTime: new Date(change.scheduledStartTime),
-          tags: { connect: rep.tags.map((t) => ({ id: t.id })) },
           userId: user.id,
         },
-        include: WITH_TAGS_AND_SERIES,
+        include: WITH_SERIES,
       });
       await tx.sessionEvent.create({ data: createEventData(s, user.id) });
       recordCreateEvent();
@@ -214,7 +211,7 @@ export class SeriesService {
    * a recurring drag/resize can target. Reuses {@link truncateFrom} to cut the
    * OLD series off just before `fromOccurrenceStartISO` (or delete it outright
    * if the cutoff lands on/before its first occurrence), then spins up a brand
-   * new `SessionSeries` + representative `Session` — same type/title/note/tags
+   * new `SessionSeries` + representative `Session` — same type/title/note
    * and the SAME rrule pattern — anchored at the new date/time going forward.
    *
    * With `skipConflicting`, every occurrence of the NEW series up to
@@ -238,7 +235,7 @@ export class SeriesService {
           where: { userId: user.id },
           orderBy: { createdAt: "asc" },
           take: 1,
-          include: WITH_TAGS_AND_SERIES,
+          include: WITH_SERIES,
         },
       },
     });
@@ -277,10 +274,9 @@ export class SeriesService {
           deadline: null,
           scheduledStartTime: repStart,
           seriesId: series.id,
-          tags: { connect: rep.tags.map((t) => ({ id: t.id })) },
           userId: user.id,
         },
-        include: WITH_TAGS_AND_SERIES,
+        include: WITH_SERIES,
       });
       await tx.sessionEvent.create({
         data: createEventData(s, user.id, series.id),

@@ -14,29 +14,10 @@ export interface ActiveDay {
   dau: number;
 }
 
-/**
- * Users grouped by `User.createdAt` week. `weeks[n]` is the share of the cohort
- * with a `ClientEvent` APP_OPEN in week n after joining; null while the week is
- * still ahead.
- */
-export interface RetentionCohort {
-  cohortWeek: string;
-  size: number;
-  weeks: (number | null)[];
-}
-
-/** Users by longest current run of consecutive UTC days with an APP_OPEN. */
-export interface StreakBucket {
-  days: string;
-  users: number;
-}
-
 export interface Engagement {
   dau: number;
   wau: number;
   activeDays: ActiveDay[];
-  retention: RetentionCohort[];
-  streaks: StreakBucket[];
 }
 
 /**
@@ -100,32 +81,15 @@ function rng(seed: number) {
 }
 
 function buildEngagement(): Engagement {
-  const r = rng(7);
   const dauSeries = [212, 226, 241, 233, 118, 96, 219, 247];
   const activeDays = dauSeries.map((dau, i) => ({
     day: iso(TODAY - (dauSeries.length - 1 - i) * DAY_MS),
     dau,
   }));
-  const retention: RetentionCohort[] = Array.from({ length: 8 }, (_, c) => {
-    const size = 60 + Math.round(r() * 90);
-    const weeks = Array.from({ length: 6 }, (_, w): number | null => {
-      if (c + w > 7) return null;
-      return w === 0 ? 1 : Math.max(0.12, +(0.82 - w * 0.12 + (r() - 0.5) * 0.08).toFixed(2));
-    });
-    return { cohortWeek: iso(TODAY - (7 - c) * 7 * DAY_MS - 6 * DAY_MS), size, weeks };
-  });
   return {
     dau: dauSeries[dauSeries.length - 1],
     wau: 418,
     activeDays,
-    retention,
-    streaks: [
-      { days: "1", users: 126 },
-      { days: "2 to 3", users: 94 },
-      { days: "4 to 6", users: 61 },
-      { days: "7 to 13", users: 38 },
-      { days: "14 or more", users: 17 },
-    ],
   };
 }
 

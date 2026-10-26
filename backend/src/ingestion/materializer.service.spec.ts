@@ -9,12 +9,7 @@ import { NotificationsService } from "../notifications/notifications.service";
 import { NotificationPubSub } from "../notifications/notification-pubsub.service";
 import { QueueService } from "../queue/queue.service";
 import { prepJobId } from "../queue/queues";
-import { TagsService } from "../tags/tags.service";
-import type {
-  ParsedBlock,
-  ParsedLmsItem,
-  ParsedPortalItem,
-} from "./core/types";
+import type { ParsedBlock, ParsedPortalItem } from "./core/types";
 
 // ── in-memory Prisma double ────────────────────────────────────────────────
 // Same idiom as integrations.service.spec.ts: a real object graph rather than
@@ -40,7 +35,6 @@ interface SessionRow {
   scheduleStudyUnitId: string | null;
   createdAt: Date;
   updatedAt: Date;
-  tags: { name: string }[];
   series: null;
 }
 
@@ -85,37 +79,8 @@ function makePrismaDouble() {
   const notifications: NotificationRow[] = [];
   const events: Record<string, unknown>[] = [];
   const prefs = { defaultReminderMinutes: 60 };
-  const tags: { id: string; userId: string; name: string }[] = [];
 
   const client = {
-    // Enough of `tag` for `TagsService.resolveTagIds` — find-or-create by name.
-    tag: {
-      createMany: (args: {
-        data: { userId: string; name: string }[];
-        skipDuplicates?: boolean;
-      }) => {
-        for (const d of args.data) {
-          if (!tags.some((t) => t.userId === d.userId && t.name === d.name)) {
-            tags.push({
-              id: `t${tags.length + 1}`,
-              userId: d.userId,
-              name: d.name,
-            });
-          }
-        }
-        return Promise.resolve({ count: args.data.length });
-      },
-      findMany: (args: { where: { userId: string; name: { in: string[] } } }) =>
-        Promise.resolve(
-          tags
-            .filter(
-              (t) =>
-                t.userId === args.where.userId &&
-                args.where.name.in.includes(t.name),
-            )
-            .map((t) => ({ id: t.id })),
-        ),
-    },
     session: {
       findUnique: (args: {
         where: { userId_externalKey: { userId: string; externalKey: string } };
@@ -166,12 +131,6 @@ function makePrismaDouble() {
             (data.scheduleStudyUnitId as string | null) ?? null,
           createdAt: new Date(),
           updatedAt: new Date(),
-          tags: (
-            (data.tags as { connect?: { id: string }[] } | undefined)
-              ?.connect ?? []
-          ).map(({ id }) => ({
-            name: tags.find((t) => t.id === id)?.name ?? id,
-          })),
           series: null,
         };
         sessions.push(row);
@@ -285,7 +244,7 @@ function makePrismaDouble() {
       fn(client),
   };
 
-  return { client, sessions, notifications, events, tags, prefs };
+  return { client, sessions, notifications, events, prefs };
 }
 
 // ── fixtures (deliberately fictional — never real DLU data) ────────────────
@@ -313,13 +272,12 @@ async function makeService(
     get: (name: string) => (name === "DLU_TZ" ? "Asia/Ho_Chi_Minh" : undefined),
   } as unknown as ConfigService;
 
-  // TagsService and NotificationsService are the real classes, wired via
-  // Nest's DI container over the fake prisma double — their `create` writes
-  // go through the same `notification`/`tag` tables the assertions read.
+  // NotificationsService is the real class, wired via
+  // Nest's DI container over the fake prisma double. Its `create` writes
+  // go through the `notification` table the assertions read.
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       MaterializerService,
-      TagsService,
       NotificationsService,
       NotificationPubSub,
       { provide: QueueService, useValue: { enqueueBestEffort: jest.fn() } },
@@ -430,40 +388,6 @@ describe("MaterializerService", () => {
       expect(db.notifications).toHaveLength(1);
     });
 
-    it("tags the session with the LMS course's full name", async () => {
-      const { db, service } = await makeService();
-
-      const lmsItem: ParsedLmsItem = {
-        ...block({ externalKey: "lms:assign:800009" }),
-        lmsCourse: {
-          lmsCourseId: 90002,
-          fullName: "Môn học Mẫu Ba - MHK99PM",
-          shortName: "MHK99PM",
-        },
-      };
-
-      await service.materialize(USER, [lmsItem], "LMS");
-
-      expect(db.sessions[0].tags).toEqual([
-        { name: "Môn học Mẫu Ba - MHK99PM" },
-      ]);
-      expect(db.tags.map((t) => t.name)).toEqual(["Môn học Mẫu Ba - MHK99PM"]);
-    });
-
-    it("adds no tag when the LMS item carries no course", async () => {
-      const { db, service } = await makeService();
-
-      const lmsItem: ParsedLmsItem = {
-        ...block({ externalKey: "lms:assign:800010" }),
-        lmsCourse: null,
-      };
-
-      await service.materialize(USER, [lmsItem], "LMS");
-
-      expect(db.sessions[0].tags).toEqual([]);
-      expect(db.tags).toHaveLength(0);
-    });
-
     it("writes the room to the location column and leaves the note untouched", async () => {
       const { db, service } = await makeService();
 
@@ -550,7 +474,6 @@ describe("MaterializerService", () => {
         scheduleStudyUnitId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-        tags: [],
         series: null,
       });
       const findUnique = jest

@@ -190,19 +190,6 @@ describe("Vietnamese notification delivery", () => {
     ).toBe("Có buổi học mới");
   });
 
-  it("translates the session-end question and keeps the session title", () => {
-    const row = {
-      eventName: "session_end.ask",
-      title: "Essay draft",
-      content: "Did you get it done?",
-    };
-    expect(localizeNotification(row, "VI_VN")).toEqual({
-      ...row,
-      content: "Bạn đã làm xong chưa?",
-    });
-    expect(localizeNotification(row)).toEqual(row);
-  });
-
   it("leaves unknown/custom copy unchanged", () => {
     const row = {
       eventName: "custom",

@@ -12,11 +12,10 @@ describe("synced lock", () => {
     expect(isSynced({ source: "PORTAL", type: "TASK" })).toBe(false);
   });
 
-  it("lets the student edit note and tags", () => {
+  it("lets the student edit note", () => {
     expect(() =>
       assertSyncedEditable(portalLecture, {
         note: "bring laptop",
-        tags: ["math"],
       }),
     ).not.toThrow();
   });

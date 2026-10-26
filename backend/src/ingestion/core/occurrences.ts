@@ -167,9 +167,7 @@ export function occurrencesFromLms(
 /**
  * LMS cache rows → blocks.
  *
- * `lmsCourse` is rebuilt from the catalog, because the course's `fullName`
- * becomes a tag on the session (`tagNamesOf`) — omit it and a cache-served
- * student silently loses the course tag a walked student gets.
+ * `lmsCourse` is rebuilt from the catalog so a cache-served block matches a walked one.
  */
 export function blocksFromLmsOccurrences(
   rows: readonly LmsOccurrenceInput[],

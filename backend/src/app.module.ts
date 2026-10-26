@@ -13,9 +13,6 @@ import { MailModule } from "./mail/mail.module";
 import { UsersModule } from "./users/users.module";
 import { ApiAccessModule } from "./api-access/api-access.module";
 import { SessionsModule } from "./sessions/sessions.module";
-import { CourseColoursModule } from "./course-colours/course-colours.module";
-import { TagsModule } from "./tags/tags.module";
-import { LinkPreviewModule } from "./link-preview/link-preview.module";
 import { SchedulerModule } from "./scheduler/scheduler.module";
 import { ScheduleModule } from "@nestjs/schedule";
 import { KillSwitchModule } from "./common/killswitch/killswitch.module";
@@ -580,12 +577,9 @@ const jobModules = [
     MailModule,
     SessionsModule,
     AdminModule,
-    CourseColoursModule,
     CryptoModule,
     LMSModule,
     PortalAPIModule,
-    TagsModule,
-    LinkPreviewModule,
     // Background cron providers (MatrixDecayService)
     // plus HeuristicScheduleService / BanditScheduleService, the single-session
     // placers SessionsService calls on create / deadline-edit. No day repack —

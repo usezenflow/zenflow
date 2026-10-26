@@ -62,20 +62,20 @@ describe("FcmSender", () => {
     expect(sendEachForMulticast).not.toHaveBeenCalled();
   });
 
-  it("carries the category and both action ids in the data of a session-end push", async () => {
+  it("carries the category and both action ids in the data of a plan-offer push", async () => {
     sendEachForMulticast.mockResolvedValue({ responses: [{ success: true }] });
     const sender = await make(FAKE_SA);
 
     await sender.send(["t1"], {
       ...MSG,
-      category: "session_end",
-      actions: ["done", "not_this_time"],
+      category: "plan_offer",
+      actions: ["keep", "prefer"],
     });
 
     const arg = sendEachForMulticast.mock.calls[0][0];
     expect(arg.data).toMatchObject({
-      category: "session_end",
-      actions: "done,not_this_time",
+      category: "plan_offer",
+      actions: "keep,prefer",
     });
   });
 

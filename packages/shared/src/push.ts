@@ -37,18 +37,10 @@ export const PUSH_CATEGORY_PLAN_OFFER = "plan_offer";
 export const PUSH_ACTION_KEEP = "keep";
 export const PUSH_ACTION_PREFER = "prefer";
 
-/** iOS notification category of the session-end push (ADR-0035). */
-export const PUSH_CATEGORY_SESSION_END = "session_end";
-
-/** Action identifiers of the session-end buttons: a completed session, or not this time. */
-export const PUSH_ACTION_DONE = "done";
-export const PUSH_ACTION_NOT_THIS_TIME = "not_this_time";
-
 /** Event slug → action category, or `null` when the push has no buttons. */
 export function pushCategoryFor(eventName: string): string | null {
   if (eventName.startsWith("sync_conflict.")) return PUSH_CATEGORY_CONFLICT;
   if (eventName.startsWith("plan_offer.")) return PUSH_CATEGORY_PLAN_OFFER;
-  if (eventName.startsWith("session_end.")) return PUSH_CATEGORY_SESSION_END;
   return null;
 }
 
@@ -57,8 +49,6 @@ export function pushActionsFor(category: string | null): readonly string[] {
   if (category === PUSH_CATEGORY_CONFLICT) return [PUSH_ACTION_RESCHEDULE];
   if (category === PUSH_CATEGORY_PLAN_OFFER)
     return [PUSH_ACTION_KEEP, PUSH_ACTION_PREFER];
-  if (category === PUSH_CATEGORY_SESSION_END)
-    return [PUSH_ACTION_DONE, PUSH_ACTION_NOT_THIS_TIME];
   return [];
 }
 

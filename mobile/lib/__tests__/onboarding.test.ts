@@ -1,18 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  addCustomTag,
   canGoBack,
   filterTimezones,
-  initialTagSelection,
-  mergeTagNames,
-  newTagsForBulk,
   nextStep,
   pendingSetupItems,
   prevStep,
   routeForSession,
-  tagOptions,
-  tagsForBulk,
-  toggleTag,
   utcOffsetMinutes,
 } from "../onboarding";
 
@@ -49,50 +42,6 @@ describe("step navigation", () => {
   });
 });
 
-describe("tags", () => {
-  it("pre-ticks the first four, or resumes existing", () => {
-    expect(initialTagSelection([])).toEqual([
-      "Study",
-      "Exam",
-      "Assignment",
-      "Project",
-    ]);
-    // Sync-created tags (LMS/portal) don't count as resuming: defaults stay ticked.
-    expect(initialTagSelection(["Thesis"])).toEqual([
-      "Study",
-      "Exam",
-      "Assignment",
-      "Project",
-      "Thesis",
-    ]);
-    // Resuming with saved suggestions keeps exactly those.
-    expect(initialTagSelection(["Lab", "Thesis"])).toEqual(["Lab", "Thesis"]);
-  });
-  it("toggles case-insensitively", () => {
-    expect(toggleTag(["Study"], "study")).toEqual([]);
-    expect(toggleTag([], "Lab")).toEqual(["Lab"]);
-  });
-  it("adds custom tags, normalizing and de-duping", () => {
-    expect(addCustomTag(["Study"], "  Thesis  draft ")).toEqual([
-      "Study",
-      "Thesis draft",
-    ]);
-    expect(addCustomTag(["Study"], "study")).toEqual(["Study"]);
-    expect(addCustomTag([], "lab")).toEqual(["Lab"]);
-    expect(addCustomTag(["Study"], "   ")).toEqual(["Study"]);
-    expect(addCustomTag([], "x".repeat(51))).toEqual([]);
-  });
-  it("lists custom tags after suggestions", () => {
-    expect(tagOptions(["Study", "Thesis"]).slice(-1)).toEqual(["Thesis"]);
-  });
-  it("builds a bulk payload", () => {
-    expect(tagsForBulk(["A", "a", " B "])).toEqual(["A", "B"]);
-    expect(tagsForBulk([])).toEqual([]);
-    expect(
-      tagsForBulk(Array.from({ length: 60 }, (_, i) => `t${i}`)),
-    ).toHaveLength(50);
-  });
-});
 
 describe("pendingSetupItems", () => {
   it("derives from real state", () => {
@@ -137,20 +86,6 @@ describe("filterTimezones", () => {
   });
 });
 
-describe("newTagsForBulk / mergeTagNames", () => {
-  const existing = Array.from({ length: 55 }, (_, i) => `e${i}`);
-  it("sends only new tags, so >50 existing don't crowd out additions", () => {
-    expect(newTagsForBulk([...existing, "Fresh", "E1"], existing)).toEqual([
-      "Fresh",
-    ]);
-    expect(newTagsForBulk(existing, existing)).toEqual([]);
-  });
-  it("merges a response without dropping existing tags", () => {
-    const merged = mergeTagNames(existing, ["Fresh", "e1"]);
-    expect(merged).toHaveLength(56);
-    expect(merged.slice(0, 55)).toEqual(existing);
-  });
-});
 
 describe("utcOffsetMinutes", () => {
   const jan = new Date("2025-01-15T12:00:00Z");

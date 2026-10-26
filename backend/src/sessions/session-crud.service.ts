@@ -17,7 +17,6 @@ import type {
 import { Prisma, type SessionType, type User } from "../../generated/prisma";
 import { minutesToUtc } from "../common/utils";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import {
   expandRrule,
@@ -29,7 +28,7 @@ import { DAY_MS } from "../scheduler/core/slot";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { ListSessionsDto, MAX_RANGE_DAYS } from "./dto/list-sessions.dto";
-import { SessionRow, WITH_TAGS_AND_SERIES } from "./types/session-row";
+import { SessionRow, WITH_SERIES } from "./types/session-row";
 import { PlacementNeedsConfirmationException } from "./placement-plan.exception";
 import {
   slotProposalFieldsOf,
@@ -59,7 +58,6 @@ const NEXT_OCCURRENCE_SCAN = 8;
 export class SessionCrudService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tagsService: TagsService,
     private readonly taskPlacement: TaskPlacementService,
     private readonly series: SeriesService,
   ) {}
@@ -68,7 +66,6 @@ export class SessionCrudService {
     dto: CreateSessionDto,
     user: User,
   ): Promise<CreateSessionResponse> {
-    const cleanTags = (dto.tags ?? []).map((t) => t.trim()).filter(Boolean);
     const now = new Date();
 
     if (dto.type === "TASK") {
@@ -86,13 +83,13 @@ export class SessionCrudService {
         now,
         policy: dto.infeasiblePolicy,
       });
-      return this.createSingleTask(dto, user, cleanTags, deadline, now);
+      return this.createSingleTask(dto, user, deadline, now);
     }
 
     if (dto.rrule) {
-      return this.createFixedRecurring(dto, user, cleanTags);
+      return this.createFixedRecurring(dto, user);
     }
-    return this.createFixedOneOff(dto, user, cleanTags);
+    return this.createFixedOneOff(dto, user);
   }
 
   /**
@@ -121,11 +118,9 @@ export class SessionCrudService {
     tx: Prisma.TransactionClient,
     user: User,
     dto: CreateSessionDto,
-    cleanTags: string[],
     deadline: Date,
     undoGroupId?: string,
   ): Promise<SessionRow> {
-    const tagIds = await this.tagsService.resolveTagIds(tx, user.id, cleanTags);
     const prepFor = dto.prepForSessionId
       ? await this.resolvePrepTarget(tx, user, dto.prepForSessionId)
       : null;
@@ -140,10 +135,9 @@ export class SessionCrudService {
         location: dto.location ?? null,
         durationMinutes: dto.durationMinutes,
         deadline,
-        tags: { connect: tagIds.map((id) => ({ id })) },
         userId: user.id,
       },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     await tx.sessionEvent.create({
       data: {
@@ -194,14 +188,13 @@ export class SessionCrudService {
   private async createSingleTask(
     dto: CreateSessionDto,
     user: User,
-    cleanTags: string[],
     deadline: Date,
     now: Date,
   ): Promise<CreateSessionResponse> {
     // One undo entry covers the create and whatever its placement displaced.
     const undoGroupId = randomUUID();
     const created = await this.prisma.$transaction((tx) =>
-      this.insertSingleTask(tx, user, dto, cleanTags, deadline, undoGroupId),
+      this.insertSingleTask(tx, user, dto, deadline, undoGroupId),
     );
 
     // heuristic → 50/50 A/B → optional LinUCB override + SlotProposal. Never
@@ -250,7 +243,6 @@ export class SessionCrudService {
   private async createFixedRecurring(
     dto: CreateSessionDto,
     user: User,
-    cleanTags: string[],
   ): Promise<CreateSessionResponse> {
     const anchor = new Date(dto.scheduledStartTime as string);
     const repStart = firstOccurrence(
@@ -260,11 +252,6 @@ export class SessionCrudService {
     );
 
     const created = await this.prisma.$transaction(async (tx) => {
-      const tagIds = await this.tagsService.resolveTagIds(
-        tx,
-        user.id,
-        cleanTags,
-      );
       const series = await tx.sessionSeries.create({
         data: {
           type: dto.type,
@@ -282,7 +269,6 @@ export class SessionCrudService {
         durationMinutes: dto.durationMinutes,
         scheduledStartTime: repStart,
         seriesId: series.id,
-        tagIds,
       });
     });
 
@@ -294,15 +280,9 @@ export class SessionCrudService {
   private async createFixedOneOff(
     dto: CreateSessionDto,
     user: User,
-    cleanTags: string[],
   ): Promise<CreateSessionResponse> {
     const start = new Date(dto.scheduledStartTime as string);
     const created = await this.prisma.$transaction(async (tx) => {
-      const tagIds = await this.tagsService.resolveTagIds(
-        tx,
-        user.id,
-        cleanTags,
-      );
       // Shared with the DLU watchers' materializer so `source` /
       // `externalKey` / the CREATE event can't drift between the two paths.
       return insertFixedSession(tx, {
@@ -314,7 +294,6 @@ export class SessionCrudService {
         location: dto.location,
         durationMinutes: dto.durationMinutes,
         scheduledStartTime: start,
-        tagIds,
       });
     });
 
@@ -336,9 +315,6 @@ export class SessionCrudService {
     if (dto.q)
       filters.push({ id: { in: await this.matchingIds(dto.q, user) } });
     if (dto.types?.length) filters.push({ type: { in: dto.types } });
-    if (dto.tags?.length) {
-      filters.push({ tags: { some: { name: { in: dto.tags } } } });
-    }
     if (dto.minDuration !== undefined || dto.maxDuration !== undefined) {
       filters.push({
         durationMinutes: { gte: dto.minDuration, lte: dto.maxDuration },
@@ -381,7 +357,7 @@ export class SessionCrudService {
           ...filters,
         ],
       },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
 
     const sessions: SharedSession[] = [];
@@ -463,7 +439,7 @@ export class SessionCrudService {
     const rows = await this.prisma.session.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
       take: overfetch,
     });
 
@@ -493,7 +469,7 @@ export class SessionCrudService {
       const rep = await this.prisma.session.findFirst({
         where: { seriesId: occ.seriesId, userId: user.id, deleted: false },
         orderBy: { createdAt: "asc" },
-        include: WITH_TAGS_AND_SERIES,
+        include: WITH_SERIES,
       });
       if (!rep)
         throw new NotFoundException(`Cannot find session with id ${id}`);
@@ -515,7 +491,7 @@ export class SessionCrudService {
 
     const session = await this.prisma.session.findFirst({
       where: { id, userId: user.id, deleted: false },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     if (!session)
       throw new NotFoundException(`Cannot find session with id ${id}`);
@@ -537,7 +513,7 @@ export class SessionCrudService {
     if (!plan.prepForSessionId) return null;
     const target = await this.prisma.session.findFirst({
       where: { id: plan.prepForSessionId, userId: user.id, deleted: false },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     if (!target) return null;
     const dto = toSessionDto(target);
@@ -593,7 +569,7 @@ export class SessionCrudService {
         prepForSessionId: targetId,
         prepForOccurrenceStart: occurrenceStart,
       },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
       orderBy: { createdAt: "asc" },
     });
     return rows.map(toSessionDto);

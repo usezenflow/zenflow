@@ -6,7 +6,6 @@ import { listIntegrations } from "@/api/integrations";
 import { LogOut, Moon } from "@/components/Icons";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
 import { FinishSetupCard } from "@/components/settings/finish-setup-card";
-import { TagsRow } from "@/components/settings/tags-row";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useNotificationState } from "@/hooks/use-notification-toggle";
 import { PreferencesSection } from "@/components/settings/preferences-section";
@@ -213,10 +212,6 @@ export default function SettingsScreen() {
         <>
         <PreferencesSection />
         <DeviceCalendarSection />
-        <OfflineLock>
-          <TagsRow />
-        </OfflineLock>
-
         <View
           onLayout={(e) => {
             dluY.current = e.nativeEvent.layout.y;

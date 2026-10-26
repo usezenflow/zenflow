@@ -131,21 +131,21 @@ describe("WebPushSender", () => {
       });
     });
 
-    it("carries the session-end category and both action ids", async () => {
+    it("carries the plan-offer category and both action ids", async () => {
       (webpush.sendNotification as jest.Mock).mockResolvedValue({});
       const sender = await make(VAPID);
 
       await sender.send([TARGET], {
         ...MSG,
-        category: "session_end",
-        actions: ["done", "not_this_time"],
+        category: "plan_offer",
+        actions: ["keep", "prefer"],
       });
 
       const [, body] = (webpush.sendNotification as jest.Mock).mock
         .calls[0] as [unknown, string];
       expect(JSON.parse(body) as unknown).toMatchObject({
-        category: "session_end",
-        actions: ["done", "not_this_time"],
+        category: "plan_offer",
+        actions: ["keep", "prefer"],
       });
     });
 

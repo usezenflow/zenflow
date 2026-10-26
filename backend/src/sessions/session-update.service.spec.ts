@@ -2,13 +2,12 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ForbiddenException } from "@nestjs/common";
 import { SessionUpdateService } from "./session-update.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { SeriesService } from "./series.service";
 import { occurrenceId } from "../scheduler/core/recurrence";
 import { DAY_MS } from "../scheduler/core/slot";
-import type { Tag, Session, SessionSeries, User } from "../../generated/prisma";
+import type { Session, SessionSeries, User } from "../../generated/prisma";
 import type { UpdateSessionDto } from "./dto/update-session.dto";
 
 /**
@@ -20,7 +19,7 @@ import type { UpdateSessionDto } from "./dto/update-session.dto";
  * (or lack thereof) can be asserted directly.
  */
 
-type SessionRow = Session & { tags: Tag[]; series: SessionSeries | null };
+type SessionRow = Session & { series: SessionSeries | null };
 
 const user: User = {
   id: "user-1",
@@ -44,7 +43,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     examRetake: null,
     durationMinutes: 60,
     deadline: null,
-    tags: [],
     series: null,
     type: "LECTURE",
     source: "USER",
@@ -54,8 +52,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     submittedAt: null,
     prepForSessionId: null,
     prepForOccurrenceStart: null,
-    syncConfirmedAt: null,
-    syncMissedAt: null,
     placementReason: null,
     placementReasonStartAt: null,
     deleted: false,
@@ -80,10 +76,6 @@ function fakeSeries() {
     promoteToSeries: jest.fn(),
     resizeSessionCount: jest.fn(),
   };
-}
-
-function fakeTagsService() {
-  return { resolveTagIds: jest.fn().mockResolvedValue([]) };
 }
 
 function fakeTaskPlacement() {
@@ -120,7 +112,6 @@ async function makeService(
           ...(prisma as object),
         },
       },
-      { provide: TagsService, useValue: fakeTagsService() },
       { provide: TaskPlacementService, useValue: fakeTaskPlacement() },
       { provide: SchedulingFeedbackService, useValue: schedulingFeedback },
       { provide: SeriesService, useValue: series },

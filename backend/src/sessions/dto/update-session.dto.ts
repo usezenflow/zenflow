@@ -1,5 +1,4 @@
 import {
-  IsArray,
   IsBoolean,
   IsDivisibleBy,
   IsIn,
@@ -60,11 +59,6 @@ export class UpdateSessionDto implements UpdateSessionInput {
   @IsOptional()
   @IsISO8601()
   prepForOccurrenceStart?: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  tags?: string[];
 
   /** ISO-8601 instant — drag reschedule / resize both just move this. */
   @IsOptional()

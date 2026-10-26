@@ -31,7 +31,6 @@ export interface Event {
   start: string; // ISO
   end: string; // ISO
   type: SessionType;
-  tags: string[];
   state: SessionCardState;
   /** Free-text location (room / building) carried through from the session, or null. */
   location?: string | null;

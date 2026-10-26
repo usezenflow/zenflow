@@ -21,7 +21,7 @@ export function isSynced(row: {
   );
 }
 
-/** Fields a sync owns. Note and tags stay the student's. */
+/** Fields a sync owns. Note stays the student's. */
 const SYNCED_FIELDS = [
   "title",
   "location",
