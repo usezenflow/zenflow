@@ -70,7 +70,9 @@ export class CalendarOutboxService implements OnModuleInit, OnModuleDestroy {
   drain(): Promise<void> {
     this.draining ??= this.runPasses()
       .catch((error: unknown) => {
-        this.logger.warn(`Calendar outbox pass failed: ${(error as Error).message}`);
+        this.logger.warn(
+          `Calendar outbox pass failed: ${(error as Error).message}`,
+        );
       })
       .finally(() => {
         this.draining = undefined;

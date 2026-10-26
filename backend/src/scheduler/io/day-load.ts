@@ -150,7 +150,7 @@ export async function loadDayLoad(
         select: {
           scheduledStartTime: true,
           durationMinutes: true,
-            },
+        },
         orderBy: { createdAt: "asc" },
         take: 1,
       },
@@ -246,7 +246,7 @@ export async function loadScheduleItems(
         durationMinutes: true,
         deadline: true,
         type: true,
-        },
+      },
     }),
     prisma.sessionSeries.findMany({
       where: {
@@ -260,7 +260,7 @@ export async function loadScheduleItems(
           select: {
             scheduledStartTime: true,
             durationMinutes: true,
-                },
+          },
           orderBy: { createdAt: "asc" },
           take: 1,
         },

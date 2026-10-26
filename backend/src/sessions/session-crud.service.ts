@@ -330,13 +330,16 @@ export class SessionCrudService {
     const tz = user.timezone;
     const span = daysBetween(dto.from, dto.to) + 1;
     if (span < 1 || span > MAX_RANGE_DAYS) {
-      throw new BadRequestException(`Range must be 1 to ${MAX_RANGE_DAYS} days`);
+      throw new BadRequestException(
+        `Range must be 1 to ${MAX_RANGE_DAYS} days`,
+      );
     }
     const displayStart = minutesToUtc(dto.from, 0, tz);
     const displayEnd = minutesToUtc(dto.to, 1439, tz);
 
     const filters: Prisma.SessionWhereInput[] = [];
-    if (dto.q) filters.push({ id: { in: await this.matchingIds(dto.q, user) } });
+    if (dto.q)
+      filters.push({ id: { in: await this.matchingIds(dto.q, user) } });
     if (dto.types?.length) filters.push({ type: { in: dto.types } });
     if (dto.tags?.length) {
       filters.push({ tags: { some: { name: { in: dto.tags } } } });
@@ -349,8 +352,12 @@ export class SessionCrudService {
     if (dto.deadlineFrom || dto.deadlineTo) {
       filters.push({
         deadline: {
-          gte: dto.deadlineFrom ? minutesToUtc(dto.deadlineFrom, 0, tz) : undefined,
-          lte: dto.deadlineTo ? minutesToUtc(dto.deadlineTo, 1439, tz) : undefined,
+          gte: dto.deadlineFrom
+            ? minutesToUtc(dto.deadlineFrom, 0, tz)
+            : undefined,
+          lte: dto.deadlineTo
+            ? minutesToUtc(dto.deadlineTo, 1439, tz)
+            : undefined,
         },
       });
     }

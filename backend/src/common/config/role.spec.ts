@@ -76,7 +76,7 @@ describe("getRole", () => {
 
 describe("runsOutbox", () => {
   it("runs in the default role, the outbox role and the worker, never in api or the watcher", () => {
-    expect(runsOutbox(getRole({} as NodeJS.ProcessEnv))).toBe(true);
+    expect(runsOutbox(getRole({}))).toBe(true);
     expect(runsOutbox("outbox")).toBe(true);
     expect(runsOutbox("worker")).toBe(true);
     expect(runsOutbox("api")).toBe(false);

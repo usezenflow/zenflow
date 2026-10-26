@@ -6,10 +6,15 @@ function fakes(summary: unknown) {
   const executed: Exec[] = [];
   const counts: number[] = [];
   const prisma = {
-    $executeRaw: jest.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
-      executed.push({ sql: strings.join("?").replace(/\s+/g, " ").trim(), values });
-      return counts.shift() ?? 1;
-    }),
+    $executeRaw: jest.fn(
+      async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        executed.push({
+          sql: strings.join("?").replace(/\s+/g, " ").trim(),
+          values,
+        });
+        return counts.shift() ?? 1;
+      },
+    ),
   };
   const sync = {
     syncUser: jest.fn(async () => summary),
@@ -19,8 +24,15 @@ function fakes(summary: unknown) {
     sync as never,
     { get: () => undefined } as never,
   );
-  const row = { userId: "u1", dirtyAt: new Date("2026-10-26T01:00:00Z"), attempts: 0 };
-  const run = () => (service as unknown as { process: (r: typeof row) => Promise<void> }).process(row);
+  const row = {
+    userId: "u1",
+    dirtyAt: new Date("2026-10-26T01:00:00Z"),
+    attempts: 0,
+  };
+  const run = () =>
+    (
+      service as unknown as { process: (r: typeof row) => Promise<void> }
+    ).process(row);
   return { executed, counts, sync, run, row };
 }
 
@@ -49,7 +61,9 @@ describe("CalendarOutboxService.process", () => {
     counts.push(0);
     await run();
     expect(executed).toHaveLength(2);
-    expect(executed[1].sql).toMatch(/SET "claimedUntil" = NULL, "attempts" = 0/);
+    expect(executed[1].sql).toMatch(
+      /SET "claimedUntil" = NULL, "attempts" = 0/,
+    );
   });
 
   it("removes the row when the user has no active connection any more", async () => {
@@ -64,7 +78,9 @@ describe("CalendarOutboxService.process", () => {
     await run();
     expect(sync.syncUser).toHaveBeenCalledTimes(1);
     const update = executed.at(-1);
-    expect(update?.sql).toMatch(/SET "claimedUntil" = NULL, "attempts" = \?, "lastError" = \?, "nextAttemptAt" = \?/);
+    expect(update?.sql).toMatch(
+      /SET "claimedUntil" = NULL, "attempts" = \?, "lastError" = \?, "nextAttemptAt" = \?/,
+    );
     expect(update?.values[0]).toBe(row.attempts + 1);
     expect(String(update?.values[1])).toContain("2 failed");
   });

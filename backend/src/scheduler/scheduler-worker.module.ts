@@ -11,6 +11,10 @@ import { SessionEventPartitionService } from "./io/session-event-partition.servi
  */
 @Module({
   imports: [PrismaModule, SchedulerModule],
-  providers: [MatrixDecayService, SessionEventPartitionService, KeptSweepService],
+  providers: [
+    MatrixDecayService,
+    SessionEventPartitionService,
+    KeptSweepService,
+  ],
 })
 export class SchedulerWorkerModule {}
