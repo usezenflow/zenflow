@@ -148,7 +148,14 @@ Rotate in Vault, then deploy:
 1. `VAULT_ADDR=... VAULT_TOKEN=... VAULT_ENV=prod ./ops/vault/rotate-versioned.sh rotate API_TOKEN_PEPPER` (or `GOOGLE_TOKEN_ENCRYPTION_KEY`). It writes a new random `_V<n+1>` to the `api` set and prints the next step.
 2. Set `<PREFIX>_CURRENT_VERSION=<n+1>` in `backend/env/prod.env`, commit, deploy.
 
-First move from the unversioned names: `rotate-versioned.sh migrate <PREFIX>`, with the release that reads `_V1`. Production refuses to boot without the current pepper version. Google rows sealed under a missing key version fail to open.
+Move production from the unversioned names (once, both prefixes):
+
+1. Record the current `api` set version, `vault kv metadata get -mount=secret zenflow/prod/api`, for rollback.
+2. Run `migrate` for each prefix, with `VAULT_ENV=prod` and the ops token. It writes `<PREFIX>_V1` and removes `<PREFIX>`.
+3. Deploy the release that reads `_V1` right after step 2. The deploy renders secrets from Vault, so an old release restarted in between would not find the unversioned names. Production refuses to boot without the current pepper version.
+4. Check: an existing personal API token still authenticates, and a connected Google Calendar still syncs.
+
+If the deploy fails, roll back the `api` set (`vault kv rollback -mount=secret -version=<recorded> zenflow/prod/api`), then redeploy the previous release. Do not leave a half-migrated set.
 
 ## Leak audit
 
