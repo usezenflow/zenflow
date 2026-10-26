@@ -1,6 +1,4 @@
-import { getApiAccess, revokeApiToken } from "@/api/api-access";
-import { KeyRound, Plus } from "@/components/Icons";
-import { ApiTokenSheet } from "@/components/settings/api-token-sheet";
+import { getApiAccess } from "@/api/api-access";
 import { CopyButton } from "@/components/settings/copy-button";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
 import { useBottomSheet } from "@/components/ui/bottom-sheet";
@@ -13,7 +11,7 @@ import { useOffline } from "@/hooks/use-offline";
 import { useUserStore } from "@/hooks/use-user-store";
 import { format, t } from "@/lib/i18n";
 import { zonedDate } from "@zenflow/core";
-import type { ApiAccessResponse, ApiTokenSummary } from "@zenflow/shared";
+import type { ApiAccessResponse } from "@zenflow/shared";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, View } from "react-native";
@@ -97,10 +95,7 @@ function AssistantSetup({ guides }: { guides: ApiAccessResponse["setup"] }) {
  */
 export function AiAssistantsSection() {
   useLanguage();
-  const { confirm, toast } = useToast();
   const offline = useOffline();
-  const tz = useUserStore((s) => s.user?.timezone) || "UTC";
-  const sheet = useBottomSheet();
   const [access, setAccess] = useState<ApiAccessResponse | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -117,36 +112,6 @@ export function AiAssistantsSection() {
   useEffect(() => {
     load();
   }, [load]);
-
-  function added(token: ApiTokenSummary) {
-    setAccess((cur) => (cur ? { ...cur, tokens: [token, ...cur.tokens] } : cur));
-  }
-
-  async function revoke(token: ApiTokenSummary) {
-    try {
-      await revokeApiToken(token.id);
-      setAccess((cur) =>
-        cur ? { ...cur, tokens: cur.tokens.filter((x) => x.id !== token.id) } : cur,
-      );
-      toast({ title: t("Token revoked"), icon: KeyRound });
-    } catch {
-      toast({
-        title: t("Couldn't revoke token"),
-        description: t("Try again in a moment."),
-        variant: "warning",
-        icon: KeyRound,
-      });
-    }
-  }
-
-  function askRevoke(token: ApiTokenSummary) {
-    confirm(t("Revoke {name}?", { name: token.name }), {
-      description: t("Assistants using it lose access."),
-      confirmLabel: t("Revoke"),
-      cancelLabel: t("Cancel"),
-      onConfirm: () => void revoke(token),
-    });
-  }
 
   if (!access) {
     return (
@@ -184,58 +149,6 @@ export function AiAssistantsSection() {
           <CopyButton value={access.prompt} label={t("Copy")} testID="api-access.prompt" />
         </View>
       </View>
-
-      <SettingsSectionLabel>{t("Tokens")}</SettingsSectionLabel>
-      <View className="overflow-hidden rounded-2xl border border-border bg-card">
-        {access.tokens.length === 0 ? (
-          <Text className="px-4 py-3.5 text-[14px] text-muted-foreground">{t("No tokens yet.")}</Text>
-        ) : (
-          access.tokens.map((token, index) => (
-            <View key={token.id}>
-              {index > 0 ? <Divider /> : null}
-              <View testID={`api-access.token.${token.id}`} className="flex-row items-center gap-3 px-4 py-2.5">
-                <View className="min-w-0 flex-1 gap-0.5">
-                  <Text numberOfLines={1} className="text-[15px] font-semibold">
-                    {token.name}
-                  </Text>
-                  <Text className="text-[12px] text-muted-foreground">
-                    {t("Created {date}", { date: format(zonedDate(token.createdAt, tz), "MMM d yyyy") })}
-                  </Text>
-                  <Text className="text-[12px] text-muted-foreground">
-                    {token.lastUsedAt
-                      ? t("Last used {date}", {
-                          date: format(zonedDate(token.lastUsedAt, tz), "MMM d yyyy"),
-                        })
-                      : t("Never used")}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => askRevoke(token)}
-                  disabled={offline}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("Revoke {name}?", { name: token.name })}
-                  className="h-11 justify-center px-2 active:opacity-70"
-                >
-                  <Text className="text-[14px] font-semibold text-foreground">{t("Revoke")}</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))
-        )}
-        <Divider />
-        <Pressable
-          onPress={() => sheet.open()}
-          disabled={offline}
-          accessibilityRole="button"
-          testID="api-access.create"
-          className="h-11 flex-row items-center gap-2 px-4 active:opacity-70"
-        >
-          <Plus size={18} className="text-primary" />
-          <Text className="text-[15px] font-semibold text-primary">{t("Create token")}</Text>
-        </Pressable>
-      </View>
-
-      <ApiTokenSheet sheet={sheet} onCreated={added} />
     </>
   );
 }

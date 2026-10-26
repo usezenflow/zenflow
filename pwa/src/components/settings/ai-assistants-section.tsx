@@ -1,23 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Bot, Check, Copy, ExternalLink, Plus, Trash2 } from "lucide-react";
-import type { ApiAccessResponse, ApiTokenSummary, ConnectedApp } from "@zenflow/shared";
-import { createApiToken, getApiAccess, revokeApiToken } from "@/api/me";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Bot, Check, Copy, ExternalLink } from "lucide-react";
+import type { ApiAccessResponse, ConnectedApp } from "@zenflow/shared";
+import { getApiAccess } from "@/api/me";
 import { disconnectApp, listConnectedApps } from "@/api/oauth";
 import { IconTile, SettingsCard, SettingsLabel } from "@/components/settings/settings-ui";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useUserStore } from "@/hooks/use-user-store";
-import { locale, t, useLanguage } from "@/lib/i18n";
+import { t, useLanguage } from "@/lib/i18n";
 import { apiErrorMessage, errorToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
@@ -70,170 +60,6 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function lastUsedLabel(token: ApiTokenSummary, tz: string): string {
-  if (!token.lastUsedAt) return t("Never used");
-  const date = new Intl.DateTimeFormat(locale(), { dateStyle: "medium", timeZone: tz }).format(
-    new Date(token.lastUsedAt),
-  );
-  return t("Last used {date}", { date });
-}
-
-/** One token, with an inline confirm step before it is revoked. */
-function TokenRow({
-  token,
-  tz,
-  onRevoked,
-}: {
-  token: ApiTokenSummary;
-  tz: string;
-  onRevoked: () => Promise<void>;
-}) {
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  async function revoke() {
-    setBusy(true);
-    try {
-      await revokeApiToken(token.id);
-      await onRevoked();
-    } catch (error) {
-      errorToast(apiErrorMessage(error, t("Couldn't revoke the token")));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <li className="py-3">
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-medium">{token.name}</p>
-          <p className="text-[13px] text-muted-foreground">{lastUsedLabel(token, tz)}</p>
-        </div>
-        {confirming ? null : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setConfirming(true)}
-            className="shrink-0 text-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" aria-hidden />
-            {t("Revoke")}
-          </Button>
-        )}
-      </div>
-      {confirming ? (
-        <div className="mt-2 flex flex-col gap-2 rounded-xl bg-destructive/10 p-3">
-          <p className="text-[13px] font-semibold">{t("Revoke {name}?", { name: token.name })}</p>
-          <p className="text-[13px] text-muted-foreground">{t("Assistants using it stop working.")}</p>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={busy}>
-              {t("Cancel")}
-            </Button>
-            <Button variant="destructive" size="sm" onClick={revoke} disabled={busy}>
-              {t("Revoke")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-    </li>
-  );
-}
-
-/**
- * Create a token: the secret is shown once in the dialog and cleared when it closes.
- */
-function CreateTokenDialog({
-  open,
-  onOpenChange,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreated: () => Promise<void>;
-}) {
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [secret, setSecret] = useState<string | null>(null);
-
-  function close(next: boolean) {
-    if (!next) {
-      setName("");
-      setSecret(null);
-    }
-    onOpenChange(next);
-  }
-
-  async function create(event: FormEvent) {
-    event.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed || busy) return;
-    setBusy(true);
-    try {
-      const created = await createApiToken({ name: trimmed });
-      setSecret(created.secret);
-      setName("");
-      await onCreated();
-    } catch (error) {
-      errorToast(apiErrorMessage(error, t("Couldn't create the token")));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={close}>
-      <DialogContent>
-        {secret ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>{t("Copy your token")}</DialogTitle>
-              <DialogDescription>{t("It won't be shown again.")}</DialogDescription>
-            </DialogHeader>
-            <div className="flex items-center gap-2">
-              <Input
-                readOnly
-                value={secret}
-                aria-label={t("Token")}
-                onFocus={(event) => event.currentTarget.select()}
-                className="font-mono text-[13px]"
-              />
-              <CopyButton value={secret} label={t("Copy token")} />
-            </div>
-            <DialogFooter>
-              <Button onClick={() => close(false)}>{t("Done")}</Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <form onSubmit={create} className="flex flex-col gap-4">
-            <DialogHeader>
-              <DialogTitle>{t("Create token")}</DialogTitle>
-              <DialogDescription>{t("Name the assistant this token is for.")}</DialogDescription>
-            </DialogHeader>
-            <Input
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="ChatGPT"
-              aria-label={t("Name")}
-              maxLength={60}
-              disabled={busy}
-            />
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => close(false)} disabled={busy}>
-                {t("Cancel")}
-              </Button>
-              <Button type="submit" disabled={!name.trim() || busy}>
-                {t("Create")}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /** One connected assistant, with an inline confirm step before it is disconnected. */
 function AppRow({ app, onChanged }: { app: ConnectedApp; onChanged: (apps: ConnectedApp[]) => void }) {
   const [confirming, setConfirming] = useState(false);
@@ -280,34 +106,27 @@ function AppRow({ app, onChanged }: { app: ConnectedApp; onChanged: (apps: Conne
 
 /**
  * Settings block for AI assistants: a three-step timeline from adding the
- * server to the first call, the assistants already connected, and tokens for
- * scripts. The test step ticks itself once an assistant connects or calls.
+ * server to the first call, and the assistants already connected. The test
+ * step ticks itself once an assistant connects.
  */
 export function AiAssistantsSection() {
   useLanguage();
-  const tz = useUserStore((s) => s.user?.timezone) || "UTC";
   const [access, setAccess] = useState<ApiAccessResponse | null>(null);
   const [apps, setApps] = useState<ConnectedApp[]>([]);
   const [failed, setFailed] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const [providerId, setProviderId] = useState<string | null>(null);
   const [ticked, setTicked] = useState<Partial<Record<StepId, boolean>>>({});
   const [openId, setOpenId] = useState<StepId | null>(null);
   const [connected, setConnected] = useState(false);
-  /** Apps and token stamps as first seen here, so only something newer counts as the test. */
+  /** Apps as first seen here, so only a newer one counts as the test. */
   const seenApps = useRef<Set<string> | null>(null);
-  const seenUse = useRef<Map<string, string | null> | null>(null);
 
   const load = useCallback(async () => {
     try {
       const [next, linked] = await Promise.all([getApiAccess(), listConnectedApps()]);
-      seenUse.current ??= new Map(next.tokens.map((token) => [token.id, token.lastUsedAt]));
       seenApps.current ??= new Set(linked.apps.map((app) => app.clientId));
       const newApp = linked.apps.some((app) => !seenApps.current?.has(app.clientId));
-      const usedToken = next.tokens.some(
-        (token) => token.lastUsedAt !== null && token.lastUsedAt !== (seenUse.current?.get(token.id) ?? null),
-      );
-      setConnected(newApp || usedToken);
+      setConnected(newApp);
       setApps(linked.apps);
       setAccess(next);
       setFailed(false);
@@ -320,7 +139,6 @@ export function AiAssistantsSection() {
     void load();
   }, [load]);
 
-  const tokens = access?.tokens ?? [];
   const guides = access?.setup ?? [];
   const guide = guides.find((g) => g.id === providerId) ?? guides[0];
   const question = t("What's on my calendar today?");
@@ -522,25 +340,6 @@ export function AiAssistantsSection() {
                 </ul>
               </div>
             )}
-
-            <details className="mt-5">
-              <summary className="cursor-pointer text-[13px] font-semibold text-muted-foreground">
-                {t("Tokens for scripts")}
-              </summary>
-              <div className="mt-3 flex flex-col gap-3">
-                {tokens.length > 0 && (
-                  <ul className="divide-y divide-border rounded-xl border border-border bg-card px-3.5">
-                    {tokens.map((token) => (
-                      <TokenRow key={token.id} token={token} tz={tz} onRevoked={load} />
-                    ))}
-                  </ul>
-                )}
-                <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)} className="self-start rounded-full">
-                  <Plus className="size-3.5" aria-hidden />
-                  {t("Create token")}
-                </Button>
-              </div>
-            </details>
           </div>
         ) : failed ? (
           <div className="flex items-center justify-between gap-3 px-4 py-3.5">
@@ -556,7 +355,6 @@ export function AiAssistantsSection() {
           </div>
         )}
       </SettingsCard>
-      <CreateTokenDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={load} />
     </>
   );
 }
