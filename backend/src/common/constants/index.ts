@@ -11,3 +11,6 @@ export const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 
 /** Longest travel time kept clear around a session, each way. */
 export const MAX_COMMUTE_MINUTES = 180;
+
+/** Invitees per session, for group study. */
+export const MAX_ATTENDEES = 20;

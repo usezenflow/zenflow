@@ -18,9 +18,13 @@ describe("GoogleCalendarClient", () => {
   it("creates an event with the deterministic id", async () => {
     fetchMock.mockResolvedValue(json(200, { etag: '"e1"' }));
 
-    expect(await client.writeEvent("t", "cal@x", "aaaa1", body, false)).toBe(
-      '"e1"',
-    );
+    expect(
+      await client.writeEvent("t", "cal@x", "aaaa1", body, {
+        exists: false,
+        etag: null,
+        notify: false,
+      }),
+    ).toBe('"e1"');
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
     expect(url.pathname).toBe("/calendar/v3/calendars/cal%40x/events");
     expect(JSON.parse(init.body as string)).toMatchObject({ id: "aaaa1" });
@@ -31,15 +35,33 @@ describe("GoogleCalendarClient", () => {
       .mockResolvedValueOnce(error(409, "duplicate"))
       .mockResolvedValueOnce(json(200, { etag: '"e2"' }));
 
-    expect(await client.writeEvent("t", "cal", "aaaa1", body, false)).toBe(
-      '"e2"',
-    );
+    expect(
+      await client.writeEvent("t", "cal", "aaaa1", body, {
+        exists: false,
+        etag: null,
+        notify: false,
+      }),
+    ).toBe('"e2"');
     const [url, init] = fetchMock.mock.calls[1] as [URL, RequestInit];
     expect(init.method).toBe("PUT");
     expect(url.pathname.endsWith("/events/aaaa1")).toBe(true);
     expect(JSON.parse(init.body as string)).toMatchObject({
       status: "confirmed",
     });
+  });
+
+  it("replaces only the version it read, and invites only when asked", async () => {
+    fetchMock.mockResolvedValue(json(200, { etag: '"e3"' }));
+
+    await client.writeEvent("t", "cal", "aaaa1", body, {
+      exists: true,
+      etag: '"e1"',
+      notify: true,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.searchParams.get("sendUpdates")).toBe("all");
+    expect(init.headers).toMatchObject({ "If-Match": '"e1"' });
   });
 
   it("treats an already deleted event as deleted", async () => {

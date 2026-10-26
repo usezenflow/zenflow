@@ -17,6 +17,7 @@ interface SessionRow {
   durationMinutes: number;
   deadline: Date | null;
   scheduledStartTime: Date;
+  attendees: string[];
   alive?: boolean;
 }
 
@@ -27,6 +28,7 @@ const session = (id: string, over: Partial<SessionRow> = {}): SessionRow => ({
   location: null,
   durationMinutes: 60,
   deadline: null,
+  attendees: [],
   scheduledStartTime: new Date("2026-11-03T02:00:00Z"),
   ...over,
 });
@@ -162,7 +164,7 @@ describe("CalendarSyncService", () => {
       "cal-1",
       "aaaa1",
       expect.objectContaining({ summary: "Task aaaa-1" }),
-      false,
+      expect.objectContaining({ exists: false }),
     );
     expect(db.links.map((l) => l.eventId).sort()).toEqual(["aaaa1", "bbbb2"]);
   });
@@ -194,7 +196,7 @@ describe("CalendarSyncService", () => {
       "cal-1",
       "aaaa1",
       expect.objectContaining({ summary: "Renamed" }),
-      true,
+      expect.objectContaining({ exists: true }),
     );
   });
 

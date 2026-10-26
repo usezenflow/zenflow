@@ -1,5 +1,7 @@
 import {
+  attendeesOf,
   eventIdOf,
+  inviteKeyOf,
   payloadHash,
   seriesEvent,
   sessionEvent,
@@ -22,6 +24,7 @@ const session: EventSession = {
   deadline: new Date("2026-11-06T16:59:00Z"),
   scheduledStartTime: new Date("2026-11-02T02:00:00Z"),
   reminderMinutes: null,
+  attendees: [],
 };
 
 describe("event mapper", () => {
@@ -129,5 +132,43 @@ describe("event mapper", () => {
     expect(
       payloadHash(sessionEvent({ ...session, title: "Other" }, ctx)),
     ).not.toBe(a);
+  });
+
+  it("sends invitees with the guest flags locked", () => {
+    const body = sessionEvent(
+      { ...session, attendees: ["ann@example.com"] },
+      ctx,
+    );
+    expect(body.attendees).toEqual([{ email: "ann@example.com" }]);
+    expect(body.guestsCanModify).toBe(false);
+    expect(body.guestsCanInviteOthers).toBe(false);
+  });
+
+  it("invites again only when the time or the invitees change", () => {
+    const withGuests = { ...session, attendees: ["ann@example.com"] };
+    const key = inviteKeyOf(sessionEvent(withGuests, ctx));
+    expect(key).not.toBeNull();
+    expect(
+      inviteKeyOf(sessionEvent({ ...withGuests, title: "Other" }, ctx)),
+    ).toBe(key);
+    expect(
+      inviteKeyOf(
+        sessionEvent({ ...withGuests, scheduledStartTime: new Date(0) }, ctx),
+      ),
+    ).not.toBe(key);
+    expect(inviteKeyOf(sessionEvent(session, ctx))).toBeNull();
+  });
+
+  it("keeps lowercase, unique invitee emails and drops Google's own entries", () => {
+    expect(
+      attendeesOf([
+        { email: "Ann@Example.com" },
+        { email: "ann@example.com" },
+        { email: "me@example.com", self: true },
+        { email: "room@resource.calendar.google.com", resource: true },
+        { email: "not an email" },
+        {},
+      ]),
+    ).toEqual(["ann@example.com"]);
   });
 });

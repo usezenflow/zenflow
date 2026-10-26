@@ -4,6 +4,7 @@ import { SessionsService } from "../sessions/sessions.service";
 import { DEFAULT_REMINDER_CHOICES } from "@zenflow/shared";
 import { CalendarImportService } from "./calendar-import.service";
 import { CalendarSyncService } from "./calendar-sync.service";
+import { attendeesOf } from "./event-mapper";
 import {
   GoogleApiError,
   GoogleCalendarClient,
@@ -12,6 +13,9 @@ import {
 import { GoogleOAuthService } from "./google-oauth.service";
 
 const SLOT_MS = 15 * 60_000;
+/** A pulled event outside this length is rejected and rewritten from Zenflow. */
+const MIN_LENGTH_MS = 5 * 60_000;
+const MAX_LENGTH_MS = 12 * 60 * 60_000;
 
 /**
  * The popup reminder Google holds for an event: minutes before start, 0 for
@@ -211,6 +215,12 @@ export class CalendarPullService {
       where: { userId_eventId: { userId, eventId: item.id } },
     });
     if (!link) return;
+    // Our next write must be conditional on the version Google now holds (`If-Match`).
+    if (this.changedSinceWrite(item, link.etag))
+      await this.prisma.calendarLink.update({
+        where: { id: link.id },
+        data: { etag: item.etag ?? link.etag },
+      });
 
     const restore = async () => {
       await this.prisma.calendarLink.update({
@@ -253,11 +263,10 @@ export class CalendarPullService {
       const start = item.start?.dateTime ? new Date(item.start.dateTime) : null;
       const end = item.end?.dateTime ? new Date(item.end.dateTime) : null;
       if (!start || !end) return restore();
+      const length = end.getTime() - start.getTime();
+      if (length < MIN_LENGTH_MS || length > MAX_LENGTH_MS) return restore();
       const snapped = Math.round(start.getTime() / SLOT_MS) * SLOT_MS;
-      const minutes = Math.max(
-        15,
-        Math.round((end.getTime() - start.getTime()) / SLOT_MS) * 15,
-      );
+      const minutes = Math.max(15, Math.round(length / SLOT_MS) * 15);
       const timeChanged =
         session.scheduledStartTime?.getTime() !== snapped ||
         session.durationMinutes !== minutes;
@@ -271,7 +280,12 @@ export class CalendarPullService {
         if (!(DEFAULT_REMINDER_CHOICES as readonly number[]).includes(reminder))
           return restore();
       }
-      if (!timeChanged && !reminderChanged) return;
+
+      const invitees = attendeesOf(item.attendees);
+      const inviteesChanged =
+        invitees.length !== session.attendees.length ||
+        invitees.some((email) => !session.attendees.includes(email));
+      if (!timeChanged && !reminderChanged && !inviteesChanged) return;
 
       if (timeChanged) {
         await this.sessions.update(
@@ -291,6 +305,14 @@ export class CalendarPullService {
             reminderMinutes:
               reminder === user.defaultReminderMinutes ? null : reminder,
           },
+          user,
+          "GOOGLE",
+        );
+      }
+      if (inviteesChanged) {
+        await this.sessions.update(
+          session.id,
+          { attendees: invitees },
           user,
           "GOOGLE",
         );

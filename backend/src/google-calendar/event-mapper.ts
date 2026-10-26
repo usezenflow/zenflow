@@ -1,5 +1,7 @@
 import { createHash } from "crypto";
+import { isEmail } from "class-validator";
 import type { SessionType } from "../../generated/prisma";
+import { MAX_ATTENDEES } from "../common/constants";
 
 /** Google event ids allow [a-v0-9]{5,}; a uuid without dashes is deterministic and valid. */
 export const eventIdOf = (id: string): string =>
@@ -23,6 +25,7 @@ export interface EventSession {
   scheduledStartTime: Date;
   /** Null uses the user's default reminder. */
   reminderMinutes: number | null;
+  attendees: string[];
 }
 
 export interface EventSeries {
@@ -51,7 +54,22 @@ export interface GoogleEventBody {
     useDefault: false;
     overrides: { method: "popup"; minutes: number }[];
   };
+  attendees: { email: string }[];
+  /** Only the organizer changes the time or the invitee list. */
+  guestsCanModify: false;
+  guestsCanInviteOthers: false;
   extendedProperties: { private: { zf: string; zfk: "s" | "r" } };
+}
+
+/** Invitee emails Zenflow keeps: lowercase, valid, unique, at most MAX_ATTENDEES. */
+export function attendeesOf(
+  list: { email?: string; self?: boolean; resource?: boolean }[] = [],
+): string[] {
+  const emails = list
+    .filter((a) => a.email && !a.self && !a.resource)
+    .map((a) => a.email!.trim().toLowerCase())
+    .filter((email) => isEmail(email));
+  return [...new Set(emails)].slice(0, MAX_ATTENDEES);
 }
 
 const toIcsUtc = (d: Date): string =>
@@ -100,6 +118,9 @@ function base(
           ? []
           : [{ method: "popup", minutes }],
     },
+    attendees: session.attendees.map((email) => ({ email })),
+    guestsCanModify: false,
+    guestsCanInviteOthers: false,
     extendedProperties: { private: { zf: id, zfk: kind } },
   };
 }
@@ -130,4 +151,15 @@ export function seriesEvent(
 
 export function payloadHash(body: GoogleEventBody): string {
   return createHash("sha256").update(JSON.stringify(body)).digest("hex");
+}
+
+/** Changes when the time or invitees change, so Google sends invitations only then. Null without invitees. */
+export function inviteKeyOf(body: GoogleEventBody): string | null {
+  if (body.attendees.length === 0) return null;
+  const parts = [
+    body.start.dateTime,
+    body.end.dateTime,
+    body.attendees.map((a) => a.email),
+  ];
+  return createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 }

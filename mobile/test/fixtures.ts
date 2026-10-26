@@ -12,6 +12,7 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     type: "LECTURE",
     source: "USER",
     reminderMinutes: null,
+    attendees: [],
     prepForSessionId: null,
     prepForOccurrenceStart: null,
     scheduledStartTime: "2026-10-15T03:00:00.000Z",

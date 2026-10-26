@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { HttpException } from "@nestjs/common";
+import { BadRequestException, HttpException } from "@nestjs/common";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
@@ -17,6 +17,7 @@ import { SessionsService } from "../../sessions/sessions.service";
 import { PlacementPlanService } from "../../sessions/placement-plan.service";
 import { GoogleCalendarService } from "../../google-calendar/google-calendar.service";
 import { MAX_BULK_SESSIONS } from "@zenflow/shared";
+import { MAX_ATTENDEES } from "../../common/constants";
 import { MCP_TOOLS } from "./mcp-tool-catalog";
 
 const text = (value: unknown, isError = false): CallToolResult => ({
@@ -28,6 +29,18 @@ const text = (value: unknown, isError = false): CallToolResult => ({
   ],
   isError,
 });
+
+/** Invitations go out through Google only. Refuse rather than save a session that invites nobody. */
+function requireGoogleForInvites(user: User, attendees: unknown): void {
+  if (
+    Array.isArray(attendees) &&
+    attendees.length > 0 &&
+    user.calendarTarget !== "GOOGLE"
+  )
+    throw new BadRequestException(
+      "Invitations need Google Calendar as the calendar target. Connect Google in settings, or remove the attendees.",
+    );
+}
 
 /** Runs a tool body; a thrown error becomes a tool error the assistant can read. */
 async function run(body: () => Promise<unknown>): Promise<CallToolResult> {
@@ -136,15 +149,21 @@ export function registerSessionTools(
         location: z.string().max(200).nullable().optional(),
         durationMinutes: z.number().int().positive().optional(),
         reminderMinutes: z.number().int().nullable().optional(),
+        attendees: z.array(z.string().max(320)).max(MAX_ATTENDEES).optional(),
         deadline: z.string().optional(),
         scheduledStartTime: z.string().optional(),
         scope: z.enum(["occurrence", "following", "series"]).optional(),
       },
     },
     ({ id, ...changes }) =>
-      run(async () =>
-        sessions.update(id, await validated(UpdateSessionDto, changes), user),
-      ),
+      run(async () => {
+        requireGoogleForInvites(user, changes.attendees);
+        return sessions.update(
+          id,
+          await validated(UpdateSessionDto, changes),
+          user,
+        );
+      }),
   );
 
   server.registerTool(
@@ -196,8 +215,14 @@ export function registerSessionTools(
       },
     },
     (args) =>
-      run(async () =>
-        sessions.bulkCreate(await validated(BulkCreateSessionsDto, args), user),
-      ),
+      run(async () => {
+        args.items.forEach((item) =>
+          requireGoogleForInvites(user, item.attendees),
+        );
+        return sessions.bulkCreate(
+          await validated(BulkCreateSessionsDto, args),
+          user,
+        );
+      }),
   );
 }

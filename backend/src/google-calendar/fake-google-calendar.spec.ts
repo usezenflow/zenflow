@@ -22,19 +22,17 @@ describe("FakeGoogleCalendar", () => {
   afterEach(() => jest.restoreAllMocks());
 
   it("replaces an event when the id already exists", async () => {
-    const first = await client.writeEvent(
-      "t",
-      cal,
-      "aaaa1",
-      body("aaaa1"),
-      false,
-    );
+    const first = await client.writeEvent("t", cal, "aaaa1", body("aaaa1"), {
+      exists: false,
+      etag: null,
+      notify: false,
+    });
     const second = await client.writeEvent(
       "t",
       cal,
       "aaaa1",
       body("aaaa1", "Renamed"),
-      false,
+      { exists: false, etag: null, notify: false },
     );
 
     expect(second).not.toBe(first);
@@ -48,7 +46,11 @@ describe("FakeGoogleCalendar", () => {
   });
 
   it("treats an event deleted twice as already gone", async () => {
-    await client.writeEvent("t", cal, "aaaa1", body("aaaa1"), false);
+    await client.writeEvent("t", cal, "aaaa1", body("aaaa1"), {
+      exists: false,
+      etag: null,
+      notify: false,
+    });
     await client.deleteEvent("t", cal, "aaaa1");
     await expect(
       client.deleteEvent("t", cal, "aaaa1"),
@@ -87,13 +89,11 @@ describe("FakeGoogleCalendar", () => {
   });
 
   it("refuses a write whose If-Match is stale", async () => {
-    const etag = await client.writeEvent(
-      "t",
-      cal,
-      "aaaa1",
-      body("aaaa1"),
-      false,
-    );
+    const etag = await client.writeEvent("t", cal, "aaaa1", body("aaaa1"), {
+      exists: false,
+      etag: null,
+      notify: false,
+    });
     google.edit(cal, "aaaa1", { summary: "Edited in Google" });
 
     const res = await fetch(
@@ -119,13 +119,21 @@ describe("FakeGoogleCalendar", () => {
       reason: "rateLimitExceeded",
     });
 
-    const failed = client.writeEvent("t", cal, "aaaa1", body("aaaa1"), false);
+    const failed = client.writeEvent("t", cal, "aaaa1", body("aaaa1"), {
+      exists: false,
+      etag: null,
+      notify: false,
+    });
     const error = await failed.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(GoogleApiError);
     expect((error as GoogleApiError).retryable).toBe(true);
 
     await expect(
-      client.writeEvent("t", cal, "aaaa1", body("aaaa1"), false),
+      client.writeEvent("t", cal, "aaaa1", body("aaaa1"), {
+        exists: false,
+        etag: null,
+        notify: false,
+      }),
     ).resolves.toEqual(expect.any(String));
   });
 

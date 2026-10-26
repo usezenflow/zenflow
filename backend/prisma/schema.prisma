@@ -230,6 +230,8 @@ model Session {
   scheduledStartTime DateTime? // fixed types (ASSIGNMENT/EXAM/LECTURE/DND) are always scheduled; TASK is placed by the engine
   // Minutes before start; null uses the user's default, 0 means no alarm
   reminderMinutes Int?
+  // Invitee emails, pushed to Google only. Set through MCP.
+  attendees String[] @default([])
   userId             String
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -981,6 +983,8 @@ model CalendarLink {
   eventId     String // Google event id: the session or series id without dashes
   payloadHash String // hash of the event last written
   etag        String?
+  // Hash of the start, end and invitees last sent; a change re-sends invitations.
+  inviteKey   String?
   syncedAt    DateTime @default(now())
 
   userId String

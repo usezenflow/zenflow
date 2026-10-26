@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
 import {
   eventIdOf,
+  inviteKeyOf,
   payloadHash,
   seriesEvent,
   sessionEvent,
@@ -102,12 +103,18 @@ export class CalendarSyncService {
       const calendarId = connection.googleCalendarId;
 
       const failures = await this.inChunks(writes, async (d) => {
+        const link = linked.get(d.eventId);
+        const inviteKey = inviteKeyOf(d.body);
         const etag = await this.client.writeEvent(
           token,
           calendarId,
           d.eventId,
           d.body,
-          linked.has(d.eventId),
+          {
+            exists: !!link,
+            etag: link?.etag ?? null,
+            notify: inviteKey !== null && inviteKey !== link?.inviteKey,
+          },
         );
         await this.prisma.calendarLink.upsert({
           where: { userId_eventId: { userId, eventId: d.eventId } },
@@ -118,6 +125,7 @@ export class CalendarSyncService {
             seriesId: d.seriesId,
             payloadHash: d.hash,
             etag,
+            inviteKey,
             syncedAt: now,
           },
           update: {
@@ -125,6 +133,7 @@ export class CalendarSyncService {
             seriesId: d.seriesId,
             payloadHash: d.hash,
             etag,
+            inviteKey,
             syncedAt: now,
           },
         });
@@ -202,6 +211,7 @@ export class CalendarSyncService {
       deadline: true,
       scheduledStartTime: true,
       reminderMinutes: true,
+      attendees: true,
     } as const;
 
     const singles = await this.prisma.session.findMany({

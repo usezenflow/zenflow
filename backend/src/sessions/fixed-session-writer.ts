@@ -30,6 +30,7 @@ import { createEventData, recordCreateEvent } from "./session-events";
 export interface FixedSessionInput {
   /** Minutes before start; null uses the user's default. */
   reminderMinutes?: number | null;
+  attendees?: string[];
   userId: string;
   /** Never `TASK` — a task is placed by the scheduler, not pinned. */
   type: Exclude<SessionType, "TASK">;
@@ -75,6 +76,7 @@ export async function insertFixedSession(
       note: input.note ?? null,
       location: input.location ?? null,
       reminderMinutes: input.reminderMinutes ?? null,
+      attendees: input.attendees ?? [],
       durationMinutes: input.durationMinutes,
       // Fixed types are pinned in time, so they carry no EDF ordering key.
       deadline: null,

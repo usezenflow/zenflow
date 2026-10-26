@@ -69,6 +69,7 @@ export function toSessionDto(row: SessionRow): SharedSession {
       ? row.scheduledStartTime.toISOString()
       : null,
     reminderMinutes: row.reminderMinutes,
+    attendees: row.attendees,
     seriesId: row.seriesId,
     rrule: row.series?.rrule ?? null,
     timetableGroupId: row.scheduleStudyUnitId,

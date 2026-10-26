@@ -13,9 +13,10 @@ export class GoogleApiError extends Error {
     super(message);
   }
 
-  /** Worth retrying later: rate limits and server errors. */
+  /** Worth retrying later: rate limits, server errors, and an event changed in Google since we read it. */
   get retryable(): boolean {
     return (
+      this.status === 412 ||
       this.status === 429 ||
       this.status >= 500 ||
       (this.status === 403 && /rateLimit|quota/i.test(this.reason))
@@ -42,6 +43,7 @@ export interface GoogleEventItem {
     overrides?: { method?: string; minutes?: number }[];
   };
   summary?: string;
+  attendees?: { email?: string; self?: boolean; resource?: boolean }[];
   transparency?: "opaque" | "transparent";
   extendedProperties?: { private?: Record<string, string> };
 }
@@ -72,6 +74,7 @@ export class GoogleCalendarClient {
     path: string,
     body?: unknown,
     query?: Record<string, string | undefined>,
+    headers?: Record<string, string>,
   ): Promise<T | null> {
     const url = new URL(`${API}${path}`);
     for (const [k, v] of Object.entries(query ?? {})) {
@@ -82,6 +85,7 @@ export class GoogleCalendarClient {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         ...(body ? { "Content-Type": "application/json" } : {}),
+        ...headers,
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -123,36 +127,38 @@ export class GoogleCalendarClient {
     );
   }
 
-  /** Creates the event, or replaces it when it exists (or was deleted earlier). Returns the etag. */
+  /**
+   * Creates the event, or replaces it when it exists (or was deleted earlier).
+   * An existing event is replaced only if its etag still matches (`If-Match`),
+   * so a change made in Google is never overwritten unseen. `notify` sends
+   * invitations to the attendees. Returns the new etag.
+   */
   async writeEvent(
     token: string,
     calendarId: string,
     eventId: string,
     body: GoogleEventBody,
-    exists: boolean,
+    opts: { exists: boolean; etag: string | null; notify: boolean },
   ): Promise<string | undefined> {
     const cal = encodeURIComponent(calendarId);
-    const put = () =>
+    const query = { sendUpdates: opts.notify ? "all" : "none" };
+    const put = (ifMatch?: string | null) =>
       this.call<{ etag: string }>(
         token,
         "PUT",
         `/calendars/${cal}/events/${eventId}`,
-        {
-          ...body,
-          id: eventId,
-          status: "confirmed",
-        },
+        { ...body, id: eventId, status: "confirmed" },
+        query,
+        ifMatch ? { "If-Match": ifMatch } : undefined,
       );
-    if (exists) return (await put())?.etag;
+    if (opts.exists) return (await put(opts.etag))?.etag;
     try {
       const res = await this.call<{ etag: string }>(
         token,
         "POST",
         `/calendars/${cal}/events`,
-        {
-          ...body,
-          id: eventId,
-        },
+        { ...body, id: eventId },
+        query,
       );
       return res?.etag;
     } catch (error) {

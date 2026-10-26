@@ -30,6 +30,7 @@ const baseSession = {
   durationMinutes: 60,
   scheduledStartTime: new Date("2026-11-03T02:00:00Z"),
   updatedAt: new Date("2026-10-31T00:00:00Z"),
+  attendees: [] as string[],
 };
 
 const event = (over: Partial<GoogleEventItem> = {}): GoogleEventItem => ({
@@ -118,6 +119,27 @@ async function setup(
 }
 
 describe("CalendarPullService", () => {
+  it("reads invitees edited in Google back, ignoring Zenflow's own entry", async () => {
+    const { service, page, sessions } = await setup();
+    page([
+      event({
+        attendees: [
+          { email: "Ann@Example.com" },
+          { email: "me@example.com", self: true },
+        ],
+      }),
+    ]);
+
+    await service.pullUser(USER);
+
+    expect(sessions.update).toHaveBeenCalledWith(
+      "aaaa-1",
+      expect.objectContaining({ attendees: ["ann@example.com"] }),
+      expect.anything(),
+      "GOOGLE",
+    );
+  });
+
   it("moves a session when the user drags its event", async () => {
     const { service, page, sessions, prisma } = await setup();
     page([event()]);
