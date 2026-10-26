@@ -218,12 +218,8 @@ const DEFAULT_ERROR_DURATION = 6000;
 
 /**
  * Gap from the screen's bottom edge to the toast stack when `position` is
- * `"bottom"` (the default). Enough to float clear of the calendar screens'
- * floating tab-bar pill (`lib/tab-bar-metrics.ts`: ~safe-area + 12 + 58 + 12);
- * `ToastProvider` sits above the safe-area provider in the tree so it can't
- * read the real inset, and a fixed value that clears the pill on the common
- * case beats a hook that would crash at that depth. On the modal task-form
- * screens (no pill) the toast just floats a little higher — still bottom-anchored.
+ * `"bottom"` (the default). `ToastProvider` sits above the safe-area provider,
+ * so it can't read the real inset and uses a fixed value.
  */
 const TOAST_BOTTOM_INSET = 110;
 const TOAST_MAX_WIDTH = 480;

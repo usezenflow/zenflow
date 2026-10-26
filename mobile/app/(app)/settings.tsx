@@ -28,7 +28,6 @@ import { setAndroidNavigationBar } from "@/lib/android-navigation-bar";
 import { clearSession } from "@/lib/api-client";
 import { clearCachedSessionUser } from "@/lib/session";
 import { clearDaySessionCache } from "@/lib/session-cache";
-import { useTabBarOverlayHeight } from "@/lib/tab-bar-metrics";
 import { resetTimelineScroll } from "@/lib/timeline-scroll";
 import { useColorScheme } from "@/lib/useColorScheme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -125,7 +124,6 @@ export default function SettingsScreen() {
     router.replace("/(auth)/login" as Href);
   }
 
-  const tabBarOverlay = useTabBarOverlayHeight();
   const insets = useSafeAreaInsets();
   // Profile and Appearance paint at once; the heavier sections follow.
   const painted = useAfterPaint();
@@ -147,7 +145,7 @@ export default function SettingsScreen() {
       <ScrollView
         ref={scrollRef as never}
         className="flex-1 px-5"
-        contentContainerStyle={{ paddingBottom: tabBarOverlay + 32 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
       >
         {notif.ready && !integrationsLoading && !offline && (
           <FinishSetupCard

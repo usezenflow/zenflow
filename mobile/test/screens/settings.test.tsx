@@ -19,7 +19,6 @@ vi.mock("@/hooks/use-notification-toggle", () => ({
 vi.mock("@/hooks/use-push-status-store", () => ({
   usePushStatusStore: { getState: () => ({ unregisterOnLogout: vi.fn(async () => {}) }) },
 }));
-vi.mock("@/lib/tab-bar-metrics", () => ({ useTabBarOverlayHeight: () => 0 }));
 vi.mock("@/lib/android-navigation-bar", () => ({ setAndroidNavigationBar: vi.fn() }));
 
 beforeEach(() => {
