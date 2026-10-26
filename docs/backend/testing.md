@@ -16,7 +16,7 @@ One spec, with `.env.test` loaded: `pnpm --filter backend exec jest --config ./t
 
 ## Stack
 
-`backend/compose.test.yml`: Postgres and MinIO always. Profile `queue` adds five Redis and Mailpit. Profile `bandit` adds the placer on `:8100`. CI does not start it.
+`backend/compose.test.yml`: Postgres always. Profile `queue` adds five Redis and Mailpit. Profile `bandit` adds the placer on `:8100`. CI does not start it.
 
 Two spec styles:
 

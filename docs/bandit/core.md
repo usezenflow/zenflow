@@ -46,7 +46,7 @@ Constants: `MAX_SCAN_DAYS = 60`, `DURATION_DIVISOR = 480`, `WORKLOAD_HOURS_DIVIS
 
 ### Heuristic kernel (H+K)
 
-- START and MOVE matrix updates (`reinforce_preference_smooth`, `reinforce_preference_move`) spread over neighbouring hours with the same kernel (width 0.75) and over the same weekday group (pool 1.0).
+- KEPT and MOVE matrix updates (`reinforce_preference_smooth`, `reinforce_preference_move`) spread over neighbouring hours with the same kernel (width 0.75) and over the same weekday group (pool 1.0).
 - The frozen TypeScript fallback has the same rule (`backend/src/scheduler/core/preference.ts`, `reinforcePreferenceSmooth`). The two must agree.
 
 ### Parity

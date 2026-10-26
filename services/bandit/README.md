@@ -94,4 +94,4 @@ services/bandit/
 
 - `PythonPlacer` via `PlacementClient` (`backend/src/scheduler/io/`) calls `/v1/place` with each arm's `(A, b)`.
 - `ExperimentService` assigns the 50/50 policy and writes `SlotProposal`.
-- `SchedulingFeedbackService` (first `MOVE`) and `SessionStartService` (`START`, [ADR-0035](../../docs/adr/0035-start-and-move-only-signals.md)) call `/v1/update` via `BanditService` and persist `(A, b)`.
+- `SchedulingFeedbackService` (`MOVE`) and the kept sweep (`KEPT`, [ADR-0042](../../docs/adr/0042-kept-and-moved-signals.md)) call `/v1/update` via `BanditService` and persist `(A, b)`.
