@@ -140,6 +140,11 @@ export class SessionUpdateService {
           id,
           firstMove.eventId,
           firstMove.dragDistanceMinutes,
+          {
+            fromMs: firstMove.oldStartMs,
+            toMs: firstMove.newStartMs,
+            timezone: user.timezone,
+          },
         );
         await this.schedulingFeedback.reinforcePreferenceMove(
           user.id,

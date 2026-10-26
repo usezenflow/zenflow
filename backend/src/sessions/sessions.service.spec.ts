@@ -111,6 +111,7 @@ function fakeTaskPlacement() {
 function fakeSchedulingFeedback() {
   return {
     onFirstMove: jest.fn().mockResolvedValue(undefined),
+    onDelete: jest.fn().mockResolvedValue(undefined),
     reinforcePreferenceMatrix: jest.fn().mockResolvedValue(undefined),
     reinforcePreferenceMove: jest.fn().mockResolvedValue(undefined),
   };
@@ -1275,7 +1276,7 @@ describe("SessionsService.remove", () => {
     const findFirst = jest.fn().mockResolvedValue(existing);
     const update = jest.fn().mockResolvedValue({ ...existing, deleted: true });
     const del = jest.fn();
-    const eventCreate = jest.fn().mockResolvedValue({});
+    const eventCreate = jest.fn().mockResolvedValue({ id: 1n });
     const prisma = prismaWithTx({
       session: { findFirst, update, delete: del },
       sessionEvent: { create: eventCreate },
@@ -1299,6 +1300,7 @@ describe("SessionsService.remove", () => {
         eventType: "DELETE",
         source: "ZENFLOW",
       }),
+      select: { id: true },
     });
     expect(result).toEqual({ id: "session-1" });
   });

@@ -226,6 +226,7 @@ describe("SessionUpdateService — preference-matrix reinforcement (Item 3B3)", 
       "task-1",
       1n,
       60,
+    expect.anything(),
     );
     expect(schedulingFeedback.reinforcePreferenceMove).toHaveBeenCalledWith(
       user.id,
@@ -387,6 +388,7 @@ describe("SessionUpdateService — preference-matrix reinforcement (Item 3B3)", 
       "task-1",
       1n,
       -60,
+    expect.anything(),
     );
     expect(schedulingFeedback.reinforcePreferenceMove).toHaveBeenCalledWith(
       user.id,

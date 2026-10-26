@@ -3,15 +3,25 @@ import {
   SchedulingModel,
   SessionEventType,
   type SchedulingArm,
+  type SessionSource,
+  type SessionType,
 } from "../../../generated/prisma";
 import { PrismaService } from "../../prisma/prisma.service";
 import { BanditArmStateRepository } from "../../bandit/bandit-arm-state.repository";
 import { BanditService } from "../../bandit/bandit.service";
-import { dragDistanceReward } from "../core/reward";
+import {
+  armDeleteReward,
+  deleteReward,
+  dragDistanceReward,
+  localParts,
+  type DeleteSignal,
+} from "../core/reward";
 import {
   isCurrentModelVersion,
   PAIRWISE_LOSS_REWARD,
   PAIRWISE_WIN_REWARD,
+  REWARD_V2_DESTINATION,
+  REWARD_V2_ENABLED,
 } from "../constants";
 import {
   reinforcePreferenceSmooth,
@@ -20,6 +30,24 @@ import {
 import { withLockedPreferenceMatrix } from "./preference-matrix-lock";
 import { FEATURE_DIM } from "@zenflow/shared";
 import { schedulerRewardUpdates } from "../../observability/metrics";
+
+/** The session fields a delete reward reads, taken before the soft delete. */
+export interface RemovedSession {
+  id: string;
+  title: string;
+  type: SessionType;
+  source: SessionSource;
+  scheduledStartTime: Date | null;
+  createdAt: Date;
+  lastMovedAt: Date | null;
+}
+
+/** Where a first move went, for the reward v2 destination update. */
+export interface MoveDestination {
+  fromMs: number;
+  toMs: number;
+  timezone: string;
+}
 
 /** The one `SlotProposal` fields this service ever reads/writes. */
 type LinucbProposal = {
@@ -59,6 +87,7 @@ export class SchedulingFeedbackService {
     sessionId: string,
     moveEventId: bigint,
     dragDistanceMinutes: number,
+    move?: MoveDestination,
   ): Promise<void> {
     await this.applyDelayedReward(
       userId,
@@ -67,6 +96,111 @@ export class SchedulingFeedbackService {
       dragDistanceReward(dragDistanceMinutes),
       SessionEventType.MOVE,
     );
+    if (REWARD_V2_ENABLED && move) {
+      await this.applyDestinationReward(userId, sessionId, move);
+    }
+  }
+
+  /**
+   * A user removed a session before it started (ADR-0043). The event always
+   * records the delete reward it would pay, so shadow data accrues; the placing
+   * arm learns from it only while `DELETE_REWARD_ENABLED` is on. Never throws.
+   */
+  async onDelete(
+    userId: string,
+    session: RemovedSession,
+    eventId: bigint,
+    now: Date,
+  ): Promise<void> {
+    try {
+      const proposal = await this.loadLinucbProposal(session.id);
+      const replaced =
+        (await this.prisma.session.count({
+          where: {
+            userId,
+            title: session.title,
+            deleted: false,
+            id: { not: session.id },
+            createdAt: { gte: new Date(now.getTime() - 60 * 60_000) },
+          },
+        })) > 0;
+      const signal: DeleteSignal = {
+        byUser: true,
+        type: session.type,
+        source: session.source,
+        placedByLinUcb: proposal !== null,
+        everMoved: session.lastMovedAt !== null,
+        replaced,
+        minutesToStart: session.scheduledStartTime
+          ? (session.scheduledStartTime.getTime() - now.getTime()) / 60_000
+          : 0,
+        // Measured from creation: a placed session is usually created with its slot.
+        minutesSincePlacement:
+          (now.getTime() - session.createdAt.getTime()) / 60_000,
+      };
+      await this.prisma.sessionEvent.updateMany({
+        where: { id: eventId },
+        data: { rewardScore: deleteReward(signal) },
+      });
+      const reward = armDeleteReward(signal);
+      if (reward !== 0) {
+        await this.applyDelayedReward(
+          userId,
+          session.id,
+          eventId,
+          reward,
+          null,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `delete reward failed for session ${session.id}: ${
+          (err as Error).message
+        }`,
+      );
+    }
+  }
+
+  /**
+   * Reward v2: a move within the same local day also rewards the hour it lands
+   * in. The proposal's day context is the same for that day, so only the hour
+   * arm changes. Never throws.
+   */
+  private async applyDestinationReward(
+    userId: string,
+    sessionId: string,
+    move: MoveDestination,
+  ): Promise<void> {
+    const count = (result: string): void =>
+      schedulerRewardUpdates.add(1, { source: "destination", result });
+    try {
+      const from = localParts(move.fromMs, move.timezone);
+      const to = localParts(move.toMs, move.timezone);
+      if (from.date !== to.date) return count("other_day");
+      const proposal = await this.loadLinucbProposal(sessionId);
+      if (!proposal?.selectedArm) return count("no_proposal");
+      if (
+        proposal.featureVector.length !== FEATURE_DIM ||
+        !isCurrentModelVersion(proposal.modelVersion)
+      ) {
+        return count("stale_layout");
+      }
+      const arm = `HOUR_${String(to.hour).padStart(2, "0")}` as SchedulingArm;
+      const applied = await this.pushBanditUpdate(
+        userId,
+        arm,
+        proposal.featureVector,
+        REWARD_V2_DESTINATION,
+      );
+      count(applied ? "applied" : "bandit_unavailable");
+    } catch (err) {
+      count("error");
+      this.logger.warn(
+        `destination reward failed for session ${sessionId}: ${
+          (err as Error).message
+        }`,
+      );
+    }
   }
 
   /**

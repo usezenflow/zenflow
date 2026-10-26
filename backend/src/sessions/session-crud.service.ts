@@ -50,6 +50,7 @@ import { insertFixedSession } from "./fixed-session-writer";
 import { mapSessionPrismaError } from "./prisma-error";
 import { placeOrDiscard } from "./placement-compensation";
 import { SeriesService } from "./series.service";
+import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { assertTaskBounds, constraintOf } from "./task-bounds";
 import { wouldConflict } from "../scheduler/io/conflict-check";
 
@@ -72,6 +73,7 @@ export class SessionCrudService {
     private readonly prisma: PrismaService,
     private readonly taskPlacement: TaskPlacementService,
     private readonly series: SeriesService,
+    private readonly schedulingFeedback: SchedulingFeedbackService,
   ) {}
 
   async create(
@@ -630,19 +632,20 @@ export class SessionCrudService {
           user,
         );
 
-      return await this.prisma.$transaction(async (tx) => {
+      const removed = await this.prisma.$transaction(async (tx) => {
         const existing = await tx.session.findFirst({
           where: { id, userId: user.id, deleted: false },
         });
         if (!existing)
           throw new NotFoundException(`Cannot find session with id ${id}`);
-        await tx.sessionEvent.create({
+        const event = await tx.sessionEvent.create({
           data: deleteEventData({
             sessionId: id,
             userId: user.id,
             snapshot: snapshotOf(existing),
             source: origin,
           }),
+          select: { id: true },
         });
         // Soft-delete: an ingested item's externalKey stays unique, so the
         // materializer recognizes this row on the next re-fetch and leaves
@@ -651,8 +654,15 @@ export class SessionCrudService {
           where: { id, userId: user.id },
           data: { deleted: true },
         });
-        return { id };
+        return { existing, eventId: event.id };
       });
+      await this.schedulingFeedback.onDelete(
+        user.id,
+        removed.existing,
+        removed.eventId,
+        new Date(),
+      );
+      return { id };
     } catch (error) {
       mapSessionPrismaError(error, id, "remove");
     }

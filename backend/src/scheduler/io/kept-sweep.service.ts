@@ -14,6 +14,7 @@ import {
   PREFERENCE_KEPT_WEIGHT,
   SESSION_KEPT_REWARD,
 } from "../constants";
+import { keptReward } from "../core/reward";
 import { SchedulingFeedbackService } from "./scheduling-feedback.service";
 
 /** Placements handled per run, so one run never grows without bound. */
@@ -105,7 +106,7 @@ export class KeptSweepService {
           durationMinutes: row.durationMinutes,
           type: row.type,
         },
-        rewardScore: SESSION_KEPT_REWARD,
+        rewardScore: keptReward(),
         occurredAt: now,
       },
       select: { id: true },
@@ -115,7 +116,7 @@ export class KeptSweepService {
       row.userId,
       row.id,
       event.id,
-      SESSION_KEPT_REWARD,
+      keptReward(),
       null,
     );
     await this.feedback.reinforcePreferenceMatrix(

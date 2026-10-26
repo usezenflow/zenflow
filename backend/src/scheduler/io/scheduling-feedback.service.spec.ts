@@ -4,7 +4,11 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { BanditArmStateRepository } from "../../bandit/bandit-arm-state.repository";
 import { BanditService } from "../../bandit/bandit.service";
 import { SchedulingFeedbackService } from "./scheduling-feedback.service";
-import { ARM_LAYOUT, BANDIT_MODEL_VERSION } from "../constants";
+import {
+  ARM_LAYOUT,
+  BANDIT_MODEL_VERSION,
+  DELETE_REWARD,
+} from "../constants";
 import { SCHEDULING_ARMS, type BanditArmStateWire } from "@zenflow/shared";
 
 /**
@@ -27,7 +31,11 @@ function allArms(
   );
 }
 
-async function makeSvc(over: { proposal?: unknown; updateResult?: unknown }) {
+async function makeSvc(over: {
+  proposal?: unknown;
+  updateResult?: unknown;
+  sameTitleCount?: number;
+}) {
   const slotFindFirst = jest.fn().mockResolvedValue(
     over.proposal === undefined
       ? {
@@ -41,6 +49,9 @@ async function makeSvc(over: { proposal?: unknown; updateResult?: unknown }) {
   const eventUpdate = jest.fn().mockResolvedValue({});
   const prisma = {
     slotProposal: { findFirst: slotFindFirst },
+    session: {
+      count: jest.fn().mockResolvedValue(over.sameTitleCount ?? 0),
+    },
     sessionEvent: { updateMany: eventUpdate },
   };
   const bandit = {
@@ -186,5 +197,39 @@ describe("SchedulingFeedbackService.onPairwiseWin", () => {
     const { svc, bandit } = await makeSvc({ proposal: null });
     await svc.onPairwiseWin("u1", "p1");
     expect(bandit.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("SchedulingFeedbackService.onDelete", () => {
+  const now = new Date("2026-06-10T10:00:00.000Z");
+  const removed = {
+    id: "s1",
+    title: "Essay",
+    type: "TASK" as const,
+    source: "USER" as const,
+    scheduledStartTime: new Date("2026-06-12T10:00:00.000Z"),
+    createdAt: new Date("2026-06-10T09:00:00.000Z"),
+    lastMovedAt: null,
+  };
+
+  it("records the delete reward on the event and leaves the arm alone in shadow mode", async () => {
+    const { svc, bandit, eventUpdate } = await makeSvc({});
+
+    await svc.onDelete("u1", removed, 9n, now);
+
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: 9n },
+      data: { rewardScore: DELETE_REWARD },
+    });
+    expect(bandit.update).not.toHaveBeenCalled();
+  });
+
+  it("records no reward for a delete that replaces a session with the same title made within the hour", async () => {
+    const { svc, eventUpdate } = await makeSvc({ sameTitleCount: 1 });
+    await svc.onDelete("u1", removed, 9n, now);
+    expect(eventUpdate).toHaveBeenCalledWith({
+      where: { id: 9n },
+      data: { rewardScore: 0 },
+    });
   });
 });

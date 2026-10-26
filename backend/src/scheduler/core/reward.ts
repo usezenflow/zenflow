@@ -2,6 +2,9 @@ import {
   DELETE_REWARD,
   DELETE_REWARD_ENABLED,
   MOVE_REWARD_SCALE_MINUTES,
+  REWARD_V2_ENABLED,
+  REWARD_V2_KEPT,
+  SESSION_KEPT_REWARD,
 } from "../constants";
 
 /**
@@ -48,6 +51,32 @@ export function deleteReward(signal: DeleteSignal): number {
 /** The reward the arm updates with: zero while shadow mode is on. */
 export function armDeleteReward(signal: DeleteSignal): number {
   return DELETE_REWARD_ENABLED ? deleteReward(signal) : 0;
+}
+
+/** The reward a KEPT slot pays the LinUCB arm (reward v2 lowers it). */
+export function keptReward(): number {
+  return REWARD_V2_ENABLED ? REWARD_V2_KEPT : SESSION_KEPT_REWARD;
+}
+
+/** Local calendar date ('YYYY-MM-DD') and hour (0 to 23) of an instant in `timezone`. */
+export function localParts(
+  ms: number,
+  timezone: string,
+): { date: string; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(ms);
+  const get = (type: string): string =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    hour: Number(get("hour")),
+  };
 }
 
 /** Grades a drag/resize/pick displacement into a LinUCB reward in `[-1, 0]`:

@@ -98,13 +98,21 @@ export const PAIRWISE_KEEP_PREFERENCE_WEIGHT =
 
 /**
  * Reward for the LinUCB arm when the user deletes a placed TASK at least an hour
- * before it starts (`core/reward.ts` `deleteReward`). A delete says "not needed",
- * weaker than a move, so it equals a 60 minute move (60 / MOVE_REWARD_SCALE_MINUTES).
- * A prior, not a measurement: see docs/adr/0043-delete-signal.md for the shadow-mode rollout.
+ * before it starts (`core/reward.ts` `deleteReward`). Tuned on seeds 100 to 109
+ * (docs/adr/0045); the optimum sits at the edge of the searched range.
  */
-export const DELETE_REWARD = -0.25;
+export const DELETE_REWARD = -1;
 /** Off until the offline evaluation passes. While off, the event stores the reward but the arm does not learn from it. */
 export const DELETE_REWARD_ENABLED = false;
+/**
+ * Reward v2 (docs/adr/0045), off until the offline evaluation passes the ship
+ * rule. On: a KEPT slot pays `REWARD_V2_KEPT` to the LinUCB arm instead of 1,
+ * and a MOVE also pays `REWARD_V2_DESTINATION` to the hour it lands in.
+ * Mirrored in services/bandit/src/core/constants.py.
+ */
+export const REWARD_V2_ENABLED = false;
+export const REWARD_V2_KEPT = 1;
+export const REWARD_V2_DESTINATION = 2;
 /**
  * Preference-matrix weight on the deleted slot. The matrix variant exists only in
  * the simulator (`services/bandit/evalx`), so production keeps it at 0.

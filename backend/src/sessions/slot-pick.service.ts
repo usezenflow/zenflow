@@ -246,6 +246,11 @@ export class SlotPickService {
         sessionId,
         moveEvent.id,
         dragDistanceMinutes,
+        {
+          fromMs: existing.scheduledStartTime.getTime(),
+          toMs: newStart.getTime(),
+          timezone: user.timezone,
+        },
       );
       await this.schedulingFeedback.reinforcePreferenceMove(
         user.id,

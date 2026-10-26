@@ -1,8 +1,14 @@
-import { DELETE_REWARD, MOVE_REWARD_SCALE_MINUTES } from "../constants";
+import {
+  DELETE_REWARD,
+  MOVE_REWARD_SCALE_MINUTES,
+  SESSION_KEPT_REWARD,
+} from "../constants";
 import {
   armDeleteReward,
   deleteReward,
   dragDistanceReward,
+  keptReward,
+  localParts,
   type DeleteSignal,
 } from "./reward";
 
@@ -68,5 +74,25 @@ describe("deleteReward", () => {
 
   it("keeps the arm at zero in shadow mode", () => {
     expect(armDeleteReward(delete_)).toBe(0);
+  });
+});
+
+describe("keptReward", () => {
+  it("pays the unchanged KEPT reward while reward v2 is off", () => {
+    expect(keptReward()).toBe(SESSION_KEPT_REWARD);
+  });
+});
+
+describe("localParts", () => {
+  it("returns the local date and hour in the timezone", () => {
+    // 23:30 UTC on 1 June is 06:30 on 2 June in Bangkok (UTC+7).
+    expect(localParts(Date.UTC(2026, 5, 1, 23, 30), "Asia/Bangkok")).toEqual({
+      date: "2026-06-02",
+      hour: 6,
+    });
+  });
+
+  it("reads midnight as hour 0", () => {
+    expect(localParts(Date.UTC(2026, 5, 2, 0, 5), "UTC").hour).toBe(0);
   });
 });
