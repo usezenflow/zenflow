@@ -12,6 +12,7 @@ import {
 
 const ctx: PlanContext = {
   timeZone: "Asia/Ho_Chi_Minh",
+  defaultReminderMinutes: 30,
   from: new Date("2026-10-24T00:00:00Z"),
   to: new Date("2026-12-10T00:00:00Z"),
 };

@@ -1,6 +1,7 @@
 import { Test } from "@nestjs/testing";
 import { PrismaService } from "../prisma/prisma.service";
 import { SessionsService } from "../sessions/sessions.service";
+import { CalendarImportService } from "./calendar-import.service";
 import { CalendarPullService } from "./calendar-pull.service";
 import { CalendarSyncService } from "./calendar-sync.service";
 import {
@@ -66,13 +67,20 @@ async function setup(
       delete: jest.fn().mockResolvedValue({}),
     },
     session: {
+      update: jest.fn().mockResolvedValue({}),
       findFirst: jest
         .fn()
         .mockResolvedValue(
           opts.session === null ? null : { ...baseSession, ...opts.session },
         ),
     },
-    user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: USER }) },
+    // The first lookup is the calendar-target guard; later ones load the user to act as.
+    user: {
+      findUniqueOrThrow: jest
+        .fn()
+        .mockResolvedValueOnce({ calendarTarget: "GOOGLE" })
+        .mockResolvedValue({ id: USER }),
+    },
   };
   const client = { listEvents: jest.fn() };
   const sessions = {
@@ -91,6 +99,10 @@ async function setup(
       { provide: GoogleCalendarClient, useValue: client },
       { provide: SessionsService, useValue: sessions },
       { provide: CalendarSyncService, useValue: sync },
+      {
+        provide: CalendarImportService,
+        useValue: { importUser: jest.fn().mockResolvedValue(undefined) },
+      },
     ],
   }).compile();
   const page = (items: GoogleEventItem[]) =>
@@ -122,6 +134,44 @@ describe("CalendarPullService", () => {
       where: { userId: USER },
       data: { syncToken: "token-2" },
     });
+  });
+
+  it("reads a reminder changed in Google back onto the session", async () => {
+    const { service, page, sessions, prisma } = await setup();
+    page([
+      event({
+        start: { dateTime: "2026-11-03T02:00:00Z" },
+        end: { dateTime: "2026-11-03T03:00:00Z" },
+        reminders: {
+          useDefault: false,
+          overrides: [{ method: "popup", minutes: 10 }],
+        },
+      }),
+    ]);
+
+    expect(await service.pullUser(USER)).toEqual({ applied: 1, restored: 0 });
+    expect(sessions.update).not.toHaveBeenCalled();
+    expect(prisma.session.update).toHaveBeenCalledWith({
+      where: { id: "aaaa-1" },
+      data: { reminderMinutes: 10 },
+    });
+  });
+
+  it("rewrites a Google reminder the app does not offer", async () => {
+    const { service, page, prisma } = await setup();
+    page([
+      event({
+        start: { dateTime: "2026-11-03T02:00:00Z" },
+        end: { dateTime: "2026-11-03T03:00:00Z" },
+        reminders: {
+          useDefault: false,
+          overrides: [{ method: "popup", minutes: 7 }],
+        },
+      }),
+    ]);
+
+    expect(await service.pullUser(USER)).toEqual({ applied: 0, restored: 1 });
+    expect(prisma.session.update).not.toHaveBeenCalled();
   });
 
   it("snaps an off-grid drop to the 15 minute grid", async () => {

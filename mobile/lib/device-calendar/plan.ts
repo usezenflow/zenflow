@@ -26,11 +26,10 @@ export interface DeviceLink {
 
 export type DeviceLinks = Record<string, DeviceLink>;
 
-/** Every event but DND rings this long before it starts. */
-export const ALARM_MINUTES = 30;
-
 export interface PlanContext {
   timeZone: string;
+  /** The alarm for sessions without their own `reminderMinutes`. */
+  defaultReminderMinutes: number;
   /** Sessions starting outside [from, to] are neither written nor removed. */
   from: Date;
   to: Date;
@@ -71,6 +70,8 @@ export function buildSpecs(sessions: Session[], ctx: PlanContext): DeviceEventSp
     if (!s.scheduledStartTime) continue;
     const start = new Date(s.scheduledStartTime);
     if (start < ctx.from || start > ctx.to) continue;
+    // Busy time imported from another calendar stays where it came from.
+    if (s.source === "GOOGLE" || s.source === "DEVICE") continue;
     const base = {
       key: s.id,
       title: s.title,
@@ -79,7 +80,7 @@ export function buildSpecs(sessions: Session[], ctx: PlanContext): DeviceEventSp
       timeZone: ctx.timeZone,
       location: s.location ?? null,
       notes: dueNote(s.deadline, ctx.timeZone),
-      alarmMinutes: s.type === "DND" ? 0 : ALARM_MINUTES,
+      alarmMinutes: s.type === "DND" ? 0 : (s.reminderMinutes ?? ctx.defaultReminderMinutes),
     };
     specs.push({
       ...base,

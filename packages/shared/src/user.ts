@@ -23,6 +23,13 @@ export interface UserPreferences {
   lang: Lang;
 }
 
+/** Where a user's schedule is shown outside Zenflow. One at a time. */
+export type CalendarTarget = "NONE" | "GOOGLE" | "DEVICE";
+
+/** Minutes before an event that the default reminder can be set to; 0 is none. */
+export const DEFAULT_REMINDER_CHOICES = [0, 5, 10, 15, 30, 60] as const;
+export type DefaultReminderChoice = (typeof DEFAULT_REMINDER_CHOICES)[number];
+
 export interface User extends UserPreferences {
   id: string;
   name: string;
@@ -33,6 +40,8 @@ export interface User extends UserPreferences {
   onboardedAt: string | null;
   /** User intent for native push notifications; in-app notifications are unaffected. */
   allowNotifications: boolean;
+  calendarTarget: CalendarTarget;
+  defaultReminderMinutes: number;
 }
 
 /** Partial update to a user's name and preferences. */
@@ -41,6 +50,7 @@ export interface UpdateUserInput {
   /** Valid IANA zone. Affects only future scheduling/rendering. */
   timezone?: string;
   lang?: Lang;
+  defaultReminderMinutes?: DefaultReminderChoice;
   /**
    * `true` marks onboarding complete (sets `onboardedAt` to now if still
    * null; idempotent — never moves an existing timestamp). Can't be unset.

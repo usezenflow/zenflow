@@ -42,6 +42,11 @@ model User {
   /// User intent for native push
   allowNotifications Boolean @default(true)
 
+  /// Where the schedule is shown: Google Calendar, the phone's calendar or nowhere
+  calendarTarget CalendarTarget @default(NONE)
+  /// Alarm before each event; 0 means none. A session's `reminderMinutes` overrides it.
+  defaultReminderMinutes Int @default(30)
+
   preferenceMatrix          Float[]   @default([])
   preferenceMatrixDecayedAt DateTime?
 
@@ -189,6 +194,15 @@ enum SessionSource {
   PORTAL
   // Placed by the system without a user request, e.g. prep for an exam or assignment.
   AUTO
+  // Busy time imported from the user's other Google or phone calendars; never written back
+  GOOGLE
+  DEVICE
+}
+
+enum CalendarTarget {
+  NONE
+  GOOGLE
+  DEVICE
 }
 
 model Session {
@@ -213,14 +227,16 @@ model Session {
   deleted Boolean @default(false)
 
   scheduledStartTime DateTime? // fixed types (ASSIGNMENT/EXAM/LECTURE/DND) are always scheduled; TASK is placed by the engine
+  // Minutes before start; null uses the user's default, 0 means no alarm
+  reminderMinutes Int?
   userId             String
   user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Stamped on every user move/resize of a scheduled TASK
-  lastMovedAt     DateTime?
+  lastMovedAt DateTime?
   // Set on insert; the daily cap on automatic prep plans counts rows by it.
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   // First time an LMS calendar showed the assignment without its "add submission" action
   submittedAt DateTime?
 
@@ -328,7 +344,6 @@ model SlotProposal {
   pairwisePositions Json?
   chosenByUser      SchedulingModel?
 
-
   timestamp DateTime @default(now())
 
   userId String
@@ -356,6 +371,14 @@ enum SessionEventType {
   MOVE // user drag or resize of a scheduled TASK (graded negative signal)
   SYSTEM_MOVE // scheduler-initiated move (displacement / conflict reschedule): reward 0, no preference update
   KEPT // an unmoved TASK's slot passed: the recommendation stood (rewardScore +1)
+  DELETE // a placed TASK was deleted before it started
+  EDIT // a session's time, length or reminder was changed outside the scheduler
+}
+
+enum SessionEventSource {
+  ZENFLOW
+  GOOGLE
+  DEVICE
 }
 
 /// Range-partitioned by month on `occurredAt`
@@ -367,6 +390,8 @@ model SessionEvent {
   rewardScore         Float            @default(0.0) // CREATE 0 · MOVE graded ≤ 0 · START +1 (ADR-0001, ADR-0035)
   dragDistanceMinutes Int? // signed (new − old start); null unless MOVE — for graded reward later
   policy              SchedulingModel? // attribution once a model is live
+  // Where the change was made: in Zenflow, or in Google or on the phone
+  source              SessionEventSource @default(ZENFLOW)
   // Shared by every row one user action wrote
   groupId             String?
   occurredAt          DateTime         @default(now())
@@ -1003,3 +1028,4 @@ model OAuthToken {
   @@index([familyId])
   @@index([expiresAt])
 }
+

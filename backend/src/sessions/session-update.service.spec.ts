@@ -41,6 +41,7 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     examFormat: null,
     examCredits: null,
     examRetake: null,
+    reminderMinutes: null,
     durationMinutes: 60,
     deadline: null,
     series: null,

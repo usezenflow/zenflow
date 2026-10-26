@@ -64,6 +64,7 @@ async function setup(
       findUniqueOrThrow: jest.fn().mockResolvedValue({
         timezone: "Asia/Ho_Chi_Minh",
         defaultReminderMinutes: 10,
+        calendarTarget: "GOOGLE",
       }),
     },
     session: {

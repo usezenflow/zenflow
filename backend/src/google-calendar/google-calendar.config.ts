@@ -2,8 +2,11 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PublicUrls } from "../common/config/public-urls";
 
-export const GOOGLE_CALENDAR_SCOPE =
-  "https://www.googleapis.com/auth/calendar.app.created";
+/** Writes the Zenflow calendar and reads the user's other calendars for busy time (ADR-0040). */
+export const GOOGLE_CALENDAR_SCOPE = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+].join(" ");
 
 /** Env-driven settings. The feature is off until every required value is set. */
 @Injectable()

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Patch, UseGuards } from "@nestjs/common";
 import { UpdateUserDto } from "./dto/update-user.dto";
+import { SetCalendarTargetDto } from "./dto/set-calendar-target.dto";
 import { toUserResponse } from "./user-response";
 import { StudentService } from "./student.service";
 import { UsersService } from "./users.service";
@@ -33,6 +34,18 @@ export class UsersController {
   @Patch("update/basic-info")
   async updateBasicInfo(@Body() dto: UpdateUserDto, @CurrentUser() user: User) {
     const updated = await this.usersService.update(user.id, dto);
+    return { success: true, data: toUserResponse(updated) };
+  }
+
+  @Patch("update/calendar-target")
+  async updateCalendarTarget(
+    @Body() dto: SetCalendarTargetDto,
+    @CurrentUser() user: User,
+  ) {
+    const updated = await this.usersService.setCalendarTarget(
+      user.id,
+      dto.target,
+    );
     return { success: true, data: toUserResponse(updated) };
   }
 

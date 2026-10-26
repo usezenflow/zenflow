@@ -62,6 +62,15 @@ export class CalendarSyncService {
       where: { userId },
     });
     if (!connection || connection.status !== "ACTIVE") return null;
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        timezone: true,
+        defaultReminderMinutes: true,
+        calendarTarget: true,
+      },
+    });
+    if (user.calendarTarget !== "GOOGLE") return null;
 
     const summary: SyncSummary = {
       written: 0,
@@ -74,12 +83,9 @@ export class CalendarSyncService {
         userId,
         connection.refreshTokenEnc,
       );
-      const user = await this.prisma.user.findUniqueOrThrow({
-        where: { id: userId },
-        select: { timezone: true },
-      });
       const ctx: EventContext = {
         timezone: user.timezone,
+        defaultReminderMinutes: user.defaultReminderMinutes,
         appUrl: this.config.webUrl,
       };
 
@@ -195,12 +201,15 @@ export class CalendarSyncService {
       durationMinutes: true,
       deadline: true,
       scheduledStartTime: true,
+      reminderMinutes: true,
     } as const;
 
     const singles = await this.prisma.session.findMany({
       where: {
         userId,
         deleted: false,
+        // Busy time imported from other calendars is read, never written back.
+        source: { notIn: ["GOOGLE", "DEVICE"] },
         scheduledStartTime: { gte: from, lte: to },
         OR: [{ seriesId: null }, { series: { rrule: null } }],
       },
@@ -213,7 +222,11 @@ export class CalendarSyncService {
         rrule: true,
         exdates: true,
         sessions: {
-          where: { deleted: false, scheduledStartTime: { not: null } },
+          where: {
+            deleted: false,
+            scheduledStartTime: { not: null },
+            source: { notIn: ["GOOGLE", "DEVICE"] },
+          },
           orderBy: { createdAt: "asc" },
           take: 1,
           select,

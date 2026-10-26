@@ -25,23 +25,21 @@ export function DeviceCalendarSection() {
   const timeZone = useUserStore((s) => s.user?.timezone) || "UTC";
   const state = useDeviceCalendar((s) => s.state);
   const syncing = useDeviceCalendar((s) => s.syncing);
+  const googleOwned = useDeviceCalendar((s) => s.googleOwned);
   const { enable, disable, syncNow } = useDeviceCalendar.getState();
 
   if (!deviceCalendarSupported()) return null;
 
   async function toggle(on: boolean) {
-    if (on) {
-      if ((await enable()) === "denied") {
-        toast({
-          title: t("Calendar access is off"),
-          description: t("Allow it in your phone's settings to use this."),
-          variant: "destructive",
-          icon: CalendarDays,
-        });
-      }
-    } else {
-      await disable();
-    }
+    if (!on) return disable();
+    const result = await enable();
+    if (result === "ok") return;
+    const failure = {
+      denied: [t("Calendar access is off"), t("Allow it in your phone's settings to use this.")],
+      google: [t("Google Calendar is in use"), t("Disconnect it on the web first.")],
+      failed: [t("Couldn't turn this on"), t("Try again in a moment.")],
+    }[result];
+    toast({ title: failure[0], description: failure[1], variant: "destructive", icon: CalendarDays });
   }
 
   return (
@@ -55,10 +53,17 @@ export function DeviceCalendarSection() {
           <View className="min-w-0 flex-1 gap-0.5">
             <Text className="text-[16px] font-semibold">{t("Show in my calendar app")}</Text>
             <Text className="text-[13px] leading-[18px] text-muted-foreground">
-              {t("Skip this if Google Calendar on your phone already shows Zenflow.")}
+              {googleOwned
+                ? t("Google Calendar shows your schedule. Disconnect it on the web to use this.")
+                : t("Skip this if Google Calendar on your phone already shows Zenflow.")}
             </Text>
           </View>
-          <Switch testID="device-calendar.toggle" checked={state.enabled} onCheckedChange={(on) => void toggle(on)} />
+          <Switch
+            testID="device-calendar.toggle"
+            checked={state.enabled}
+            disabled={googleOwned && !state.enabled}
+            onCheckedChange={(on) => void toggle(on)}
+          />
         </View>
         {state.enabled ? (
           <Pressable

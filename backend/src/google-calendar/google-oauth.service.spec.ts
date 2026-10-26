@@ -44,7 +44,7 @@ describe("GoogleOAuthService", () => {
       "https://accounts.google.com/o/oauth2/v2/auth",
     );
     expect(url.searchParams.get("scope")).toBe(
-      "https://www.googleapis.com/auth/calendar.app.created",
+      "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly",
     );
     expect(url.searchParams.get("access_type")).toBe("offline");
     expect(url.searchParams.get("redirect_uri")).toBe(config.redirectUri);

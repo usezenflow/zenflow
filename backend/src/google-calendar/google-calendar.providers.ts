@@ -1,4 +1,5 @@
 import { PublicUrls } from "../common/config/public-urls";
+import { CalendarImportService } from "./calendar-import.service";
 import { CalendarPullService } from "./calendar-pull.service";
 import { CalendarSyncService } from "./calendar-sync.service";
 import { CalendarWatchService } from "./calendar-watch.service";
@@ -15,4 +16,5 @@ export const GOOGLE_CALENDAR_CORE = [
   CalendarWatchService,
   CalendarSyncService,
   CalendarPullService,
+  CalendarImportService,
 ];

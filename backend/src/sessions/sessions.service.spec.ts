@@ -51,6 +51,7 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     examFormat: null,
     examCredits: null,
     examRetake: null,
+    reminderMinutes: null,
     durationMinutes: 60,
     deadline: new Date("2026-01-05T12:00:00.000Z"),
     series: null,
@@ -286,6 +287,7 @@ describe("SessionsService.create", () => {
     expect(result).toEqual({
       id: "session-1",
       placementReason: null,
+      reminderMinutes: null,
       undoGroupId: expect.any(String),
       title: "Write report",
       note: null,

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -77,6 +78,33 @@ export class UsersService {
         throw new NotFoundException("Cannot find user with the given id");
       throw new InternalServerErrorException();
     }
+  }
+
+  /**
+   * Turns the phone calendar on or off. Google is never set or cleared here:
+   * connecting and disconnecting own that target, so the two can't both run.
+   */
+  async setCalendarTarget(userId: string, target: "NONE" | "DEVICE") {
+    if (target === "DEVICE") {
+      const connection = await this.prisma.calendarConnection.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (connection)
+        throw new ConflictException(
+          "Disconnect Google Calendar before showing the schedule on this phone.",
+        );
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { calendarTarget: "DEVICE" },
+      });
+    } else {
+      await this.prisma.user.updateMany({
+        where: { id: userId, calendarTarget: "DEVICE" },
+        data: { calendarTarget: "NONE" },
+      });
+    }
+    return this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
   }
 
   /**

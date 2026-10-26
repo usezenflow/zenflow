@@ -1,6 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { SessionsService } from "../sessions/sessions.service";
+import { DEFAULT_REMINDER_CHOICES } from "@zenflow/shared";
+import { CalendarImportService } from "./calendar-import.service";
 import { CalendarSyncService } from "./calendar-sync.service";
 import {
   GoogleApiError,
@@ -10,6 +12,16 @@ import {
 import { GoogleOAuthService } from "./google-oauth.service";
 
 const SLOT_MS = 15 * 60_000;
+
+/**
+ * The popup reminder Google holds for an event: minutes before start, 0 for
+ * none. Undefined when the event uses Google's default, which Zenflow never sets.
+ */
+export function googleReminder(item: GoogleEventItem): number | undefined {
+  if (!item.reminders || item.reminders.useDefault) return undefined;
+  const popup = item.reminders.overrides?.find((o) => o.method === "popup");
+  return popup?.minutes ?? 0;
+}
 
 export interface PullSummary {
   /** Sessions moved or removed to match a change made in Google. */
@@ -33,6 +45,7 @@ export class CalendarPullService {
     private readonly client: GoogleCalendarClient,
     private readonly sessions: SessionsService,
     private readonly sync: CalendarSyncService,
+    private readonly imports: CalendarImportService,
   ) {}
 
   async pullUser(userId: string): Promise<PullSummary | null> {
@@ -40,12 +53,18 @@ export class CalendarPullService {
       where: { userId },
     });
     if (!connection || connection.status !== "ACTIVE") return null;
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { calendarTarget: true },
+    });
+    if (user.calendarTarget !== "GOOGLE") return null;
     const summary: PullSummary = { applied: 0, restored: 0 };
     try {
       const token = await this.oauth.accessToken(
         userId,
         connection.refreshTokenEnc,
       );
+      await this.importBusy(userId, token, connection.googleCalendarId);
       if (!connection.syncToken) {
         await this.baseline(userId, token, connection.googleCalendarId);
         return summary;
@@ -73,6 +92,22 @@ export class CalendarPullService {
         return summary;
       }
       throw error;
+    }
+  }
+
+  /** Busy time from the user's other calendars. Its failures must not stop the pull of Zenflow's own events. */
+  private async importBusy(
+    userId: string,
+    token: string,
+    calendarId: string,
+  ): Promise<void> {
+    try {
+      await this.imports.importUser(userId, token, calendarId);
+    } catch (error) {
+      if (error instanceof GoogleApiError && error.authRevoked) throw error;
+      this.logger.warn(
+        `Busy time import for ${userId} failed: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -178,19 +213,40 @@ export class CalendarPullService {
         15,
         Math.round((end.getTime() - start.getTime()) / SLOT_MS) * 15,
       );
-      if (
-        session.scheduledStartTime?.getTime() === snapped &&
-        session.durationMinutes === minutes
-      )
-        return;
-      await this.sessions.update(
-        session.id,
-        {
-          scheduledStartTime: new Date(snapped).toISOString(),
-          durationMinutes: minutes,
-        },
-        user,
-      );
+      const timeChanged =
+        session.scheduledStartTime?.getTime() !== snapped ||
+        session.durationMinutes !== minutes;
+
+      const reminder = googleReminder(item);
+      const reminderChanged =
+        reminder !== undefined &&
+        reminder !== (session.reminderMinutes ?? user.defaultReminderMinutes);
+      if (reminder !== undefined && reminderChanged) {
+        // Only the choices the app offers are read back; anything else is rewritten.
+        if (!(DEFAULT_REMINDER_CHOICES as readonly number[]).includes(reminder))
+          return restore();
+      }
+      if (!timeChanged && !reminderChanged) return;
+
+      if (timeChanged) {
+        await this.sessions.update(
+          session.id,
+          {
+            scheduledStartTime: new Date(snapped).toISOString(),
+            durationMinutes: minutes,
+          },
+          user,
+        );
+      }
+      if (reminder !== undefined && reminderChanged) {
+        await this.prisma.session.update({
+          where: { id: session.id },
+          data: {
+            reminderMinutes:
+              reminder === user.defaultReminderMinutes ? null : reminder,
+          },
+        });
+      }
       summary.applied++;
     } catch (error) {
       this.logger.debug(

@@ -19,7 +19,14 @@ import type { PlacementChip } from "./placement-chip";
 export type SessionType = "TASK" | "ASSIGNMENT" | "EXAM" | "LECTURE" | "DND";
 
 /** Where a session came from. */
-export type SessionSource = "USER" | "LMS" | "PORTAL" | "AUTO";
+export type SessionSource =
+  | "USER"
+  | "LMS"
+  | "PORTAL"
+  | "AUTO"
+  /** Busy time imported from the user's Google or phone calendar: read only. */
+  | "GOOGLE"
+  | "DEVICE";
 
 export interface Session {
   id: string;
@@ -52,6 +59,8 @@ export interface Session {
    * are plain field writes via `PATCH /sessions/:id`.
    */
   scheduledStartTime: string | null;
+  /** Minutes before start; `null` uses the user's default, `0` means no alarm. */
+  reminderMinutes: number | null;
   /**
    * Set when this session belongs to a recurring fixed series (`DND` /
    * `ASSIGNMENT` / `EXAM` / `LECTURE`). This `Session` is one *virtual

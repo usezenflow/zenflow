@@ -36,7 +36,18 @@ export interface GoogleEventItem {
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   recurringEventId?: string;
+  reminders?: {
+    useDefault?: boolean;
+    overrides?: { method?: string; minutes?: number }[];
+  };
+  summary?: string;
+  transparency?: "opaque" | "transparent";
   extendedProperties?: { private?: Record<string, string> };
+}
+
+export interface CalendarListItem {
+  id: string;
+  selected?: boolean;
 }
 
 export interface EventPage {
@@ -188,6 +199,50 @@ export class GoogleCalendarClient {
       nextPageToken: res?.nextPageToken,
       nextSyncToken: res?.nextSyncToken,
     };
+  }
+
+  /** Every calendar on the user's list. */
+  async listCalendars(token: string): Promise<CalendarListItem[]> {
+    const items: CalendarListItem[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await this.call<{
+        items?: CalendarListItem[];
+        nextPageToken?: string;
+      }>(token, "GET", "/users/me/calendarList", undefined, { pageToken });
+      items.push(...(res?.items ?? []));
+      pageToken = res?.nextPageToken;
+    } while (pageToken);
+    return items;
+  }
+
+  /** Every event starting in the window, recurring ones expanded to single instances. */
+  async listWindow(
+    token: string,
+    calendarId: string,
+    timeMin: Date,
+    timeMax: Date,
+  ): Promise<GoogleEventItem[]> {
+    const items: GoogleEventItem[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await this.call<EventPage>(
+        token,
+        "GET",
+        `/calendars/${encodeURIComponent(calendarId)}/events`,
+        undefined,
+        {
+          timeMin: timeMin.toISOString(),
+          timeMax: timeMax.toISOString(),
+          singleEvents: "true",
+          maxResults: "250",
+          pageToken,
+        },
+      );
+      items.push(...(res?.items ?? []));
+      pageToken = res?.nextPageToken;
+    } while (pageToken);
+    return items;
   }
 
   async watch(

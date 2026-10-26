@@ -21,6 +21,8 @@ export interface EventSession {
   durationMinutes: number;
   deadline: Date | null;
   scheduledStartTime: Date;
+  /** Null uses the user's default reminder. */
+  reminderMinutes: number | null;
 }
 
 export interface EventSeries {
@@ -32,6 +34,7 @@ export interface EventSeries {
 
 export interface EventContext {
   timezone: string;
+  defaultReminderMinutes: number;
   appUrl: string;
 }
 
@@ -43,7 +46,7 @@ export interface GoogleEventBody {
   start: { dateTime: string; timeZone: string };
   end: { dateTime: string; timeZone: string };
   recurrence?: string[];
-  /** A 30-minute popup, except for DND blocks, which never ring. */
+  /** One popup at the effective reminder; none for DND blocks or a reminder of 0. */
   reminders: {
     useDefault: false;
     overrides: { method: "popup"; minutes: number }[];
@@ -79,6 +82,7 @@ function base(
 ): GoogleEventBody {
   const start = session.scheduledStartTime;
   const end = new Date(start.getTime() + session.durationMinutes * 60_000);
+  const minutes = session.reminderMinutes ?? ctx.defaultReminderMinutes;
   const description = [dueLine(session.deadline, ctx.timezone), ctx.appUrl]
     .filter(Boolean)
     .join("\n");
@@ -92,7 +96,9 @@ function base(
     reminders: {
       useDefault: false,
       overrides:
-        session.type === "DND" ? [] : [{ method: "popup", minutes: 30 }],
+        session.type === "DND" || minutes === 0
+          ? []
+          : [{ method: "popup", minutes }],
     },
     extendedProperties: { private: { zf: id, zfk: kind } },
   };

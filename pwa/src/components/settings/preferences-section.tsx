@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Bell, Globe } from "lucide-react";
-import { type Lang, type UpdateUserInput, type User } from "@zenflow/shared";
+import { AlarmClock, Bell, BellOff, Clock, Globe } from "lucide-react";
+import { DEFAULT_REMINDER_CHOICES, type DefaultReminderChoice, type Lang, type UpdateUserInput, type User } from "@zenflow/shared";
 import { Switch } from "@/components/ui/switch";
 import { OptionSheet, type SheetOption } from "@/components/settings/option-sheet";
 import {
@@ -16,16 +16,27 @@ import { setLanguage, t, useLanguage } from "@/lib/i18n";
 import { errorToast } from "@/lib/toast";
 import { LANGUAGES, languageOption } from "@/lib/languages";
 
-/** Language and the notification opt-in, saved to the account. */
+function reminderLabel(minutes: number): string {
+  if (minutes === 0) return t("None");
+  if (minutes === 60) return t("1 hour before");
+  return t("{minutes} min before", { minutes });
+}
+
+/** Language, default reminder and the notification opt-in, saved to the account. */
 export function PreferencesSection({ user }: { user: User }) {
   useLanguage();
-  const [sheet, setSheet] = useState<"language" | null>(null);
+  const [sheet, setSheet] = useState<"language" | "reminder" | null>(null);
   const push = useWebPush();
 
   const languages: SheetOption<Lang>[] = LANGUAGES.map(({ value, label, flag }) => ({
     value,
     label,
     flag,
+  }));
+  const reminders: SheetOption<DefaultReminderChoice>[] = DEFAULT_REMINDER_CHOICES.map((value) => ({
+    value,
+    label: reminderLabel(value),
+    icon: value === 0 ? BellOff : value >= 60 ? Clock : AlarmClock,
   }));
 
   async function save(patch: UpdateUserInput, onSaved?: () => void) {
@@ -55,6 +66,12 @@ export function PreferencesSection({ user }: { user: User }) {
           title={t("Language")}
           value={`${languageOption(user.lang).flag} ${languageOption(user.lang).label}`}
           onClick={() => setSheet("language")}
+        />
+        <SettingsRow
+          icon={AlarmClock}
+          title={t("Default reminder")}
+          value={reminderLabel(user.defaultReminderMinutes)}
+          onClick={() => setSheet("reminder")}
         />
       </SettingsCard>
 
@@ -90,6 +107,14 @@ export function PreferencesSection({ user }: { user: User }) {
         options={languages}
         value={user.lang}
         onSelect={(lang) => void save({ lang }, () => setLanguage(lang))}
+      />
+      <OptionSheet
+        open={sheet === "reminder"}
+        onOpenChange={(open) => setSheet(open ? "reminder" : null)}
+        title={t("Default reminder")}
+        options={reminders}
+        value={user.defaultReminderMinutes as DefaultReminderChoice}
+        onSelect={(defaultReminderMinutes) => void save({ defaultReminderMinutes })}
       />
     </>
   );

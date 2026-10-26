@@ -19,13 +19,16 @@ describe("UpdateUserDto", () => {
     expect(await errors({})).toHaveLength(0);
     expect(await errors({ onboarded: true })).toHaveLength(0);
     expect(await errors({ allowNotifications: false })).toHaveLength(0);
+    expect(await errors({ defaultReminderMinutes: 10 })).toHaveLength(0);
+    expect(await errors({ defaultReminderMinutes: 0 })).toHaveLength(0);
   });
 
   it.each([
     { timezone: "Mars/Olympus" },
     { lang: "VI_VN" },
     { lang: "fr" },
-    { defaultReminderMinutes: 10 },
+    { defaultReminderMinutes: 7 },
+    { defaultReminderMinutes: "10" },
     { homeLocation: "Home" },
     { defaultTransport: "BIKE" },
     { onboarded: false },

@@ -1,12 +1,15 @@
 import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import {
+  AlarmClockIcon,
   Bell,
   ChevronRight,
   Clock,
   Globe,
   Sliders,
 } from "@/components/Icons";
+import { updateBasicInfo } from "@/api/users";
+import { useUserStore } from "@/hooks/use-user-store";
 import {
   OptionSheet,
   type OptionSheetHandle,
@@ -24,6 +27,7 @@ import {
 } from "@/lib/preferences";
 import { filterTimezones, gmtOffset } from "@/lib/onboarding";
 import { timezonePickerValue } from "@/lib/preferences-sync";
+import { DEFAULT_REMINDER_CHOICES, type DefaultReminderChoice } from "@zenflow/shared";
 import { type ComponentType, useMemo, useRef } from "react";
 import { Pressable, View } from "react-native";
 
@@ -134,13 +138,40 @@ export function TimezoneRow() {
   );
 }
 
+function reminderLabel(minutes: number): string {
+  if (minutes === 0) return t("None");
+  if (minutes === 60) return t("1 hour before");
+  return t("{minutes} min before", { minutes });
+}
+
 /** Preferences + Notifications sections (mockups/settings.html). */
 export function PreferencesSection() {
   useLanguage();
   const { prefs } = usePreferences();
   const { setEnabled, active } = useNotificationState();
   const save = usePreferenceSave();
+  const { toast } = useToast();
+  const reminderMinutes = useUserStore((s) => s.user?.defaultReminderMinutes ?? 30);
+  const reminderSheet = useRef<OptionSheetHandle>(null);
   const languageSheet = useRef<OptionSheetHandle>(null);
+  const reminderOptions = DEFAULT_REMINDER_CHOICES.map((value) => ({
+    value,
+    label: reminderLabel(value),
+    icon: AlarmClockIcon,
+  }));
+
+  async function saveReminder(defaultReminderMinutes: DefaultReminderChoice) {
+    try {
+      useUserStore.getState().updateUser(await updateBasicInfo({ defaultReminderMinutes }));
+    } catch {
+      toast({
+        title: t("Couldn't save preference"),
+        description: t("Try again in a moment."),
+        variant: "destructive",
+        icon: Sliders,
+      });
+    }
+  }
 
   async function toggleNotifications(on: boolean) {
     await setEnabled(on);
@@ -158,6 +189,12 @@ export function PreferencesSection() {
             return l ? `${l.flag} ${l.label}` : "";
           })()}
           onPress={() => languageSheet.current?.open()}
+        />
+        <Row
+          Icon={AlarmClockIcon}
+          title={t("Default reminder")}
+          value={reminderLabel(reminderMinutes)}
+          onPress={() => reminderSheet.current?.open()}
         />
       </View>
 
@@ -185,6 +222,13 @@ export function PreferencesSection() {
         options={LANGUAGES}
         value={prefs.language}
         onSelect={(language) => save({ language })}
+      />
+      <OptionSheet
+        ref={reminderSheet}
+        title={t("Default reminder")}
+        options={reminderOptions}
+        value={reminderMinutes as DefaultReminderChoice}
+        onSelect={(minutes) => void saveReminder(minutes)}
       />
     </>
   );

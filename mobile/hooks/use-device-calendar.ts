@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { AppState } from "react-native";
 import { create } from "zustand";
 import { listSessions, updateSession } from "@/api/tasks";
+import { getGoogleCalendar, setCalendarTarget } from "@/api/google-calendar";
 import { useConnectivity } from "@/lib/connectivity";
 import { expoCalendarAdapter } from "@/lib/device-calendar/expo-adapter";
 import { reviewDeviceEvents, type PhoneTimes } from "@/lib/device-calendar/moves";
@@ -28,14 +29,24 @@ const EDIT_DEBOUNCE_MS = 3_000;
 type Store = {
   state: DeviceCalendarState;
   syncing: boolean;
+  /** True while Google Calendar is the user's target, so the phone calendar can't be on. */
+  googleOwned: boolean;
   /** Loads the saved state for `userId`. */
   hydrate: (userId: string | null) => void;
-  /** Turns the sync on. Resolves "denied" when the phone refuses access. */
-  enable: () => Promise<"ok" | "denied">;
+  /**
+   * Turns the sync on. "denied": the phone refuses access. "google": Google
+   * Calendar is connected. "failed": the server could not be reached.
+   */
+  enable: () => Promise<"ok" | "denied" | "google" | "failed">;
   disable: () => Promise<void>;
+  /** Matches the phone to the server's target; true when the phone sync may run. */
+  reconcile: () => Promise<boolean>;
   /** Syncs now; without `force`, recent syncs are skipped. */
   syncNow: (force?: boolean) => Promise<void>;
 };
+
+/** The server refuses a target that is taken by the other calendar (409). */
+const isConflict = (error: unknown) => (error as { response?: { status?: number } }).response?.status === 409;
 
 /** This month and the next, deduped: enough to cover the sync window. */
 async function fetchWindow(now: Date): Promise<Session[]> {
@@ -56,11 +67,22 @@ export const useDeviceCalendar = create<Store>((set, get) => {
   return {
     state: { ...EMPTY_STATE },
     syncing: false,
+    googleOwned: false,
 
     hydrate: (id) => set({ state: id ? deviceCalendarStore.load(id) : { ...EMPTY_STATE } }),
 
     enable: async () => {
+      if (get().googleOwned) return "google";
       if (!(await expoCalendarAdapter.requestPermission())) return "denied";
+      try {
+        await setCalendarTarget("DEVICE");
+      } catch (error) {
+        if (isConflict(error)) {
+          set({ googleOwned: true });
+          return "google";
+        }
+        return "failed";
+      }
       persist({ ...get().state, enabled: true });
       await get().syncNow(true);
       return "ok";
@@ -68,6 +90,28 @@ export const useDeviceCalendar = create<Store>((set, get) => {
 
     disable: async () => {
       persist(await removeDeviceCalendar(expoCalendarAdapter, get().state));
+      await setCalendarTarget("NONE").catch(() => undefined);
+    },
+
+    reconcile: async () => {
+      let status;
+      try {
+        status = await getGoogleCalendar();
+      } catch {
+        // Offline: keep what the phone has and check again on the next sync.
+        return get().state.enabled && !get().googleOwned;
+      }
+      if (status.target === "GOOGLE") {
+        set({ googleOwned: true });
+        if (get().state.enabled) persist(await removeDeviceCalendar(expoCalendarAdapter, get().state));
+        return false;
+      }
+      set({ googleOwned: false });
+      // The phone calendar was on before the server knew about it: claim it rather than switch it off.
+      if (get().state.enabled && status.target !== "DEVICE") {
+        await setCalendarTarget("DEVICE").catch(() => undefined);
+      }
+      return get().state.enabled;
     },
 
     syncNow: async (force = false) => {
@@ -76,12 +120,14 @@ export const useDeviceCalendar = create<Store>((set, get) => {
       if (!state.enabled || syncing || !user) return;
       if (!force && state.syncedAt && Date.now() - state.syncedAt < MIN_INTERVAL_MS) return;
       if (!useConnectivity.getState().online) return;
+      if (!(await get().reconcile())) return;
 
       set({ syncing: true });
       try {
         const now = new Date();
         const ctx = {
           timeZone: user.timezone,
+          defaultReminderMinutes: user.defaultReminderMinutes,
           from: addDays(now, -BACK_DAYS),
           to: addDays(now, AHEAD_DAYS),
         };

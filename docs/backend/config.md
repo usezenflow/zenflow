@@ -29,7 +29,7 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `API_TOKEN_PEPPER` | none | Required in production, 32+ chars. Peppers the personal API token HMAC; unset outside production disables API access. Rotating revokes every token. |
 | `PUBLIC_API_URL` | none | API base incl. `/api/v1`, e.g. `https://api.usezenflow.com/api/v1`. Turns on OAuth for AI assistants ([ADR-0041](../adr/0041-mcp-oauth.md)) and is the base of Google's redirect and push URLs. |
 | `PUBLIC_WEB_URL` | first `CORS_ORIGIN` | Where the PWA lives: the consent screen and the page Google returns to. |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | none | Google OAuth client for Calendar sync ([ADR-0040](../adr/0040-google-calendar-sync.md)). Redirect URI `<PUBLIC_API_URL>/google-calendar/callback`, scope `calendar.app.created`. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | none | Google OAuth client for Calendar sync ([ADR-0040](../adr/0040-google-calendar-sync.md)). Redirect URI `<PUBLIC_API_URL>/google-calendar/callback`, scopes `calendar.events` and `calendar.calendarlist.readonly`. |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY` | none | 64 hex chars (`openssl rand -hex 32`). AES-256-GCM key for stored Google refresh tokens. Sync is off until the three Google vars and `PUBLIC_API_URL` are set. Rotating it forces everyone to reconnect. |
 
 | `PORT` | 8000 | |

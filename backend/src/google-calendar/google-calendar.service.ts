@@ -32,14 +32,19 @@ export class GoogleCalendarService {
   ) {}
 
   async status(user: User): Promise<GoogleCalendarStatus> {
-    const [connection, outbox] = await Promise.all([
+    const [connection, outbox, target] = await Promise.all([
       this.prisma.calendarConnection.findUnique({ where: { userId: user.id } }),
       this.prisma.calendarSyncOutbox.findUnique({ where: { userId: user.id } }),
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: user.id },
+        select: { calendarTarget: true },
+      }),
     ]);
     // A row in the outbox means session changes are waiting for the next push.
     const failing = outbox && outbox.attempts > 0 ? outbox : null;
     return {
       available: this.config.available,
+      target: target.calendarTarget,
       connected: !!connection,
       state: connection?.status ?? null,
       lastSyncedAt: connection?.lastSyncedAt?.toISOString() ?? null,
@@ -98,6 +103,10 @@ export class GoogleCalendarService {
       await this.prisma.$transaction([
         this.prisma.calendarLink.deleteMany({ where: { userId: user.id } }),
         this.prisma.calendarConnection.delete({ where: { id: connection.id } }),
+        this.prisma.user.updateMany({
+          where: { id: user.id, calendarTarget: "GOOGLE" },
+          data: { calendarTarget: "NONE" },
+        }),
       ]);
     }
     return this.status(user);
@@ -147,17 +156,28 @@ export class GoogleCalendarService {
         CALENDAR_NAME,
         user.timezone,
       ));
-    const connection = await this.prisma.calendarConnection.upsert({
-      where: { userId },
-      create: { userId, googleCalendarId: calendarId, refreshTokenEnc: sealed },
-      update: {
-        googleCalendarId: calendarId,
-        refreshTokenEnc: sealed,
-        status: "ACTIVE",
-        lastError: null,
-        syncToken: null,
-      },
-    });
+    // Google becomes the target in the same write, so the phone side can't also run.
+    const [connection] = await this.prisma.$transaction([
+      this.prisma.calendarConnection.upsert({
+        where: { userId },
+        create: {
+          userId,
+          googleCalendarId: calendarId,
+          refreshTokenEnc: sealed,
+        },
+        update: {
+          googleCalendarId: calendarId,
+          refreshTokenEnc: sealed,
+          status: "ACTIVE",
+          lastError: null,
+          syncToken: null,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { calendarTarget: "GOOGLE" },
+      }),
+    ]);
     if (existing)
       await this.prisma.calendarLink.deleteMany({ where: { userId } });
     try {
@@ -168,6 +188,7 @@ export class GoogleCalendarService {
       );
     }
     await this.trigger.enqueue(userId, "sync");
+    await this.trigger.enqueue(userId, "pull", 5_000);
   }
 
   private requireAvailable(): void {

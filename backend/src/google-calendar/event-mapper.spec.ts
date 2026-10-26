@@ -9,6 +9,7 @@ import {
 
 const ctx: EventContext = {
   timezone: "Asia/Ho_Chi_Minh",
+  defaultReminderMinutes: 30,
   appUrl: "https://app.usezenflow.com",
 };
 
@@ -20,6 +21,7 @@ const session: EventSession = {
   durationMinutes: 60,
   deadline: new Date("2026-11-06T16:59:00Z"),
   scheduledStartTime: new Date("2026-11-02T02:00:00Z"),
+  reminderMinutes: null,
 };
 
 describe("event mapper", () => {
@@ -59,6 +61,13 @@ describe("event mapper", () => {
       useDefault: false,
       overrides: [],
     });
+  });
+
+  it("uses the session's reminder over the user's default, and 0 for none", () => {
+    const popup = (minutes: number) => ({ useDefault: false, overrides: [{ method: "popup", minutes }] });
+    expect(sessionEvent({ ...session, reminderMinutes: 10 }, ctx).reminders).toEqual(popup(10));
+    expect(sessionEvent({ ...session, reminderMinutes: 0 }, ctx).reminders).toEqual({ useDefault: false, overrides: [] });
+    expect(sessionEvent(session, { ...ctx, defaultReminderMinutes: 60 }).reminders).toEqual(popup(60));
   });
 
   it("omits an empty location", () => {
