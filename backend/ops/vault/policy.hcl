@@ -13,6 +13,9 @@ path "secret/data/zenflow/__ENV__/postgres" {
 path "secret/data/zenflow/__ENV__/grafana" {
   capabilities = ["read"]
 }
+path "secret/data/zenflow/__ENV__/ntfy" {
+  capabilities = ["read"]
+}
 path "secret/data/zenflow/__ENV__/backup" {
   capabilities = ["read"]
 }

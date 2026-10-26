@@ -22,7 +22,7 @@ RATE_LIMIT_REDIS_HOST=localhost
 RATE_LIMIT_REDIS_PORT=6380
 # QUEUE_REDIS_HOST and REDIS_PUBSUB_HOST stay unset on purpose: the suites use the
 # in-memory queue fallback and in-process SSE events, so no extra Redis is needed.
-# FCM_*, APNS_* and VAPID_* stay unset on purpose: each push provider self-disables.
+# NTFY_BASE_URL and NTFY_TOKEN stay unset on purpose: the ntfy sender self-disables.
 # The queue e2e suite (test/queue) defaults to compose.test.yml's queue profile
 # on 127.0.0.1:7381 (queue) and :7382 (pub/sub) and passes them to its processes.
 CORS_ORIGIN=http://localhost:5173
