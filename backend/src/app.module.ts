@@ -391,34 +391,14 @@ const jobModules = [
         PLACE_TIMEOUT_MS: Joi.number().integer().min(100).default(2500),
         // "1" => emit a `Server-Timing` header on responses (bench/test env).
         BENCH_TIMING: Joi.string().valid("0", "1").optional(),
-        // --- Native mobile push (devices/) --------------------------------
-        // Each provider self-disables when its vars are unset, like
-        // BANDIT_SERVICE_URL: FcmSender needs FCM_SERVICE_ACCOUNT, ApnsSender
-        // needs all four APNS_* below, WebPushSender needs all three VAPID_*
-        // below. With none configured, POST /devices still records tokens but
-        // nothing is ever sent.
-        // Base64 of the Firebase service-account JSON (the `project_id` is
-        // inside it). Android delivery via firebase-admin.
-        FCM_SERVICE_ACCOUNT: Joi.string().optional(),
-        // Base64 of the APNs auth key (`AuthKey_XXXXXXXXXX.p8` contents) plus
-        // its 10-char key id, the Apple team id, and the app bundle id (which
-        // is the APNs `topic`). iOS delivery via @parse/node-apn, token auth.
-        APNS_KEY: Joi.string().optional(),
-        APNS_KEY_ID: Joi.string().optional(),
-        APNS_TEAM_ID: Joi.string().optional(),
-        APNS_BUNDLE_ID: Joi.string().optional(),
-        // true -> api.push.apple.com, false -> the sandbox gateway.
-        APNS_PRODUCTION: Joi.boolean().default(false),
-        // Web Push (WebPushSender) needs all three. The public key is also
-        // baked into the web build as VITE_VAPID_PUBLIC_KEY; the private key
-        // never leaves the API.
-        // Generate with `npx web-push generate-vapid-keys`.
-        VAPID_PUBLIC_KEY: Joi.string().optional(),
-        VAPID_PRIVATE_KEY: Joi.string().optional(),
-        // A mailto: or https: contact URL the push services may use.
-        VAPID_SUBJECT: Joi.string()
-          .pattern(/^(mailto:|https:)/)
+        // --- Push (devices/) -----------------------------------------------
+        // NtfySender self-disables without NTFY_BASE_URL: POST /devices still
+        // records topics but nothing is sent. NTFY_TOKEN is the publisher's
+        // bearer token when the server denies anonymous access.
+        NTFY_BASE_URL: Joi.string()
+          .uri({ scheme: ["http", "https"] })
           .optional(),
+        NTFY_TOKEN: Joi.string().optional(),
         // --- Observability (observability/, tracing.ts) -------------------
         // NODE_ENV is also read directly by several modules; declare it so it
         // has one validated default. `tracing.ts` reads the OTEL_* vars
@@ -594,10 +574,8 @@ const jobModules = [
     // dependent with IntegrationsModule via forwardRef, see ingestion.module.ts.
     IngestionModule,
     NotificationsModule,
-    // Push — a second subscriber to the notification emitter (like the SSE
-    // stream), plus POST/DELETE /devices. Self-
-    // disables per provider when its FCM_*/APNS_*/VAPID_* env is unset; see
-    // devices.module.ts.
+    // Push: ntfy delivery plus POST/DELETE /devices. Self-disables when
+    // NTFY_BASE_URL is unset; see devices.module.ts.
     DevicesModule,
     CalendarBusyModule,
     OAuthModule,

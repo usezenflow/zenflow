@@ -162,7 +162,7 @@ describe("NotificationsService", () => {
       expect(seen).toHaveBeenCalledWith(ROW);
     });
 
-    it("enqueues one idempotent push job per provider", async () => {
+    it("enqueues one idempotent push job per notification", async () => {
       const { service, queue } = await makeService([]);
       service.notify("session.new", ROW);
       service.notify("session.new", ROW);
@@ -172,17 +172,13 @@ describe("NotificationsService", () => {
         { jobId: string },
       ][];
       expect(calls.map((c) => c[2].jobId)).toEqual([
-        "push_n1_fcm",
-        "push_n1_apns",
-        "push_n1_web",
-        "push_n1_fcm",
-        "push_n1_apns",
-        "push_n1_web",
+        "push_n1_ntfy",
+        "push_n1_ntfy",
       ]);
       expect(calls[0][1]).toEqual({
         type: "push",
         notificationId: "n1",
-        provider: "fcm",
+        provider: "ntfy",
       });
     });
     it("retries a failed enqueue, then counts it dropped without throwing", async () => {
@@ -193,8 +189,7 @@ describe("NotificationsService", () => {
         const done = service.announce("session.new", ROW);
         await jest.advanceTimersByTimeAsync(5_000);
         await expect(done).resolves.toBeUndefined();
-        // 3 attempts x 3 providers
-        expect(queue.enqueueBestEffort).toHaveBeenCalledTimes(9);
+        expect(queue.enqueueBestEffort).toHaveBeenCalledTimes(3);
       } finally {
         jest.useRealTimers();
       }
@@ -211,8 +206,7 @@ describe("NotificationsService", () => {
         const done = service.announce("session.new", ROW);
         await jest.advanceTimersByTimeAsync(5_000);
         await done;
-        // 3 first attempts, then one retry each for fcm and apns.
-        expect(queue.enqueueBestEffort).toHaveBeenCalledTimes(5);
+        expect(queue.enqueueBestEffort).toHaveBeenCalledTimes(3);
       } finally {
         jest.useRealTimers();
       }
@@ -226,9 +220,9 @@ describe("NotificationsService", () => {
         .fn()
         .mockResolvedValue([{ id: "n1" }, { id: "n2" }]);
       queue.getJob.mockImplementation((_def: unknown, id: string) =>
-        Promise.resolve(id === "push_n1_fcm" ? { id } : undefined),
+        Promise.resolve(id === "push_n1_ntfy" ? { id } : undefined),
       );
-      await expect(service.reconcileRecent()).resolves.toBe(5);
+      await expect(service.reconcileRecent()).resolves.toBe(1);
       const ids = (
         queue.enqueueBestEffort.mock.calls as [
           unknown,
@@ -236,13 +230,7 @@ describe("NotificationsService", () => {
           { jobId: string },
         ][]
       ).map((c) => c[2].jobId);
-      expect(ids).toEqual([
-        "push_n1_apns",
-        "push_n1_web",
-        "push_n2_fcm",
-        "push_n2_apns",
-        "push_n2_web",
-      ]);
+      expect(ids).toEqual(["push_n2_ntfy"]);
     });
 
     it("pages past the first batch so older rows are still checked", async () => {
@@ -265,7 +253,7 @@ describe("NotificationsService", () => {
       );
       expect(queue.getJob).toHaveBeenCalledWith(
         expect.anything(),
-        "push_n501_fcm",
+        "push_n501_ntfy",
       );
     });
 

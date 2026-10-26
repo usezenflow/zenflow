@@ -175,7 +175,7 @@ export const sessionEventPartitionsAhead = meter.createGauge(
 
 // --- Push -----------------------------------------------------------------------
 export const pushSend = meter.createCounter("push.send", {
-  description: "Native push sends, by provider + result",
+  description: "ntfy push sends, by provider + result",
 });
 export const pushDevicesPruned = meter.createCounter("push.devices_pruned", {
   description: "UserDevice rows deleted after a dead-token response",

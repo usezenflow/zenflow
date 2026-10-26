@@ -27,15 +27,11 @@ describe("DevicesController", () => {
     const res = await controller.register(USER, {
       platform: "ANDROID",
       pushToken: "tok-a",
-      p256dh: null,
-      auth: null,
     });
 
     expect(service.registerDevice).toHaveBeenCalledWith(USER, {
       platform: "ANDROID",
       pushToken: "tok-a",
-      p256dh: null,
-      auth: null,
     });
     expect(res).toEqual({
       success: true,

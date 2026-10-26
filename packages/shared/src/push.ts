@@ -1,10 +1,7 @@
 /**
  * Push: device registration and the payload the client receives.
  *
- * A device is identified by one opaque `pushToken`: an FCM registration token
- * (Android), an APNs device token (iOS) or a Web Push subscription endpoint
- * (WEB). WEB also carries the subscription's `p256dh` and `auth` keys; native
- * platforms send `null` for both.
+ * A device is identified by one `pushToken`: its ntfy topic, random and secret.
  *
  * As everywhere in this package: "absent" is an explicit value, never an
  * optional property, and everything that crosses the wire is a plain string.
@@ -69,19 +66,17 @@ export function pushSoundFile(tone: PushTone): string {
   return `zenflow_${tone}.wav`;
 }
 
-/** Which push provider a device token belongs to. Mirrors the Prisma enum. */
+/** Device platform. Mirrors the Prisma enum; `WEB` is legacy and no longer accepted. */
 export type DevicePlatform = "IOS" | "ANDROID" | "WEB";
 
-/**
- * Request body for `POST /devices` — register (or refresh) one device.
- * `p256dh` and `auth` are required (non-empty) when `platform` is `WEB`, and `null` otherwise.
- */
+/** A valid ntfy topic: URL-safe and bounded, so it cannot alter the publish path. */
+export const NTFY_TOPIC_RE = /^[A-Za-z0-9_-]{16,64}$/;
+
+/** Request body for `POST /devices` — register (or refresh) one device. */
 export interface RegisterDeviceInput {
   platform: DevicePlatform;
-  /** FCM or APNs token; for WEB, the push subscription endpoint URL (https). */
+  /** The device's ntfy topic; matches {@link NTFY_TOPIC_RE}. */
   pushToken: string;
-  p256dh: string | null;
-  auth: string | null;
 }
 
 /** Request body for `DELETE /devices` — unregister one device by its token. */
@@ -96,8 +91,7 @@ export interface RegisterDeviceResponse {
 
 /**
  * The string map delivered alongside a push, for the app to route on when the
- * notification is tapped. FCM `data` values must be strings; the APNs custom
- * payload mirrors this shape for parity, so every value here is a string —
+ * notification is tapped. Every value is a string —
  * `sessionId` is `""` (not omitted) when the notification has no session.
  */
 export interface PushDataPayload {

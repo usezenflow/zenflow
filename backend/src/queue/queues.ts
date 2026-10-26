@@ -61,10 +61,10 @@ export interface UnitJobData {
 
 /** Channel jobs on the `notify` queue. */
 export type NotifyJobData =
-  /** Native push for one provider of a notification row. */
+  /** ntfy push for a notification row. */
   { type: "push"; notificationId: string; provider: PushProvider };
 
-export type PushProvider = "fcm" | "apns" | "web";
+export type PushProvider = "ntfy";
 
 /**
  * Portal (DLU timetable/exam/discovery) fetches. One request at a time per
