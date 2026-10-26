@@ -6,6 +6,7 @@ import {
 import {
   PLACEMENT_NEEDS_CONFIRMATION_CODE,
   type InfeasiblePolicy,
+  type PlacementPolicy,
 } from "@zenflow/shared";
 import { Prisma, type User } from "../../../generated/prisma";
 import { withSpan } from "../../observability/otel";
@@ -16,7 +17,11 @@ import { toPlacementPlanDto } from "./placement-plan";
 import { PLACEMENT_PLAN_TTL_MS } from "../constants";
 import { ScheduleInfeasibleException } from "../schedule-infeasible.exception";
 import { ceilToSlot, MS_PER_MINUTE } from "../core/slot";
-import type { PlaceableTask, PlacementResult } from "../types/placement.types";
+import type {
+  PlaceableTask,
+  PlacementConstraint,
+  PlacementResult,
+} from "../types/placement.types";
 
 type Trigger = "create" | "deadline-change";
 
@@ -186,6 +191,7 @@ export class TaskPlacementService {
     deadline: Date;
     now: Date;
     policy?: InfeasiblePolicy;
+    constraint?: PlacementConstraint;
   }): Promise<void> {
     const { user, durationMinutes, deadline, now } = args;
     assertFitsBeforeDeadline(now, durationMinutes, deadline);
@@ -196,6 +202,7 @@ export class TaskPlacementService {
       deadline,
       now,
       policy: args.policy,
+      constraint: args.constraint,
     });
   }
 
@@ -212,6 +219,10 @@ export class TaskPlacementService {
     deadline: Date;
     now: Date;
     policy?: InfeasiblePolicy;
+    constraint?: PlacementConstraint;
+    prevStartMs?: number;
+    excludeSessionIds?: string[];
+    primaryPolicy?: PlacementPolicy;
   }): Promise<Date | null> {
     assertFitsBeforeDeadline(args.now, args.durationMinutes, args.deadline);
     const { startMs, needsConfirmation } =

@@ -35,6 +35,7 @@ async function setup() {
   const crud = {
     create: jest.fn(),
     proposeCreate: jest.fn(),
+    proposeOverlaps: jest.fn().mockResolvedValue(false),
     remove: jest.fn(),
     removeTimetableGroup: jest.fn(),
     removeTimetableGroupFrom: jest.fn(),
@@ -108,6 +109,8 @@ describe("SessionsService.bulkCreate", () => {
           proposedStart: "2026-10-26T01:00:00.000Z",
           proposedEnd: "2026-10-26T02:00:00.000Z",
           timezone: USER.timezone,
+          localStart: expect.stringContaining("2026-10-26"),
+          warnings: expect.any(Array),
         },
         {
           index: 1,

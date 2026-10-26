@@ -4,7 +4,13 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { randomUUID } from "crypto";
-import type { InfeasiblePolicy, UpdateSessionResponse } from "@zenflow/shared";
+import {
+  SESSION_WINDOW_HOURS,
+  type InfeasiblePolicy,
+  type SessionWindow,
+  type UpdateSessionResponse,
+} from "@zenflow/shared";
+import { formatInTimeZone } from "date-fns-tz";
 import {
   Prisma,
   type SessionEventSource,
@@ -34,6 +40,7 @@ import { editEventData, moveEventData, recordUserMove } from "./session-events";
 import { assertSyncedEditable } from "./synced-lock";
 import { mapSessionPrismaError } from "./prisma-error";
 import { SeriesService } from "./series.service";
+import { assertTaskBounds, constraintOf } from "./task-bounds";
 
 /** 400 for `PATCH { scheduledStartTime: null }` on a `TASK`. */
 export const TASK_START_REQUIRED_MESSAGE =
@@ -205,6 +212,8 @@ export class SessionUpdateService {
         type: true,
         durationMinutes: true,
         deadline: true,
+        notBefore: true,
+        window: true,
       },
     });
     if (!existing || existing.type !== "TASK") return;
@@ -219,6 +228,7 @@ export class SessionUpdateService {
       deadline,
       now,
       policy: dto.infeasiblePolicy,
+      constraint: constraintOf(existing),
     });
   }
 
@@ -340,6 +350,51 @@ export class SessionUpdateService {
     return rep.id;
   }
 
+  /**
+   * A TASK's `notBefore` / `window` after this PATCH, or null when untouched.
+   * A manual move outside a bound is the user's override, so that bound is
+   * dropped; bounds that no start could satisfy are rejected.
+   */
+  private taskBoundsAfter(
+    dto: UpdateSessionDto,
+    existing: SessionRow,
+    timezone: string,
+  ): { notBefore: Date | null; window: SessionWindow | null } | null {
+    if (existing.type !== "TASK") return null;
+    const given = dto.notBefore !== undefined || dto.window !== undefined;
+    const moved = dto.scheduledStartTime
+      ? new Date(dto.scheduledStartTime)
+      : null;
+    let notBefore =
+      dto.notBefore !== undefined
+        ? dto.notBefore
+          ? new Date(dto.notBefore)
+          : null
+        : existing.notBefore;
+    let window =
+      dto.window !== undefined
+        ? dto.window
+        : (existing.window as SessionWindow | null);
+    if (!notBefore && !window) return given ? { notBefore, window } : null;
+
+    if (moved && notBefore && moved < notBefore) notBefore = null;
+    if (moved && window) {
+      const hour = Number(formatInTimeZone(moved, timezone, "H"));
+      const [from, to] = SESSION_WINDOW_HOURS[window];
+      if (hour < from || hour >= to) window = null;
+    }
+    const deadline =
+      dto.deadline !== undefined ? new Date(dto.deadline) : existing.deadline;
+    if (deadline)
+      assertTaskBounds({
+        notBefore,
+        window,
+        durationMinutes: dto.durationMinutes ?? existing.durationMinutes,
+        deadline,
+      });
+    return { notBefore, window };
+  }
+
   /** The plain field diff + (for fixed types) the whole-series recurrence
    * lifecycle + `MOVE` telemetry, all in one transaction. */
   private runFieldDiffTransaction(
@@ -390,6 +445,11 @@ export class SessionUpdateService {
       }
 
       let nextStart: Date | null | undefined;
+      const bounds = this.taskBoundsAfter(dto, existing, user.timezone);
+      if (bounds) {
+        data.notBefore = bounds.notBefore;
+        data.window = bounds.window;
+      }
       if (dto.scheduledStartTime === null && existing.type === "TASK") {
         // A live TASK always has a start: it is moved, never unscheduled.
         throw new BadRequestException(TASK_START_REQUIRED_MESSAGE);
@@ -583,6 +643,7 @@ export class SessionUpdateService {
         durationMinutes: updated.durationMinutes,
         deadline: newDeadline,
         prevStartMs: updated.scheduledStartTime?.getTime(),
+        constraint: constraintOf(updated),
       },
       now,
       infeasiblePolicy,

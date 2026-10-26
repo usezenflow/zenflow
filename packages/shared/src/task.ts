@@ -28,6 +28,16 @@ export type SessionSource =
   | "GOOGLE"
   | "DEVICE";
 
+/** Part of the day a flexible task may be placed in (local time): 06 to 12, 12 to 18, 18 to 24. */
+export const SESSION_WINDOWS = ["MORNING", "AFTERNOON", "EVENING"] as const;
+export type SessionWindow = (typeof SESSION_WINDOWS)[number];
+/** Local start hour (inclusive) and end hour (exclusive) of each window. */
+export const SESSION_WINDOW_HOURS: Record<SessionWindow, readonly [number, number]> = {
+  MORNING: [6, 12],
+  AFTERNOON: [12, 18],
+  EVENING: [18, 24],
+};
+
 export interface Session {
   id: string;
   title: string;
@@ -99,6 +109,10 @@ export interface Session {
    * the start was set by the user or a move since, or for a fallback placement.
    */
   placementReason: PlacementReason | null;
+  /** `TASK` only: the engine never starts it before this ISO-8601 instant. */
+  notBefore?: string | null;
+  /** `TASK` only: the engine keeps it inside this part of the day. */
+  window?: SessionWindow | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -268,6 +282,10 @@ export interface CreateTaskInput {
   durationMinutes: number;
   /** ISO-8601 deadline — required for a `TASK`; shared by every session of a series. */
   deadline: string;
+  /** Earliest start, ISO-8601. Optional. */
+  notBefore?: string | null;
+  /** Part of the day to keep it in. Optional. */
+  window?: SessionWindow | null;
   /** The lecture, exam or assignment this task prepares for. A recurring lecture occurrence id pins that occurrence. */
   prepForSessionId?: string;
   /** Answer to a prior 409 {@link ScheduleInfeasibleError}; omit on the first attempt. */
@@ -343,6 +361,10 @@ export interface UpdateSessionInput {
   durationMinutes?: number;
   /** ISO-8601 deadline (TASK only). Omit to leave unchanged. */
   deadline?: string;
+  /** TASK only: earliest start, ISO-8601. `null` clears it. */
+  notBefore?: string | null;
+  /** TASK only: part of the day. `null` clears it. */
+  window?: SessionWindow | null;
   scheduledStartTime?: string | null;
   /**
    * RFC 5545 RRULE — for a recurring fixed session (`DND` / `ASSIGNMENT` /

@@ -28,6 +28,10 @@ export type BulkCreateItemResult =
       proposedStart: string | null;
       proposedEnd: string | null;
       timezone: string;
+      /** Local weekday and time of `proposedStart`, so a client need not convert. */
+      localStart?: string;
+      /** Plain-language flags: odd hour, weekend, close to the deadline, overlaps another session. */
+      warnings?: string[];
     }
   | { index: number; status: "ERROR"; code: string; message: string };
 

@@ -43,6 +43,8 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     attendees: [],
     durationMinutes: 60,
     deadline: null,
+    notBefore: null,
+    window: null,
     series: null,
     type: "TASK",
     source: "USER",

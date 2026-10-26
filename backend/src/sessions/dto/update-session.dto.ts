@@ -10,8 +10,10 @@ import {
   Min,
   ValidateIf,
 } from "class-validator";
+import { SESSION_WINDOWS } from "@zenflow/shared";
 import type {
   InfeasiblePolicy,
+  SessionWindow,
   UpdateScope,
   UpdateSessionInput,
 } from "@zenflow/shared";
@@ -55,6 +57,18 @@ export class UpdateSessionDto implements UpdateSessionInput {
   @IsOptional()
   @IsISO8601()
   deadline?: string;
+
+  /** TASK only: earliest start, ISO-8601. `null` clears it. */
+  @ValidateIf((_, v) => v !== null)
+  @IsOptional()
+  @IsISO8601()
+  notBefore?: string | null;
+
+  /** TASK only: part of the day. `null` clears it. */
+  @ValidateIf((_, v) => v !== null)
+  @IsOptional()
+  @IsIn(SESSION_WINDOWS)
+  window?: SessionWindow | null;
 
   /** A prep `TASK` only: the lecture occurrence it prepares for. */
   @IsOptional()

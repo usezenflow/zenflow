@@ -50,6 +50,8 @@ import { insertFixedSession } from "./fixed-session-writer";
 import { mapSessionPrismaError } from "./prisma-error";
 import { placeOrDiscard } from "./placement-compensation";
 import { SeriesService } from "./series.service";
+import { assertTaskBounds, constraintOf } from "./task-bounds";
+import { wouldConflict } from "../scheduler/io/conflict-check";
 
 /** How far ahead, and how many occurrences, to look for the next class without a prep plan. */
 const NEXT_OCCURRENCE_WINDOW_DAYS = 120;
@@ -80,6 +82,11 @@ export class SessionCrudService {
 
     if (dto.type === "TASK") {
       const deadline = new Date(dto.deadline as string);
+      assertTaskBounds({
+        ...constraintOf(dto),
+        durationMinutes: dto.durationMinutes,
+        deadline,
+      });
 
       // Pre-flight feasibility — BEFORE any row is inserted, so an
       // infeasible request never leaves an unplaced task behind (no rollback
@@ -92,6 +99,7 @@ export class SessionCrudService {
         deadline,
         now,
         policy: dto.infeasiblePolicy,
+        constraint: constraintOf(dto),
       });
       return this.createSingleTask(dto, user, deadline, now);
     }
@@ -106,6 +114,17 @@ export class SessionCrudService {
    * The start `create` would give this item, with nothing written (bulk dry
    * run). Fixed sessions are not placed, so their own start is the proposal.
    */
+  /** Whether a fixed one-off item's own start overlaps something already on the calendar. */
+  async proposeOverlaps(dto: CreateSessionDto, user: User): Promise<boolean> {
+    if (dto.type === "TASK" || !dto.scheduledStartTime) return false;
+    return wouldConflict(this.prisma, {
+      userId: user.id,
+      timezone: user.timezone,
+      start: new Date(dto.scheduledStartTime),
+      durationMinutes: dto.durationMinutes,
+    });
+  }
+
   async proposeCreate(dto: CreateSessionDto, user: User): Promise<Date | null> {
     if (dto.type !== "TASK") {
       return dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : null;
@@ -116,6 +135,7 @@ export class SessionCrudService {
       deadline: new Date(dto.deadline as string),
       now: new Date(),
       policy: dto.infeasiblePolicy,
+      constraint: constraintOf(dto),
     });
   }
 
@@ -147,6 +167,8 @@ export class SessionCrudService {
         attendees: dto.attendees ?? [],
         durationMinutes: dto.durationMinutes,
         deadline,
+        notBefore: dto.notBefore ? new Date(dto.notBefore) : null,
+        window: dto.window ?? null,
         userId: user.id,
       },
       include: WITH_SERIES,
@@ -223,6 +245,7 @@ export class SessionCrudService {
             id: created.id,
             durationMinutes: created.durationMinutes,
             deadline,
+            constraint: constraintOf(dto),
           },
           now,
           infeasiblePolicy: dto.infeasiblePolicy,

@@ -18,8 +18,10 @@ import { IsRRule } from "../../common/validators/rrule.decorator";
 import { IsFeasibleTaskWindow } from "../../common/validators/feasible-task-window.decorator";
 import {
   DEFAULT_REMINDER_CHOICES,
+  SESSION_WINDOWS,
   type InfeasiblePolicy,
   type SessionType,
+  type SessionWindow,
 } from "@zenflow/shared";
 
 export const INFEASIBLE_POLICIES: InfeasiblePolicy[] = [
@@ -120,6 +122,16 @@ export class CreateSessionDto {
   @IsISO8601()
   @IsFeasibleTaskWindow()
   deadline?: string;
+
+  /** `TASK` only: never start earlier than this ISO-8601 instant. */
+  @ValidateIf((o: CreateSessionDto) => o.type === "TASK" && o.notBefore != null)
+  @IsISO8601()
+  notBefore?: string | null;
+
+  /** `TASK` only: keep it inside this part of the day (local time). */
+  @ValidateIf((o: CreateSessionDto) => o.type === "TASK" && o.window != null)
+  @IsIn(SESSION_WINDOWS)
+  window?: SessionWindow | null;
 
   /** ISO-8601 start — required for the fixed types (`ASSIGNMENT`/`EXAM`/`LECTURE`/`DND`). */
   @ValidateIf((o: CreateSessionDto) => o.type !== "TASK")

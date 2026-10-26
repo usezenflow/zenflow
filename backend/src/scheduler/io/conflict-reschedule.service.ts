@@ -1,3 +1,4 @@
+import { constraintOf } from "../../sessions/task-bounds";
 import { HttpException, Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import type { User } from "../../../generated/prisma";
@@ -19,6 +20,8 @@ interface ConflictRow {
   seriesId: string | null;
   durationMinutes: number;
   deadline: Date;
+  notBefore: Date | null;
+  window: string | null;
   scheduledStartTime: Date;
 }
 
@@ -59,6 +62,8 @@ export class ConflictRescheduleService {
         seriesId: true,
         durationMinutes: true,
         deadline: true,
+        notBefore: true,
+        window: true,
         scheduledStartTime: true,
       },
       orderBy: { deadline: "asc" },
@@ -107,6 +112,7 @@ export class ConflictRescheduleService {
           durationMinutes: row.durationMinutes,
           deadline: row.deadline,
           prevStartMs: from.getTime(),
+          constraint: constraintOf(row),
         },
         now,
         // It already has a start; don't move it onto another conflict.

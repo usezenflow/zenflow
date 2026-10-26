@@ -3,6 +3,7 @@ import type {
   CreateSessionResponse,
   PlacementReason,
   Session as SharedSession,
+  SessionWindow,
   SlotProposalFields,
   UpdateSessionResponse,
 } from "@zenflow/shared";
@@ -76,6 +77,8 @@ export function toSessionDto(row: SessionRow): SharedSession {
     courseKey: courseKeyOf(row),
     late: isLate(row),
     placementReason: placementReasonOf(row),
+    notBefore: row.notBefore?.toISOString() ?? null,
+    window: (row.window as SessionWindow | null) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

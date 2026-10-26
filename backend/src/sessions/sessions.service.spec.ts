@@ -55,6 +55,8 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     attendees: [],
     durationMinutes: 60,
     deadline: new Date("2026-01-05T12:00:00.000Z"),
+    notBefore: null,
+    window: null,
     series: null,
     type: "TASK",
     source: "USER",
@@ -279,6 +281,7 @@ describe("SessionsService.create", () => {
         id: "session-1",
         durationMinutes: 30,
         deadline: new Date("2026-06-10T17:00:00.000Z"),
+        constraint: { notBefore: null, window: null },
       },
       now: expect.any(Date),
       createInput: expect.objectContaining({ title: "Write report" }),
@@ -288,6 +291,8 @@ describe("SessionsService.create", () => {
     expect(result).toEqual({
       id: "session-1",
       placementReason: null,
+      notBefore: null,
+      window: null,
       reminderMinutes: null,
       attendees: [],
       undoGroupId: expect.any(String),
@@ -1215,6 +1220,7 @@ describe("SessionsService.create never leaves a TASK unplaced", () => {
       id: "session-1",
       durationMinutes: 60,
       deadline: new Date("2026-06-12T15:30:00.000Z"),
+      constraint: { notBefore: null, window: null },
     });
     expect(placement.redistributeSeries).not.toHaveBeenCalled();
   });

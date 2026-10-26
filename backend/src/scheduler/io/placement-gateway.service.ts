@@ -28,7 +28,11 @@ import {
   SLOT_MS,
   type Interval,
 } from "../core/slot";
-import type { PlaceableTask } from "../types/placement.types";
+import type {
+  PlaceableTask,
+  PlacementConstraint,
+} from "../types/placement.types";
+import { constraintBlocks } from "./constraint-blocks";
 import { effectivePreferenceMatrix } from "../core/preference";
 import { isFlexible } from "./displacement.service";
 import { loadDayLoads, loadScheduleItems } from "./day-load";
@@ -45,6 +49,8 @@ export interface GatewayRequestArgs {
   maxScanDays: number;
   /** Rows being (re)placed; excluded from the occupancy load. */
   excludeSessionIds: string[];
+  /** `notBefore` / `window` of the task, added as blocked time. */
+  constraint?: PlacementConstraint;
 }
 
 /** Stored matrix if 168 finite numbers, else the shared cold-start default. */
@@ -153,7 +159,12 @@ export class PlacementGateway {
       member,
       days: bounds.map((b, i) => ({
         ...b,
-        occupied: loads[i].occupied.map(toMs),
+        occupied: [
+          ...loads[i].occupied.map(toMs),
+          ...(args.constraint
+            ? constraintBlocks(b, timezone, args.constraint, overhangMs)
+            : []),
+        ],
         workloadByType: loads[i].workloadByType,
       })),
       user: {

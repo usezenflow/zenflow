@@ -1,3 +1,4 @@
+import { proposalWarnings } from "./proposal-warnings";
 import { HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import type {
   BulkCreateItemResult,
@@ -96,6 +97,15 @@ export class SessionsService {
     try {
       if (dryRun) {
         const start = await this.crud.proposeCreate(item, user);
+        const flags = start
+          ? proposalWarnings({
+              start,
+              durationMinutes: item.durationMinutes,
+              deadline: item.deadline ? new Date(item.deadline) : null,
+              timezone: user.timezone,
+              overlaps: await this.crud.proposeOverlaps(item, user),
+            })
+          : undefined;
         return {
           index,
           status: "PROPOSED",
@@ -106,6 +116,7 @@ export class SessionsService {
               ).toISOString()
             : null,
           timezone: user.timezone,
+          ...flags,
         };
       }
       const res = await this.create(item, user);
