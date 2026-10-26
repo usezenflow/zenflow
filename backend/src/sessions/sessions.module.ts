@@ -29,6 +29,6 @@ import { CalendarSyncTriggerModule } from "../google-calendar/calendar-sync-trig
     PlacementChipsService,
     PlacementPlanService,
   ],
-  exports: [SessionsService],
+  exports: [SessionsService, PlacementPlanService],
 })
 export class SessionsModule {}

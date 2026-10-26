@@ -22,7 +22,13 @@ export type BulkCreateItemResult =
       id: string;
       scheduledStartTime: string | null;
     }
-  | { index: number; status: "PROPOSED"; proposedStart: string | null }
+  | {
+      index: number;
+      status: "PROPOSED";
+      proposedStart: string | null;
+      proposedEnd: string | null;
+      timezone: string;
+    }
   | { index: number; status: "ERROR"; code: string; message: string };
 
 /** `POST /sessions/bulk` response data. `results` follows the item order. */

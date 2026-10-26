@@ -29,6 +29,14 @@ export const MCP_TOOLS: readonly McpToolInfo[] = [
       "Xóa tối đa 50 mục trong items, mỗi mục có kind và id. kind là session (id phiên hoặc lần lặp), series (id chuỗi lặp, lấy seriesId từ list_schedule) hoặc timetable (id một buổi của môn, scope all xóa cả môn, following xóa từ buổi đó). Gọi dryRun là true trước, chỉ xóa thật khi người dùng đồng ý.",
   },
   {
+    name: "undo_last_change",
+    description: "Hoàn tác thay đổi gần nhất của người dùng. Không có tham số.",
+  },
+  {
+    name: "sync_status",
+    description: "Trạng thái đồng bộ Google Calendar và lỗi gần nhất.",
+  },
+  {
     name: "create_tasks",
     description:
       "Tạo tối đa 50 phiên trong items, theo thứ tự. Mỗi phiên có type, title (tối đa 60 ký tự) và durationMinutes (bội số của 15). type là TASK cho việc có hạn chót: đặt deadline (ISO-8601). type là ASSIGNMENT, EXAM, LECTURE hoặc DND cho lịch cố định: đặt scheduledStartTime (ISO-8601), thêm rrule để lặp (thời khóa biểu, giờ ngủ). Đặt dryRun là true để xem giờ dự kiến (proposedStart) mà không ghi gì.",

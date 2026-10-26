@@ -256,6 +256,25 @@ export class PlacementPlanService {
   }
 
   /**
+   * Reverts the group of the newest undoable event. shortcut: a reverted group
+   * is not marked, so a second call finds the same group and restores nothing;
+   * upgrade by flagging undone groups.
+   */
+  async undoLatest(user: User): Promise<UndoPlacementResponse> {
+    const latest = await this.prisma.sessionEvent.findFirst({
+      where: {
+        userId: user.id,
+        groupId: { not: null },
+        eventType: { in: UNDOABLE_EVENT_TYPES },
+      },
+      orderBy: { occurredAt: "desc" },
+      select: { groupId: true },
+    });
+    if (!latest?.groupId) throw new NotFoundException("Nothing to undo");
+    return this.undo(user, latest.groupId);
+  }
+
+  /**
    * Reverts every event an undo group wrote, newest first: a created session
    * is removed (soft delete, as a user delete does), a moved one goes back to
    * its previous start. A session moved again since keeps its current start

@@ -20,6 +20,7 @@ export function buildApiAccessPrompt(args: {
     "- Đọc lịch bằng list_schedule trước khi tạo, dời hoặc sửa bất kỳ phiên nào.",
     "- Với create_tasks, luôn gọi với dryRun là true trước. Đưa giờ dự kiến cho người dùng xem. Chỉ gọi lại không có dryRun khi người dùng đồng ý.",
     "- Nếu một mục trả về ERROR, sửa theo thông báo lỗi rồi gửi lại mục đó. Các mục khác vẫn được tạo.",
+    "- Phiên thiếu trên lịch: gọi sync_status. Muốn hoàn tác: gọi undo_last_change.",
     "- Không tự bịa hạn chót. Hỏi người dùng khi thiếu deadline.",
     "- Trả lời ngắn gọn. Mỗi phiên ghi rõ tên và giờ bắt đầu.",
   ].join("\n");

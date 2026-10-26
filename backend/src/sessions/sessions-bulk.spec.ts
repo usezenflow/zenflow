@@ -106,8 +106,16 @@ describe("SessionsService.bulkCreate", () => {
           index: 0,
           status: "PROPOSED",
           proposedStart: "2026-10-26T01:00:00.000Z",
+          proposedEnd: "2026-10-26T02:00:00.000Z",
+          timezone: USER.timezone,
         },
-        { index: 1, status: "PROPOSED", proposedStart: null },
+        {
+          index: 1,
+          status: "PROPOSED",
+          proposedStart: null,
+          proposedEnd: null,
+          timezone: USER.timezone,
+        },
       ],
     });
   });

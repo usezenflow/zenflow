@@ -100,6 +100,12 @@ export class SessionsService {
           index,
           status: "PROPOSED",
           proposedStart: start ? start.toISOString() : null,
+          proposedEnd: start
+            ? new Date(
+                start.getTime() + item.durationMinutes * 60_000,
+              ).toISOString()
+            : null,
+          timezone: user.timezone,
         };
       }
       const res = await this.create(item, user);

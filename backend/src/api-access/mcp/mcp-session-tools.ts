@@ -14,6 +14,8 @@ import {
 } from "../../sessions/dto/list-sessions.dto";
 import { UpdateSessionDto } from "../../sessions/dto/update-session.dto";
 import { SessionsService } from "../../sessions/sessions.service";
+import { PlacementPlanService } from "../../sessions/placement-plan.service";
+import { GoogleCalendarService } from "../../google-calendar/google-calendar.service";
 import { MAX_BULK_SESSIONS } from "@zenflow/shared";
 import { MCP_TOOLS } from "./mcp-tool-catalog";
 
@@ -69,13 +71,20 @@ async function validated<T extends object>(
   return dto;
 }
 
+/** The services the session tools call; each is the one the REST route uses. */
+export interface SessionToolServices {
+  sessions: SessionsService;
+  placement: PlacementPlanService;
+  calendar: GoogleCalendarService;
+}
+
 /**
  * Registers the session tools on one request's server. Each handler calls the
  * same service as the REST route, so validation and writes are shared.
  */
 export function registerSessionTools(
   server: McpServer,
-  sessions: SessionsService,
+  { sessions, placement, calendar }: SessionToolServices,
   user: User,
 ): void {
   const described = (name: string) => {
@@ -159,6 +168,18 @@ export function registerSessionTools(
       run(async () =>
         sessions.bulkDelete(await validated(BulkDeleteSessionsDto, args), user),
       ),
+  );
+
+  server.registerTool(
+    "sync_status",
+    { description: described("sync_status"), inputSchema: {} },
+    () => run(() => calendar.status(user)),
+  );
+
+  server.registerTool(
+    "undo_last_change",
+    { description: described("undo_last_change"), inputSchema: {} },
+    () => run(() => placement.undoLatest(user)),
   );
 
   server.registerTool(

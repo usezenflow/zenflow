@@ -4,6 +4,8 @@ import { ConflictException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import type { User } from "../../../generated/prisma";
 import { SessionsService } from "../../sessions/sessions.service";
+import { PlacementPlanService } from "../../sessions/placement-plan.service";
+import { GoogleCalendarService } from "../../google-calendar/google-calendar.service";
 import { McpServerFactory } from "./mcp-server.factory";
 
 const USER = { id: "u1", timezone: "UTC" } as User;
@@ -22,7 +24,12 @@ describe("McpServerFactory", () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [McpServerFactory, { provide: SessionsService, useValue: {} }],
+      providers: [
+        McpServerFactory,
+        { provide: SessionsService, useValue: {} },
+        { provide: PlacementPlanService, useValue: {} },
+        { provide: GoogleCalendarService, useValue: {} },
+      ],
     }).compile();
     factory = module.get(McpServerFactory);
   });
@@ -48,6 +55,8 @@ describe("McpServerFactory", () => {
       "delete_sessions",
       "get_session",
       "list_schedule",
+      "sync_status",
+      "undo_last_change",
       "update_session",
     ]);
     await client.close();
@@ -60,12 +69,16 @@ describe("McpServerFactory write tools", () => {
     update: jest.fn(),
     bulkDelete: jest.fn(),
   };
+  const placement = { undoLatest: jest.fn() };
+  const calendar = { status: jest.fn() };
 
   async function connected() {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         McpServerFactory,
         { provide: SessionsService, useValue: sessions },
+        { provide: PlacementPlanService, useValue: placement },
+        { provide: GoogleCalendarService, useValue: calendar },
       ],
     }).compile();
     return connect(module.get(McpServerFactory));
@@ -173,5 +186,67 @@ describe("McpServerFactory write tools", () => {
 
     expect(res.isError).toBe(true);
     expect(sessions.bulkDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe("McpServerFactory status and undo tools", () => {
+  const placement = { undoLatest: jest.fn() };
+  const calendar = { status: jest.fn() };
+
+  async function connected() {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        McpServerFactory,
+        { provide: SessionsService, useValue: {} },
+        { provide: PlacementPlanService, useValue: placement },
+        { provide: GoogleCalendarService, useValue: calendar },
+      ],
+    }).compile();
+    return connect(module.get(McpServerFactory));
+  }
+
+  beforeEach(() => jest.resetAllMocks());
+
+  it("sync_status returns the Google Calendar status of the signed-in user", async () => {
+    calendar.status.mockResolvedValue({ connected: true, attempts: 0 });
+    const { client } = await connected();
+
+    const res = await client.callTool({ name: "sync_status", arguments: {} });
+
+    expect(calendar.status).toHaveBeenCalledWith(USER);
+    expect(JSON.parse((res.content as { text: string }[])[0].text)).toEqual({
+      connected: true,
+      attempts: 0,
+    });
+  });
+
+  it("undo_last_change reverts the newest undoable group", async () => {
+    placement.undoLatest.mockResolvedValue({
+      undoGroupId: "g1",
+      restored: [],
+      removedSessionIds: ["s1"],
+      skippedSessionIds: [],
+    });
+    const { client } = await connected();
+
+    const res = await client.callTool({
+      name: "undo_last_change",
+      arguments: {},
+    });
+
+    expect(placement.undoLatest).toHaveBeenCalledWith(USER);
+    expect(res.isError).toBeFalsy();
+  });
+
+  it("undo_last_change reports a service error as a tool error", async () => {
+    placement.undoLatest.mockRejectedValue(new Error("Nothing to undo"));
+    const { client } = await connected();
+
+    const res = await client.callTool({
+      name: "undo_last_change",
+      arguments: {},
+    });
+
+    expect(res.isError).toBe(true);
   });
 });
