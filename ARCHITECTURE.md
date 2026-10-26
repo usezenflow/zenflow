@@ -21,7 +21,7 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
   - `all` runs everything in one process (local dev, test stack).
 - All placement ranking is delegated to the Bandit service, a stateless Python process called by the API and the watcher.
 - Redis is split by workload: sessions/OTP, rate limits (also the manual-sync lock), kill-switch flags, BullMQ jobs, SSE pub/sub ([ADR-0008](docs/adr/0008-redis-topology-and-kill-switch.md)). The `redis-cache` of ADR-0017 is not deployed.
-- Ingestion pulls from the university's Portal, DKHP and Moodle systems; native push goes out to FCM/APNs.
+- Ingestion pulls from the university's Portal, DKHP and Moodle systems; push goes out through self-hosted ntfy ([ADR-0047](docs/adr/0047-ntfy-push.md)).
 - Production also runs an edge proxy and an observability stack (OTel → Tempo, Loki, Prometheus, Grafana).
 
 ## Calendar

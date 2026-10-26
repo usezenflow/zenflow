@@ -1,6 +1,6 @@
 # ADR-0034: PWA offline calendar cache (IndexedDB, read-only)
 
-**Status:** accepted
+**Status:** superseded by [ADR-0047](0047-ntfy-push.md)
 **Date:** 2026-10-20
 **Issue:** n/a
 

@@ -15,8 +15,8 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | `PORTAL_API_KEY` | DLU portal API key | Replace when DLU invalidates it |
 | `MAIL_PASSWORD` | SMTP password | At the SMTP provider |
 | `BANDIT_SERVICE_TOKEN` | Bearer for `POST /v1/place` (both services) | Set the new value on bandit with the old as `BANDIT_SERVICE_TOKEN_PREVIOUS`, then API, then drop `_PREVIOUS` |
-| `FCM_SERVICE_ACCOUNT`, `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` | Push | Firebase or Apple portal |
-| `VAPID_PRIVATE_KEY` | Web Push signing (Vault sets `api`) | Regenerate with `npx web-push generate-vapid-keys` and redeploy. Browsers resubscribe |
+| `NTFY_TOKEN` | Backend publish token (Vault set `api`) | Generate a `tk_` token, set it here and in `NTFY_AUTH_TOKENS`, redeploy |
+| `NTFY_AUTH_USERS`, `NTFY_AUTH_TOKENS` | ntfy server users (bcrypt hashes) and the publisher token (Vault set `ntfy`, plain env) | `ntfy user hash`, redeploy `ntfy` |
 | `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY`, `BACKUP_AGE_RECIPIENT`, `BACKUP_AGE_IDENTITY` | Backup container. `BACKUP_AGE_RECIPIENT` is public. `BACKUP_AGE_IDENTITY` is the restore-test key, never the master key | [runbook](backups.md#rotation) |
 | `GRAFANA_ADMIN_PASSWORD` (staging), `GF_SECURITY_ADMIN_PASSWORD` (prod) | Grafana admin | Change, redeploy |
 | `GF_SMTP_PASSWORD` | Grafana alert mail (prod, Vault `grafana`) | Reset in Mailgun, redeploy |
@@ -25,7 +25,7 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `SOPS_AGE_KEY`, `SECRETS_COMMAND` | CI deploy (GitHub Environment secrets) | Yearly or on offboarding |
 | `GITHUB_TOKEN` | Image push and pull | Automatic |
 
-Not secrets: `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `VITE_*`, `EXPO_PUBLIC_*`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`, `backend/certs/lms-ca.pem`, `CORS_ORIGIN`, hosts, ports, usernames, database and bucket names, URLs without credentials. They go in the non-secret env file (`backend/env/prod.env` for prod), never in Vault. A name must not be in both.
+Not secrets: `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `VITE_*`, `EXPO_PUBLIC_*`, `NTFY_BASE_URL`, `backend/certs/lms-ca.pem`, `CORS_ORIGIN`, hosts, ports, usernames, database and bucket names, URLs without credentials. They go in the non-secret env file (`backend/env/prod.env` for prod), never in Vault. A name must not be in both.
 
 ## How secrets reach the app
 
@@ -166,10 +166,10 @@ Rotate, assuming compromise:
 2. SMTP credentials at the mail provider.
 3. Prod and staging DB passwords. Confirm the DB is not publicly reachable.
 4. `MASTER_*` V1: compromised-key row above.
-5. `PORTAL_API_KEY`, `BANDIT_SERVICE_TOKEN`, `FCM_*`, `APNS_*`, `VAPID_PRIVATE_KEY` if ever set there. Refresh the portal key.
+5. `PORTAL_API_KEY`, `BANDIT_SERVICE_TOKEN`, `NTFY_TOKEN` if ever set there. Refresh the portal key.
 6. Optionally purge history with `git filter-repo --path backend/.env --path ... --invert-paths`, force-push and re-clone. Rotation is what counts. Check forks, CI logs and branch `backup/issue-56-pre-cleanup`.
 
-The tree is clean: only `backend/.env.example`, the public `backend/certs/lms-ca.pem`, and a synthetic key in `backend/src/devices/apns.sender.spec.ts` (allowlisted in `.gitleaks.toml`).
+The tree is clean: only `backend/.env.example`, the public `backend/certs/lms-ca.pem`, and test fixtures allowlisted in `.gitleaks.toml`.
 
 ## Access (fill in)
 
