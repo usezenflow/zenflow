@@ -24,6 +24,18 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - Ingestion pulls from the university's Portal, DKHP and Moodle systems; native push goes out to FCM/APNs.
 - Production also runs an edge proxy and an observability stack (OTel → Tempo, Loki, Prometheus, Grafana).
 
+## Calendar sync
+
+![Zenflow calendar sync component diagram](docs/architecture/calendar-sync-components.svg)
+
+- Google to Zenflow: Google calls `POST /google-calendar/webhook`, which checks the channel and queues a pull. `calendar-pull.service` reads changes by `syncToken` and writes them to sessions with origin `GOOGLE`. A 410 drops the token and lists the calendar again.
+- Zenflow to Google: a session change marks the user dirty in `CalendarSyncOutbox`. `calendar-sync.processor` holds a per-user lock and runs `calendar-sync.service`, which writes events with `If-Match` on the stored etag.
+- Phone to Zenflow: on foreground, `use-device-calendar` compares each phone event with what Zenflow last wrote. Moves and reminders of scheduled TASKs are sent as session updates with origin `DEVICE`; other phone edits are overwritten on the next write.
+- Zenflow to phone: `planSync` creates, updates and deletes Zenflow events on the phone calendar through `expo-adapter`. Only Zenflow-owned types are written.
+- Busy time: other calendars are imported as `Session` rows of type `DND`, from the Google pull (`GOOGLE`) or `PUT /device-calendar/busy` (`DEVICE`). They are never written back.
+- One calendar target per user (`User.calendarTarget`): `GOOGLE` or `DEVICE` is written, never both.
+- `calendar-sweep` enqueues a pull and a sync for every user every 5 minutes.
+
 ## Scheduler components
 
 ![Zenflow scheduler component diagram](docs/architecture/scheduler-components.svg)
@@ -33,7 +45,7 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - `ExperimentService` holds the only RNG: the 50/50 policy roll and the pairwise draw.
 - A frozen heuristic (`FallbackPlacer`) answers only when the Bandit service is unavailable; the response is marked degraded, never a 503.
 - The Bandit service is the only ranking implementation, reached through `/v1/place` and `/v1/update`.
-- Reward: the first user move (API) and a START (API) call `/v1/update` and persist the arm state. A nightly job decays the preference matrix.
+- Reward: the first user move (API) and a KEPT (kept sweep) call `/v1/update` and persist the arm state. A nightly job decays the preference matrix.
 
 ## Ingestion and notifications components
 
@@ -44,13 +56,13 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 - `MaterializerService` is the single writer of ingested `Session` rows. A student's own move or delete wins over upstream; a removal soft-deletes.
 - The cross-student occurrence cache and fan-out are off by default.
 - A materializer write creates one `Notification` row, then `announce()` fans it out twice: Redis pub/sub for live SSE, and one `notify` push job per provider.
-- Reminders are delayed `notify` jobs armed by the watcher's 5-minute sweep and fired by `worker-notify`.
+- Reminders are not sent by Zenflow. The reminder is written onto the Google or phone calendar event, and that calendar fires it ([ADR-0039](docs/adr/0039-thin-layer-calendar-native.md)).
 
 ## Queue design
 
 ![Zenflow queue design](docs/architecture/queue-design.svg)
 
-- Nine queues (`portal-fetch`, `portal-profile`, `portal-marks`, `portal-discovery`, `portal-week`, `lms-fetch`, `lms-discovery`, `lms-month`, `notify`), each with a `.dlq`, on a `noeviction` + AOF Redis.
+- Eleven queues in five groups: portal ingestion, LMS ingestion, notify, prep-plan and calendar-sync. Each has a dead-letter queue, on a `noeviction` + AOF Redis.
 - The job id is the idempotency key; every producer call is time-bounded.
 - Retries use exponential backoff; an open upstream breaker parks a job without using an attempt.
 
@@ -59,4 +71,5 @@ Diagram-first companion to [README.md](README.md), for contributors placing a ch
 ![Zenflow ERD](docs/architecture/data-model-erd.svg)
 
 - Source of truth is [`schema.prisma`](backend/prisma/schema.prisma); table notes are in [docs/backend/data-model.md](docs/backend/data-model.md).
-- Four groups: account, calendar and inbox, learning loop (`SlotProposal`, `SessionEvent`, `BanditArmState`), DLU ingestion catalog.
+- Four areas: account and access, sessions with calendar sync (`CalendarConnection`, `CalendarLink`, `CalendarSyncOutbox`), the learning loop (`SlotProposal`, `SessionEvent`, `BanditArmState`), and ingestion with the portal and LMS catalog.
+- The diagram shows key columns only; the full set is in `schema.prisma`.
