@@ -149,6 +149,33 @@ export class StudentSyncService {
     const years = fetched.value;
     const parsed = parseMarks(years);
 
+    const known = new Map(
+      (
+        await this.prisma.studentMark.findMany({
+          where: { userId: data.userId },
+          select: {
+            scheduleStudyUnitId: true,
+            score10: true,
+            score4: true,
+            letter: true,
+            passed: true,
+          },
+        })
+      ).map((m) => [m.scheduleStudyUnitId, m]),
+    );
+    // A course with no result yet is not news.
+    const changed = parsed.marks.filter((m) => {
+      if (m.score10 === null && m.letter === null) return false;
+      const old = known.get(m.scheduleStudyUnitId);
+      return (
+        !old ||
+        old.score10 !== m.score10 ||
+        old.score4 !== m.score4 ||
+        old.letter !== m.letter ||
+        old.passed !== m.passed
+      );
+    });
+
     for (const mark of parsed.marks) {
       await this.prisma.studentMark.upsert({
         where: {
@@ -193,26 +220,42 @@ export class StudentSyncService {
       },
     });
 
-    // Announce once, the first time marks land.
+    // The first time marks land is one announcement; later, only new or changed marks.
     if (profile && profile.marksFetchedAt === null) {
-      await this.announce(data.userId);
+      await this.announce(
+        data.userId,
+        "marks.ready",
+        "Your marks are available",
+      );
+    } else if (changed.length > 0) {
+      await this.announce(
+        data.userId,
+        "marks.updated",
+        changed.length === 1
+          ? `New mark: ${changed[0].curriculumName}`
+          : `${changed.length} new marks`,
+      );
     }
     return { ok: true };
   }
 
-  private async announce(userId: string): Promise<void> {
+  private async announce(
+    userId: string,
+    eventName: string,
+    title: string,
+  ): Promise<void> {
     try {
       const row = await this.notifications.create(userId, {
         sessionId: null,
-        title: "Your marks are available",
+        title,
         content: "Open your profile.",
         eventEndsAt: null,
         materializeSession: false,
-        eventName: "marks.ready",
+        eventName,
       });
       this.notifications.notify(NotificationEvent.NEW_SESSION, row);
     } catch (error) {
-      this.logger.warn(`Could not raise marks.ready: ${errorMessage(error)}`);
+      this.logger.warn(`Could not raise ${eventName}: ${errorMessage(error)}`);
     }
   }
 

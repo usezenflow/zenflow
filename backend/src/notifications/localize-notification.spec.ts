@@ -3,9 +3,7 @@ import { localizeNotification } from "./localize-notification";
 import { NotificationsService } from "./notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { PushService } from "../devices/push.service";
-import { FcmSender } from "../devices/fcm.sender";
-import { ApnsSender } from "../devices/apns.sender";
-import { WebPushSender } from "../devices/web-push.sender";
+import { NtfySender } from "../devices/ntfy.sender";
 import type { PushMessage, SendResult } from "../devices/types";
 import type { User } from "../../generated/prisma";
 import { ConfigService } from "@nestjs/config";
@@ -27,9 +25,7 @@ async function build(
       { provide: ConfigService, useValue: new ConfigService({}) },
       { provide: PrismaService, useValue: prisma },
       { provide: QueueService, useValue: { enqueueBestEffort: jest.fn() } },
-      { provide: FcmSender, useValue: sender },
-      { provide: ApnsSender, useValue: sender },
-      { provide: WebPushSender, useValue: sender },
+      { provide: NtfySender, useValue: sender },
     ],
   }).compile();
   return {
@@ -119,7 +115,7 @@ describe("Vietnamese notification delivery", () => {
       service.notify("test", row);
       expect(listener).toHaveBeenCalledWith(row);
       await push.sendToUser("u", row);
-      expect(sender.send).toHaveBeenCalledTimes(2);
+      expect(sender.send).toHaveBeenCalledTimes(1);
       expect(sender.send.mock.calls[0][1]).toMatchObject({
         title: row.title,
         body: row.content,
@@ -188,6 +184,23 @@ describe("Vietnamese notification delivery", () => {
         "VI_VN",
       ).title,
     ).toBe("Có buổi học mới");
+  });
+
+  it("localizes new mark notices", () => {
+    const row = (title: string) => ({
+      eventName: "marks.updated",
+      title,
+      content: "Open your profile.",
+    });
+    expect(
+      localizeNotification(row("New mark: Giải tích"), "VI_VN"),
+    ).toMatchObject({
+      title: "Điểm mới: Giải tích",
+      content: "Mở hồ sơ của bạn.",
+    });
+    expect(localizeNotification(row("3 new marks"), "VI_VN").title).toBe(
+      "3 điểm mới",
+    );
   });
 
   it("leaves unknown/custom copy unchanged", () => {

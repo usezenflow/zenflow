@@ -103,8 +103,11 @@ export function localizeNotification<
         /^Still syncing, check back soon\.$/,
         "Đang đồng bộ, lát ghé lại nha.",
       );
-  } else if (row.eventName === "marks.ready") {
-    title = title.replace(/^Your marks are available$/, "Điểm của bạn đã có");
+  } else if (row.eventName.startsWith("marks.")) {
+    title = title
+      .replace(/^Your marks are available$/, "Điểm của bạn đã có")
+      .replace(/^New mark: /, "Điểm mới: ")
+      .replace(/^(\d+) new marks$/, "$1 điểm mới");
     content = content.replace(/^Open your profile\.$/, "Mở hồ sơ của bạn.");
   } else if (row.eventName === "timetable.changed") {
     title = title
