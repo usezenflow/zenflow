@@ -76,25 +76,30 @@ beforeEach(() => {
 });
 
 const primary = () => screen.getByTestId("onboarding.primary");
+const secondary = () => screen.getByTestId("onboarding.secondary");
 
 describe("OnboardingScreen", () => {
-  it("shows the three rows with the campus row open", () => {
+  it("starts on the welcome screen with no skip", () => {
     renderScreen(<OnboardingScreen />);
-    expect(screen.getByText("Connect your apps")).toBeTruthy();
+    expect(screen.getByText("Let's go")).toBeTruthy();
+    expect(screen.queryByTestId("onboarding.secondary")).toBeNull();
+  });
+
+  it("walks campus, calendar and assistant, one at a time", () => {
+    renderScreen(<OnboardingScreen />);
+    fireEvent.click(primary());
     expect(screen.getByTestId("campus-step")).toBeTruthy();
-    expect(screen.queryByTestId("assistants-step")).toBeNull();
-  });
-
-  it("opens one row at a time", () => {
-    renderScreen(<OnboardingScreen />);
-    fireEvent.click(screen.getByTestId("onboarding.row.assistants"));
-    expect(screen.getByTestId("assistants-step")).toBeTruthy();
+    fireEvent.click(primary());
+    expect(screen.getByTestId("onboarding.notifications-switch")).toBeTruthy();
     expect(screen.queryByTestId("campus-step")).toBeNull();
+    fireEvent.click(secondary());
+    expect(screen.getByTestId("assistants-step")).toBeTruthy();
   });
 
-  it("turns notifications on from the calendar row", async () => {
+  it("turns notifications on from the calendar step", async () => {
     renderScreen(<OnboardingScreen />);
-    fireEvent.click(screen.getByTestId("onboarding.row.calendar"));
+    fireEvent.click(primary());
+    fireEvent.click(primary());
     fireEvent.click(screen.getByTestId("onboarding.notifications-switch"));
     await waitFor(() =>
       expect(notif.setEnabled).toHaveBeenCalledWith(true, { quiet: true }),
@@ -102,25 +107,23 @@ describe("OnboardingScreen", () => {
   });
 
   describe("finish", () => {
-    it("offers to skip until campus is connected", () => {
+    const toDone = () => {
       renderScreen(<OnboardingScreen />);
-      expect(screen.getByText("Skip for now")).toBeTruthy();
-    });
+      for (let i = 0; i < 4; i++) fireEvent.click(primary());
+    };
 
-    it("opens the calendar once campus is connected", async () => {
-      useIntegrationStore.setState({
-        integrations: [{ provider: "DLU", connected: true }] as never,
-        loading: false,
-      });
-      renderScreen(<OnboardingScreen />);
-      fireEvent.click(await screen.findByText("Open my calendar"));
-      await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
-    });
-
-    it("completes onboarding even when everything is skipped", async () => {
-      renderScreen(<OnboardingScreen />);
+    it("opens the calendar on the last step", async () => {
+      toDone();
+      expect(screen.getByText("Open my calendar")).toBeTruthy();
       fireEvent.click(primary());
       await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
+    });
+
+    it("does not save before the last step", () => {
+      renderScreen(<OnboardingScreen />);
+      fireEvent.click(primary());
+      fireEvent.click(secondary());
+      expect(patches).toEqual([]);
     });
 
     it("toasts when completing fails", async () => {
@@ -129,7 +132,7 @@ describe("OnboardingScreen", () => {
           HttpResponse.json({ message: "no" }, { status: 500 }),
         ),
       );
-      renderScreen(<OnboardingScreen />);
+      toDone();
       fireEvent.click(primary());
       await waitFor(() =>
         expect(screen.getByText("Couldn't save")).toBeTruthy(),

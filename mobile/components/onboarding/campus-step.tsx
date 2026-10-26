@@ -5,7 +5,9 @@ import { BusyOr } from "@/components/ui/delayed-spinner";
 import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
 import { useLanguage } from "@/hooks/use-language";
+import { useUserStore } from "@/hooks/use-user-store";
 import { t } from "@/lib/i18n";
+import { studentIdOf } from "@/lib/student-id";
 import type { IntegrationProvider, IntegrationStatus } from "@zenflow/shared";
 import { useState } from "react";
 import { View } from "react-native";
@@ -27,6 +29,7 @@ export function CampusStep({
   onConnected: (status: IntegrationStatus) => void;
 }) {
   useLanguage();
+  const email = useUserStore((u) => u.user?.email);
   const [active, setActive] = useState<IntegrationProvider | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -35,9 +38,11 @@ export function CampusStep({
   const [asking, setAsking] = useState<"id" | "password">("id");
 
   function open(p: IntegrationProvider) {
+    // The backend only accepts the signed-in student's own ID, so skip asking.
+    const id = studentIdOf(email) ?? "";
     setActive(p);
-    setAsking("id");
-    setUsername("");
+    setAsking(id ? "password" : "id");
+    setUsername(id);
     setPassword("");
     setError(false);
   }
@@ -70,9 +75,9 @@ export function CampusStep({
             onPress={() => open(provider)}
           >
             {isOpen ? (
-              <View className="gap-3 border-t border-border p-4">
+              <View className="gap-3 border-t border-foreground/10 p-4">
                 <Text className="text-[16px] font-semibold">
-                  {asking === "id" ? t("Your student ID?") : t("And your password?")}
+                  {asking === "id" ? t("Your student ID?") : t("Your password?")}
                 </Text>
                 <Input
                   key={asking}

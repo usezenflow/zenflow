@@ -1,6 +1,7 @@
 import { Check } from "@/components/Icons";
 import { Text } from "@/components/ui/text";
 import { DelayedSpinner } from "@/components/ui/delayed-spinner";
+import { useColorScheme } from "@/lib/useColorScheme";
 import { cn } from "@/lib/utils";
 import type { ComponentType, ReactNode } from "react";
 import { Pressable, View } from "react-native";
@@ -25,14 +26,22 @@ export function ConnectTile({
   testID?: string;
   children?: ReactNode;
 }) {
+  const { isDarkColorScheme: dark } = useColorScheme();
   const done = state === "done";
   return (
     <View
       className={cn(
-        "overflow-hidden rounded-2xl border bg-card",
-        done ? "border-primary/40" : "border-border",
+        "overflow-hidden rounded-2xl border",
         state === "off" && "opacity-60",
       )}
+      style={{
+        backgroundColor: dark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.5)",
+        borderColor: done
+          ? "rgba(255,142,62,0.6)"
+          : dark
+            ? "rgba(255,200,150,0.22)"
+            : "rgba(255,255,255,0.7)",
+      }}
     >
       <Pressable
         testID={testID}
@@ -43,7 +52,7 @@ export function ConnectTile({
         <View
           className={cn(
             "size-11 items-center justify-center rounded-2xl",
-            done ? "bg-primary" : "bg-primary/10",
+            done ? "bg-primary" : "bg-primary/15",
           )}
         >
           {done ? (

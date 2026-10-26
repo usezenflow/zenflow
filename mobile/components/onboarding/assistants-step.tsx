@@ -67,7 +67,7 @@ export function AssistantsStep() {
               onPress={() => void pick(g.id, g.link?.url)}
             >
               {open && !connected ? (
-                <View className="flex-row items-center gap-2 border-t border-border px-4 py-3">
+                <View className="flex-row items-center gap-2 border-t border-foreground/10 px-4 py-3">
                   <View className="size-2 rounded-full bg-primary" />
                   <Text className="flex-1 text-[12px] text-muted-foreground">{t("Waiting")}</Text>
                   <Pressable

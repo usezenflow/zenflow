@@ -1,5 +1,18 @@
 /** Vietnamese UI copy. English keys remain the English fallback. */
 export default {
+  "Your days, on autopilot": "Lịch trình tự chạy",
+  "Classes": "Lớp học",
+  "Deadlines": "Deadline",
+  "Focus time": "Giờ tập trung",
+  "Let's go": "Đi thôi",
+  "Bring your classes": "Mang lớp học vào",
+  "Import your timetable": "Nhập thời khóa biểu",
+  "Stay in the loop": "Luôn nắm lịch",
+  "Sync and get reminders": "Đồng bộ và nhắc việc",
+  "Plan by chatting": "Lên lịch bằng chat",
+  "Link your AI assistant": "Nối trợ lý AI",
+  "You're all set": "Xong rồi nha",
+  "Your week is ready": "Tuần của bạn sẵn sàng",
   Now: "Bây giờ",
   "Import my timetable": "Nhập thời khóa biểu",
   "Your password is stored encrypted. Disconnect in Settings to delete it.":
@@ -364,7 +377,7 @@ export default {
   "Waiting": "Đang chờ",
   "Copy link": "Sao chép liên kết",
   "Your student ID?": "Mã số sinh viên của bạn?",
-  "And your password?": "Và mật khẩu?",
+  "Your password?": "Mật khẩu?",
   "Next": "Tiếp",
   "Push alerts for schedule changes and sync problems": "Thông báo đẩy khi lịch thay đổi hoặc đồng bộ lỗi",
   "Notification": "Thông báo",
