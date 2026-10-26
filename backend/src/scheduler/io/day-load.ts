@@ -195,6 +195,8 @@ export interface ScheduleItem {
   durationMinutes: number;
   /** The row's TASK deadline, if any. */
   deadlineMs: number | null;
+  /** The user moved this row by hand (`lastMovedAt`): it is fixed for placement. */
+  moved: boolean;
 }
 
 /**
@@ -246,6 +248,7 @@ export async function loadScheduleItems(
         durationMinutes: true,
         deadline: true,
         type: true,
+        lastMovedAt: true,
       },
     }),
     prisma.sessionSeries.findMany({
@@ -281,6 +284,7 @@ export async function loadScheduleItems(
       end: start + o.durationMinutes * 60_000,
       durationMinutes: o.durationMinutes,
       deadlineMs: (o as { deadline?: Date | null }).deadline?.getTime() ?? null,
+      moved: o.lastMovedAt !== null,
     });
   }
   for (const series of recurringSeries) {
@@ -304,6 +308,7 @@ export async function loadScheduleItems(
         end: start + rep.durationMinutes * 60_000,
         durationMinutes: rep.durationMinutes,
         deadlineMs: null,
+        moved: false,
       });
     }
   }

@@ -30,6 +30,7 @@ const item = (
   end: start + durationMinutes * 60 * 1000,
   durationMinutes,
   deadlineMs: NOW + 3 * 24 * HOUR,
+  moved: false,
   ...overrides,
 });
 
