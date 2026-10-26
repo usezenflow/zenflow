@@ -785,7 +785,7 @@ services:
   # Self-hosted push (ADR-0047). Reached through nginx at https://ntfy.usezenflow.com.
   ntfy:
     container_name: zenflow-ntfy-prod
-    image: binwiederhold/ntfy:v2.14.0
+    image: binwiederhier/ntfy:v2.34.0
     restart: unless-stopped
     command: ["serve"]
     env_file:
