@@ -25,11 +25,11 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `ALLOWED_EMAIL_DOMAINS` | unset | Comma-separated sign-in domains (subdomains pass). Unset: anyone. Set in `backend/env/prod.env` only. Enforced on OTP request, verify and every authenticated request, so other domains' sessions drop. Error `EMAIL_DOMAIN_NOT_ALLOWED`. |
 | `MASTER_LMS_ENCRYPTION_KEY_V1` / `MASTER_PORTAL_ENCRYPTION_KEY_V1` | none | Required. 64 hex chars (`openssl rand -hex 32`). Add `_V<n>` and set `MASTER_KEY_CURRENT_VERSION` to rotate. |
 | `MASTER_KEY_CURRENT_VERSION` | `1` | Master-key version used for new wraps; its `_V<n>` keys must exist. |
-| `API_TOKEN_PEPPER` | none | Required in production, 32+ chars. Peppers the personal API token HMAC; unset outside production disables API access. Rotating revokes every token. |
+| `API_TOKEN_PEPPER_V<n>`, `API_TOKEN_PEPPER_CURRENT_VERSION` | `1` | Pepper for personal and OAuth token HMACs, 32+ chars. The current version hashes new tokens; older ones still verify until removed. Required in production. |
 | `PUBLIC_API_URL` | none | API base incl. `/api/v1`, e.g. `https://api.usezenflow.com/api/v1`. Turns on OAuth for AI assistants ([ADR-0041](../adr/0041-mcp-oauth.md)) and is the base of Google's redirect and push URLs. |
 | `PUBLIC_WEB_URL` | first `CORS_ORIGIN` | Where the PWA lives: the consent screen and the page Google returns to. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | none | Google OAuth client for Calendar sync ([ADR-0040](../adr/0040-google-calendar-sync.md)). Redirect URI `<PUBLIC_API_URL>/google-calendar/callback`, scopes `calendar.events` and `calendar.calendarlist.readonly`. |
-| `GOOGLE_TOKEN_ENCRYPTION_KEY` | none | 64 hex chars (`openssl rand -hex 32`). AES-256-GCM key for stored Google refresh tokens. Sync is off until the three Google vars and `PUBLIC_API_URL` are set. Rotating it forces everyone to reconnect. |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY_V<n>`, `GOOGLE_TOKEN_ENCRYPTION_KEY_CURRENT_VERSION` | `1` | 64 hex chars each (`openssl rand -hex 32`). AES-256-GCM keys for stored Google refresh tokens; each sealed value records its version. Sync is off until the three Google vars and `PUBLIC_API_URL` are set. |
 | `GOOGLE_WEBHOOK_SECRET` | none | Keys the Google push channel tokens. Set it to any long random string; Google Calendar stays off without it. |
 
 | `PORT` | 8000 | |

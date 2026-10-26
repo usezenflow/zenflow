@@ -12,6 +12,7 @@ import type {
   RevokeApiTokenResponse,
 } from "@zenflow/shared";
 import { type ApiToken, type User } from "../../generated/prisma";
+import { readVersionedSecret } from "../common/config/versioned-secret";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   API_TOKEN_PREFIX,
@@ -40,13 +41,21 @@ export function toApiTokenSummary(row: ApiToken): ApiTokenSummary {
 @Injectable()
 export class ApiTokensService {
   private readonly logger = new Logger(ApiTokensService.name);
+  /** Current pepper, used to hash new tokens. */
   private readonly pepper: string | undefined;
+  /** Every configured pepper: a token is found under any of them. */
+  private readonly peppers: string[];
 
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService,
   ) {
-    this.pepper = config.get<string>("API_TOKEN_PEPPER") || undefined;
+    const { current, values } = readVersionedSecret(
+      (key) => config.get<string>(key),
+      "API_TOKEN_PEPPER",
+    );
+    this.pepper = values.get(current);
+    this.peppers = [...values.values()];
   }
 
   async list(user: User): Promise<ApiTokenSummary[]> {
@@ -98,13 +107,18 @@ export class ApiTokensService {
       return this.authenticateOAuth(secret, now);
     }
     if (!this.pepper || !secret.startsWith(API_TOKEN_PREFIX)) return null;
-    const row = await this.prisma.apiToken.findUnique({
-      where: { hash: hashApiToken(secret, this.pepper) },
+    const row = await this.prisma.apiToken.findFirst({
+      where: { hash: { in: this.hashes(secret) } },
       include: { user: true },
     });
     if (!row || row.revokedAt) return null;
     await this.touch(row.id, row.lastUsedAt, now);
     return row.user;
+  }
+
+  /** The stored form of a secret under each configured pepper, so tokens survive a rotation. */
+  private hashes(secret: string): string[] {
+    return this.peppers.map((pepper) => hashApiToken(secret, pepper));
   }
 
   /** The user behind a live OAuth access token an AI assistant was given. */
@@ -114,7 +128,7 @@ export class ApiTokensService {
   ): Promise<User | null> {
     const row = await this.prisma.oAuthToken.findFirst({
       where: {
-        hash: hashApiToken(secret, this.pepper!),
+        hash: { in: this.hashes(secret) },
         kind: "ACCESS",
         expiresAt: { gt: now },
       },

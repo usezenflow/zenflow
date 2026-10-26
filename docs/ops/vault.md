@@ -7,7 +7,7 @@ For operators. Self-hosted Vault: KV v2 plus AppRole. Part of [secrets.md](secre
 - Prod only. The `vault` service is in `backend/compose.prod.yml`; staging uses `.env.staging`.
 - `SECRETS_PROVIDER=vault` is valid only for the `production` Environment. `deploy.sh` exits 2 and `deploy.yml` fails otherwise.
 - Not implemented: dynamic DB credentials, transit engine, key rotation job, auto-unseal, HA.
-- Files in `backend/ops/vault/`: `config.hcl`, `policy.hcl`, `setup-approle.sh`, `render-secrets.sh`, `import-dotenv.sh`.
+- Files in `backend/ops/vault/`: `config.hcl`, `policy.hcl`, `setup-approle.sh`, `render-secrets.sh`, `import-dotenv.sh`, `rotate-versioned.sh`.
 - The `hashicorp/vault` image is pinned in `compose.prod.yml`.
 
 ## Layout
@@ -111,6 +111,45 @@ The deploy restarts every Redis with `requirepass` before the new colour starts.
 - Running apps keep working (they read files at boot only).
 - A host reboot clears `/run` (tmpfs), so restarted containers cannot start. Unseal, then redeploy or run `render-secrets.sh`.
 
+## Root token and non-root edits
+
+Root is for init, policy changes and new environments. Edit a secret with a short-lived token instead.
+
+### Generate a root token
+
+Needs 3 of 5 holders. Each holder runs their share with `-nonce` from `-init`.
+
+```bash
+docker exec zenflow-vault-prod vault operator generate-root -init     # note the nonce and OTP
+docker exec -it zenflow-vault-prod vault operator generate-root -nonce=<nonce>   # 3 holders, one each
+docker exec zenflow-vault-prod vault operator generate-root -decode=<encoded> -otp=<otp>
+docker exec zenflow-vault-prod vault operator generate-root -cancel  # abort instead
+```
+
+Revoke it when done: `vault token revoke -self`.
+
+### Edit KV without root
+
+One-time, with root. The policy covers the prod sets only. Add a line when a set is added.
+
+```bash
+docker exec -i -e VAULT_TOKEN zenflow-vault-prod vault policy write zenflow-ops-prod - <<'EOF'
+path "secret/data/zenflow/prod/*" { capabilities = ["create", "read", "update", "patch", "list"] }
+path "secret/metadata/zenflow/prod/*" { capabilities = ["read", "list"] }
+EOF
+$V token create -policy=zenflow-ops-prod -no-default-policy -ttl=1h
+```
+
+Then, with the token from the last command:
+
+```bash
+export VAULT_TOKEN=<token>
+docker exec -e VAULT_TOKEN zenflow-vault-prod vault kv patch -mount=secret zenflow/prod/api KEY=...
+unset VAULT_TOKEN
+```
+
+Metadata delete needs root. See [Rotation with Vault](#rotation-with-vault).
+
 ## Key shares
 
 Review quarterly.
@@ -181,6 +220,7 @@ docker compose -f compose.prod.yml start vault        # unseal with the SAME sha
 | Redis password | Patch `api` and the instance's set, deploy. Brief outage, see [secrets.md](secrets.md#redis-passwords) |
 | Database password | Run `ALTER USER`, patch `POSTGRES_PASSWORD` in `api`, `postgres` and `backup`, deploy |
 | Crypto master keys | Patch in `MASTER_*_ENCRYPTION_KEY_V2`, set `MASTER_KEY_CURRENT_VERSION=2` in `backend/env/prod.env`, deploy |
+| `API_TOKEN_PEPPER`, `GOOGLE_TOKEN_ENCRYPTION_KEY` | `ops/vault/rotate-versioned.sh rotate <PREFIX>`, set `<PREFIX>_CURRENT_VERSION` in `backend/env/prod.env`, deploy. Runbook: [secrets.md](secrets.md#versioned-secrets) |
 | VAPID private key | Patch `VAPID_PRIVATE_KEY` in `api`, deploy. The public key is not in Vault: it lives in `backend/env/prod.env` and in the web build as `VITE_VAPID_PUBLIC_KEY`. A new pair means rebuilding the web app, and browsers resubscribe. See [ADR-0033](../adr/0033-web-push.md) |
 
 Never `kv put` over a set that holds V1 keys: it replaces all keys, and V1 must stay while rows reference it.

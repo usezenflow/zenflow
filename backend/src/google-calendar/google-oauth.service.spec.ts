@@ -5,7 +5,7 @@ import { GoogleOAuthService } from "./google-oauth.service";
 const config = {
   clientId: "client-id",
   clientSecret: "client-secret",
-  tokenKey: "a".repeat(64),
+  tokenKeys: { current: 1, values: new Map([[1, "a".repeat(64)]]) },
   stateSecret: "state-secret",
   redirectUri: "https://api.example.com/api/v1/google-calendar/callback",
 };

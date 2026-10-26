@@ -251,8 +251,8 @@ export class OAuthProvider implements OAuthServerProvider {
     client: OAuthClientInformationFull,
     request: OAuthTokenRevocationRequest,
   ): Promise<void> {
-    const row = await this.prisma.oAuthToken.findUnique({
-      where: { hash: this.hash(request.token) },
+    const row = await this.prisma.oAuthToken.findFirst({
+      where: { hash: { in: this.hashes(request.token) } },
     });
     if (row && row.clientId === client.client_id)
       await this.revokeFamily(row.familyId);
@@ -262,10 +262,18 @@ export class OAuthProvider implements OAuthServerProvider {
     await this.prisma.oAuthToken.deleteMany({ where: { familyId } });
   }
 
+  /** The stored form of a new secret, under the current pepper. */
   hash(secret: string): string {
     return createHmac("sha256", this.config.pepper)
       .update(secret)
       .digest("hex");
+  }
+
+  /** Every stored form of a secret, one per configured pepper, so tokens survive a rotation. */
+  hashes(secret: string): string[] {
+    return this.config.peppers.map((pepper) =>
+      createHmac("sha256", pepper).update(secret).digest("hex"),
+    );
   }
 
   /** Only the MCP endpoint is a protected resource, so anything else is refused. */
@@ -284,7 +292,7 @@ export class OAuthProvider implements OAuthServerProvider {
   private find(kind: OAuthTokenKind, secret: string) {
     if (!secret.startsWith(PREFIX[kind])) return Promise.resolve(null);
     return this.prisma.oAuthToken.findFirst({
-      where: { hash: this.hash(secret), kind },
+      where: { hash: { in: this.hashes(secret) }, kind },
     });
   }
 

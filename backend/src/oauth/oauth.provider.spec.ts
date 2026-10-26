@@ -31,6 +31,7 @@ async function setup() {
         provide: OAuthConfig,
         useValue: {
           pepper: "p".repeat(40),
+          peppers: ["p".repeat(40)],
           signingSecret: "s",
           consentUrl: "https://app/oauth/consent",
           mcpUrl: new URL("https://api.example.com/api/v1/mcp"),

@@ -86,7 +86,11 @@ export class GoogleOAuthService {
   }
 
   seal(refreshToken: string): string {
-    return sealToken(refreshToken, this.config.tokenKey);
+    const { current, values } = this.config.tokenKeys;
+    return sealToken(refreshToken, {
+      version: current,
+      hex: values.get(current) ?? "",
+    });
   }
 
   /** A valid access token for a stored (sealed) refresh token, cached until it nears expiry. */
@@ -96,7 +100,7 @@ export class GoogleOAuthService {
       return cached.token;
     const res = await this.token({
       grant_type: "refresh_token",
-      refresh_token: openToken(sealedRefresh, this.config.tokenKey),
+      refresh_token: openToken(sealedRefresh, this.config.tokenKeys.values),
     });
     this.cache.set(userId, {
       token: res.access_token,
@@ -115,7 +119,7 @@ export class GoogleOAuthService {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          token: openToken(sealedRefresh, this.config.tokenKey),
+          token: openToken(sealedRefresh, this.config.tokenKeys.values),
         }),
       });
     } catch {

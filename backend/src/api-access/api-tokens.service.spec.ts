@@ -32,9 +32,12 @@ type UpdateManyWhere = {
 function fakePrisma(users: User[]) {
   const rows: Row[] = [];
   let seq = 0;
-  const findUnique = jest.fn(
-    (args: { where: { hash: string }; include?: { user: boolean } }) => {
-      const row = rows.find((r) => r.hash === args.where.hash);
+  const findByHash = jest.fn(
+    (args: {
+      where: { hash: { in: string[] } };
+      include?: { user: boolean };
+    }) => {
+      const row = rows.find((r) => args.where.hash.in.includes(r.hash));
       if (!row) return Promise.resolve(null);
       const user = users.find((u) => u.id === row.userId);
       return Promise.resolve(args.include ? { ...row, user } : row);
@@ -82,14 +85,22 @@ function fakePrisma(users: User[]) {
         ),
       ),
     ),
-    findFirst: jest.fn((args: { where: { id: string; userId: string } }) =>
-      Promise.resolve(
-        rows.find(
-          (r) => r.id === args.where.id && r.userId === args.where.userId,
-        ) ?? null,
-      ),
+    findFirst: jest.fn(
+      (args: {
+        where: { id?: string; userId?: string; hash?: { in: string[] } };
+        include?: { user: boolean };
+      }) =>
+        args.where.hash
+          ? findByHash({
+              where: { hash: args.where.hash },
+              include: args.include,
+            })
+          : Promise.resolve(
+              rows.find(
+                (r) => r.id === args.where.id && r.userId === args.where.userId,
+              ) ?? null,
+            ),
     ),
-    findUnique,
     update: jest.fn((args: { where: { id: string }; data: Partial<Row> }) => {
       const row = rows.find((r) => r.id === args.where.id);
       if (row) Object.assign(row, args.data);
@@ -97,13 +108,13 @@ function fakePrisma(users: User[]) {
     }),
     updateMany,
   };
-  return { rows, apiToken, findUnique, updateMany };
+  return { rows, apiToken, findByHash, updateMany };
 }
 
 type FakePrisma = ReturnType<typeof fakePrisma>;
 
-async function make(
-  pepper: string | undefined,
+async function makeWithVars(
+  vars: Record<string, string | undefined>,
   prisma: FakePrisma,
   oAuthToken: unknown = {},
 ) {
@@ -116,14 +127,19 @@ async function make(
       },
       {
         provide: ConfigService,
-        useValue: {
-          get: (key: string) =>
-            key === "API_TOKEN_PEPPER" ? pepper : undefined,
-        },
+        useValue: { get: (key: string) => vars[key] },
       },
     ],
   }).compile();
   return module.get(ApiTokensService);
+}
+
+function make(
+  pepper: string | undefined,
+  prisma: FakePrisma,
+  oAuthToken: unknown = {},
+) {
+  return makeWithVars({ API_TOKEN_PEPPER_V1: pepper }, prisma, oAuthToken);
 }
 
 const alice = {
@@ -191,13 +207,35 @@ describe("ApiTokensService", () => {
     expect(await rotated.authenticate(secret, T0)).toBeNull();
   });
 
+  it("keeps tokens minted under an older pepper valid after rotation", async () => {
+    const prisma = fakePrisma([alice]);
+    const before = await make(PEPPER, prisma);
+    const { secret: old } = await before.create(alice, { name: "old" });
+
+    const rotated = await makeWithVars(
+      {
+        API_TOKEN_PEPPER_CURRENT_VERSION: "2",
+        API_TOKEN_PEPPER_V1: PEPPER,
+        API_TOKEN_PEPPER_V2: OTHER_PEPPER,
+      },
+      prisma,
+    );
+    const { secret: fresh } = await rotated.create(alice, { name: "new" });
+
+    expect((await rotated.authenticate(old, T0))?.id).toBe(alice.id);
+    expect((await rotated.authenticate(fresh, T0))?.id).toBe(alice.id);
+    expect(prisma.rows.find((r) => r.name === "new")?.hash).toBe(
+      hashApiToken(fresh, OTHER_PEPPER),
+    );
+  });
+
   it("rejects unknown and foreign-prefix secrets without a lookup", async () => {
     const prisma = fakePrisma([alice]);
     const service = await make(PEPPER, prisma);
 
     expect(await service.authenticate("zf_unknown", T0)).toBeNull();
     expect(await service.authenticate("Bearer something", T0)).toBeNull();
-    expect(prisma.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.findByHash).toHaveBeenCalledTimes(1);
   });
 
   it("authenticates a live OAuth access token and refuses an expired one", async () => {
@@ -210,10 +248,14 @@ describe("ApiTokensService", () => {
     const oAuthToken = {
       findFirst: jest.fn(
         (args: {
-          where: { hash: string; kind: string; expiresAt: { gt: Date } };
+          where: {
+            hash: { in: string[] };
+            kind: string;
+            expiresAt: { gt: Date };
+          };
         }) =>
           Promise.resolve(
-            args.where.hash === stored.hash &&
+            args.where.hash.in.includes(stored.hash) &&
               args.where.kind === "ACCESS" &&
               stored.expiresAt > args.where.expiresAt.gt
               ? stored

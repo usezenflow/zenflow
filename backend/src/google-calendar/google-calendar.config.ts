@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PublicUrls } from "../common/config/public-urls";
+import { readVersionedSecret } from "../common/config/versioned-secret";
 
 /** Writes the Zenflow calendar and reads the user's other calendars for busy time (ADR-0040). */
 export const GOOGLE_CALENDAR_SCOPE = [
@@ -22,8 +23,12 @@ export class GoogleCalendarConfig {
   get clientSecret(): string {
     return this.config.get<string>("GOOGLE_CLIENT_SECRET") ?? "";
   }
-  get tokenKey(): string {
-    return this.config.get<string>("GOOGLE_TOKEN_ENCRYPTION_KEY") ?? "";
+  /** Keys that seal refresh tokens. Old versions still open existing rows. */
+  get tokenKeys() {
+    return readVersionedSecret(
+      (key) => this.config.get<string>(key),
+      "GOOGLE_TOKEN_ENCRYPTION_KEY",
+    );
   }
   get apiUrl(): string {
     return this.urls.api;
@@ -50,7 +55,7 @@ export class GoogleCalendarConfig {
     return !!(
       this.clientId &&
       this.clientSecret &&
-      this.tokenKey &&
+      this.tokenKeys.values.has(this.tokenKeys.current) &&
       this.webhookSecret &&
       this.apiUrl
     );

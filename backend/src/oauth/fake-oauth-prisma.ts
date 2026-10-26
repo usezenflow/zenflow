@@ -28,6 +28,8 @@ export function fakeOAuthPrisma() {
       if (want === null) return have === null;
       if (want && typeof want === "object" && "gt" in want)
         return (have as Date) > (want as { gt: Date }).gt;
+      if (want && typeof want === "object" && "in" in want)
+        return (want as { in: unknown[] }).in.includes(have);
       return have === want;
     });
 

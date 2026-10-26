@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PublicUrls } from "../common/config/public-urls";
+import { readVersionedSecret } from "../common/config/versioned-secret";
 
 export const MCP_SCOPE = "schedule";
 export const CODE_TTL_MS = 5 * 60_000;
@@ -19,9 +20,20 @@ export class OAuthConfig {
     private readonly urls: PublicUrls,
   ) {}
 
-  /** Secret that keys token hashes; shared with personal API tokens. */
+  /** Secret that keys token hashes; shared with personal API tokens. New hashes use the current one. */
   get pepper(): string {
-    return this.config.get<string>("API_TOKEN_PEPPER") ?? "";
+    const { current, values } = this.pepperVersions;
+    return values.get(current) ?? "";
+  }
+  /** Every configured pepper: a stored hash may have been made under any of them. */
+  get peppers(): string[] {
+    return [...this.pepperVersions.values.values()];
+  }
+  private get pepperVersions() {
+    return readVersionedSecret(
+      (key) => this.config.get<string>(key),
+      "API_TOKEN_PEPPER",
+    );
   }
   get signingSecret(): string {
     return this.config.get<string>("SESSION_SECRET") ?? "";

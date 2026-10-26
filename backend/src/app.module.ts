@@ -8,6 +8,7 @@ import { createKeyv } from "@keyv/redis";
 import { Keyv } from "keyv";
 import { CacheableMemory } from "cacheable";
 import { redisOptions, redisUrl } from "./common/config/connections";
+import { readVersionedSecret } from "./common/config/versioned-secret";
 import { MailService } from "./mail/mail.service";
 import { MailModule } from "./mail/mail.module";
 import { UsersModule } from "./users/users.module";
@@ -118,18 +119,22 @@ const jobModules = [
         // old row still resolves its recorded version. The pattern + custom
         // check below validate every versioned var and require the current one.
         MASTER_KEY_CURRENT_VERSION: Joi.number().integer().min(1).default(1),
-        // Server pepper for personal API tokens: tokens are stored as
-        // HMAC-SHA256(secret, pepper). Rotating it revokes every API token.
-        // Optional outside production; without it API access is disabled.
-        API_TOKEN_PEPPER: Joi.string()
-          .min(32)
-          .when("NODE_ENV", { is: "production", then: Joi.required() }),
+        // Server peppers for personal and OAuth tokens: stored as HMAC-SHA256(secret,
+        // pepper). `API_TOKEN_PEPPER_V<n>`, see master keys. Required in production.
+        // Without the current one, API access is disabled.
+        API_TOKEN_PEPPER_CURRENT_VERSION: Joi.number()
+          .integer()
+          .min(1)
+          .default(1),
         CORS_ORIGIN: Joi.string().required(),
         // Google Calendar sync (google-calendar/). Optional: the feature stays off until all are set.
         GOOGLE_CLIENT_ID: Joi.string().optional(),
         GOOGLE_CLIENT_SECRET: Joi.string().optional(),
-        // 32-byte hex key that encrypts stored Google refresh tokens.
-        GOOGLE_TOKEN_ENCRYPTION_KEY: Joi.string().hex().length(64).optional(),
+        // `GOOGLE_TOKEN_ENCRYPTION_KEY_V<n>` (32-byte hex) encrypts stored Google refresh tokens.
+        GOOGLE_TOKEN_ENCRYPTION_KEY_CURRENT_VERSION: Joi.number()
+          .integer()
+          .min(1)
+          .default(1),
         // Public API base incl. /api/v1; Google calls back and pushes here.
         PUBLIC_API_URL: Joi.string().uri().optional(),
         PUBLIC_WEB_URL: Joi.string().uri().optional(),
@@ -531,6 +536,13 @@ const jobModules = [
             .length(64)
             .regex(/^[0-9a-fA-F]+$/, "hex"),
         )
+        .pattern(/^API_TOKEN_PEPPER_V\d+$/, Joi.string().min(32))
+        .pattern(
+          /^GOOGLE_TOKEN_ENCRYPTION_KEY_V\d+$/,
+          Joi.string()
+            .length(64)
+            .regex(/^[0-9a-fA-F]+$/, "hex"),
+        )
         .custom((value: unknown, helpers) => {
           const env = value as Record<string, unknown>;
           const version = Number(env.MASTER_KEY_CURRENT_VERSION ?? 1);
@@ -540,6 +552,19 @@ const jobModules = [
               return helpers.error("any.custom", {
                 error: new Error(
                   `${name} is required (MASTER_KEY_CURRENT_VERSION=${version})`,
+                ),
+              });
+            }
+          }
+          if (env.NODE_ENV === "production") {
+            const pepper = readVersionedSecret(
+              (key) => env[key] as string | undefined,
+              "API_TOKEN_PEPPER",
+            );
+            if (!pepper.values.has(pepper.current)) {
+              return helpers.error("any.custom", {
+                error: new Error(
+                  `API_TOKEN_PEPPER_V${pepper.current} is required in production (API_TOKEN_PEPPER_CURRENT_VERSION=${pepper.current})`,
                 ),
               });
             }

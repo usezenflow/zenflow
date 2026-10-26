@@ -25,6 +25,7 @@ async function setup() {
   const fake = fakeOAuthPrisma();
   const config = {
     pepper: "p".repeat(40),
+    peppers: ["p".repeat(40)],
     signingSecret: "s".repeat(40),
     consentUrl: "https://app.example.com/oauth/consent",
     issuer: new URL("https://api.example.com"),

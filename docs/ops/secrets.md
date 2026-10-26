@@ -10,9 +10,9 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | API, migrations, Postgres, backup (Vault sets `api`, `postgres`, `backup`) | [runbook](#database-password) |
 | `SESSION_SECRET` | Signs the session cookie | [runbook](#session-signing-key-session_secret) |
-| `API_TOKEN_PEPPER` | Server pepper for hashing personal API tokens (required in production, min 32 chars; Vault sets `api`) | Rotating invalidates all personal API tokens |
+| `API_TOKEN_PEPPER_V<n>` | Server pepper for hashing personal and OAuth tokens (required in production, min 32 chars; Vault sets `api`) | [runbook](#versioned-secrets) |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret for Calendar sync (Vault sets `api`) | Rotate in Google Cloud, redeploy |
-| `GOOGLE_TOKEN_ENCRYPTION_KEY` | AES key for stored Google refresh tokens, 64 hex (Vault sets `api`) | Rotating forces every user to reconnect Google Calendar |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY_V<n>` | AES key for stored Google refresh tokens, 64 hex (Vault sets `api`) | [runbook](#versioned-secrets) |
 | `MASTER_LMS_ENCRYPTION_KEY_V<n>`, `MASTER_PORTAL_ENCRYPTION_KEY_V<n>` | Wrap per-user DEKs for DLU and LMS credentials (`backend/src/crypto`) | [runbook](#crypto-master-keys-master__encryption_key_vn) |
 | `PORTAL_API_KEY` | DLU portal API key | Replace when DLU invalidates it |
 | `MAIL_PASSWORD` | SMTP password | At the SMTP provider |
@@ -134,6 +134,21 @@ Add a version (config only):
 | --- | --- |
 | Routine | Add V2 (new users only), keep V1 |
 | V1 compromised (it was committed, see below) | Back up the DB, run a re-wrap in a maintenance window, verify every row is `masterKeyVersion = 2`, then remove V1. Ask users to re-link DLU credentials and change their DLU passwords |
+
+### Versioned secrets
+
+Code: `backend/src/common/config/versioned-secret.ts`. Covers `API_TOKEN_PEPPER` and `GOOGLE_TOKEN_ENCRYPTION_KEY`, both now `_V<n>` like the master keys.
+
+- A version stays readable until its var is removed. A pepper version verifies the tokens hashed under it. A key version opens the rows sealed under it (the value's `v<n>.` prefix).
+- Rotating a pepper does not revoke tokens while the old version stays. Removing the old version revokes them.
+- No re-seal job: a Google refresh token keeps its old key version until the user reconnects or the row is rewritten.
+
+Rotate in Vault, then deploy:
+
+1. `VAULT_ADDR=... VAULT_TOKEN=... VAULT_ENV=prod ./ops/vault/rotate-versioned.sh rotate API_TOKEN_PEPPER` (or `GOOGLE_TOKEN_ENCRYPTION_KEY`). It writes a new random `_V<n+1>` to the `api` set and prints the next step.
+2. Set `<PREFIX>_CURRENT_VERSION=<n+1>` in `backend/env/prod.env`, commit, deploy.
+
+First move from the unversioned names: `rotate-versioned.sh migrate <PREFIX>`, with the release that reads `_V1`. Production refuses to boot without the current pepper version. Google rows sealed under a missing key version fail to open.
 
 ## Leak audit
 
