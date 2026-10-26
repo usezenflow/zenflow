@@ -4,11 +4,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { BanditArmStateRepository } from "../../bandit/bandit-arm-state.repository";
 import { BanditService } from "../../bandit/bandit.service";
 import { SchedulingFeedbackService } from "./scheduling-feedback.service";
-import {
-  ARM_LAYOUT,
-  BANDIT_MODEL_VERSION,
-  DELETE_REWARD,
-} from "../constants";
+import { ARM_LAYOUT, BANDIT_MODEL_VERSION, DELETE_REWARD } from "../constants";
 import { SCHEDULING_ARMS, type BanditArmStateWire } from "@zenflow/shared";
 
 /**
