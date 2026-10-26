@@ -112,7 +112,7 @@ One student lives through one 15-week semester. Every method sees the same semes
 - **Student.** Peak hour (chronotype), willingness to start, extra willingness close to a deadline, and a chance to answer offers (30% never do).
 - **Start chance.** The start probability is the willingness times how well the hour fits the student's curve, times a factor for recent lectures, times a factor for the weekend, times the deadline boost. A block starts when a fixed random draw falls under that probability.
 - **Signals.** The learner hears KEPT for a block left in place, MOVE when the student drags it, and an offer answer. These match the production signals. KEPT stands in for a start only in the sense that the block was not changed; whether it was started is latent and never shown to the learner.
-- **Signal change, 25 Oct 2026 (commit 984b628d).** Before that commit the learner was rewarded for completed blocks only (DONE), and silence gave no update. Since it, every unmoved block is KEPT and pays +1. Results from before the change (the 23 Oct archives and the old report) describe the DONE world. Results from after it describe the KEPT world, which production uses.
+- **Signal history.** Until commit 984b628d (25 Oct 2026) the learner was rewarded only for completed blocks, and an unmoved block that was not completed gave no update. From that commit on, every unmoved block is KEPT and pays +1, which is what production sends. Results from before the commit are not comparable with results from after it, and are not reported here.
 - **Reward v2 signals (ADR-0045).** Each adds to L, and each arm names them with letters (`Lv2-KDMC`):
   - **D, delete:** a delete reaches the learner and pays `v2_delete`. The delete chance is `delete_noise` plus `delete_slot` times how poorly the hour fits.
   - **M, move destination:** a MOVE also pays `v2_move` to the hour the block moved to. A move goes toward the student's peak, so this signal points at the peak by construction.
@@ -210,8 +210,9 @@ $f_{\mathrm{before}}$ and $f_{\mathrm{after}}$ are the free minutes to the previ
 | 800 to 899 | Reward v2 ladder, coupling checks | Spent 26 Oct 2026. The ladder ran first, then the coupling checks on the same seeds, so the checks are diagnostics. |
 | 900 to 999 | Delete scoring (ADR-0043) | Spent. |
 | 1000 to 1099 | Reward v2 robustness | Spent 26 Oct 2026. |
-| 1100 to 1199 | Three-world benchmark against the old arms | Spent 26 Oct 2026. |
-| 1200 and up | Next held-out check | Free. |
+| 1100 to 1199 | Benchmark of the old arms in two KEPT worlds | Spent 26 Oct 2026. |
+| 1200 to 1299 | L6, the L24 family and the candidate, heuristic metrics | Spent 26 Oct 2026. |
+| 1300 and up | Next held-out check | Free. |
 
 A seed used for a decision is spent. A change made after a held-out check needs a new held-out block. Diagnostics run on a block after its ladder count as spent for decisions.
 
