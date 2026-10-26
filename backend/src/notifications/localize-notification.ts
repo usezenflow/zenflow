@@ -114,6 +114,22 @@ export function localizeNotification<
     content = content
       .replace(/^See what changed\.$/, "Xem có gì thay đổi.")
       .replace(/^Check your timetable\.$/, "Xem lại thời khóa biểu của bạn.");
+  } else if (row.eventName.startsWith("discovery.")) {
+    const copy: Record<string, { title: string; content: string }> = {
+      "discovery.1": {
+        title: "Hỏi trợ lý",
+        content: "Thử hỏi xem lịch của bạn tuần này có gì.",
+      },
+      "discovery.2": {
+        title: "Thêm việc bằng trò chuyện",
+        content: "Nói cho trợ lý việc cần làm và hạn nộp.",
+      },
+      "discovery.3": {
+        title: "Hoàn tác thay đổi",
+        content: "Nhờ trợ lý hoàn tác thay đổi gần nhất.",
+      },
+    };
+    ({ title, content } = copy[row.eventName] ?? { title, content });
   } else if (row.eventName.startsWith("sync_conflict.")) {
     const label = (value: string) =>
       value === "your timetable"

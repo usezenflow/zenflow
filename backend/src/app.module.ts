@@ -44,6 +44,7 @@ import {
   PortalFetchWorkerModule,
 } from "./ingestion/fetch-worker.module";
 import { SchedulerWorkerModule } from "./scheduler/scheduler-worker.module";
+import { DiscoveryPushModule } from "./notifications/discovery-push.module";
 import { HealthModule } from "./health/health.module";
 import { OAuthCleanupModule, OAuthModule } from "./oauth/oauth.module";
 import { GoogleCalendarModule } from "./google-calendar/google-calendar.module";
@@ -76,6 +77,7 @@ const jobModules = [
         SchedulerWorkerModule,
         CalendarSweepModule,
         OAuthCleanupModule,
+        DiscoveryPushModule,
       ]
     : []),
   ...(consumesQueue(role, "notify") ? [NotifyWorkerModule] : []),
