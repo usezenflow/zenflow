@@ -146,6 +146,7 @@ SEMESTER_ARMS = (*HEADLINE, "AB")
 LONG_WINDOW_DAYS = core.LONG_WINDOW_DAYS
 CLOSE_HOURS = core.CLOSE_HOURS
 DONE_RATE_DELTA = 0.03  # non-inferiority margin, share of tasks completed
+ADHERENCE_DELTA = 0.03  # non-inferiority margin, share of tasks started
 CURVE_TASKS = 30
 FIXED_HOUR = 19  # the Fixed baseline's start hour
 EARLIEST_H = 6  # no baseline starts a block before this hour
@@ -183,7 +184,7 @@ PAIRS: dict[str, tuple[str, str]] = {
 # Column keys: s = done (1.0 if the student completed the block), p = done
 # chance, m = deadline margin hours, c = conflict free, tap/offer/pick/pri are
 # AB pairwise fields, mov = move flag.
-COLS = ("s", "p", "m", "c", "tap", "mov", "off", "pl", "pri")
+COLS = ("s", "p", "m", "c", "tap", "mov", "off", "pl", "pri", "del")
 
 
 # --- Calendar bookkeeping ------------------------------------------------------
@@ -302,7 +303,37 @@ def parse_arm(arm: str) -> dict[str, Any]:
     return spec
 
 
-Noise = list[tuple[float, float]]
+Noise = list[tuple[float, float, float]]
+# Reward v2 signals (plan: reward v2). Arms named Lv2-* add these to L; the
+# weights live in run.CFG (``v2_*``) so tuning can sweep them.
+V2_STEPS = {
+    "Lv2-M": "M",
+    "Lv2-K": "K",
+    "Lv2-KD": "KD",
+    "Lv2-KDM": "KDM",
+    "Lv2-KDMC": "KDMC",
+    "Lv2-DMC": "DMC",
+}
+
+
+def v2_spec(arm: str) -> dict[str, Any]:
+    """L with the reward v2 signals named by ``arm``'s letters.
+
+    A signal not named is ``None``.
+
+    K: KEPT pays ``v2_kept`` instead of 1. D: a delete pays ``v2_delete``.
+    M: a MOVE also pays ``v2_move`` to the destination hour. C: a hand-made
+    block pays ``v2_create`` to its hour.
+    """
+    steps = V2_STEPS[arm]
+    cfg = core.CFG
+    return {
+        "policy": "LINUCB",
+        "kept_reward": cfg["v2_kept"] if "K" in steps else None,
+        "delete_reward": cfg["v2_delete"] if "D" in steps else None,
+        "move_dest_reward": cfg["v2_move"] if "M" in steps else None,
+        "create_reward": cfg["v2_create"] if "C" in steps else None,
+    }
 
 
 class Feedback:
@@ -340,6 +371,72 @@ class Feedback:
             effect()
 
 
+def _free_starts(
+    s: PassiveStudent, task: Task, cal: Calendar, placed: core.Placed, day: int
+) -> list[tuple[float, int]]:
+    """Done chance and start of every free 15 minute start on one day, in time order."""
+    busy = [*cal.busy.get(day, []), *placed.get(day, [])]
+    out: list[tuple[float, int]] = []
+    for m in range(6 * 60, 24 * 60 - task.duration_min + 1, 15):
+        start = day * DAY_MS + m * MS_PER_MINUTE
+        end = start + task.duration_min * MS_PER_MINUTE
+        if start < task.arrival_ms or end > task.deadline_ms:
+            continue
+        if any(m < be and m + task.duration_min > bs for bs, be in busy):
+            continue
+        out.append((s.done_chance(task, start, cal), start))
+    return out
+
+
+def _best_on_day(
+    s: PassiveStudent, task: Task, cal: Calendar, placed: core.Placed, day: int
+) -> int | None:
+    """The best free start on one day: ``oracle_start`` restricted to ``day``."""
+    best: tuple[float, int] | None = None
+    for p, start in _free_starts(s, task, cal, placed, day):
+        if best is None or p > best[0] + 1e-12:
+            best = (p, start)
+    return best[1] if best else None
+
+
+def _regret(
+    s: PassiveStudent, task: Task, cal: Calendar, placed: core.Placed, p: float
+) -> float:
+    """Hidden done chance lost by this slot against the best free slot in the window."""
+    best = s.oracle_start(task, cal, placed)
+    return 0.0 if best is None else max(0.0, s.done_chance(task, best, cal) - p)
+
+
+def _created(
+    s: PassiveStudent,
+    task: Task,
+    cal: Calendar,
+    placed: core.Placed,
+    start: int,
+    noise: Noise | None,
+    n: int,
+) -> str | None:
+    """The hour arm of the block the student also makes by hand that day, or ``None``.
+
+    An assumption: ``create_share`` of tasks get a hand-made block at the
+    student's best free hour on the proposal's day. It is observed, not offered,
+    so it never occupies the learner's calendar.
+    """
+    if noise is None or noise[n][2] >= core.CFG["create_share"]:
+        return None
+    free = _free_starts(s, task, cal, placed, start // DAY_MS)
+    if not free:
+        return None
+    # ``create_fit`` is the share of hand-made blocks at the student's best hour;
+    # the rest land at a random free hour (a coupling check, not a headline setting).
+    rng = random.Random(f"create-fit:{noise[n][2]!r}")
+    if rng.random() < core.CFG["create_fit"]:
+        best = max(free, key=lambda f: (f[0], -f[1]))[1]
+    else:
+        best = rng.choice(free)[1]
+    return HOUR_ARM_IDS[(best % DAY_MS) // HOUR_MS]
+
+
 def simulate_arm(
     s: PassiveStudent,
     sem: Semester,
@@ -351,6 +448,7 @@ def simulate_arm(
     spec = (
         core.ARM_SPEC.get(arm)
         or EXTRA_SPEC.get(arm)
+        or (v2_spec(arm) if arm in V2_STEPS else None)
         or (parse_arm(arm) if ":" in arm else {"policy": arm.upper()})
     )
     policy = spec["policy"]
@@ -444,7 +542,15 @@ def simulate_arm(
         done, signal, applied, p = s.react(task, start, cal, feed.delete_draw(n))
         row = _row(task, applied, done, p, cal, placed)
         row["mov"] = float(signal == "MOVE")
+        row["del"] = float(signal == "DELETE")
+        row["reg"] = _regret(s, task, cal, placed, p)
+        row["drag"] = abs(applied - start) / MS_PER_MINUTE if signal == "MOVE" else 0.0
         rows.append(row)
+        made = (
+            _created(s, task, cal, placed, start, noise, n)
+            if spec.get("create_reward") is not None
+            else None
+        )
         if signal != "DELETE":  # a deleted block frees its slot
             _occupy(placed, applied, task.duration_min)
         heard = feed.seen(n, signal)
@@ -457,7 +563,7 @@ def simulate_arm(
                 lambda h=hour, v=z, y=done_label: hourly.observe_label(h, v, y),
             )
         if heard == "KEPT":
-            reward = KEPT_REWARD
+            reward = spec.get("kept_reward", KEPT_REWARD)
             if not spec.get("frozen"):
                 feed.defer(
                     n,
@@ -472,6 +578,14 @@ def simulate_arm(
                     0, core._moved(box[0], o, a, d, kern)
                 ),
             )
+            if lin and not hourly and spec.get("move_dest_reward") is not None:
+                dest = HOUR_ARM_IDS[(applied % DAY_MS) // HOUR_MS]
+                feed.defer(
+                    n,
+                    lambda d=dest, x=lin["featureVector"], r=spec["move_dest_reward"]: (
+                        core._learn(state, d, x, r, spec)
+                    ),
+                )
         elif heard == "DELETE":
             # Only arms that declare a delete signal learn from it.
             reward = spec.get("delete_reward")
@@ -496,6 +610,13 @@ def simulate_arm(
                     )
                     if hourly
                     else core._learn(state, a, x, r, spec)
+                ),
+            )
+        if made is not None and lin and not hourly:
+            feed.defer(
+                n,
+                lambda d=made, x=lin["featureVector"], r=spec["create_reward"]: (
+                    core._learn(state, d, x, r, spec)
                 ),
             )
     return rows
@@ -624,6 +745,35 @@ def reality(s: PassiveStudent, seed: int, idx: int) -> PassiveStudent:
     return s
 
 
+def proposal_summary(rows: list[dict[str, Any]]) -> dict[str, float]:
+    """One student's proposal totals, in the heuristic vs LinUCB report's definitions.
+
+    A proposal is a placed task. Kept means neither dragged nor deleted. ``to60``
+    is the first proposal number n >= 10 where at least 6 of proposals n-9..n
+    were kept, else the placement count. ``first`` covers proposals 1 to 11 and
+    ``late`` proposals 42 on, both counted by the reactions seen before them.
+    """
+    placed = [r for r in rows if r["m"] is not None]
+    kept = [1.0 - r["mov"] - r["del"] for r in placed]
+    reg = [float(r["reg"]) for r in placed]
+    n = len(placed)
+    to60 = next(
+        (k for k in range(10, n + 1) if sum(kept[k - 10 : k]) >= 6),
+        n,
+    )
+    return {
+        "n": float(n),
+        "kept": sum(kept),
+        "reg": sum(reg),
+        "drag": sum(float(r["drag"]) for r in placed),
+        "to60": float(to60),
+        "first_n": float(len(reg[:11])),
+        "first_reg": sum(reg[:11]),
+        "late_n": float(len(reg[41:])),
+        "late_reg": sum(reg[41:]),
+    }
+
+
 def run_seed(seed: int, students: int, arms: tuple[str, ...]) -> dict[str, Any]:
     """Every sampled student through every arm for one seed.
 
@@ -642,7 +792,7 @@ def run_seed(seed: int, students: int, arms: tuple[str, ...]) -> dict[str, Any]:
         s = reality(s, seed, idx)
         sem = build_semester(random.Random(f"semester:{seed}:{idx}"))
         sig = random.Random(f"signal:{seed}:{idx}")
-        noise = [(sig.random(), sig.random()) for _ in sem.tasks]
+        noise = [(sig.random(), sig.random(), sig.random()) for _ in sem.tasks]
         per: dict[str, Any] = {}
         for arm in arms:
             if arm == "AB":
@@ -650,7 +800,10 @@ def run_seed(seed: int, students: int, arms: tuple[str, ...]) -> dict[str, Any]:
             else:
                 rng = random.Random(f"rand:{seed}:{idx}:{arm}")
                 per[arm] = simulate_arm(s, sem, arm, rng, noise)
-        out["students"].append({"meta": _meta(s, sem), "arms": per})
+        proposals = {a: proposal_summary(r) for a, r in per.items() if a != "AB"}
+        out["students"].append(
+            {"meta": _meta(s, sem), "arms": per, "proposal": proposals}
+        )
     return out
 
 
@@ -1025,7 +1178,7 @@ REALITY: dict[str, dict[str, Any]] = {
 }
 
 
-REALITY_ARMS = ("H+K", "L")
+REALITY_ARMS = ("H+K", "L", "Lv2-KDMC")
 
 
 def reality_sweep(

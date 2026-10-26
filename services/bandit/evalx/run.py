@@ -156,6 +156,17 @@ CFG: dict[str, Any] = {
     # Delete behaviour of the students (semester): noise, and the slot-dependent part.
     "delete_noise": 0.0,
     "delete_slot": 0.0,
+    # Reward v2 (semester ``Lv2-*`` arms), frozen after the tuning sweep on seeds
+    # 100 to 109 (docs/adr/0045). Move, create and delete sit at the edge of the
+    # searched range, so the optimum may lie beyond it.
+    "v2_kept": 1.0,
+    "v2_delete": -1.0,
+    "v2_move": 2.0,
+    "v2_create": 2.0,
+    # Assumed share of tasks the student also makes by hand (never measured).
+    "create_share": 0.1,
+    # Hand-made blocks at the best free hour (1) or at a random free hour (0).
+    "create_fit": 1.0,
 }
 _PRODUCTION = {
     "gap": consts.LINUCB_GAP_WEIGHT,
@@ -297,10 +308,16 @@ def _days(
     while ms <= last_ms:
         busy = busy_minutes(cal, ms)
         mine = (placed or {}).get(ms // DAY_MS, [])
+        lectures = cal.lecture_blocks(ms // DAY_MS)
+        dnd = cal.dnd_blocks(ms // DAY_MS)
         workload = {**ZERO_WORKLOAD}
         workload["LECTURE"] = {
-            "hours": sum(b - a for a, b in busy) / 60,
-            "count": len(busy),
+            "hours": sum(b - a for a, b in lectures) / 60,
+            "count": len(lectures),
+        }
+        workload["DND"] = {
+            "hours": sum(b - a for a, b in dnd) / 60,
+            "count": len(dnd),
         }
         if mine:
             workload["TASK"] = {

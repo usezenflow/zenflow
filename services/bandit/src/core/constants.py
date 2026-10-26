@@ -14,6 +14,10 @@ STABILITY_SATURATION_HOURS = 4
 MOVE_REWARD_SCALE_MINUTES = 240
 # Reward of a placement whose slot passed unmoved (KEPT, ADR-0042).
 KEPT_REWARD = 1.0
+# Reward v2 (ADR-0045), off in production until the offline eval passes.
+REWARD_V2_ENABLED = False
+REWARD_V2_KEPT = 1.0
+REWARD_V2_DESTINATION = 2.0
 MATRIX_HALF_LIFE_DAYS = 21
 
 PREFERENCE_SLOTS_PER_DAY = 24
