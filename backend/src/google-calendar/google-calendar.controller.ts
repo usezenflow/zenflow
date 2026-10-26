@@ -77,7 +77,9 @@ export class GoogleCalendarController {
     @Headers("x-goog-channel-id") channelId?: string,
     @Headers("x-goog-channel-token") token?: string,
     @Headers("x-goog-resource-state") state?: string,
+    @Headers("x-goog-resource-id") resourceId?: string,
   ): Promise<void> {
-    if (channelId) await this.google.onNotification(channelId, token, state);
+    if (channelId)
+      await this.google.onNotification(channelId, token, state, resourceId);
   }
 }

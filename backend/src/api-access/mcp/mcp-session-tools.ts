@@ -135,6 +135,7 @@ export function registerSessionTools(
         title: z.string().max(60).optional(),
         location: z.string().max(200).nullable().optional(),
         durationMinutes: z.number().int().positive().optional(),
+        reminderMinutes: z.number().int().nullable().optional(),
         deadline: z.string().optional(),
         scheduledStartTime: z.string().optional(),
         scope: z.enum(["occurrence", "following", "series"]).optional(),

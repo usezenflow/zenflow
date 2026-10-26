@@ -8,7 +8,7 @@ import { GoogleCalendarConfig } from "./google-calendar.config";
 const DAY_MS = 86_400_000;
 /** Google caps channel life; replace one well before it lapses. */
 const CHANNEL_TTL_MS = 7 * DAY_MS;
-const RENEW_BEFORE_MS = 36 * 3_600_000;
+export const RENEW_BEFORE_MS = 36 * 3_600_000;
 
 /** Keeps one push channel per connection alive, since Google never renews them. */
 @Injectable()
@@ -20,7 +20,7 @@ export class CalendarWatchService {
   ) {}
 
   channelToken(channelId: string): string {
-    return createHmac("sha256", this.config.stateSecret)
+    return createHmac("sha256", this.config.webhookSecret)
       .update(`channel:${channelId}`)
       .digest("base64url");
   }

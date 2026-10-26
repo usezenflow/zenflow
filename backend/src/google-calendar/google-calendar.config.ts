@@ -41,12 +41,17 @@ export class GoogleCalendarConfig {
   get stateSecret(): string {
     return this.config.get<string>("SESSION_SECRET") ?? "";
   }
+  /** Keys the push channel tokens. Its own secret, so a leak of the session secret cannot forge webhooks. */
+  get webhookSecret(): string {
+    return this.config.get<string>("GOOGLE_WEBHOOK_SECRET") ?? "";
+  }
 
   get available(): boolean {
     return !!(
       this.clientId &&
       this.clientSecret &&
       this.tokenKey &&
+      this.webhookSecret &&
       this.apiUrl
     );
   }

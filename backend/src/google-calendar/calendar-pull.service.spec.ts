@@ -129,6 +129,7 @@ describe("CalendarPullService", () => {
       "aaaa-1",
       { scheduledStartTime: "2026-11-03T04:00:00.000Z", durationMinutes: 60 },
       { id: USER },
+      "GOOGLE",
     );
     expect(prisma.calendarConnection.update).toHaveBeenCalledWith({
       where: { userId: USER },
@@ -137,7 +138,7 @@ describe("CalendarPullService", () => {
   });
 
   it("reads a reminder changed in Google back onto the session", async () => {
-    const { service, page, sessions, prisma } = await setup();
+    const { service, page, sessions } = await setup();
     page([
       event({
         start: { dateTime: "2026-11-03T02:00:00Z" },
@@ -150,15 +151,16 @@ describe("CalendarPullService", () => {
     ]);
 
     expect(await service.pullUser(USER)).toEqual({ applied: 1, restored: 0 });
-    expect(sessions.update).not.toHaveBeenCalled();
-    expect(prisma.session.update).toHaveBeenCalledWith({
-      where: { id: "aaaa-1" },
-      data: { reminderMinutes: 10 },
-    });
+    expect(sessions.update).toHaveBeenCalledWith(
+      "aaaa-1",
+      { reminderMinutes: 10 },
+      { id: USER },
+      "GOOGLE",
+    );
   });
 
   it("rewrites a Google reminder the app does not offer", async () => {
-    const { service, page, prisma } = await setup();
+    const { service, page, sessions } = await setup();
     page([
       event({
         start: { dateTime: "2026-11-03T02:00:00Z" },
@@ -171,7 +173,7 @@ describe("CalendarPullService", () => {
     ]);
 
     expect(await service.pullUser(USER)).toEqual({ applied: 0, restored: 1 });
-    expect(prisma.session.update).not.toHaveBeenCalled();
+    expect(sessions.update).not.toHaveBeenCalled();
   });
 
   it("snaps an off-grid drop to the 15 minute grid", async () => {
@@ -189,6 +191,7 @@ describe("CalendarPullService", () => {
       "aaaa-1",
       { scheduledStartTime: "2026-11-03T04:00:00.000Z", durationMinutes: 90 },
       { id: USER },
+      "GOOGLE",
     );
   });
 
@@ -229,7 +232,11 @@ describe("CalendarPullService", () => {
     page([event({ status: "cancelled" })]);
 
     expect(await service.pullUser(USER)).toEqual({ applied: 1, restored: 0 });
-    expect(sessions.remove).toHaveBeenCalledWith("aaaa-1", { id: USER });
+    expect(sessions.remove).toHaveBeenCalledWith(
+      "aaaa-1",
+      { id: USER },
+      "GOOGLE",
+    );
     expect(prisma.calendarLink.delete).toHaveBeenCalledWith({
       where: { id: "link-1" },
     });
@@ -298,5 +305,45 @@ describe("CalendarPullService", () => {
       USER,
       "Google access was revoked",
     );
+  });
+});
+
+describe("CalendarPullService recurrence and expired tokens", () => {
+  it("drops one occurrence when its instance is cancelled in Google", async () => {
+    const { service, page, sessions } = await setup({
+      links: [
+        { ...link, sessionId: null, seriesId: "series-1", eventId: "ser1" },
+      ],
+    });
+    page([
+      {
+        id: "ser1_20261103T020000Z",
+        recurringEventId: "ser1",
+        status: "cancelled",
+        originalStartTime: { dateTime: "2026-11-03T02:00:00Z" },
+        etag: '"theirs"',
+      },
+    ]);
+
+    expect(await service.pullUser(USER)).toEqual({ applied: 1, restored: 0 });
+    expect(sessions.remove).toHaveBeenCalledWith(
+      "series-1::2026-11-03T02:00:00.000Z",
+      { id: USER },
+      "GOOGLE",
+    );
+  });
+
+  it("reads everything and applies it when the sync token has expired", async () => {
+    const { service, client, sessions, prisma } = await setup();
+    client.listEvents
+      .mockRejectedValueOnce(new GoogleApiError(410, "", "gone"))
+      .mockResolvedValueOnce({ items: [event()], nextSyncToken: "token-3" });
+
+    expect(await service.pullUser(USER)).toEqual({ applied: 1, restored: 0 });
+    expect(sessions.update).toHaveBeenCalled();
+    expect(prisma.calendarConnection.update).toHaveBeenCalledWith({
+      where: { userId: USER },
+      data: { syncToken: "token-3" },
+    });
   });
 });

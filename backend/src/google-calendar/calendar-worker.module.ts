@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { CalendarBusyModule } from "../calendar-busy/calendar-busy.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { PrismaModule } from "../prisma/prisma.module";
 import { QueueModule } from "../queue/queue.module";
@@ -15,6 +16,7 @@ import { GOOGLE_CALENDAR_CORE } from "./google-calendar.providers";
     NotificationsModule,
     SessionsModule,
     CalendarSyncTriggerModule,
+    CalendarBusyModule,
   ],
   providers: [...GOOGLE_CALENDAR_CORE, CalendarSyncProcessor],
 })

@@ -1,4 +1,6 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { runCronJob } from "../observability/cron";
 import {
   notificationCategory,
   type NotificationDto,
@@ -240,6 +242,11 @@ export class NotificationsService {
       `push enqueue dropped for ${notificationId}/${provider}; the reconciliation sweep will retry`,
     );
     return false;
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleReconcileCron(): Promise<void> {
+    await runCronJob("notifications-reconcile", () => this.reconcileRecent());
   }
 
   /**

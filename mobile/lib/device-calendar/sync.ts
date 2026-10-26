@@ -6,6 +6,8 @@ import {
   type DeviceLinks,
   type PlanContext,
 } from "./plan";
+import type { PhoneTimes } from "./moves";
+import type { BusyEvent } from "./busy";
 
 /** The phone's calendar, as the sync needs it. The Expo implementation is in `expo-adapter.ts`. */
 export interface CalendarAdapter {
@@ -14,8 +16,13 @@ export interface CalendarAdapter {
   /** The id of the Zenflow calendar, creating it when `existingId` is missing or gone. */
   ensureCalendar(existingId: string | null): Promise<string>;
   createEvent(calendarId: string, spec: DeviceEventSpec): Promise<string>;
-  /** Start and end of an event as the phone holds it; null when it is gone or cannot be read. */
-  readEvent(eventId: string): Promise<{ startMs: number; endMs: number } | null>;
+  /**
+   * Start, end and first alarm of an event as the phone holds it. Null when it
+   * is gone; undefined when it could not be read this time.
+   */
+  readEvent(eventId: string): Promise<PhoneTimes | null | undefined>;
+  /** The phone's timed, busy events in the window, outside the Zenflow calendar. */
+  listBusy(from: Date, to: Date, ignoreCalendarId: string | null): Promise<BusyEvent[]>;
   /** Rejects when the event no longer exists. */
   updateEvent(eventId: string, spec: DeviceEventSpec): Promise<void>;
   deleteEvent(eventId: string): Promise<void>;
@@ -69,6 +76,7 @@ export async function syncDeviceCalendar(
       hash: spec.hash,
       startMs: spec.startDate.getTime(),
       endMs: spec.endDate.getTime(),
+      alarmMinutes: spec.alarmMinutes,
     };
   };
   const create = async (spec: DeviceEventSpec) => {

@@ -48,6 +48,7 @@ import { DiscoveryPushModule } from "./notifications/discovery-push.module";
 import { HealthModule } from "./health/health.module";
 import { OAuthCleanupModule, OAuthModule } from "./oauth/oauth.module";
 import { GoogleCalendarModule } from "./google-calendar/google-calendar.module";
+import { CalendarBusyModule } from "./calendar-busy/calendar-busy.module";
 import { CalendarWorkerModule } from "./google-calendar/calendar-worker.module";
 import { CalendarSweepModule } from "./google-calendar/calendar-sweep.module";
 import { CalendarOutboxModule } from "./google-calendar/calendar-outbox.module";
@@ -598,6 +599,7 @@ const jobModules = [
     // devices.module.ts.
     DevicesModule,
     GoogleCalendarModule,
+    CalendarBusyModule,
     OAuthModule,
     HealthModule,
     ...jobModules,

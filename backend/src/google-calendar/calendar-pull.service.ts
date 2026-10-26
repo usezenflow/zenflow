@@ -75,16 +75,14 @@ export class CalendarPullService {
         connection.syncToken,
       );
       if (items === null) {
-        await this.baseline(userId, token, connection.googleCalendarId);
+        // The token expired: read everything once and reconcile it like a delta.
+        const full = await this.readAll(token, connection.googleCalendarId);
+        for (const item of full.items) await this.apply(userId, item, summary);
+        await this.storeToken(userId, full.nextSyncToken);
         return summary;
       }
       for (const item of items) await this.apply(userId, item, summary);
-      if (nextSyncToken) {
-        await this.prisma.calendarConnection.update({
-          where: { userId },
-          data: { syncToken: nextSyncToken },
-        });
-      }
+      await this.storeToken(userId, nextSyncToken);
       return summary;
     } catch (error) {
       if (error instanceof GoogleApiError && error.authRevoked) {
@@ -140,19 +138,65 @@ export class CalendarPullService {
     token: string,
     calendarId: string,
   ): Promise<void> {
+    const full = await this.readAll(token, calendarId);
+    await this.storeToken(userId, full.nextSyncToken);
+  }
+
+  /** Every event on the calendar, with the token that picks up from here. */
+  private async readAll(token: string, calendarId: string) {
+    const items: GoogleEventItem[] = [];
     let pageToken: string | undefined;
     let nextSyncToken: string | undefined;
     do {
       const page = await this.client.listEvents(token, calendarId, {
         pageToken,
       });
+      items.push(...page.items);
       pageToken = page.nextPageToken;
       nextSyncToken = page.nextSyncToken ?? nextSyncToken;
     } while (pageToken);
+    return { items, nextSyncToken };
+  }
+
+  private async storeToken(userId: string, syncToken: string | undefined) {
     await this.prisma.calendarConnection.update({
       where: { userId },
-      data: { syncToken: nextSyncToken ?? null },
+      data: { syncToken: syncToken ?? null },
     });
+  }
+
+  /**
+   * One instance of a Zenflow series. Cancelling it in Google deletes that
+   * occurrence. A moved instance is not read back: the series keeps its time.
+   */
+  private async applyInstance(
+    userId: string,
+    item: GoogleEventItem,
+    summary: PullSummary,
+  ): Promise<void> {
+    const original = item.originalStartTime?.dateTime;
+    if (item.status !== "cancelled" || !original) return;
+    const series = await this.prisma.calendarLink.findUnique({
+      where: {
+        userId_eventId: { userId, eventId: item.recurringEventId! },
+      },
+    });
+    if (!series?.seriesId) return;
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+    });
+    try {
+      await this.sessions.remove(
+        `${series.seriesId}::${new Date(original).toISOString()}`,
+        user,
+        "GOOGLE",
+      );
+      summary.applied++;
+    } catch (error) {
+      this.logger.debug(
+        `Google cancel of ${series.seriesId} refused: ${(error as Error).message}`,
+      );
+    }
   }
 
   private async apply(
@@ -160,8 +204,9 @@ export class CalendarPullService {
     item: GoogleEventItem,
     summary: PullSummary,
   ): Promise<void> {
+    if (item.recurringEventId) return this.applyInstance(userId, item, summary);
     const priv = item.extendedProperties?.private;
-    if (!priv?.zf || item.recurringEventId) return;
+    if (!priv?.zf) return;
     const link = await this.prisma.calendarLink.findUnique({
       where: { userId_eventId: { userId, eventId: item.id } },
     });
@@ -200,7 +245,7 @@ export class CalendarPullService {
       if (item.status === "cancelled") {
         if (session.source === "LMS" || session.source === "PORTAL")
           return restore();
-        await this.sessions.remove(session.id, user);
+        await this.sessions.remove(session.id, user, "GOOGLE");
         await this.prisma.calendarLink.delete({ where: { id: link.id } });
         summary.applied++;
         return;
@@ -236,16 +281,19 @@ export class CalendarPullService {
             durationMinutes: minutes,
           },
           user,
+          "GOOGLE",
         );
       }
       if (reminder !== undefined && reminderChanged) {
-        await this.prisma.session.update({
-          where: { id: session.id },
-          data: {
+        await this.sessions.update(
+          session.id,
+          {
             reminderMinutes:
               reminder === user.defaultReminderMinutes ? null : reminder,
           },
-        });
+          user,
+          "GOOGLE",
+        );
       }
       summary.applied++;
     } catch (error) {

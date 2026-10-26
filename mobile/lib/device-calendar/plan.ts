@@ -22,6 +22,8 @@ export interface DeviceLink {
   startMs: number;
   /** Absent on links written before end times were kept; those skip move detection for length. */
   endMs?: number;
+  /** The alarm last written, in minutes before start. Absent on links written before reminders were read back. */
+  alarmMinutes?: number;
 }
 
 export type DeviceLinks = Record<string, DeviceLink>;

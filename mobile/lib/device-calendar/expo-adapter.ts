@@ -1,7 +1,11 @@
 import { Platform } from "react-native";
 import * as Calendar from "expo-calendar";
 import type { DeviceEventSpec } from "./plan";
+import type { BusyEvent } from "./busy";
 import type { CalendarAdapter } from "./sync";
+
+/** The phone says "not found" for an event that was deleted; anything else is a read that failed. */
+const GONE = /not found|does not exist|no such/i;
 
 const CALENDAR_TITLE = "Zenflow";
 const CALENDAR_COLOR = "#FF6900";
@@ -57,14 +61,34 @@ export const expoCalendarAdapter: CalendarAdapter = {
   async readEvent(eventId) {
     try {
       const event = await Calendar.ExpoCalendarEvent.get(eventId);
+      const alarm = event.alarms?.find((a) => typeof a.relativeOffset === "number");
       return {
         startMs: new Date(event.startDate).getTime(),
         endMs: new Date(event.endDate).getTime(),
+        alarmMinutes: alarm ? Math.max(0, Math.round(-alarm.relativeOffset!)) : 0,
       };
-    } catch {
-      // Gone, or unreadable: the sync rewrites it from Zenflow either way.
-      return null;
+    } catch (error) {
+      // Only a deleted event is rewritten; a read that failed is left alone this time.
+      // shortcut: relies on the platform's "not found" wording, check it on both OSes.
+      return GONE.test(String((error as Error)?.message ?? "")) ? null : undefined;
     }
+  },
+
+  async listBusy(from, to, ignoreCalendarId) {
+    const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
+    const ids = calendars.map((c) => c.id).filter((id) => id !== ignoreCalendarId);
+    if (ids.length === 0) return [];
+    const events = await Calendar.getEventsAsync(ids, from, to);
+    return events
+      .filter((e) => !e.allDay && e.availability !== Calendar.Availability.FREE)
+      .map(
+        (e): BusyEvent => ({
+          externalKey: `${e.calendarId}:${e.id}`,
+          title: e.title,
+          start: new Date(e.startDate),
+          end: new Date(e.endDate),
+        }),
+      );
   },
 
   async updateEvent(eventId, spec) {

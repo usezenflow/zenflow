@@ -3,6 +3,7 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 import { PrismaService } from "../prisma/prisma.service";
 import { CalendarSyncTrigger } from "./calendar-sync-trigger.service";
 import { GoogleCalendarConfig } from "./google-calendar.config";
+import { RENEW_BEFORE_MS } from "./calendar-watch.service";
 
 const STALE_MS = 4 * 60_000;
 const BATCH = 500;
@@ -37,7 +38,16 @@ export class CalendarSweepService {
       take: BATCH,
       select: { userId: true },
     });
-    for (const { userId } of stale) {
+    // Push channels lapse on Google's clock, not ours: renew before they do.
+    const expiring = await this.prisma.calendarConnection.findMany({
+      where: {
+        status: "ACTIVE",
+        channelExpiresAt: { lt: new Date(Date.now() + RENEW_BEFORE_MS) },
+      },
+      take: BATCH,
+      select: { userId: true },
+    });
+    for (const { userId } of [...stale, ...expiring]) {
       try {
         await this.trigger.enqueue(userId, "pull");
         await this.trigger.enqueue(userId, "sync");

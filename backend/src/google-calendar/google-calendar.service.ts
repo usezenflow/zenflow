@@ -122,19 +122,30 @@ export class GoogleCalendarService {
     return this.status(user);
   }
 
-  /** Called by the webhook: schedules a pull for the connection that owns the channel. */
+  /**
+   * Called by the webhook: schedules a pull for the connection that owns the
+   * channel. Never throws: Google retries a failed push, and a missed one is
+   * caught by the sweep.
+   */
   async onNotification(
     channelId: string,
     token: string | undefined,
     state: string | undefined,
+    resourceId: string | undefined,
   ): Promise<void> {
-    if (!this.watch.verify(channelId, token) || state === "sync") return;
-    const connection = await this.prisma.calendarConnection.findUnique({
-      where: { channelId },
-      select: { userId: true, status: true },
-    });
-    if (connection?.status === "ACTIVE")
-      await this.trigger.enqueue(connection.userId, "pull");
+    try {
+      if (!this.watch.verify(channelId, token) || state === "sync") return;
+      const connection = await this.prisma.calendarConnection.findUnique({
+        where: { channelId },
+        select: { userId: true, status: true, channelResourceId: true },
+      });
+      // A notification for a channel we stopped (its resource id no longer matches) is ignored.
+      if (!connection || connection.channelResourceId !== resourceId) return;
+      if (connection.status === "ACTIVE")
+        await this.trigger.enqueue(connection.userId, "pull");
+    } catch (err) {
+      this.logger.warn(`Calendar push ignored: ${(err as Error).message}`);
+    }
   }
 
   private async connect(userId: string, code: string): Promise<void> {

@@ -12,7 +12,11 @@ import {
 import { TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
 import { IsFeasibleTaskWindow } from "../../common/validators/feasible-task-window.decorator";
-import { type InfeasiblePolicy, type SessionType } from "@zenflow/shared";
+import {
+  DEFAULT_REMINDER_CHOICES,
+  type InfeasiblePolicy,
+  type SessionType,
+} from "@zenflow/shared";
 
 export const INFEASIBLE_POLICIES: InfeasiblePolicy[] = [
   "ACCEPT_CONFLICTS",
@@ -63,6 +67,12 @@ export class CreateSessionDto {
   @IsString()
   @MaxLength(200, { message: "Location must be at most 200 characters." })
   location?: string | null;
+
+  /** Minutes before start; `null` or omitted uses the user's default. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsIn(DEFAULT_REMINDER_CHOICES)
+  reminderMinutes?: number | null;
 
   /** Session duration in minutes (always a positive multiple of 15, required). */
   @IsInt()

@@ -328,6 +328,10 @@ export type UpdateScope = "occurrence" | "following" | "series";
  */
 export interface UpdateSessionInput {
   title?: string;
+  /** Minutes before start; `null` uses the user's default. */
+  reminderMinutes?: number | null;
+  /** Where the change was made. Defaults to `ZENFLOW`. */
+  source?: "ZENFLOW" | "DEVICE";
   /** A prep `TASK` only: the lecture occurrence it prepares for (ISO-8601). */
   prepForOccurrenceStart?: string;
   note?: string | null;

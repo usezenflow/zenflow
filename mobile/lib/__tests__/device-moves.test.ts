@@ -86,3 +86,38 @@ describe("reviewDeviceEvents", () => {
     expect([...review.restore]).toEqual(["s1"]);
   });
 });
+
+describe("reviewDeviceEvents reminders", () => {
+  const linkWithAlarm: DeviceLinks = {
+    s1: { eventId: "e1", hash: "h", startMs: START, endMs: START + HOUR, alarmMinutes: 30 },
+  };
+
+  it("keeps a phone reminder the app offers", () => {
+    const review = reviewDeviceEvents(
+      linkWithAlarm,
+      { e1: { startMs: START, endMs: START + HOUR, alarmMinutes: 10 } },
+      new Map([["s1", task()]]),
+    );
+    expect(review.reminders).toEqual([{ key: "s1", minutes: 10 }]);
+    expect(review.restore.size).toBe(0);
+  });
+
+  it("rewrites a phone reminder the app does not offer", () => {
+    const review = reviewDeviceEvents(
+      linkWithAlarm,
+      { e1: { startMs: START, endMs: START + HOUR, alarmMinutes: 7 } },
+      new Map([["s1", task()]]),
+    );
+    expect(review.reminders).toEqual([]);
+    expect(review.restore.has("s1")).toBe(true);
+  });
+
+  it("ignores an alarm that did not change", () => {
+    const review = reviewDeviceEvents(
+      linkWithAlarm,
+      { e1: { startMs: START, endMs: START + HOUR, alarmMinutes: 30 } },
+      new Map([["s1", task()]]),
+    );
+    expect(review.reminders).toEqual([]);
+  });
+});

@@ -56,6 +56,7 @@ function fakePhone() {
       e.endMs = spec.endDate.getTime();
       return Promise.resolve();
     },
+    listBusy: () => Promise.resolve([]),
     readEvent: (eventId) => {
       const e = events.get(eventId);
       return Promise.resolve(e ? { startMs: e.startMs, endMs: e.endMs } : null);

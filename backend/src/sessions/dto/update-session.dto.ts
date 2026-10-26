@@ -18,6 +18,7 @@ import type {
 import { TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
 import { INFEASIBLE_POLICIES } from "./create-session.dto";
+import { DEFAULT_REMINDER_CHOICES } from "@zenflow/shared";
 import {} from "@zenflow/shared";
 
 /**
@@ -59,6 +60,17 @@ export class UpdateSessionDto implements UpdateSessionInput {
   @IsOptional()
   @IsISO8601()
   prepForOccurrenceStart?: string;
+
+  /** Minutes before start; `null` uses the user's default. Omit to leave unchanged. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsIn(DEFAULT_REMINDER_CHOICES)
+  reminderMinutes?: number | null;
+
+  /** Where the change was made. Google changes are recorded by the server, not sent here. */
+  @IsOptional()
+  @IsIn(["ZENFLOW", "DEVICE"])
+  source?: "ZENFLOW" | "DEVICE";
 
   /** ISO-8601 instant — drag reschedule / resize both just move this. */
   @IsOptional()

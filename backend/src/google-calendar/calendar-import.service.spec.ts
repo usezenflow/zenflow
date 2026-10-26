@@ -1,4 +1,8 @@
-import { CalendarImportService, busyBlock } from "./calendar-import.service";
+import {
+  BusyBlocksService,
+  busyBlock,
+} from "../calendar-busy/busy-blocks.service";
+import { CalendarImportService } from "./calendar-import.service";
 import type { GoogleEventItem } from "./google-calendar.client";
 
 const NOW = new Date("2026-11-01T00:00:00Z");
@@ -30,23 +34,27 @@ function setup(items: GoogleEventItem[], existing: unknown[] = []) {
     ]),
     listWindow: jest.fn().mockResolvedValue(items),
   };
-  const service = new CalendarImportService(prisma as never, client as never);
+  const service = new CalendarImportService(
+    new BusyBlocksService(prisma as never),
+    client as never,
+  );
   return { service, prisma, client };
 }
 
 describe("busyBlock", () => {
   it("covers the whole event in 15-minute slots", () => {
-    expect(busyBlock(timed())).toEqual({
-      start: new Date("2026-11-03T02:00:00Z"),
-      durationMinutes: 75,
-    });
+    expect(
+      busyBlock(
+        new Date("2026-11-03T02:10:00Z"),
+        new Date("2026-11-03T03:05:00Z"),
+      ),
+    ).toEqual({ start: new Date("2026-11-03T02:00:00Z"), durationMinutes: 75 });
   });
 
-  it("skips all-day and empty events", () => {
-    expect(busyBlock({ id: "a", start: { date: "2026-11-03" } })).toBeNull();
-    expect(
-      busyBlock(timed({ end: { dateTime: "2026-11-03T02:10:00Z" } })),
-    ).toBeNull();
+  it("skips empty and inverted events", () => {
+    const at = new Date("2026-11-03T02:10:00Z");
+    expect(busyBlock(at, at)).toBeNull();
+    expect(busyBlock(at, new Date("2026-11-03T01:00:00Z"))).toBeNull();
   });
 });
 

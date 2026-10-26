@@ -1267,8 +1267,10 @@ describe("SessionsService.remove", () => {
     const findFirst = jest.fn().mockResolvedValue(existing);
     const update = jest.fn().mockResolvedValue({ ...existing, deleted: true });
     const del = jest.fn();
+    const eventCreate = jest.fn().mockResolvedValue({});
     const prisma = prismaWithTx({
       session: { findFirst, update, delete: del },
+      sessionEvent: { create: eventCreate },
     });
     const service = await makeService(
       prisma,
@@ -1283,6 +1285,13 @@ describe("SessionsService.remove", () => {
       data: { deleted: true },
     });
     expect(del).not.toHaveBeenCalled();
+    expect(eventCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sessionId: "session-1",
+        eventType: "DELETE",
+        source: "ZENFLOW",
+      }),
+    });
     expect(result).toEqual({ id: "session-1" });
   });
 

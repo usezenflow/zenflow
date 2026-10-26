@@ -31,6 +31,7 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `PUBLIC_WEB_URL` | first `CORS_ORIGIN` | Where the PWA lives: the consent screen and the page Google returns to. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | none | Google OAuth client for Calendar sync ([ADR-0040](../adr/0040-google-calendar-sync.md)). Redirect URI `<PUBLIC_API_URL>/google-calendar/callback`, scopes `calendar.events` and `calendar.calendarlist.readonly`. |
 | `GOOGLE_TOKEN_ENCRYPTION_KEY` | none | 64 hex chars (`openssl rand -hex 32`). AES-256-GCM key for stored Google refresh tokens. Sync is off until the three Google vars and `PUBLIC_API_URL` are set. Rotating it forces everyone to reconnect. |
+| `GOOGLE_WEBHOOK_SECRET` | none | Keys the Google push channel tokens. Set it to any long random string; Google Calendar stays off without it. |
 
 | `PORT` | 8000 | |
 | `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` (push and `calendar-sync`) / `worker-scheduler` one consumer each, `outbox` the calendar outbox (LISTEN plus poll, no queue), `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, one `outbox`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |

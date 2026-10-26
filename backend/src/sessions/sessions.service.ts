@@ -15,7 +15,7 @@ import type {
   SlotPickResponse,
   UpdateSessionResponse,
 } from "@zenflow/shared";
-import { type User } from "../../generated/prisma";
+import type { SessionEventSource, User } from "../../generated/prisma";
 import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
 import { BulkDeleteSessionsDto } from "./dto/bulk-delete-sessions.dto";
 import { CreateSessionDto } from "./dto/create-session.dto";
@@ -220,12 +220,17 @@ export class SessionsService {
     id: string,
     dto: UpdateSessionDto,
     user: User,
+    origin?: SessionEventSource,
   ): Promise<UpdateSessionResponse> {
-    return this.synced(user, this.updates.update(id, dto, user));
+    return this.synced(user, this.updates.update(id, dto, user, origin));
   }
 
-  async remove(id: string, user: User): Promise<RemoveSessionResponse> {
-    return this.synced(user, this.crud.remove(id, user));
+  async remove(
+    id: string,
+    user: User,
+    origin?: SessionEventSource,
+  ): Promise<RemoveSessionResponse> {
+    return this.synced(user, this.crud.remove(id, user, origin));
   }
 
   /** Repacks the flexible sessions that overlap `id`; `id` itself stays put. */

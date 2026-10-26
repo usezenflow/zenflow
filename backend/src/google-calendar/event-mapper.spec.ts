@@ -64,15 +64,26 @@ describe("event mapper", () => {
   });
 
   it("uses the session's reminder over the user's default, and 0 for none", () => {
-    const popup = (minutes: number) => ({ useDefault: false, overrides: [{ method: "popup", minutes }] });
-    expect(sessionEvent({ ...session, reminderMinutes: 10 }, ctx).reminders).toEqual(popup(10));
-    expect(sessionEvent({ ...session, reminderMinutes: 0 }, ctx).reminders).toEqual({ useDefault: false, overrides: [] });
-    expect(sessionEvent(session, { ...ctx, defaultReminderMinutes: 60 }).reminders).toEqual(popup(60));
+    const popup = (minutes: number) => ({
+      useDefault: false,
+      overrides: [{ method: "popup", minutes }],
+    });
+    expect(
+      sessionEvent({ ...session, reminderMinutes: 10 }, ctx).reminders,
+    ).toEqual(popup(10));
+    expect(
+      sessionEvent({ ...session, reminderMinutes: 0 }, ctx).reminders,
+    ).toEqual({ useDefault: false, overrides: [] });
+    expect(
+      sessionEvent(session, { ...ctx, defaultReminderMinutes: 60 }).reminders,
+    ).toEqual(popup(60));
   });
 
   it("gives each session type its own colour", () => {
     const types = ["TASK", "ASSIGNMENT", "EXAM", "LECTURE", "DND"] as const;
-    const colours = types.map((type) => sessionEvent({ ...session, type }, ctx).colorId);
+    const colours = types.map(
+      (type) => sessionEvent({ ...session, type }, ctx).colorId,
+    );
     expect(new Set(colours).size).toBe(types.length);
   });
 

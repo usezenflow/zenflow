@@ -5,6 +5,7 @@ import { AppState } from "react-native";
 import { create } from "zustand";
 import { listSessions, updateSession } from "@/api/tasks";
 import { getGoogleCalendar, setCalendarTarget } from "@/api/google-calendar";
+import { putDeviceBusy } from "@/api/device-calendar";
 import { useConnectivity } from "@/lib/connectivity";
 import { expoCalendarAdapter } from "@/lib/device-calendar/expo-adapter";
 import { reviewDeviceEvents, type PhoneTimes } from "@/lib/device-calendar/moves";
@@ -25,6 +26,8 @@ const AHEAD_DAYS = 45;
 const MIN_INTERVAL_MS = 2 * 60_000;
 /** Edits arrive in bursts; sync once after they settle. */
 const EDIT_DEBOUNCE_MS = 3_000;
+/** The server takes at most this many busy blocks in one request. */
+const BUSY_MAX = 2000;
 
 type Store = {
   state: DeviceCalendarState;
@@ -47,6 +50,23 @@ type Store = {
 
 /** The server refuses a target that is taken by the other calendar (409). */
 const isConflict = (error: unknown) => (error as { response?: { status?: number } }).response?.status === 409;
+
+/** Sends the phone's other busy time, so the scheduler plans around it. Failures wait for the next sync. */
+async function uploadBusy(zenflowCalendarId: string | null, now: Date): Promise<void> {
+  try {
+    const events = await expoCalendarAdapter.listBusy(addDays(now, -BACK_DAYS), addDays(now, AHEAD_DAYS), zenflowCalendarId);
+    await putDeviceBusy(
+      events.slice(0, BUSY_MAX).map((e) => ({
+        externalKey: e.externalKey,
+        title: e.title,
+        start: e.start.toISOString(),
+        end: e.end.toISOString(),
+      })),
+    );
+  } catch {
+    // Permission revoked or offline: the next sync tries again.
+  }
+}
 
 /** This month and the next, deduped: enough to cover the sync window. */
 async function fetchWindow(now: Date): Promise<Session[]> {
@@ -141,7 +161,7 @@ export const useDeviceCalendar = create<Store>((set, get) => {
         const times = await Promise.all(
           entries.map((link) => expoCalendarAdapter.readEvent(link.eventId)),
         );
-        const phone: Record<string, PhoneTimes | null> = {};
+        const phone: Record<string, PhoneTimes | null | undefined> = {};
         entries.forEach((link, i) => {
           phone[link.eventId] = times[i];
         });
@@ -157,11 +177,20 @@ export const useDeviceCalendar = create<Store>((set, get) => {
             await updateSession(move.key, {
               scheduledStartTime: new Date(move.startMs).toISOString(),
               durationMinutes: move.durationMinutes,
+              source: "DEVICE",
             });
             moved = true;
           } catch {
             // Rejected (a conflict, or the task changed): Zenflow's time stands.
             links[move.key] = { ...links[move.key], hash: "" };
+          }
+        }
+        for (const reminder of review.reminders) {
+          try {
+            await updateSession(reminder.key, { reminderMinutes: reminder.minutes, source: "DEVICE" });
+            moved = true;
+          } catch {
+            links[reminder.key] = { ...links[reminder.key], hash: "" };
           }
         }
         if (moved) sessions = await fetchWindow(now);
@@ -173,6 +202,7 @@ export const useDeviceCalendar = create<Store>((set, get) => {
           ctx,
         );
         persist(result.state);
+        await uploadBusy(result.state.calendarId, now);
       } catch {
         // Offline or permission revoked: the next trigger tries again.
       } finally {

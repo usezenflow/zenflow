@@ -36,6 +36,7 @@ export interface GoogleEventItem {
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   recurringEventId?: string;
+  originalStartTime?: { dateTime?: string };
   reminders?: {
     useDefault?: boolean;
     overrides?: { method?: string; minutes?: number }[];

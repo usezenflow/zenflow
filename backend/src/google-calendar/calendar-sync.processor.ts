@@ -11,6 +11,9 @@ import { CalendarWatchService } from "./calendar-watch.service";
 import { GoogleApiError } from "./google-calendar.client";
 import { GoogleOAuthService } from "./google-oauth.service";
 
+/** A sync of a large calendar can run for minutes; the lock is held that long. */
+const LOCK_TIMEOUT_MS = 10 * 60_000;
+
 /**
  * Consumer of the `calendar-sync` queue. A `sync` job writes the schedule to
  * Google and keeps the push channel alive; a `pull` job reads changes made in
@@ -41,21 +44,35 @@ export class CalendarSyncProcessor implements OnModuleInit {
       return;
     }
     const { userId, type } = job.data;
-    if (type === "pull") {
-      const result = await this.pull.pullUser(userId);
-      if (result && result.restored + result.applied > 0)
-        await this.trigger.enqueue(userId, "sync");
-      return;
-    }
+    // One sync or pull per user at a time: a push and a sweep must not write the same events.
+    await this.withUserLock(userId, async () => {
+      if (type === "pull") {
+        const result = await this.pull.pullUser(userId);
+        if (result && result.restored + result.applied > 0)
+          await this.trigger.enqueue(userId, "sync");
+        return;
+      }
 
-    const summary = await this.sync.syncUser(userId);
-    if (!summary) return;
-    await this.keepChannel(userId);
-    if (summary.retryable > 0) {
-      throw new Error(
-        `${summary.retryable} calendar writes deferred for ${userId}`,
-      );
-    }
+      const summary = await this.sync.syncUser(userId);
+      if (!summary) return;
+      await this.keepChannel(userId);
+      if (summary.retryable > 0) {
+        throw new Error(
+          `${summary.retryable} calendar writes deferred for ${userId}`,
+        );
+      }
+    });
+  }
+
+  /** Holds a Postgres advisory lock for the user's calendar work until `fn` finishes. */
+  private withUserLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`calendar:${userId}`}))`;
+        return fn();
+      },
+      { timeout: LOCK_TIMEOUT_MS, maxWait: LOCK_TIMEOUT_MS },
+    );
   }
 
   /** The channel is best effort: the sweep and pull job cover a missed push. */

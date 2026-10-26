@@ -5,7 +5,11 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import type { InfeasiblePolicy, UpdateSessionResponse } from "@zenflow/shared";
-import { Prisma, type User } from "../../generated/prisma";
+import {
+  Prisma,
+  type SessionEventSource,
+  type User,
+} from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
@@ -26,7 +30,7 @@ import {
   slotProposalFieldsOf,
   toUpdateSessionResponse,
 } from "./session-mapper";
-import { moveEventData, recordUserMove } from "./session-events";
+import { editEventData, moveEventData, recordUserMove } from "./session-events";
 import { assertSyncedEditable } from "./synced-lock";
 import { mapSessionPrismaError } from "./prisma-error";
 import { SeriesService } from "./series.service";
@@ -93,6 +97,7 @@ export class SessionUpdateService {
     id: string,
     dto: UpdateSessionDto,
     user: User,
+    origin: SessionEventSource = dto.source ?? "ZENFLOW",
   ): Promise<UpdateSessionResponse> {
     try {
       const now = new Date();
@@ -117,7 +122,7 @@ export class SessionUpdateService {
       if (!occ) await this.guardDeadlineEdit(id, dto, user, now);
 
       const { updated, firstMove, newDeadline, undoGroupId } =
-        await this.runFieldDiffTransaction(id, dto, user, now);
+        await this.runFieldDiffTransaction(id, dto, user, now, origin);
 
       if (shiftedRepStart)
         await this.series.shiftPrepOccurrences(id, shiftedRepStart, user);
@@ -342,6 +347,7 @@ export class SessionUpdateService {
     dto: UpdateSessionDto,
     user: User,
     now: Date,
+    origin: SessionEventSource,
   ): Promise<FieldDiffResult> {
     return this.prisma.$transaction(async (tx): Promise<FieldDiffResult> => {
       const existing = await tx.session.findFirst({
@@ -356,6 +362,11 @@ export class SessionUpdateService {
       if (dto.title !== undefined) data.title = dto.title;
       if (dto.note !== undefined) data.note = dto.note;
       if (dto.location !== undefined) data.location = dto.location;
+      const reminderChanged =
+        dto.reminderMinutes !== undefined &&
+        dto.reminderMinutes !== existing.reminderMinutes;
+      if (dto.reminderMinutes !== undefined)
+        data.reminderMinutes = dto.reminderMinutes;
 
       if (dto.durationMinutes !== undefined)
         data.durationMinutes = dto.durationMinutes;
@@ -427,6 +438,7 @@ export class SessionUpdateService {
               newDurationMinutes:
                 dto.durationMinutes ?? existing.durationMinutes,
               dragDistanceMinutes: move.dragDistanceMinutes,
+              source: origin,
             }),
             groupId: undoGroupId,
           },
@@ -442,6 +454,18 @@ export class SessionUpdateService {
             newStartMs: move.movedTo.getTime(),
           };
         }
+      }
+
+      if (reminderChanged) {
+        await tx.sessionEvent.create({
+          data: editEventData({
+            sessionId: id,
+            userId: user.id,
+            oldReminderMinutes: existing.reminderMinutes,
+            newReminderMinutes: dto.reminderMinutes ?? null,
+            source: origin,
+          }),
+        });
       }
 
       const row = await tx.session.update({

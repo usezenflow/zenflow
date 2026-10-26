@@ -14,7 +14,12 @@ import type {
   SessionSuggestionsResponse,
   SessionsListResponse,
 } from "@zenflow/shared";
-import { Prisma, type SessionType, type User } from "../../generated/prisma";
+import {
+  Prisma,
+  type SessionEventSource,
+  type SessionType,
+  type User,
+} from "../../generated/prisma";
 import { minutesToUtc } from "../common/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
@@ -35,7 +40,12 @@ import {
   toCreateSessionResponse,
   toSessionDto,
 } from "./session-mapper";
-import { createEventData, recordCreateEvent } from "./session-events";
+import {
+  createEventData,
+  deleteEventData,
+  recordCreateEvent,
+  snapshotOf,
+} from "./session-events";
 import { insertFixedSession } from "./fixed-session-writer";
 import { mapSessionPrismaError } from "./prisma-error";
 import { placeOrDiscard } from "./placement-compensation";
@@ -133,6 +143,7 @@ export class SessionCrudService {
         title: dto.title,
         note: dto.note ?? null,
         location: dto.location ?? null,
+        reminderMinutes: dto.reminderMinutes ?? null,
         durationMinutes: dto.durationMinutes,
         deadline,
         userId: user.id,
@@ -266,6 +277,7 @@ export class SessionCrudService {
         title: dto.title,
         note: dto.note,
         location: dto.location,
+        reminderMinutes: dto.reminderMinutes,
         durationMinutes: dto.durationMinutes,
         scheduledStartTime: repStart,
         seriesId: series.id,
@@ -292,6 +304,7 @@ export class SessionCrudService {
         title: dto.title,
         note: dto.note,
         location: dto.location,
+        reminderMinutes: dto.reminderMinutes,
         durationMinutes: dto.durationMinutes,
         scheduledStartTime: start,
       });
@@ -575,7 +588,11 @@ export class SessionCrudService {
     return rows.map(toSessionDto);
   }
 
-  async remove(id: string, user: User): Promise<RemoveSessionResponse> {
+  async remove(
+    id: string,
+    user: User,
+    origin: SessionEventSource = "ZENFLOW",
+  ): Promise<RemoveSessionResponse> {
     try {
       // A recurring occurrence ref → add the instant to the series' exdates
       // ("delete this one"); the row and other occurrences stay put.
@@ -593,6 +610,14 @@ export class SessionCrudService {
         });
         if (!existing)
           throw new NotFoundException(`Cannot find session with id ${id}`);
+        await tx.sessionEvent.create({
+          data: deleteEventData({
+            sessionId: id,
+            userId: user.id,
+            snapshot: snapshotOf(existing),
+            source: origin,
+          }),
+        });
         // Soft-delete: an ingested item's externalKey stays unique, so the
         // materializer recognizes this row on the next re-fetch and leaves
         // it alone instead of recreating it.
