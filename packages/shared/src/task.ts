@@ -37,6 +37,12 @@ export const SESSION_WINDOW_HOURS: Record<SessionWindow, readonly [number, numbe
   EVENING: [18, 24],
 };
 
+/** Length bounds in minutes for a flexible `TASK`; longer work is split into chunks. */
+export const MIN_TASK_MINUTES = 15;
+export const MAX_TASK_MINUTES = 240;
+/** Most chunks a long task is split into (12 h at the cap). */
+export const MAX_SPLIT_CHUNKS = 3;
+
 export interface Session {
   id: string;
   title: string;

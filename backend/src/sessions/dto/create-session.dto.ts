@@ -11,6 +11,7 @@ import {
 } from "class-validator";
 import { TIME_GRANULARITY } from "../../common/constants";
 import { IsRRule } from "../../common/validators/rrule.decorator";
+import { MaxTaskMinutes } from "../../common/validators/max-task-minutes.decorator";
 import { IsFeasibleTaskWindow } from "../../common/validators/feasible-task-window.decorator";
 import {
   DEFAULT_REMINDER_CHOICES,
@@ -80,6 +81,7 @@ export class CreateSessionDto {
   @IsInt()
   @Min(TIME_GRANULARITY)
   @IsDivisibleBy(TIME_GRANULARITY)
+  @MaxTaskMinutes()
   durationMinutes: number;
 
   /**
