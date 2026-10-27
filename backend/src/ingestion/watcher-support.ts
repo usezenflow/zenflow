@@ -134,6 +134,15 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * `ms` spread by ±25%, so requests spaced by a fixed delay don't line up into a
+ * recognisable rhythm. I/O only: `core/*` stays deterministic (invariant #2).
+ */
+export function jitter(ms: number, random: () => number = Math.random): number {
+  if (ms <= 0) return ms;
+  return Math.round(ms * (0.75 + random() * 0.5));
+}
+
+/**
  * Visit every `Integration` for `provider`, oldest id first, **sequentially**.
  *
  * Sequential on purpose: this is the whole of the baseline's politeness policy

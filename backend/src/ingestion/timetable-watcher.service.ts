@@ -35,6 +35,7 @@ import {
   isOccurrenceCacheEnabled,
   jobItemBody,
   positiveConfig,
+  jitter,
   sleep,
   statusCodeOf,
   type IntegrationTarget,
@@ -180,7 +181,7 @@ export class TimetableWatcherService {
     }[] = [];
 
     for (const week of weeks) {
-      if (!first) await sleep(this.requestDelayMs);
+      if (!first) await sleep(jitter(this.requestDelayMs));
       first = false;
 
       const url =

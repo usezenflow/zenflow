@@ -18,7 +18,7 @@ import { marksEligible, type SeasonOverrides } from "./core/seasonal-policy";
 import { resolveSemester } from "./core/semester";
 import { seasonOverrides } from "./season-config";
 import { PortalSessionService } from "./portal-session.service";
-import { errorMessage, sleep } from "./watcher-support";
+import { errorMessage, jitter, sleep } from "./watcher-support";
 
 /** Marks are refreshed at most this often once due (`INGESTION_MARKS_PERIOD_MS`). */
 export const DEFAULT_MARKS_PERIOD_MS = 60 * 60_000;
@@ -67,7 +67,7 @@ export class StudentSyncService {
   ): Promise<StudentSyncResult> {
     const fetched = await this.session.withToken(data.userId, async (token) => {
       const rawInfo = await this.portal.fetchStudentInfo(token);
-      await sleep(this.requestDelayMs);
+      await sleep(jitter(this.requestDelayMs));
       const rawPrograms = await this.portal.fetchStudyPrograms(token);
       return { rawInfo, rawPrograms };
     });
@@ -139,7 +139,7 @@ export class StudentSyncService {
       const years: PortalMarksYear[] = [];
       let first = true;
       for (const { studyProgramId } of programs) {
-        if (!first) await sleep(this.requestDelayMs);
+        if (!first) await sleep(jitter(this.requestDelayMs));
         first = false;
         years.push(...(await this.portal.fetchMarks(token, studyProgramId)));
       }
