@@ -3,7 +3,7 @@
  * `POST /sessions/bulk-delete` and the MCP tools. Items run in order; a failing
  * item does not stop the rest.
  */
-import type { CreateSessionInput } from "./task";
+import type { CreateSessionInput, UpdateSessionInput } from "./task";
 
 /** Most items one bulk request creates or deletes. */
 export const MAX_BULK_SESSIONS = 50;
@@ -21,6 +21,8 @@ export type BulkCreateItemResult =
       status: "CREATED";
       id: string;
       scheduledStartTime: string | null;
+      /** Two scheduler policies disagreed by at least an hour; `POST /sessions/:id/slot-pick` records the user's choice. */
+      pairwise?: { slotProposalId: string; primary: string; alternative: string };
     }
   | {
       index: number;
@@ -91,4 +93,18 @@ export type BulkDeleteItemResult =
 export interface BulkDeleteSessionsResponse {
   dryRun: boolean;
   results: BulkDeleteItemResult[];
+}
+
+/** `POST /sessions/bulk-update` body. Each item is one `PATCH /sessions/:id`. */
+export interface BulkUpdateSessionsInput {
+  items: { id: string; patch: UpdateSessionInput }[];
+}
+
+export type BulkUpdateItemResult =
+  | { index: number; status: "UPDATED"; id: string }
+  | { index: number; status: "ERROR"; id: string; code: string; message: string };
+
+/** `POST /sessions/bulk-update` response data. `results` follows the item order. */
+export interface BulkUpdateSessionsResponse {
+  results: BulkUpdateItemResult[];
 }
