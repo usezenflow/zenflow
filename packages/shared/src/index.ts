@@ -16,3 +16,4 @@ export * from "./student";
 export * from "./admin";
 export * from "./api-access";
 export * from "./oauth";
+export * from "./insights";
