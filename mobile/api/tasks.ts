@@ -1,4 +1,10 @@
 import type {
+  BulkCreateSessionsInput,
+  BulkCreateSessionsResponse,
+  BulkDeleteSessionsInput,
+  BulkUpdateSessionsInput,
+  BulkUpdateSessionsResponse,
+  BulkDeleteSessionsResponse,
   ConfirmPlacementRequest,
   ConfirmPlacementResponse,
   CreateSessionInput,
@@ -188,5 +194,37 @@ export async function slotPick(
     input,
   );
   notifySessionsMutated();
+  return data.data;
+}
+
+/** `POST /sessions/bulk`; with `dryRun` it only proposes starts. */
+export async function bulkCreateSessions(
+  input: BulkCreateSessionsInput,
+): Promise<BulkCreateSessionsResponse> {
+  const { data } = await api.post("/sessions/bulk", input, {
+    timeout: SAVE_TIMEOUT_MS,
+  });
+  if (!input.dryRun) notifySessionsMutated();
+  return data.data;
+}
+
+/** `POST /sessions/bulk-delete`; one failing item does not stop the others. */
+export async function bulkUpdateSessions(
+  input: BulkUpdateSessionsInput,
+): Promise<BulkUpdateSessionsResponse> {
+  const { data } = await api.post("/sessions/bulk-update", input, {
+    timeout: SAVE_TIMEOUT_MS,
+  });
+  notifySessionsMutated();
+  return data.data;
+}
+
+export async function bulkDeleteSessions(
+  input: BulkDeleteSessionsInput,
+): Promise<BulkDeleteSessionsResponse> {
+  const { data } = await api.post("/sessions/bulk-delete", input, {
+    timeout: SAVE_TIMEOUT_MS,
+  });
+  if (!input.dryRun) notifySessionsMutated();
   return data.data;
 }

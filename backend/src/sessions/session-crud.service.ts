@@ -127,7 +127,11 @@ export class SessionCrudService {
     });
   }
 
-  async proposeCreate(dto: CreateSessionDto, user: User): Promise<Date | null> {
+  async proposeCreate(
+    dto: CreateSessionDto,
+    user: User,
+    claimed: { startMs: number; endMs: number }[] = [],
+  ): Promise<Date | null> {
     if (dto.type !== "TASK") {
       return dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : null;
     }
@@ -137,7 +141,7 @@ export class SessionCrudService {
       deadline: new Date(dto.deadline as string),
       now: new Date(),
       policy: dto.infeasiblePolicy,
-      constraint: constraintOf(dto),
+      constraint: { ...constraintOf(dto), extraOccupied: claimed },
     });
   }
 

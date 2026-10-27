@@ -89,6 +89,77 @@ describe("SessionsService.bulkCreate", () => {
     expect(crud.create).toHaveBeenCalledTimes(3);
   });
 
+  it("adds pairwise only when the policies diverged and a proposal was stored", async () => {
+    const { service, crud } = await setup();
+    const base = { id: "s", scheduledStartTime: null };
+    const pair = {
+      slotProposalId: "p1",
+      primarySlot: "2026-10-26T01:00:00.000Z",
+      alternativeSlot: "2026-10-26T05:00:00.000Z",
+    };
+    crud.create
+      .mockResolvedValueOnce({ ...base, ...pair, divergent: true })
+      .mockResolvedValueOnce({ ...base, ...pair, divergent: false })
+      .mockResolvedValueOnce({
+        ...base,
+        ...pair,
+        divergent: true,
+        slotProposalId: null,
+      })
+      .mockResolvedValueOnce({
+        ...base,
+        ...pair,
+        divergent: true,
+        alternativeSlot: null,
+      })
+      .mockResolvedValueOnce({
+        ...base,
+        ...pair,
+        divergent: true,
+        primarySlot: null,
+      });
+
+    const got = await service.bulkCreate(
+      bulk([TASK, TASK, TASK, TASK, TASK]),
+      USER,
+    );
+
+    expect(got.results[0]).toMatchObject({
+      pairwise: {
+        slotProposalId: "p1",
+        primary: pair.primarySlot,
+        alternative: pair.alternativeSlot,
+      },
+    });
+    for (const r of got.results.slice(1))
+      expect(r).not.toHaveProperty("pairwise");
+  });
+
+  it("never adds pairwise on a dry run", async () => {
+    const { service, crud } = await setup();
+    crud.proposeCreate.mockResolvedValueOnce(
+      new Date("2026-10-26T01:00:00.000Z"),
+    );
+    const got = await service.bulkCreate(bulk([TASK], true), USER);
+    expect(got.results[0]).not.toHaveProperty("pairwise");
+  });
+
+  it("holds earlier proposals as busy time for later items on a dry run", async () => {
+    const { service, crud } = await setup();
+    crud.proposeCreate
+      .mockResolvedValueOnce(new Date("2026-10-26T01:00:00.000Z"))
+      .mockResolvedValueOnce(new Date("2026-10-26T02:00:00.000Z"));
+
+    await service.bulkCreate(bulk([TASK, TASK], true), USER);
+
+    expect(crud.proposeCreate.mock.calls[1][2]).toEqual([
+      {
+        startMs: Date.parse("2026-10-26T01:00:00.000Z"),
+        endMs: Date.parse("2026-10-26T02:00:00.000Z"),
+      },
+    ]);
+  });
+
   it("proposes each start without calling create on a dry run", async () => {
     const { service, crud } = await setup();
     crud.proposeCreate
@@ -274,9 +345,9 @@ describe("SessionsController API token routes", () => {
     expect(modeOf("findOne")).toBe("allow");
   });
 
-  it("accepts bearer only on the bulk create and bulk delete", () => {
-    expect(modeOf("bulkCreate")).toBe("only");
-    expect(modeOf("bulkDelete")).toBe("only");
+  it("accepts a bearer or the cookie on the bulk create and bulk delete", () => {
+    expect(modeOf("bulkCreate")).toBe("allow");
+    expect(modeOf("bulkDelete")).toBe("allow");
   });
 
   it("refuses bearer tokens on every other route", () => {
@@ -285,6 +356,11 @@ describe("SessionsController API token routes", () => {
       "update",
       "remove",
       "undoPlacement",
+      "undoLatest",
+      "replan",
+      "confirmReplan",
+      "recap",
+      "freeSlots",
     ] as const) {
       expect(modeOf(name)).toBeUndefined();
     }

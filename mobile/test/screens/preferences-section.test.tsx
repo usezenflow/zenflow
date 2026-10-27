@@ -1,10 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  PreferencesSection,
-  TimezoneRow,
-} from "@/components/settings/preferences-section";
+import { PreferencesSection } from "@/components/settings/preferences-section";
 import { useUserStore } from "@/hooks/use-user-store";
 import { API, testUser } from "@/test/msw/handlers";
 import { server } from "@/test/msw/server";
@@ -36,10 +33,10 @@ beforeEach(() => {
 });
 
 describe("PreferencesSection", () => {
-  it("shows the account's language, not the timezone", async () => {
+  it("shows the language and the timezone", async () => {
     renderScreen(<PreferencesSection />);
     expect(await screen.findByText("🇬🇧 English")).toBeTruthy();
-    expect(screen.queryByText("Asia/Ho_Chi_Minh")).toBeNull();
+    expect(screen.getByText("Asia/Ho_Chi_Minh")).toBeTruthy();
   });
 
   it("saves a new language", async () => {
@@ -65,12 +62,5 @@ describe("PreferencesSection", () => {
     expect(sw.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(sw);
     await waitFor(() => expect(toggle.setEnabled).toHaveBeenCalledWith(false));
-  });
-});
-
-describe("TimezoneRow", () => {
-  it("shows the account's timezone", async () => {
-    renderScreen(<TimezoneRow />);
-    expect(await screen.findByText("Asia/Ho_Chi_Minh")).toBeTruthy();
   });
 });

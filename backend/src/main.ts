@@ -19,6 +19,8 @@ import { OAuthConfig } from "./oauth/oauth.config";
 import { OAuthRouter } from "./oauth/oauth-router";
 import { IoredisSessionStore } from "./common/redis/ioredis-session.store";
 
+import { paletteBodyParser } from "./users/palette-body";
+
 // 7 days. Default lifetime of an idle session; with rolling sessions an
 // actively-used session keeps getting extended on every request.
 const DEFAULT_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -55,6 +57,8 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   app.set("trust proxy", configService.get<number>("TRUST_PROXY_HOPS"));
   app.setGlobalPrefix("api/v1");
+  // The palette blob is opaque bytes; over the limit this answers 413.
+  app.use("/api/v1/users/me/palette", paletteBodyParser());
   // OAuth discovery, registration, authorize and token endpoints live at the
   // API origin root, outside the global prefix, as MCP clients expect.
   if (app.get(OAuthConfig).available) app.use(app.get(OAuthRouter).create());

@@ -3,7 +3,7 @@ import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { logout as logoutRequest } from "@/api/auth";
 import { listIntegrations } from "@/api/integrations";
-import { LogOut, Moon } from "@/components/Icons";
+import { ChevronLeft, LogOut, Moon } from "@/components/Icons";
 import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
 import { FinishSetupCard } from "@/components/settings/finish-setup-card";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
@@ -11,11 +11,12 @@ import { useNotificationState } from "@/hooks/use-notification-toggle";
 import { PreferencesSection } from "@/components/settings/preferences-section";
 import { DeviceCalendarSection } from "@/components/settings/device-calendar-section";
 import { ProfileRow } from "@/components/settings/profile-row";
-import { StudentCard, StudentCardSkeleton } from "@/components/settings/student-card";
+import {
+  StudentCard,
+  StudentCardSkeleton,
+} from "@/components/settings/student-card";
 import { useStudent } from "@/hooks/use-student";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
-import { AiAssistantsSection } from "@/components/settings/ai-assistants-section";
-import { AdvancedSection } from "@/components/settings/advanced-section";
 import { SettingsSkeleton } from "@/components/settings/settings-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAfterPaint } from "@/hooks/use-after-paint";
@@ -28,6 +29,7 @@ import { setAndroidNavigationBar } from "@/lib/android-navigation-bar";
 import { clearSession } from "@/lib/api-client";
 import { clearCachedSessionUser } from "@/lib/session";
 import { clearDaySessionCache } from "@/lib/session-cache";
+import { paletteDisk } from "@/lib/palette/palette-disk";
 import { resetTimelineScroll } from "@/lib/timeline-scroll";
 import { useColorScheme } from "@/lib/useColorScheme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -43,7 +45,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-/** The Me tab: profile, preferences, DLU and account. Advanced holds timezone and storage. */
+/** The Me tab: profile, preferences, DLU and account. */
 export default function SettingsScreen() {
   const offline = useOffline();
   useLanguage();
@@ -59,7 +61,7 @@ export default function SettingsScreen() {
   }>(null);
   const dluY = useRef(0);
   // `?focus=dlu` (the calendar's "Import my timetable") lands on the LMS and portal section.
-  const { focus, connect } = useLocalSearchParams<{ focus?: string; connect?: string }>();
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const notif = useNotificationState();
   const integrations = useIntegrationStore((s) => s.integrations);
   const integrationsLoading = useIntegrationStore((s) => s.loading);
@@ -118,6 +120,7 @@ export default function SettingsScreen() {
     // Drop the calendar's in-memory day cache + shared scroll anchor so the
     // next user never sees a flash of the previous account's days.
     clearDaySessionCache();
+    paletteDisk.clear();
     resetTimelineScroll();
     setUser(null);
     setLoggingOut(false);
@@ -136,9 +139,23 @@ export default function SettingsScreen() {
         style={{ paddingTop: insets.top + 16 }}
       >
         <View className="flex-row items-center justify-between">
-          <Text className="text-xl font-bold tracking-tight">
-            {t("Me")}
-          </Text>
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              testID="settings.back"
+              accessibilityRole="button"
+              accessibilityLabel={t("Back")}
+              hitSlop={12}
+              onPress={() =>
+                router.canGoBack()
+                  ? router.back()
+                  : router.replace("/(app)" as Href)
+              }
+              className="-ml-2 size-9 items-center justify-center rounded-full active:bg-muted"
+            >
+              <ChevronLeft size={22} className="text-foreground" />
+            </Pressable>
+            <Text className="text-xl font-bold tracking-tight">{t("Me")}</Text>
+          </View>
           <OfflineIndicator dayKey="settings" />
         </View>
       </View>
@@ -208,42 +225,44 @@ export default function SettingsScreen() {
         {showSkeleton ? (
           <SettingsSkeleton />
         ) : (
-        <>
-        <PreferencesSection />
-        <DeviceCalendarSection />
-        <AiAssistantsSection connectCode={connect} />
-        <View
-          onLayout={(e) => {
-            dluY.current = e.nativeEvent.layout.y;
-            if (focus === "dlu") {
-              scrollRef.current?.scrollTo({ y: dluY.current, animated: true });
-            }
-          }}
-        >
-          <OfflineLock>
-            <DluAccountsSection />
-          </OfflineLock>
-        </View>
-
-        <AdvancedSection />
-
-        <SettingsSectionLabel>{t("Account")}</SettingsSectionLabel>
-        <View className="mb-[18px] overflow-hidden rounded-2xl border border-border bg-card">
-          <Pressable
-            testID="settings.sign-out"
-            onPress={handleSignOut}
-            disabled={loggingOut}
-            className="flex-row items-center gap-[13px] bg-card px-4 py-3.5"
-          >
-            <View className="h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl bg-muted">
-              <BusyOr busy={loggingOut} size={18} tone="muted"><LogOut size={18} className="text-destructive" /></BusyOr>
+          <>
+            <PreferencesSection />
+            <DeviceCalendarSection />
+            <View
+              onLayout={(e) => {
+                dluY.current = e.nativeEvent.layout.y;
+                if (focus === "dlu") {
+                  scrollRef.current?.scrollTo({
+                    y: dluY.current,
+                    animated: true,
+                  });
+                }
+              }}
+            >
+              <OfflineLock>
+                <DluAccountsSection />
+              </OfflineLock>
             </View>
-            <Text className="text-[15px] font-semibold text-destructive">
-              {loggingOut ? t("Signing out…") : t("Sign out")}
-            </Text>
-          </Pressable>
-        </View>
-        </>
+
+            <SettingsSectionLabel>{t("Account")}</SettingsSectionLabel>
+            <View className="mb-[18px] overflow-hidden rounded-2xl border border-border bg-card">
+              <Pressable
+                testID="settings.sign-out"
+                onPress={handleSignOut}
+                disabled={loggingOut}
+                className="flex-row items-center gap-[13px] bg-card px-4 py-3.5"
+              >
+                <View className="h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl bg-muted">
+                  <BusyOr busy={loggingOut} size={18} tone="muted">
+                    <LogOut size={18} className="text-destructive" />
+                  </BusyOr>
+                </View>
+                <Text className="text-[15px] font-semibold text-destructive">
+                  {loggingOut ? t("Signing out…") : t("Sign out")}
+                </Text>
+              </Pressable>
+            </View>
+          </>
         )}
       </ScrollView>
     </View>

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -11,6 +12,7 @@ import { defineConfig } from "vitest/config";
  * doesn't set up; flagged as a gap rather than solved here.
  */
 export default defineConfig({
+  resolve: { alias: [{ find: /^@\//, replacement: `${path.resolve(__dirname)}/` }] },
   test: {
     include: ["lib/**/*.test.ts"],
     environment: "node",

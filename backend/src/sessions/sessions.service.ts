@@ -5,6 +5,8 @@ import type {
   BulkCreateSessionsResponse,
   BulkDeleteItemResult,
   BulkDeleteSessionsResponse,
+  BulkUpdateItemResult,
+  BulkUpdateSessionsResponse,
   CreateSessionResponse,
   RemoveSessionResponse,
   RemoveSessionSeriesResponse,
@@ -19,6 +21,7 @@ import type {
 import type { SessionEventSource, User } from "../../generated/prisma";
 import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
 import { BulkDeleteSessionsDto } from "./dto/bulk-delete-sessions.dto";
+import { BulkUpdateSessionsDto } from "./dto/bulk-update-sessions.dto";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
@@ -73,8 +76,16 @@ export class SessionsService {
   ): Promise<BulkCreateSessionsResponse> {
     const dryRun = dto.dryRun === true;
     const results: BulkCreateItemResult[] = [];
+    // A dry run writes nothing, so earlier proposals are held as busy time to match the real create.
+    const claimed: { startMs: number; endMs: number }[] = [];
     for (const [index, item] of dto.items.entries()) {
-      results.push(await this.bulkItem(index, item, dryRun, user));
+      const r = await this.bulkItem(index, item, dryRun, user, [...claimed]);
+      if (r.status === "PROPOSED" && r.proposedStart && r.proposedEnd)
+        claimed.push({
+          startMs: Date.parse(r.proposedStart),
+          endMs: Date.parse(r.proposedEnd),
+        });
+      results.push(r);
     }
     return { dryRun, results };
   }
@@ -84,10 +95,11 @@ export class SessionsService {
     item: CreateSessionDto,
     dryRun: boolean,
     user: User,
+    claimed: { startMs: number; endMs: number }[],
   ): Promise<BulkCreateItemResult> {
     try {
       if (dryRun) {
-        const start = await this.crud.proposeCreate(item, user);
+        const start = await this.crud.proposeCreate(item, user, claimed);
         const flags = start
           ? proposalWarnings({
               start,
@@ -118,6 +130,18 @@ export class SessionsService {
         scheduledStartTime: res.scheduledStartTime
           ? new Date(res.scheduledStartTime).toISOString()
           : null,
+        ...(res.divergent &&
+        res.slotProposalId &&
+        res.primarySlot &&
+        res.alternativeSlot
+          ? {
+              pairwise: {
+                slotProposalId: res.slotProposalId,
+                primary: res.primarySlot,
+                alternative: res.alternativeSlot,
+              },
+            }
+          : {}),
       };
     } catch (err) {
       return { index, status: "ERROR", ...this.bulkError(err) };
@@ -171,6 +195,23 @@ export class SessionsService {
       }
     }
     return { dryRun, results };
+  }
+
+  /** Up to 50 patches in one call, applied in order; a failing item does not stop the rest. */
+  async bulkUpdate(
+    dto: BulkUpdateSessionsDto,
+    user: User,
+  ): Promise<BulkUpdateSessionsResponse> {
+    const results: BulkUpdateItemResult[] = [];
+    for (const [index, { id, patch }] of dto.items.entries()) {
+      try {
+        await this.update(id, patch, user);
+        results.push({ index, status: "UPDATED", id });
+      } catch (err) {
+        results.push({ index, status: "ERROR", id, ...this.bulkError(err) });
+      }
+    }
+    return { results };
   }
 
   private bulkError(err: unknown): { code: string; message: string } {

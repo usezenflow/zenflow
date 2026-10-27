@@ -1,5 +1,5 @@
 import type { Session } from "@zenflow/shared";
-import { buildRecap, findFreeSlots } from "./mcp-recap";
+import { buildRecap, findFreeSlots } from "./session-recap";
 
 const TZ = "Asia/Ho_Chi_Minh";
 const at = (hour: number, date = "2026-10-26") =>

@@ -16,18 +16,24 @@ import { SlotPickDto } from "./dto/slot-pick.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { DeadlineOptionsDto } from "./dto/deadline-options.dto";
-import {
-  AllowApiToken,
-  ApiTokenOnly,
-} from "../api-access/allow-api-token.decorator";
+import { AllowApiToken } from "../api-access/allow-api-token.decorator";
 import { ApiTokenGuard } from "../api-access/api-token.guard";
 import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
 import { BulkDeleteSessionsDto } from "./dto/bulk-delete-sessions.dto";
+import { BulkUpdateSessionsDto } from "./dto/bulk-update-sessions.dto";
 import { CurrentUser } from "../users/decorators/current-user.decorator";
 import { type User } from "../../generated/prisma";
 import { deadlineOptions } from "./utils/deadline-options";
 import { ConfirmPlacementDto } from "./dto/confirm-placement.dto";
 import { PlacementPlanService } from "./placement-plan.service";
+import { ReplanService } from "./replan.service";
+import { buildRecap, findFreeSlots } from "./session-recap";
+import {
+  FreeSlotsDto,
+  InsightRangeDto,
+  ReplanDto,
+} from "./dto/insight-range.dto";
+import { plainToInstance } from "class-transformer";
 
 @Controller("sessions")
 @UseGuards(ApiTokenGuard)
@@ -35,6 +41,7 @@ export class SessionsController {
   constructor(
     private readonly sessionsService: SessionsService,
     private readonly placementPlans: PlacementPlanService,
+    private readonly replans: ReplanService,
   ) {}
 
   // NOTE: must precede @Post(":id/...") routes so "placement" isn't matched as an :id.
@@ -68,9 +75,34 @@ export class SessionsController {
     return { success: true, message: "Session created", data };
   }
 
-  /** Up to 20 sessions in one call, each created or proposed on its own. Assistants only. */
+  /** Revert the newest undoable change, whatever its group. */
+  @Post("undo-latest")
+  async undoLatest(@CurrentUser() user: User) {
+    const data = await this.placementPlans.undoLatest(user);
+    return {
+      success: true,
+      message: `Restored ${data.restored.length} session(s)`,
+      data,
+    };
+  }
+
+  /** Preview a replan of the range. Nothing changes until `replan/confirm`. */
+  @Post("replan")
+  async replan(@Body() dto: ReplanDto, @CurrentUser() user: User) {
+    const data = await this.replans.plan(user, dto.from, dto.to, dto.change);
+    return { success: true, message: "Replan proposed", data };
+  }
+
+  /** Apply the replan for the range; it is recomputed, so it can differ from the preview. */
+  @Post("replan/confirm")
+  async confirmReplan(@Body() dto: ReplanDto, @CurrentUser() user: User) {
+    const data = await this.replans.apply(user, dto.from, dto.to, dto.change);
+    return { success: true, message: "Replan applied", data };
+  }
+
+  /** Up to 50 sessions in one call (`dryRun` previews), each created or proposed on its own. */
   @Post("bulk")
-  @ApiTokenOnly()
+  @AllowApiToken()
   async bulkCreate(
     @Body() dto: BulkCreateSessionsDto,
     @CurrentUser() user: User,
@@ -86,9 +118,9 @@ export class SessionsController {
     };
   }
 
-  /** Up to 50 deletions in one call: sessions, recurring series or timetable groups. Assistants only. */
+  /** Up to 50 deletions in one call: sessions, recurring series or timetable groups. */
   @Post("bulk-delete")
-  @ApiTokenOnly()
+  @AllowApiToken()
   async bulkDelete(
     @Body() dto: BulkDeleteSessionsDto,
     @CurrentUser() user: User,
@@ -104,6 +136,21 @@ export class SessionsController {
     };
   }
 
+  /** Up to 50 session patches in one call. */
+  @Post("bulk-update")
+  async bulkUpdate(
+    @Body() dto: BulkUpdateSessionsDto,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.bulkUpdate(dto, user);
+    const done = data.results.filter((r) => r.status === "UPDATED").length;
+    return {
+      success: true,
+      message: `Updated ${done} of ${data.results.length} sessions`,
+      data,
+    };
+  }
+
   @Get()
   @AllowApiToken()
   async list(@Query() dto: ListSessionsDto, @CurrentUser() user: User) {
@@ -113,6 +160,40 @@ export class SessionsController {
       message: `Found ${data.sessions.length} sessions`,
       data,
     };
+  }
+
+  // NOTE: must precede @Get(":id") so "recap" isn't matched as an :id.
+  @Get("recap")
+  async recap(@Query() dto: InsightRangeDto, @CurrentUser() user: User) {
+    const { sessions } = await this.sessionsService.list(
+      plainToInstance(ListSessionsDto, dto),
+      user,
+    );
+    const data = buildRecap(
+      sessions,
+      dto.from,
+      dto.to,
+      user.timezone,
+      user.preferenceMatrix,
+    );
+    return { success: true, message: "Recap", data };
+  }
+
+  // NOTE: must precede @Get(":id") so "free-slots" isn't matched as an :id.
+  @Get("free-slots")
+  async freeSlots(@Query() dto: FreeSlotsDto, @CurrentUser() user: User) {
+    const { sessions } = await this.sessionsService.list(
+      plainToInstance(ListSessionsDto, { from: dto.from, to: dto.to }),
+      user,
+    );
+    const data = findFreeSlots(
+      sessions,
+      dto.from,
+      dto.to,
+      dto.durationMinutes,
+      user.timezone,
+    );
+    return { success: true, message: "Free slots", data };
   }
 
   // NOTE: must precede @Get(":id") so "suggestions" isn't matched as an :id.

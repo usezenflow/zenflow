@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Text, View } from "react-native";
 
-const passthrough = () => ({ build: () => passthrough(), duration: passthrough, delay: passthrough, springify: passthrough });
+const passthrough = () => ({ build: () => passthrough(), duration: passthrough, delay: passthrough, springify: passthrough, damping: passthrough });
 const Animated = {
   View,
   Text,
@@ -11,6 +11,7 @@ const Animated = {
 export default Animated;
 export const FadeIn = passthrough();
 export const FadeOut = passthrough();
+export const SlideInDown = passthrough();
 export const FadeInDown = passthrough();
 export const FadeOutUp = passthrough();
 export const Layout = passthrough();

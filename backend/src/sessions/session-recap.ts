@@ -1,6 +1,6 @@
 import type { Session } from "@zenflow/shared";
 import { formatInTimeZone } from "date-fns-tz";
-import { minutesToUtc } from "../../common/utils";
+import { minutesToUtc } from "../common/utils";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;

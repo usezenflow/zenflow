@@ -19,7 +19,7 @@ import { PlacementPlanService } from "../../sessions/placement-plan.service";
 import { MAX_BULK_SESSIONS, SESSION_WINDOWS } from "@zenflow/shared";
 import { MCP_TOOLS } from "./mcp-tool-catalog";
 import { timeInfo } from "./mcp-time";
-import { buildRecap, findFreeSlots } from "./mcp-recap";
+import { buildRecap, findFreeSlots } from "../../sessions/session-recap";
 import type { PlanTokens } from "./plan-token";
 
 const text = (value: unknown, isError = false): CallToolResult => ({

@@ -33,6 +33,10 @@ model User {
   timezone           String              @default("Asia/Saigon") @db.VarChar(50)
   lang               Language            @default(VI_VN)
 
+  /// Opaque palette blob from the app; byte 0 is the client format version
+  paletteData      Bytes?    @db.ByteA
+  paletteUpdatedAt DateTime?
+
   /// Gates `/admin/*`; set in the database only
   role UserRole @default(USER)
 

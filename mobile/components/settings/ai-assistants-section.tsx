@@ -3,6 +3,7 @@ import { AssistantConnect } from "@/components/settings/assistant-connect";
 import { CopyButton } from "@/components/settings/copy-button";
 import { SettingsSectionLabel } from "@/components/settings/settings-header";
 import { useBottomSheet } from "@/components/ui/bottom-sheet";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
@@ -14,7 +15,7 @@ import { format, t } from "@/lib/i18n";
 import { zonedDate } from "@zenflow/core";
 import type { ApiAccessResponse } from "@zenflow/shared";
 import { cn } from "@/lib/utils";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Linking, Pressable, View } from "react-native";
 
 function Divider() {
@@ -35,14 +36,65 @@ function EndpointRow({ label, value, testID }: { label: string; value: string; t
   );
 }
 
-/** Provider tabs: one connection guide per assistant, with a snippet to copy when it has one. */
-function AssistantSetup({ guides }: { guides: ApiAccessResponse["setup"] }) {
+function StepRow({ n, last, children }: { n: number; last: boolean; children: ReactNode }) {
+  return (
+    <View className="flex-row gap-3">
+      <View className="items-center">
+        <View className="h-6 w-6 items-center justify-center rounded-full bg-primary">
+          <Text className="text-[12px] font-bold text-primary-foreground">{n}</Text>
+        </View>
+        {last ? null : <View className="mt-1 w-px flex-1 bg-border" />}
+      </View>
+      <View className={cn("min-w-0 flex-1 gap-2", !last && "pb-4")}>{children}</View>
+    </View>
+  );
+}
+
+/** Provider tabs, then numbered steps: copy the address, open the assistant, follow the guide. */
+function AssistantSetup({ access }: { access: ApiAccessResponse }) {
+  const guides = access.setup;
   const [selected, setSelected] = useState(guides[0]?.id);
   const guide = guides.find((g) => g.id === selected) ?? guides[0];
   if (!guide) return null;
+  const steps: ReactNode[] = [];
+  if (!guide.code) {
+    steps.push(
+      <>
+        <Text className="text-[14px] font-semibold">{t("Copy the address")}</Text>
+        <View className="flex-row items-center gap-2 rounded-xl bg-muted/60 py-1 pl-3 pr-1">
+          <Text selectable numberOfLines={1} className="min-w-0 flex-1 text-[13px]">
+            {access.mcpUrl}
+          </Text>
+          <CopyButton value={access.mcpUrl} label={t("Copy")} iconOnly testID="api-access.mcp" />
+        </View>
+      </>,
+    );
+  }
+  if (guide.link) {
+    const { url, label } = guide.link;
+    steps.push(
+      <Button onPress={() => void Linking.openURL(url)} testID={`api-access.link.${guide.id}`} className="self-start">
+        <Text>{label}</Text>
+      </Button>,
+    );
+  }
+  guide.steps.forEach((step) => steps.push(<Text className="text-[14px] leading-[20px]">{step}</Text>));
+  if (guide.code) {
+    steps.push(
+      <>
+        <Text selectable className="rounded-xl bg-muted/60 p-3 font-mono text-[12px] leading-[17px]">
+          {guide.code}
+        </Text>
+        <CopyButton value={guide.code} label={t("Copy")} testID={`api-access.setup.${guide.id}`} />
+      </>,
+    );
+  }
   return (
-    <View className="gap-3 px-4 py-3.5">
-      <Text className="text-[15px] font-semibold">{t("Connect with")}</Text>
+    <View className="gap-4 px-4 py-4">
+      <View className="gap-1">
+        <Text className="text-[17px] font-semibold">{t("Connect your AI assistant")}</Text>
+        <Text className="text-[13px] text-muted-foreground">{t("Pick one and follow the steps.")}</Text>
+      </View>
       <View accessibilityRole="tablist" className="flex-row rounded-full bg-muted p-0.5">
         {guides.map((g) => {
           const on = g.id === guide.id;
@@ -52,48 +104,26 @@ function AssistantSetup({ guides }: { guides: ApiAccessResponse["setup"] }) {
               role="tab"
               aria-selected={on}
               onPress={() => setSelected(g.id)}
-              className={cn("flex-1 items-center rounded-full py-1.5", on && "bg-card shadow-sm")}
+              className={cn("flex-1 items-center rounded-full py-2", on && "bg-card")}
             >
               <Text className={cn("text-[13px]", on ? "font-semibold" : "text-muted-foreground")}>{g.label}</Text>
             </Pressable>
           );
         })}
       </View>
-      {guide.link ? (
-        <Pressable
-          onPress={() => void Linking.openURL(guide.link!.url)}
-          accessibilityRole="link"
-          testID={`api-access.link.${guide.id}`}
-          className="h-10 self-start justify-center rounded-full border border-border px-4 active:opacity-70"
-        >
-          <Text className="text-[14px] font-semibold text-primary">{guide.link.label}</Text>
-        </Pressable>
-      ) : null}
-      <View className="gap-2">
-        {guide.steps.map((step, index) => (
-          <View key={step} className="flex-row gap-2.5">
-            <Text className="w-4 text-[13.5px] text-muted-foreground">{index + 1}.</Text>
-            <Text className="min-w-0 flex-1 text-[13.5px] leading-[19px]">{step}</Text>
-          </View>
+      <View>
+        {steps.map((node, i) => (
+          <StepRow key={`${guide.id}-${i}`} n={i + 1} last={i === steps.length - 1}>
+            {node}
+          </StepRow>
         ))}
       </View>
-      {guide.code ? (
-        <View className="gap-2">
-          <Text selectable className="rounded-xl bg-muted/60 p-3 font-mono text-[12px] leading-[17px]">
-            {guide.code}
-          </Text>
-          <CopyButton value={guide.code} label={t("Copy")} testID={`api-access.setup.${guide.id}`} />
-        </View>
-      ) : null}
+      {guide.code ? <EndpointRow label={t("REST base URL")} value={access.restBaseUrl} testID="api-access.rest" /> : null}
     </View>
   );
 }
 
-/**
- * Settings "AI assistants": the MCP and REST endpoints, the system prompt that
- * tells an assistant about the tools, and personal tokens. Tokens are created
- * and revoked here; a revoke asks first.
- */
+/** Settings "AI assistants": connect an assistant to Zenflow over MCP. The system prompt ships with the server. */
 export function AiAssistantsSection({ connectCode }: { connectCode?: string }) {
   useLanguage();
   const offline = useOffline();
@@ -138,19 +168,7 @@ export function AiAssistantsSection({ connectCode }: { connectCode?: string }) {
       <View className="overflow-hidden rounded-2xl border border-border bg-card">
         <AssistantConnect initialCode={connectCode} />
         <Divider />
-        <EndpointRow label={t("MCP server")} value={access.mcpUrl} testID="api-access.mcp" />
-        <Divider />
-        <EndpointRow label={t("REST base URL")} value={access.restBaseUrl} testID="api-access.rest" />
-        <Divider />
-        <AssistantSetup guides={access.setup} />
-        <Divider />
-        <View className="gap-2 px-4 py-3.5">
-          <Text className="text-[15px] font-semibold">{t("Prompt")}</Text>
-          <Text numberOfLines={4} className="text-[13px] leading-[18px] text-muted-foreground">
-            {access.prompt}
-          </Text>
-          <CopyButton value={access.prompt} label={t("Copy")} testID="api-access.prompt" />
-        </View>
+        <AssistantSetup access={access} />
       </View>
     </>
   );
