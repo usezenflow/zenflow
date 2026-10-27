@@ -5,7 +5,8 @@
   "version": "0.0.0",
   "scripts": {
     "build": "tailwindcss -i ./src/input.css -o ./dist/output.css",
-    "watch": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch"
+    "watch": "tailwindcss -i ./src/input.css -o ./dist/output.css --watch",
+    "build:palette": "node build-palette.mjs"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.14",
