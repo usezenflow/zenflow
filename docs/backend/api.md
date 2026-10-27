@@ -152,8 +152,8 @@ The ingestion inbox, written by the materializer. `eventName` (for example `assi
 | POST | `/devices` | Register or refresh one device (`RegisterDeviceInput`). Upserts on `pushToken`. Returns `{ id }` |
 | DELETE | `/devices` | Unregister by `pushToken`. Idempotent |
 
-- `platform` is `IOS` or `ANDROID`. `pushToken` is the device's ntfy topic.
-- Push runs as `notify:push` jobs in `worker-notify` (backoff, then `notify.dlq`; `ntfy` breaker). Unset `NTFY_BASE_URL` disables push.
+- `platform` is `IOS`, `ANDROID` or `WEB`. A `WEB` row needs an `https` `pushToken` (the subscription endpoint) and non-empty `p256dh` and `auth`. Native platforms omit the keys.
+- Push runs as `notify:push` jobs in `worker-notify` (backoff, then `notify.dlq`; `fcm`, `apns` and `web` breakers). A provider with no env is disabled. Dead tokens are pruned on send.
 
 ## Rate limits
 

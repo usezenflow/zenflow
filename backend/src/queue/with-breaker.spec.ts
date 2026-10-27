@@ -95,20 +95,18 @@ describe("withBreaker", () => {
 
   it("breakers are per upstream", async () => {
     const { breakers, job } = setup(1);
-    await withBreaker(breakers, "dlu-lms", job(), "t", boom).catch(() => 0);
+    await withBreaker(breakers, "fcm", job(), "t", boom).catch(() => 0);
     await expect(
-      withBreaker(breakers, "dlu-portal", job(), "t", () =>
-        Promise.resolve("ok"),
-      ),
+      withBreaker(breakers, "apns", job(), "t", () => Promise.resolve("ok")),
     ).resolves.toBe("ok");
   });
 
   it("probes again once the open time has passed", async () => {
     const { breakers, job, advance } = setup(1);
-    await withBreaker(breakers, "dlu-lms", job(), "t", boom).catch(() => 0);
+    await withBreaker(breakers, "fcm", job(), "t", boom).catch(() => 0);
     advance(61_000);
     await expect(
-      withBreaker(breakers, "dlu-lms", job(), "t", () => Promise.resolve("ok")),
+      withBreaker(breakers, "fcm", job(), "t", () => Promise.resolve("ok")),
     ).resolves.toBe("ok");
   });
 });

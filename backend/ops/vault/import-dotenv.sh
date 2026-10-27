@@ -5,7 +5,7 @@
 #     ./ops/vault/import-dotenv.sh .env.prod
 #
 # Imports SECRETS ONLY into one set per consumer under secret/zenflow/$VAULT_ENV/:
-# api, bandit, postgres, grafana, ntfy, backup and one per Redis instance (see classify below; a secret a
+# api, bandit, postgres, grafana, backup and one per Redis instance (see classify below; a secret a
 # few containers share is written to each of their sets). Known non-secret keys
 # stay in the env file (backend/env/<env>.env) and are only listed. An unknown key
 # is an error, so nothing lands in a set by default. It does not source the dotenv
@@ -25,7 +25,7 @@ command -v curl >/dev/null && command -v jq >/dev/null || { echo "import-dotenv:
 # non-secret (stays in the env file), or fails with a hint for anything else.
 classify() {
   case "$1" in
-    SESSION_SECRET|MAIL_PASSWORD|PORTAL_API_KEY|DKHP_API_KEY) echo api ;;
+    SESSION_SECRET|MAIL_PASSWORD|PORTAL_API_KEY|DKHP_API_KEY|FCM_SERVICE_ACCOUNT|APNS_KEY|APNS_KEY_ID|APNS_TEAM_ID|VAPID_PRIVATE_KEY) echo api ;;
     MASTER_LMS_ENCRYPTION_KEY_V[0-9]*|MASTER_PORTAL_ENCRYPTION_KEY_V[0-9]*) echo api ;;
     API_TOKEN_PEPPER_V[0-9]*) echo api ;;
     API_TOKEN_PEPPER_CURRENT_VERSION) echo env ;;
@@ -33,9 +33,6 @@ classify() {
     BANDIT_SERVICE_TOKEN) echo "api bandit" ;;
     BANDIT_SERVICE_TOKEN_PREVIOUS) echo bandit ;;
     GF_SECURITY_ADMIN_PASSWORD|GF_SMTP_PASSWORD) echo grafana ;;
-    NTFY_AUTH_USERS|NTFY_AUTH_TOKENS) echo ntfy ;;
-    NTFY_TOKEN) echo api ;;
-    NTFY_BASE_URL) echo env ;;
     BACKUP_S3_ACCESS_KEY_ID|BACKUP_S3_SECRET_ACCESS_KEY|BACKUP_AGE_IDENTITY) echo backup ;;
     # One password per Redis instance: the app (api set) and that instance's own set.
     SESSION_REDIS_PASSWORD) echo "api session-redis" ;;
@@ -52,7 +49,7 @@ classify() {
     BANDIT_SERVICE_URL|PLACE_TIMEOUT_MS|PORTAL_API_URL|PORTAL_API_TIMEOUT_MS|DKHP_API_URL|LMS_URL|LMS_TIMEOUT_MS|DLU_TZ) echo env ;;
     LOG_LEVEL|HTTP_SLOW_REQUEST_MS|NODE_ENV|ROLE|SWAGGER_ENABLED|BENCH_TIMING|SERVICE_VERSION|PAIRWISE_SAMPLE_RATE) echo env ;;
     MASTER_KEY_CURRENT_VERSION) echo env ;;
-    RATE_LIMIT_STORE_TIMEOUT_MS|KILLSWITCH_CACHE_TTL_MS|REDIS_PUBSUB_TIMEOUT_MS) echo env ;;
+    RATE_LIMIT_STORE_TIMEOUT_MS|KILLSWITCH_CACHE_TTL_MS|REDIS_PUBSUB_TIMEOUT_MS|APNS_BUNDLE_ID|APNS_PRODUCTION|VAPID_PUBLIC_KEY|VAPID_SUBJECT) echo env ;;
     OTEL_SERVICE_NAME|OTEL_EXPORTER_OTLP_ENDPOINT|OTEL_SDK_DISABLED|OTEL_TRACES_SAMPLER|OTEL_TRACES_SAMPLER_ARG|OTEL_METRIC_EXPORT_INTERVAL_MS|OTEL_LOG_LEVEL) echo env ;;
     OTP_REQUEST_IP_WINDOW_SEC|OTP_REQUEST_IP_LIMIT|OTP_REQUEST_IP_HOURLY_WINDOW_SEC|OTP_REQUEST_IP_HOURLY_LIMIT|OTP_REQUEST_EMAIL_WINDOW_SEC|OTP_REQUEST_EMAIL_LIMIT) echo env ;;
     OTP_VERIFY_IP_WINDOW_SEC|OTP_VERIFY_IP_LIMIT|OTP_VERIFY_EMAIL_WINDOW_SEC|OTP_VERIFY_EMAIL_LIMIT) echo env ;;
@@ -123,7 +120,7 @@ put_set() {
   echo "imported $set"
 }
 
-for set in api bandit postgres grafana ntfy backup session-redis redis-ratelimit redis-queue redis-killswitch redis-pubsub; do put_set "$set"; done
+for set in api bandit postgres grafana backup session-redis redis-ratelimit redis-queue redis-killswitch redis-pubsub; do put_set "$set"; done
 if [ "$dry_run" = --dry-run ]; then
   printf 'left in env (not imported): '
   payload_for env | jq -r '.data | keys[]' | paste -sd, -

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { ConfigContext, ExpoConfig } from "@expo/config";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -6,6 +7,15 @@ const withAndroidBuildFixes = require("./plugins/withAndroidBuildFixes");
 const withIosBuildFixes = require("./plugins/withIosBuildFixes");
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const withE2eCleartext = require("./plugins/withE2eCleartext");
+
+// FCM (Android push) needs the Firebase Android app config baked into the
+// native build. Drop `google-services.json` (from the Firebase console) next
+// to this file; until then Android push is simply inert and the build still
+// works. iOS/APNs needs no analogous file — just the push entitlement the
+// `expo-notifications` plugin adds.
+const googleServicesFile = existsSync("./google-services.json")
+  ? "./google-services.json"
+  : undefined;
 
 // One version for the whole repo (changesets fixed group): mobile/package.json
 // is the source. Store builds need a plain x.y.z, so a `-beta.N` suffix becomes
@@ -76,6 +86,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     permissions: ["android.permission.REQUEST_INSTALL_PACKAGES"],
     // The default template asks for "draw over other apps", which Play Protect flags.
     blockedPermissions: ["android.permission.SYSTEM_ALERT_WINDOW"],
+    ...(googleServicesFile ? { googleServicesFile } : {}),
     // Resize the visible window when the keyboard opens instead of the
     // default pan behavior — required for `KeyboardAvoidingView`
     // (the task composer sheet) to work; without this the fixed footer + focused
@@ -92,7 +103,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     ["expo-router"],
     "@react-native-community/datetimepicker",
-    // Local notifications: permission, Android channels and sounds.
+    // Adds the iOS push entitlement (`aps-environment`) + the Android
+    // notification permission / channel wiring. Raw FCM/APNs tokens come from
+    // `Notifications.getDevicePushTokenAsync()` (see `lib/push.ts`).
     [
       "expo-notifications",
       {
@@ -145,7 +158,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // The full version including `-beta.N`, which `version` above drops. The updater
     // compares it with the latest GitHub release tag.
     releaseVersion: fullVersion,
-    ntfyBaseUrl: process.env.EXPO_PUBLIC_NTFY_BASE_URL ?? process.env.NTFY_BASE_URL,
     eas: {
       projectId: "",
     },

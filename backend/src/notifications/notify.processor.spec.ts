@@ -64,59 +64,80 @@ describe("NotifyProcessor", () => {
     const { processor, push, killSwitch, job } = await setup();
     killSwitch.isEnabled.mockResolvedValue(false);
     await processor.process(
-      job({ type: "push", notificationId: "n1", provider: "ntfy" }),
+      job({ type: "push", notificationId: "n1", provider: "fcm" }),
     );
     expect(killSwitch.isEnabled).toHaveBeenCalledWith("notifications");
     expect(push.deliver).not.toHaveBeenCalled();
   });
 
-  it("push: delivers the notification", async () => {
+  it("push: delivers the notification for the job's provider", async () => {
     const { processor, push, job } = await setup();
     await processor.process(
-      job({ type: "push", notificationId: "n1", provider: "ntfy" }),
+      job({ type: "push", notificationId: "n1", provider: "fcm" }),
       "tok",
     );
     expect(push.deliver).toHaveBeenCalledWith("n1", {
+      provider: "fcm",
       guard: expect.any(Function),
     });
   });
 
+  it("push: a web job delivers through the web provider and parks on its own breaker", async () => {
+    const { processor, push, breakers, job } = await setup();
+    await processor.process(
+      job({ type: "push", notificationId: "n1", provider: "web" }),
+      "tok",
+    );
+    expect(push.deliver).toHaveBeenCalledWith("n1", {
+      provider: "web",
+      guard: expect.any(Function),
+    });
+    await breakers
+      .run("web", () => Promise.reject(new Error("down")))
+      .catch(() => 0);
+    const { guard } = push.deliver.mock.calls[0][1] as {
+      guard: (p: string, fn: () => Promise<unknown>) => Promise<unknown>;
+    };
+    const fn = jest.fn();
+    await expect(guard("web", fn)).rejects.toBeInstanceOf(DelayedError);
+    expect(fn).not.toHaveBeenCalled();
+    await expect(guard("fcm", () => Promise.resolve(1))).resolves.toBe(1);
+  });
+
   it("push: the guard runs the provider under its named breaker and parks the job when it is open", async () => {
     const { processor, push, breakers, job } = await setup();
-    // Trip the ntfy breaker.
+    // Trip the fcm breaker.
     await breakers
-      .run("ntfy", () => Promise.reject(new Error("down")))
+      .run("fcm", () => Promise.reject(new Error("down")))
       .catch(() => 0);
-    const j = job({ type: "push", notificationId: "n1", provider: "ntfy" });
+    const j = job({ type: "push", notificationId: "n1", provider: "fcm" });
     await processor.process(j, "tok");
     const { guard } = push.deliver.mock.calls[0][1] as {
       guard: (p: string, fn: () => Promise<unknown>) => Promise<unknown>;
     };
     const fn = jest.fn();
-    await expect(guard("ntfy", fn)).rejects.toBeInstanceOf(DelayedError);
+    await expect(guard("fcm", fn)).rejects.toBeInstanceOf(DelayedError);
     expect(fn).not.toHaveBeenCalled();
     expect(j.moveToDelayed).toHaveBeenCalledTimes(1);
+    // apns is unaffected.
+    await expect(guard("apns", () => Promise.resolve(1))).resolves.toBe(1);
   });
 
   it("push: a delivery failure propagates so BullMQ retries with backoff", async () => {
     const { processor, push, job } = await setup();
-    push.deliver.mockRejectedValue(new Error("ntfy down"));
+    push.deliver.mockRejectedValue(new Error("fcm down"));
     await expect(
       processor.process(
-        job({ type: "push", notificationId: "n1", provider: "ntfy" }),
+        job({ type: "push", notificationId: "n1", provider: "fcm" }),
       ),
-    ).rejects.toThrow("ntfy down");
+    ).rejects.toThrow("fcm down");
   });
 
-  it("push: a job queued for a removed provider is unrecoverable", async () => {
+  it("push: a job without a provider is unrecoverable (it could re-send on a breaker park)", async () => {
     const { processor, push, job } = await setup();
     await expect(
       processor.process(
-        job({
-          type: "push",
-          notificationId: "n1",
-          provider: "fcm",
-        } as unknown as NotifyJobData),
+        job({ type: "push", notificationId: "n1" } as unknown as NotifyJobData),
       ),
     ).rejects.toBeInstanceOf(UnrecoverableError);
     expect(push.deliver).not.toHaveBeenCalled();

@@ -782,25 +782,6 @@ services:
     networks:
       - o11y
 
-  # Self-hosted push (ADR-0047). Reached through nginx at https://ntfy.usezenflow.com.
-  ntfy:
-    container_name: zenflow-ntfy-prod
-    image: binwiederhier/ntfy:v2.34.0
-    restart: unless-stopped
-    command: ["serve"]
-    env_file:
-      - path: .env.prod
-        required: false
-      - path: ${ZENFLOW_SECRETS_DIR:-/run/zenflow/prod}/ntfy/files.env
-        required: false
-    volumes:
-      - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
-      - ntfy_cache:/var/lib/ntfy
-    expose:
-      - "80"
-    networks:
-      - o11y
-
   nginx:
     image: nginx:1.28-alpine
     container_name: nginx
@@ -817,12 +798,10 @@ services:
       - ./nginx/snippets-proxy.conf:/etc/nginx/zenflow/snippets-proxy.conf:ro
       - ./nginx/sse.conf:/etc/nginx/zenflow/sse.conf:ro
       - ./nginx/grafana.conf:/etc/nginx/zenflow/grafana.conf:ro
-      - ./nginx/ntfy.conf:/etc/nginx/zenflow/ntfy.conf:ro
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_webroot:/var/www/certbot:ro
     depends_on:
       - grafana
-      - ntfy
     networks:
       - edge
       - o11y
@@ -907,7 +886,6 @@ volumes:
   alloy_data:
   prometheus_data:
   grafana_data:
-  ntfy_cache:
   vault_data:
   redis_data:
   redis_ratelimit_data:

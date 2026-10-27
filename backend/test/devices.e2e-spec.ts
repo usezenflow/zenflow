@@ -8,14 +8,16 @@ import { Test, TestingModule } from "@nestjs/testing";
 import request from "supertest";
 import type { App } from "supertest/types";
 import { CookieAuthGuard } from "../src/auth/guards";
+import { ApnsSender } from "../src/devices/apns.sender";
 import { DevicesModule } from "../src/devices/devices.module";
-import { NtfySender } from "../src/devices/ntfy.sender";
+import { FcmSender } from "../src/devices/fcm.sender";
+import { WebPushSender } from "../src/devices/web-push.sender";
 import { PrismaService } from "../src/prisma/prisma.service";
 
 /**
  * The real HTTP surface of `/devices` — controller, DTOs, global
  * `ValidationPipe`, response envelope — over a stubbed `PrismaService` and with
- * the ntfy sender disabled (so nothing reaches a network).
+ * both push senders disabled (so nothing reaches a network).
  *
  * Like `notifications.e2e-spec.ts`, this does not boot `AppModule`. The stub
  * `CookieAuthGuard` pins the user from an `x-test-user` header (default `u1`),
@@ -26,6 +28,8 @@ interface DeviceRow {
   id: string;
   platform: string;
   pushToken: string;
+  p256dh: string | null;
+  auth: string | null;
   userId: string;
   lastSeenAt: Date | null;
 }
@@ -90,8 +94,12 @@ describe("Devices (e2e)", () => {
     })
       .overrideProvider(PrismaService)
       .useValue(prismaStub)
-      .overrideProvider(NtfySender)
+      .overrideProvider(FcmSender)
       .useValue(disabledSender)
+      .overrideProvider(ApnsSender)
+      .useValue(disabledSender)
+      .overrideProvider(WebPushSender)
+      .useValue({ ...disabledSender, publicKey: null })
       .overrideGuard(CookieAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
@@ -129,7 +137,7 @@ describe("Devices (e2e)", () => {
     it("registers a device and returns { id } in the envelope", async () => {
       const res = await request(app.getHttpServer())
         .post("/devices")
-        .send({ platform: "ANDROID", pushToken: "tok-a-aaaaaaaaaaaaaaaa" });
+        .send({ platform: "ANDROID", pushToken: "tok-a" });
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({
@@ -144,10 +152,10 @@ describe("Devices (e2e)", () => {
       const server = app.getHttpServer();
       await request(server)
         .post("/devices")
-        .send({ platform: "IOS", pushToken: "tok-b-aaaaaaaaaaaaaaaa" });
+        .send({ platform: "IOS", pushToken: "tok-b" });
       const res = await request(server)
         .post("/devices")
-        .send({ platform: "ANDROID", pushToken: "tok-b-aaaaaaaaaaaaaaaa" });
+        .send({ platform: "ANDROID", pushToken: "tok-b" });
 
       expect(res.status).toBe(200);
       expect(store).toHaveLength(1);
@@ -157,7 +165,7 @@ describe("Devices (e2e)", () => {
     it("rejects an unknown platform", async () => {
       const res = await request(app.getHttpServer())
         .post("/devices")
-        .send({ platform: "WINDOWS", pushToken: "tok-a-aaaaaaaaaaaaaaaa" });
+        .send({ platform: "WINDOWS", pushToken: "tok-a" });
 
       expect(res.status).toBe(400);
     });
@@ -171,48 +179,52 @@ describe("Devices (e2e)", () => {
     });
 
     it("rejects an unknown field (forbidNonWhitelisted)", async () => {
-      const res = await request(app.getHttpServer()).post("/devices").send({
-        platform: "ANDROID",
-        pushToken: "tok-a-aaaaaaaaaaaaaaaa",
-        extra: 1,
-      });
+      const res = await request(app.getHttpServer())
+        .post("/devices")
+        .send({ platform: "ANDROID", pushToken: "tok-a", extra: 1 });
 
       expect(res.status).toBe(400);
     });
   });
 
-  describe("POST /devices (topic)", () => {
-    it.each(["WEB", "WINDOWS"])("rejects the %s platform", async (platform) => {
+  describe("POST /devices (WEB)", () => {
+    const endpoint = "https://push.example.test/sub/abc";
+    const keys = { p256dh: "p256-key", auth: "auth-secret" };
+
+    it("stores the endpoint and subscription keys", async () => {
       const res = await request(app.getHttpServer())
         .post("/devices")
-        .send({ platform, pushToken: "tok-aaaaaaaaaaaaaaaa" });
+        .send({ platform: "WEB", pushToken: endpoint, ...keys });
 
-      expect(res.status).toBe(400);
-      expect(store).toHaveLength(0);
-    });
-
-    it.each([
-      "short",
-      "has/slash-aaaaaaaaaaaaaaaa",
-      "fcm:token-aaaaaaaaaaaaaaaa",
-    ])("rejects the malformed topic %s", async (pushToken) => {
-      const res = await request(app.getHttpServer())
-        .post("/devices")
-        .send({ platform: "ANDROID", pushToken });
-
-      expect(res.status).toBe(400);
-      expect(store).toHaveLength(0);
-    });
-
-    it("rejects the legacy subscription keys", async () => {
-      const res = await request(app.getHttpServer()).post("/devices").send({
-        platform: "ANDROID",
-        pushToken: "tok-aaaaaaaaaaaaaaaa",
-        p256dh: null,
-        auth: null,
+      expect(res.status).toBe(200);
+      expect(store).toHaveLength(1);
+      expect(store[0]).toMatchObject({
+        platform: "WEB",
+        pushToken: endpoint,
+        ...keys,
       });
+    });
+
+    it("rejects a WEB registration without its keys", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/devices")
+        .send({ platform: "WEB", pushToken: endpoint });
 
       expect(res.status).toBe(400);
+      expect(store).toHaveLength(0);
+    });
+
+    it("rejects a WEB endpoint that is not https", async () => {
+      const res = await request(app.getHttpServer())
+        .post("/devices")
+        .send({
+          platform: "WEB",
+          pushToken: "http://push.example.test/sub/abc",
+          ...keys,
+        });
+
+      expect(res.status).toBe(400);
+      expect(store).toHaveLength(0);
     });
   });
 
@@ -221,11 +233,11 @@ describe("Devices (e2e)", () => {
       const server = app.getHttpServer();
       await request(server)
         .post("/devices")
-        .send({ platform: "ANDROID", pushToken: "tok-a-aaaaaaaaaaaaaaaa" });
+        .send({ platform: "ANDROID", pushToken: "tok-a" });
 
       const first = await request(server)
         .delete("/devices")
-        .send({ pushToken: "tok-a-aaaaaaaaaaaaaaaa" });
+        .send({ pushToken: "tok-a" });
       expect(first.status).toBe(200);
       expect(first.body).toMatchObject({
         success: true,
@@ -235,21 +247,21 @@ describe("Devices (e2e)", () => {
 
       const second = await request(server)
         .delete("/devices")
-        .send({ pushToken: "tok-a-aaaaaaaaaaaaaaaa" });
+        .send({ pushToken: "tok-a" });
       expect(second.status).toBe(200);
     });
 
     it("does not remove another user's device", async () => {
       const server = app.getHttpServer();
-      await request(server).post("/devices").set("x-test-user", "owner").send({
-        platform: "ANDROID",
-        pushToken: "tok-shared-aaaaaaaaaaaaaaaa",
-      });
+      await request(server)
+        .post("/devices")
+        .set("x-test-user", "owner")
+        .send({ platform: "ANDROID", pushToken: "tok-shared" });
 
       const res = await request(server)
         .delete("/devices")
         .set("x-test-user", "intruder")
-        .send({ pushToken: "tok-shared-aaaaaaaaaaaaaaaa" });
+        .send({ pushToken: "tok-shared" });
 
       expect(res.status).toBe(200); // idempotent, not a 404
       expect(store).toHaveLength(1);

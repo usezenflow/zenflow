@@ -127,10 +127,13 @@ mobile `dev | typecheck | test`; dashboard `dev | build | typecheck | lint` (por
   origin-based). Backend `CORS_ORIGIN` (`.env.dev`) is a comma-separated list
   (split in `main.ts`) and must contain both dev web origins.
 - OTP login emails are caught by Mailpit (UI/API on `:8025`) in the local Docker stack.
-- Push (`backend/src/devices/`, `POST`/`DELETE /devices`): `NtfySender` posts to the
-  device's ntfy topic via `NTFY_BASE_URL` + `NTFY_TOKEN`; unset in `.env.test`.
-  `PushService` fans every notification out over the same emitter the SSE
-  stream uses.
+- Push (`backend/src/devices/`, `POST`/`DELETE /devices`): Android via
+  `FCM_SERVICE_ACCOUNT`, iOS via `APNS_KEY` + `APNS_KEY_ID` + `APNS_TEAM_ID` +
+  `APNS_BUNDLE_ID` (+ `APNS_PRODUCTION`), Web via `VAPID_PUBLIC_KEY` +
+  `VAPID_PRIVATE_KEY` + `VAPID_SUBJECT`. All optional — each provider
+  self-disables when its vars are unset, like `BANDIT_SERVICE_URL`; unset in
+  `.env.test`. `PushService` fans every notification out over the same emitter
+  the SSE stream uses.
 
 ## Docs
 

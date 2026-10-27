@@ -1,7 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { type Notification } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
-import { NtfySender } from "./ntfy.sender";
+import { ApnsSender } from "./apns.sender";
+import { FcmSender } from "./fcm.sender";
+import { WebPushSender } from "./web-push.sender";
 import {
   PushProviderError,
   PushService,
@@ -10,9 +12,11 @@ import {
 import type { SendResult } from "./types";
 
 interface DeviceRow {
-  platform: "IOS" | "ANDROID";
+  platform: "IOS" | "ANDROID" | "WEB";
   pushToken: string;
   userId: string;
+  p256dh?: string | null;
+  auth?: string | null;
 }
 
 function makePrismaDouble(devices: DeviceRow[], allowNotifications = true) {
@@ -59,96 +63,105 @@ const ROW = {
   sessionId: "s1",
 } as unknown as Notification;
 
-const DEVICE: DeviceRow = {
-  platform: "ANDROID",
-  pushToken: "topic-aaaaaaaaaaaaaaaa",
-  userId: "u1",
-};
-
 async function make(opts: {
   devices?: DeviceRow[];
-  ntfy?: ReturnType<typeof fakeSender>;
+  fcm?: ReturnType<typeof fakeSender>;
+  apns?: ReturnType<typeof fakeSender>;
+  web?: ReturnType<typeof fakeSender>;
   allowNotifications?: boolean;
 }) {
   const db = makePrismaDouble(opts.devices ?? [], opts.allowNotifications);
-  const ntfy = opts.ntfy ?? fakeSender(true);
+  const fcm = opts.fcm ?? fakeSender(true);
+  const apns = opts.apns ?? fakeSender(true);
+  const web = opts.web ?? fakeSender(true);
 
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       PushService,
       { provide: PrismaService, useValue: db.client },
-      { provide: NtfySender, useValue: ntfy },
+      { provide: FcmSender, useValue: fcm },
+      { provide: ApnsSender, useValue: apns },
+      { provide: WebPushSender, useValue: web },
     ],
   }).compile();
   const service = module.get<PushService>(PushService);
 
-  return { db, service, ntfy };
+  return { db, service, fcm, apns, web };
 }
 
 describe("PushService", () => {
   describe("sendToUser", () => {
-    it("is a no-op when ntfy is disabled", async () => {
-      const { service, db, ntfy } = await make({
-        devices: [DEVICE],
-        ntfy: fakeSender(false),
+    it("is a no-op when all senders are disabled", async () => {
+      const { service, db, fcm, apns, web } = await make({
+        devices: [{ platform: "ANDROID", pushToken: "a1", userId: "u1" }],
+        fcm: fakeSender(false),
+        apns: fakeSender(false),
+        web: fakeSender(false),
       });
 
       await service.sendToUser("u1", ROW);
 
       expect(db.client.userDevice.findMany).not.toHaveBeenCalled();
-      expect(ntfy.send).not.toHaveBeenCalled();
+      expect(fcm.send).not.toHaveBeenCalled();
+      expect(apns.send).not.toHaveBeenCalled();
+      expect(web.send).not.toHaveBeenCalled();
     });
 
-    it("skips push when the user has allowNotifications=false", async () => {
-      const { service, db, ntfy } = await make({
-        devices: [DEVICE],
+    it("skips native push when the user has allowNotifications=false", async () => {
+      const { service, db, fcm, apns } = await make({
+        devices: [{ platform: "ANDROID", pushToken: "a1", userId: "u1" }],
         allowNotifications: false,
       });
 
       await service.sendToUser("u1", ROW);
 
       expect(db.client.userDevice.findMany).not.toHaveBeenCalled();
-      expect(ntfy.send).not.toHaveBeenCalled();
+      expect(fcm.send).not.toHaveBeenCalled();
+      expect(apns.send).not.toHaveBeenCalled();
     });
 
     it("does nothing when the user has no devices", async () => {
-      const { service, ntfy } = await make({ devices: [] });
+      const { service, fcm, apns } = await make({ devices: [] });
 
       await service.sendToUser("u1", ROW);
 
-      expect(ntfy.send).not.toHaveBeenCalled();
+      expect(fcm.send).not.toHaveBeenCalled();
+      expect(apns.send).not.toHaveBeenCalled();
     });
 
-    it("sends every device topic of the user, with title/body/data", async () => {
-      const { service, ntfy } = await make({
+    it("routes Android tokens to FCM and iOS tokens to APNs, with title/body/data", async () => {
+      const { service, fcm, apns } = await make({
         devices: [
-          DEVICE,
-          { ...DEVICE, platform: "IOS", pushToken: "topic-bbbbbbbbbbbbbbbb" },
-          { ...DEVICE, pushToken: "topic-other-user-00", userId: "u2" },
+          { platform: "ANDROID", pushToken: "a1", userId: "u1" },
+          { platform: "ANDROID", pushToken: "a2", userId: "u1" },
+          { platform: "IOS", pushToken: "i1", userId: "u1" },
+          { platform: "ANDROID", pushToken: "other", userId: "u2" },
         ],
       });
 
       await service.sendToUser("u1", ROW);
 
-      expect(ntfy.send).toHaveBeenCalledWith(
-        ["topic-aaaaaaaaaaaaaaaa", "topic-bbbbbbbbbbbbbbbb"],
-        {
-          title: ROW.title,
-          body: ROW.content,
-          data: {
-            notificationId: "n1",
-            eventName: "exam.created",
-            sessionId: "s1",
-            slotProposalId: "",
-            url: "/calendar?session=s1",
-          },
-          tone: "default",
+      expect(fcm.send).toHaveBeenCalledWith(["a1", "a2"], {
+        title: ROW.title,
+        body: ROW.content,
+        data: {
+          notificationId: "n1",
+          eventName: "exam.created",
+          sessionId: "s1",
+          slotProposalId: "",
+          url: "/calendar?session=s1",
         },
-      );
+        tone: "default",
+        category: null,
+        actions: [],
+      });
+      expect(apns.send).toHaveBeenCalledWith(["i1"], expect.anything());
     });
 
-    it("uses the urgent tone for a sync conflict", async () => {
-      const { service, ntfy } = await make({ devices: [DEVICE] });
+    it("tags a sync-conflict push with the Reschedule category and the urgent tone", async () => {
+      const { service, apns } = await make({
+        devices: [{ platform: "IOS", pushToken: "i1", userId: "u1" }],
+      });
 
       await service.sendToUser("u1", {
         ...ROW,
@@ -156,19 +169,95 @@ describe("PushService", () => {
         sessionId: null,
       });
 
-      expect(ntfy.send).toHaveBeenCalledWith(
-        [DEVICE.pushToken],
-        expect.objectContaining({ tone: "urgent" }),
+      expect(apns.send).toHaveBeenCalledWith(
+        ["i1"],
+        expect.objectContaining({ tone: "urgent", category: "sync_conflict" }),
       );
     });
 
+    it("sends a plan-offer push with the Keep and Prefer actions", async () => {
+      const { service, apns } = await make({
+        devices: [{ platform: "IOS", pushToken: "i1", userId: "u1" }],
+      });
+
+      await service.sendToUser("u1", {
+        ...ROW,
+        eventName: "plan_offer.ask",
+        title: "Essay draft",
+        content: "Keep the scheduled time?",
+        sessionId: "s1",
+      });
+
+      expect(apns.send).toHaveBeenCalledWith(
+        ["i1"],
+        expect.objectContaining({
+          title: "Essay draft",
+          body: "Keep the scheduled time?",
+          category: "plan_offer",
+          actions: ["keep", "prefer"],
+        }),
+      );
+    });
+
+    it("routes WEB rows with their subscription keys to Web Push", async () => {
+      const { service, web, fcm } = await make({
+        devices: [
+          {
+            platform: "WEB",
+            pushToken: "https://push.example.test/w1",
+            p256dh: "p1",
+            auth: "x1",
+            userId: "u1",
+          },
+          { platform: "ANDROID", pushToken: "a1", userId: "u1" },
+        ],
+      });
+
+      await service.sendToUser("u1", ROW);
+
+      expect(web.send).toHaveBeenCalledWith(
+        [
+          {
+            endpoint: "https://push.example.test/w1",
+            p256dh: "p1",
+            auth: "x1",
+          },
+        ],
+        expect.objectContaining({ title: ROW.title, tone: "default" }),
+      );
+      expect(fcm.send).toHaveBeenCalledWith(["a1"], expect.anything());
+    });
+
+    it("skips a WEB row that has no keys", async () => {
+      const { service, web } = await make({
+        devices: [
+          {
+            platform: "WEB",
+            pushToken: "https://push.example.test/w1",
+            p256dh: null,
+            auth: null,
+            userId: "u1",
+          },
+        ],
+      });
+
+      await service.sendToUser("u1", ROW);
+
+      expect(web.send).not.toHaveBeenCalled();
+    });
+
     it("uses the /notifications url when the row has no session", async () => {
-      const { service, ntfy } = await make({ devices: [DEVICE] });
+      const { service, fcm } = await make({
+        devices: [{ platform: "ANDROID", pushToken: "a1", userId: "u1" }],
+      });
 
-      await service.sendToUser("u1", { ...ROW, sessionId: null });
+      await service.sendToUser("u1", {
+        ...ROW,
+        sessionId: null,
+      });
 
-      expect(ntfy.send).toHaveBeenCalledWith(
-        [DEVICE.pushToken],
+      expect(fcm.send).toHaveBeenCalledWith(
+        ["a1"],
         expect.objectContaining({
           data: expect.objectContaining({
             sessionId: "",
@@ -178,19 +267,51 @@ describe("PushService", () => {
       );
     });
 
-    it("prunes the topics the sender reports invalid", async () => {
+    it("prunes dead Web Push endpoints", async () => {
       const { service, db } = await make({
-        devices: [DEVICE, { ...DEVICE, pushToken: "bad:token" }],
-        ntfy: fakeSender(true, { sent: 1, invalidTokens: ["bad:token"] }),
+        devices: [
+          {
+            platform: "WEB",
+            pushToken: "https://push.example.test/gone",
+            p256dh: "p",
+            auth: "a",
+            userId: "u1",
+          },
+        ],
+        web: fakeSender(true, {
+          sent: 0,
+          invalidTokens: ["https://push.example.test/gone"],
+        }),
       });
 
       await service.sendToUser("u1", ROW);
 
-      expect(db.devices.map((d) => d.pushToken)).toEqual([DEVICE.pushToken]);
+      expect(db.devices).toHaveLength(0);
     });
 
-    it("does not call deleteMany when nothing is invalid", async () => {
-      const { service, db } = await make({ devices: [DEVICE] });
+    it("prunes every dead token all senders report", async () => {
+      const { service, db } = await make({
+        devices: [
+          { platform: "ANDROID", pushToken: "a-dead", userId: "u1" },
+          { platform: "ANDROID", pushToken: "a-ok", userId: "u1" },
+          { platform: "IOS", pushToken: "i-dead", userId: "u1" },
+        ],
+        fcm: fakeSender(true, { sent: 1, invalidTokens: ["a-dead"] }),
+        apns: fakeSender(true, { sent: 0, invalidTokens: ["i-dead"] }),
+      });
+
+      await service.sendToUser("u1", ROW);
+
+      expect(db.client.userDevice.deleteMany).toHaveBeenCalledWith({
+        where: { pushToken: { in: ["a-dead", "i-dead"] } },
+      });
+      expect(db.devices.map((d) => d.pushToken)).toEqual(["a-ok"]);
+    });
+
+    it("does not call deleteMany when nothing is stale", async () => {
+      const { service, db } = await make({
+        devices: [{ platform: "ANDROID", pushToken: "a1", userId: "u1" }],
+      });
 
       await service.sendToUser("u1", ROW);
 
@@ -198,9 +319,53 @@ describe("PushService", () => {
     });
   });
 
-  describe("failures", () => {
-    it("runs the send through the guard as ntfy", async () => {
-      const { service } = await make({ devices: [DEVICE] });
+  describe("providers", () => {
+    const BOTH: DeviceRow[] = [
+      { platform: "ANDROID", pushToken: "a1", userId: "u1" },
+      { platform: "IOS", pushToken: "i1", userId: "u1" },
+    ];
+
+    const WITH_WEB: DeviceRow[] = [
+      ...BOTH,
+      {
+        platform: "WEB",
+        pushToken: "https://push.example.test/w1",
+        p256dh: "p",
+        auth: "a",
+        userId: "u1",
+      },
+    ];
+
+    it("a per-provider job only touches that provider", async () => {
+      const { service, fcm, apns, web } = await make({ devices: WITH_WEB });
+
+      await service.sendToUser("u1", ROW, { provider: "apns" });
+
+      expect(fcm.send).not.toHaveBeenCalled();
+      expect(web.send).not.toHaveBeenCalled();
+      expect(apns.send).toHaveBeenCalledWith(["i1"], expect.anything());
+    });
+
+    it("a web job only touches Web Push, and is a no-op while it is disabled", async () => {
+      const { service, fcm, web, db } = await make({
+        devices: WITH_WEB,
+        web: fakeSender(false),
+      });
+
+      await service.sendToUser("u1", ROW, { provider: "web" });
+
+      expect(db.client.userDevice.findMany).not.toHaveBeenCalled();
+      expect(fcm.send).not.toHaveBeenCalled();
+      expect(web.send).not.toHaveBeenCalled();
+    });
+
+    it("runs each provider through the guard under its own name", async () => {
+      const { service } = await make({
+        devices: WITH_WEB,
+        fcm: fakeSender(true, { sent: 1, invalidTokens: [] }),
+        apns: fakeSender(true, { sent: 1, invalidTokens: [] }),
+        web: fakeSender(true, { sent: 1, invalidTokens: [] }),
+      });
       const calls: string[] = [];
       const guard: ProviderGuard = (p, fn) => {
         calls.push(p);
@@ -209,13 +374,14 @@ describe("PushService", () => {
 
       await service.sendToUser("u1", ROW, { guard });
 
-      expect(calls).toEqual(["ntfy"]);
+      expect(calls.sort()).toEqual(["apns", "fcm", "web"]);
     });
 
-    it("throws PushProviderError when every send failed transiently, so the job retries", async () => {
+    it("throws PushProviderError when every token failed transiently, so the job retries", async () => {
       const { service } = await make({
-        devices: [DEVICE],
-        ntfy: fakeSender(true, { sent: 0, invalidTokens: [] }),
+        devices: BOTH,
+        fcm: fakeSender(true, { sent: 0, invalidTokens: [] }),
+        apns: fakeSender(true, { sent: 1, invalidTokens: [] }),
       });
 
       await expect(service.sendToUser("u1", ROW)).rejects.toBeInstanceOf(
@@ -223,26 +389,46 @@ describe("PushService", () => {
       );
     });
 
-    it("treats all-invalid topics as handled (pruned, no retry)", async () => {
+    it("treats all-dead tokens as handled (pruned, no retry)", async () => {
       const { service, db } = await make({
-        devices: [DEVICE],
-        ntfy: fakeSender(true, {
-          sent: 0,
-          invalidTokens: [DEVICE.pushToken],
-        }),
+        devices: [BOTH[0]],
+        fcm: fakeSender(true, { sent: 0, invalidTokens: ["a1"] }),
       });
 
       await expect(service.sendToUser("u1", ROW)).resolves.toBeUndefined();
       expect(db.devices).toHaveLength(0);
     });
 
-    it("propagates a guard rejection (breaker open)", async () => {
-      const { service, ntfy } = await make({ devices: [DEVICE] });
+    it("throws PushProviderError when every Web Push send failed transiently", async () => {
+      const { service } = await make({
+        devices: [
+          {
+            platform: "WEB",
+            pushToken: "https://push.example.test/w1",
+            p256dh: "p",
+            auth: "a",
+            userId: "u1",
+          },
+        ],
+        web: fakeSender(true, { sent: 0, invalidTokens: [] }),
+      });
+
+      await expect(
+        service.sendToUser("u1", ROW, { provider: "web" }),
+      ).rejects.toBeInstanceOf(PushProviderError);
+    });
+
+    it("a guard rejection (breaker open) still lets the other provider finish and prune", async () => {
+      const { service, apns } = await make({
+        devices: BOTH,
+        apns: fakeSender(true, { sent: 1, invalidTokens: [] }),
+      });
       const open = new Error("parked");
-      const guard: ProviderGuard = () => Promise.reject(open);
+      const guard = <T>(p: string, fn: () => Promise<T>) =>
+        p === "fcm" ? Promise.reject(open) : fn();
 
       await expect(service.sendToUser("u1", ROW, { guard })).rejects.toBe(open);
-      expect(ntfy.send).not.toHaveBeenCalled();
+      expect(apns.send).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -256,9 +442,9 @@ describe("PushService", () => {
         .spyOn(service, "sendToUser")
         .mockResolvedValue(undefined);
 
-      await service.deliver("n1", {});
+      await service.deliver("n1", { provider: "fcm" });
 
-      expect(spy).toHaveBeenCalledWith("u1", ROW, {});
+      expect(spy).toHaveBeenCalledWith("u1", ROW, { provider: "fcm" });
     });
 
     it("throws when the row is missing so BullMQ retries", async () => {
@@ -267,7 +453,9 @@ describe("PushService", () => {
         findUnique: jest.fn().mockResolvedValue(null),
       };
 
-      await expect(service.deliver("gone", {})).rejects.toThrow(/not found/);
+      await expect(
+        service.deliver("gone", { provider: "fcm" }),
+      ).rejects.toThrow(/not found/);
     });
   });
 });

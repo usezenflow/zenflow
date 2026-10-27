@@ -148,11 +148,13 @@ enum DevicePlatform {
   WEB
 }
 
-// Push registration: `pushToken` is the device's ntfy topic
+// Push registration (FCM on Android, APNs on iOS, Web Push on WEB)
 model UserDevice {
   id         String         @id @default(uuid())
   platform   DevicePlatform
   pushToken  String         @unique
+  p256dh     String?
+  auth       String?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   lastSeenAt DateTime?

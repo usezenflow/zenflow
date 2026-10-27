@@ -52,14 +52,14 @@ describe("QueueService (Redis)", () => {
     });
     await svc.enqueue(
       NOTIFY_QUEUE,
-      { type: "push", notificationId: "n", provider: "ntfy" },
-      { jobId: "push_n_ntfy" },
+      { type: "push", notificationId: "n", provider: "fcm" },
+      { jobId: "push_n_fcm" },
     );
     expect(add).toHaveBeenCalledWith(
       "notify",
-      { type: "push", notificationId: "n", provider: "ntfy" },
+      { type: "push", notificationId: "n", provider: "fcm" },
       expect.objectContaining({
-        jobId: "push_n_ntfy",
+        jobId: "push_n_fcm",
         attempts: 7,
         backoff: { type: "exponential", delay: 1234 },
       }),
@@ -71,7 +71,7 @@ describe("QueueService (Redis)", () => {
     const svc = await make(redis);
     await svc.enqueue(
       NOTIFY_QUEUE,
-      { type: "push", notificationId: "n", provider: "ntfy" },
+      { type: "push", notificationId: "n", provider: "fcm" },
       { jobId: "j", delayMs: 1500.4, jobOptions: { attempts: 1 } },
     );
     expect(add.mock.calls[0][2]).toMatchObject({ delay: 1500, attempts: 1 });
@@ -91,7 +91,7 @@ describe("QueueService (Redis)", () => {
     await expect(
       svc.enqueueBestEffort(
         NOTIFY_QUEUE,
-        { type: "push", notificationId: "n", provider: "ntfy" },
+        { type: "push", notificationId: "n", provider: "fcm" },
         { jobId: "a" },
       ),
     ).resolves.toBeNull();
@@ -99,7 +99,7 @@ describe("QueueService (Redis)", () => {
     await expect(
       svc.enqueueBestEffort(
         NOTIFY_QUEUE,
-        { type: "push", notificationId: "n", provider: "ntfy" },
+        { type: "push", notificationId: "n", provider: "fcm" },
         { jobId: "b" },
       ),
     ).resolves.toBeNull();
@@ -112,7 +112,7 @@ describe("QueueService (Redis)", () => {
     await expect(
       svc.enqueue(
         NOTIFY_QUEUE,
-        { type: "push", notificationId: "n", provider: "ntfy" },
+        { type: "push", notificationId: "n", provider: "fcm" },
         { jobId: "a" },
       ),
     ).rejects.toThrow(/timed out/);
@@ -172,29 +172,29 @@ describe("QueueService (in-memory test fallback)", () => {
     expect(svc.memory).toBe(true);
     await svc.enqueue(
       NOTIFY_QUEUE,
-      { type: "push", notificationId: "n", provider: "ntfy" },
-      { jobId: "push_n_ntfy" },
+      { type: "push", notificationId: "n", provider: "fcm" },
+      { jobId: "push_n_fcm" },
     );
     const again = await svc.enqueue(
       NOTIFY_QUEUE,
-      { type: "push", notificationId: "n", provider: "ntfy" },
-      { jobId: "push_n_ntfy" },
+      { type: "push", notificationId: "n", provider: "fcm" },
+      { jobId: "push_n_fcm" },
     );
-    expect(again.id).toBe("push_n_ntfy");
+    expect(again.id).toBe("push_n_fcm");
     expect(svc.memoryJobs).toHaveLength(1);
     expect(await svc.counts(NOTIFY_QUEUE)).toMatchObject({ waiting: 1 });
-    expect(await svc.remove(NOTIFY_QUEUE, "push_n_ntfy")).toBe(true);
+    expect(await svc.remove(NOTIFY_QUEUE, "push_n_fcm")).toBe(true);
     expect(svc.memoryJobs).toHaveLength(0);
   });
 
   it("getJob finds a recorded job", async () => {
     await svc.enqueue(
       NOTIFY_QUEUE,
-      { type: "push", notificationId: "g", provider: "ntfy" },
-      { jobId: "push_g_ntfy" },
+      { type: "push", notificationId: "g", provider: "apns" },
+      { jobId: "push_g_apns" },
     );
-    expect(await svc.getJob(NOTIFY_QUEUE, "push_g_ntfy")).toMatchObject({
-      id: "push_g_ntfy",
+    expect(await svc.getJob(NOTIFY_QUEUE, "push_g_apns")).toMatchObject({
+      id: "push_g_apns",
     });
     expect(await svc.getJob(NOTIFY_QUEUE, "none")).toBeUndefined();
   });

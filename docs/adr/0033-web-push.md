@@ -1,6 +1,6 @@
 # ADR-0033: Web Push as a device platform
 
-**Status:** superseded by [ADR-0047](0047-ntfy-push.md)
+**Status:** accepted
 **Date:** 2026-10-20
 **Issue:** none
 

@@ -15,7 +15,7 @@ For operators. Self-hosted Vault: KV v2 plus AppRole. Part of [secrets.md](secre
 | Item | Value |
 | --- | --- |
 | KV mount | v2 at `secret/` |
-| Secret sets | `secret/zenflow/<env>/<set>`, one per consumer: `api` (Nest roles and `migrations`), `bandit`, `postgres`, `grafana`, `ntfy`, `backup`, `session-redis`, `redis-ratelimit`, `redis-queue`, `redis-killswitch`, `redis-pubsub` |
+| Secret sets | `secret/zenflow/<env>/<set>`, one per consumer: `api` (Nest roles and `migrations`), `bandit`, `postgres`, `grafana`, `backup`, `session-redis`, `redis-ratelimit`, `redis-queue`, `redis-killswitch`, `redis-pubsub` |
 | Keys | Secrets only, named by env var. Hosts, ports, users and bucket names live in `backend/env/prod.env` |
 | Shared keys | Written to every set that needs them: `POSTGRES_PASSWORD` (`api`, `postgres`, `backup`), `BANDIT_SERVICE_TOKEN` (`api`, `bandit`), each `*_REDIS_PASSWORD` (`api` and its own set) |
 | Policy `zenflow-api-<env>` | `read` on each set path, listed explicitly. A new set needs a line in `policy.hcl` and a re-run of `setup-approle.sh` |
@@ -54,11 +54,10 @@ Vault uses file storage on `vault_data`, listens on `127.0.0.1:8200` only, and a
    V="docker exec -e VAULT_TOKEN zenflow-vault-prod vault"
    $V secrets enable -path=secret -version=2 kv
    # Secrets only. Read values from a prompt or file, not shell history.
-   $V kv put -mount=secret zenflow/prod/api SESSION_SECRET=... MASTER_LMS_ENCRYPTION_KEY_V1=... MASTER_PORTAL_ENCRYPTION_KEY_V1=... POSTGRES_PASSWORD=... MAIL_PASSWORD=... S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... PORTAL_API_KEY=... BANDIT_SERVICE_TOKEN=... NTFY_TOKEN=...
+   $V kv put -mount=secret zenflow/prod/api SESSION_SECRET=... MASTER_LMS_ENCRYPTION_KEY_V1=... MASTER_PORTAL_ENCRYPTION_KEY_V1=... POSTGRES_PASSWORD=... MAIL_PASSWORD=... S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... PORTAL_API_KEY=... BANDIT_SERVICE_TOKEN=... VAPID_PRIVATE_KEY=...
    $V kv put -mount=secret zenflow/prod/bandit BANDIT_SERVICE_TOKEN=...
    $V kv put -mount=secret zenflow/prod/postgres POSTGRES_PASSWORD=...
    $V kv put -mount=secret zenflow/prod/grafana GF_SECURITY_ADMIN_PASSWORD=... GF_SMTP_PASSWORD=...
-   $V kv put -mount=secret zenflow/prod/ntfy NTFY_AUTH_USERS=... NTFY_AUTH_TOKENS=...
    $V kv put -mount=secret zenflow/prod/backup POSTGRES_PASSWORD=... BACKUP_S3_ACCESS_KEY_ID=... BACKUP_S3_SECRET_ACCESS_KEY=... BACKUP_AGE_IDENTITY=...
    # One Redis password each (openssl rand -hex 24), in `api` and in the instance's own set
    $V kv patch -mount=secret zenflow/prod/api SESSION_REDIS_PASSWORD=... RATE_LIMIT_REDIS_PASSWORD=... QUEUE_REDIS_PASSWORD=... REDIS_KILLSWITCH_PASSWORD=... REDIS_PUBSUB_PASSWORD=...
@@ -72,7 +71,7 @@ Vault uses file storage on `vault_data`, listens on `127.0.0.1:8200` only, and a
      -v /etc/zenflow/vault:/creds -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN -e ENV_NAME=prod \
      hashicorp/vault:1.20.4 /ops/setup-approle.sh --role-id-file /creds/role_id --secret-id-file /creds/secret_id
    ```
-   `NTFY_BASE_URL` is not a secret. It goes in `backend/env/prod.env`, not in Vault. `ntfy` is a plain-env set, like `grafana`.
+   The VAPID public key and subject are not secrets. They go in `backend/env/prod.env` (`VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`), not in Vault.
    Or import an existing `.env.prod` in parts format. The importer writes each secret to every set that needs it and rejects unknown keys (Grafana uses `GF_SECURITY_ADMIN_PASSWORD` and `GF_SMTP_PASSWORD`):
    ```bash
    export VAULT_ADDR=http://127.0.0.1:8200 VAULT_ENV=prod
@@ -222,6 +221,6 @@ docker compose -f compose.prod.yml start vault        # unseal with the SAME sha
 | Database password | Run `ALTER USER`, patch `POSTGRES_PASSWORD` in `api`, `postgres` and `backup`, deploy |
 | Crypto master keys | Patch in `MASTER_*_ENCRYPTION_KEY_V2`, set `MASTER_KEY_CURRENT_VERSION=2` in `backend/env/prod.env`, deploy |
 | `API_TOKEN_PEPPER` | `ops/vault/rotate-versioned.sh rotate <PREFIX>`, set `<PREFIX>_CURRENT_VERSION` in `backend/env/prod.env`, deploy. Runbook: [secrets.md](secrets.md#versioned-secrets) |
-| ntfy token | Patch `NTFY_TOKEN` in `api` and `NTFY_AUTH_TOKENS` in `ntfy`, deploy. Subscribers keep their topics. See [ADR-0047](../adr/0047-ntfy-push.md) |
+| VAPID private key | Patch `VAPID_PRIVATE_KEY` in `api`, deploy. The public key is not in Vault: it lives in `backend/env/prod.env` and in the web build as `VITE_VAPID_PUBLIC_KEY`. A new pair means rebuilding the web app, and browsers resubscribe. See [ADR-0033](../adr/0033-web-push.md) |
 
 Never `kv put` over a set that holds V1 keys: it replaces all keys, and V1 must stay while rows reference it.

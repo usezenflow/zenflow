@@ -712,24 +712,6 @@ services:
       postgres:
         condition: service_healthy
 
-  # Self-hosted push (ADR-0047). Reached through nginx at http://ntfy.localhost.
-  ntfy:
-    container_name: zenflow-ntfy-staging
-    image: binwiederhier/ntfy:v2.34.0
-    restart: unless-stopped
-    command: ["serve"]
-    environment:
-      NTFY_BASE_URL: ${NTFY_BASE_URL:-http://ntfy.localhost}
-      NTFY_AUTH_USERS: ${NTFY_AUTH_USERS:-}
-      NTFY_AUTH_TOKENS: ${NTFY_AUTH_TOKENS:-}
-    volumes:
-      - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
-      - ntfy_cache:/var/lib/ntfy
-    expose:
-      - "80"
-    networks:
-      - o11y
-
   nginx:
     image: nginx:1.28-alpine
     container_name: nginx-staging
@@ -743,11 +725,8 @@ services:
       - ./nginx/snippets-proxy.conf:/etc/nginx/zenflow/snippets-proxy.conf:ro
       - ./nginx/sse.conf:/etc/nginx/zenflow/sse.conf:ro
       - ./nginx/grafana.conf:/etc/nginx/zenflow/grafana.conf:ro
-      - ./nginx/ntfy.conf:/etc/nginx/zenflow/ntfy.conf:ro
     depends_on:
       grafana:
-        condition: service_started
-      ntfy:
         condition: service_started
       state-init:
         condition: service_completed_successfully
@@ -825,7 +804,6 @@ volumes:
   alloy_data:
   prometheus_data:
   grafana_data:
-  ntfy_cache:
   redis_data:
   redis_ratelimit_data:
   redis_queue_data:

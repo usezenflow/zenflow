@@ -1,13 +1,23 @@
-import { IsIn, IsString, Matches } from "class-validator";
-import { NTFY_TOPIC_RE, type RegisterDeviceInput } from "@zenflow/shared";
+import { IsEnum, IsNotEmpty, IsString, ValidateIf } from "class-validator";
+import type { RegisterDeviceInput } from "@zenflow/shared";
 import { DevicePlatform } from "../../../generated/prisma";
 
-/** Body for `POST /devices`. `pushToken` is the device's ntfy topic. */
+/** Body for `POST /devices`. The subscription keys are required only for `WEB`. */
 export class RegisterDeviceDto implements RegisterDeviceInput {
-  @IsIn([DevicePlatform.IOS, DevicePlatform.ANDROID])
+  @IsEnum(DevicePlatform)
   platform!: DevicePlatform;
 
   @IsString()
-  @Matches(NTFY_TOPIC_RE)
+  @IsNotEmpty()
   pushToken!: string;
+
+  @ValidateIf((o: RegisterDeviceDto) => o.platform === DevicePlatform.WEB)
+  @IsString()
+  @IsNotEmpty()
+  p256dh!: string | null;
+
+  @ValidateIf((o: RegisterDeviceDto) => o.platform === DevicePlatform.WEB)
+  @IsString()
+  @IsNotEmpty()
+  auth!: string | null;
 }

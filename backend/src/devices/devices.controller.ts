@@ -14,7 +14,7 @@ import { RegisterDeviceDto } from "./dto/register-device.dto";
 import { UnregisterDeviceDto } from "./dto/unregister-device.dto";
 
 /**
- * Device registry for push: one ntfy topic per device.
+ * Device registry for push: FCM (Android), APNs (iOS) and Web Push (WEB).
  *
  * Register on login and on every token refresh; unregister on logout. There is
  * deliberately no list route — a user's device tokens are not something the

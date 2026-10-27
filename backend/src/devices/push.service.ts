@@ -1,9 +1,16 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { type PushDataPayload, pushToneFor } from "@zenflow/shared";
+import {
+  type PushDataPayload,
+  pushActionsFor,
+  pushCategoryFor,
+  pushToneFor,
+} from "@zenflow/shared";
 import { type Notification } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
-import { NtfySender } from "./ntfy.sender";
-import type { PushMessage, SendResult } from "./types";
+import { ApnsSender } from "./apns.sender";
+import { FcmSender } from "./fcm.sender";
+import { WebPushSender } from "./web-push.sender";
+import type { PushMessage, SendResult, WebPushTarget } from "./types";
 import { pushDevicesPruned, pushSend } from "../observability/metrics";
 import { withSpan } from "../observability/otel";
 import { localizeNotification } from "../notifications/localize-notification";
@@ -11,7 +18,7 @@ import type { PushProvider } from "../queue/queues";
 
 /**
  * Wraps one provider call, e.g. with that provider's circuit breaker
- * (`ntfy`). The default runs it as is.
+ * (`fcm` / `apns` / `web`). The default runs it as is.
  */
 export type ProviderGuard = <T>(
   provider: PushProvider,
@@ -21,9 +28,17 @@ export type ProviderGuard = <T>(
 const unguarded: ProviderGuard = (_provider, fn) => fn();
 
 export interface SendOptions {
-  /** With a guard that can park the job (breaker), the job re-runs the whole send. */
+  /** Only this provider (a per-provider job); omitted = both. */
+  provider?: PushProvider;
+  /**
+   * With a guard that can park the job (breaker), `provider` must be set:
+   * parking a both-provider job would re-send to the provider that succeeded.
+   */
   guard?: ProviderGuard;
 }
+
+/** Options of a queue job: always one provider. */
+export type DeliverOptions = SendOptions & { provider: PushProvider };
 
 /** Every token of a provider failed transiently: worth a retry, and a breaker failure. */
 export class PushProviderError extends Error {
@@ -44,8 +59,8 @@ export class PushProviderError extends Error {
  *
  * A provider that answers nothing useful for every token throws
  * {@link PushProviderError} so the job retries with backoff and the
- * `ntfy` breaker counts it; a partial success is a success. Malformed topics
- * are pruned.
+ * `fcm`/`apns`/`web` breaker counts it; a partial success is a success. Tokens
+ * the providers report dead are pruned.
  */
 @Injectable()
 export class PushService {
@@ -53,7 +68,9 @@ export class PushService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ntfy: NtfySender,
+    private readonly fcm: FcmSender,
+    private readonly apns: ApnsSender,
+    private readonly web: WebPushSender,
   ) {}
 
   /**
@@ -61,7 +78,7 @@ export class PushService {
    * producer may have enqueued before its transaction committed; the retry
    * finds it).
    */
-  async deliver(notificationId: string, opts: SendOptions): Promise<void> {
+  async deliver(notificationId: string, opts: DeliverOptions): Promise<void> {
     // A queue worker has no ambient async context: open a fresh root span.
     await withSpan("push.deliver", async () => {
       const row = await this.prisma.notification.findUnique({
@@ -74,7 +91,7 @@ export class PushService {
 
   /**
    * Deliver one notification to every device `userId` has registered. A no-op
-   * when ntfy is not configured or the user has no devices.
+   * when neither provider is configured or the user has no devices.
    */
   async sendToUser(
     userId: string,
@@ -85,11 +102,14 @@ export class PushService {
       userId,
       (lang) => {
         const local = localizeNotification(row, lang);
+        const category = pushCategoryFor(row.eventName);
         return {
           title: local.title,
           body: local.content,
           data: this.dataFor(row),
           tone: pushToneFor(row.eventName),
+          category,
+          actions: pushActionsFor(category),
         };
       },
       opts,
@@ -107,9 +127,14 @@ export class PushService {
     opts: SendOptions = {},
   ): Promise<void> {
     const guard = opts.guard ?? unguarded;
-    if (!this.ntfy.enabled) {
+    const wants = (p: PushProvider) => !opts.provider || opts.provider === p;
+    const anyEnabled =
+      (wants("fcm") && this.fcm.enabled) ||
+      (wants("apns") && this.apns.enabled) ||
+      (wants("web") && this.web.enabled);
+    if (!anyEnabled) {
       this.logger.warn(
-        `sendToUser(${userId}): sender disabled — set NTFY_BASE_URL`,
+        `sendToUser(${userId}): sender disabled — set FCM_SERVICE_ACCOUNT, the APNS_* and/or the VAPID_* vars`,
       );
       return;
     }
@@ -124,7 +149,7 @@ export class PushService {
 
     const devices = await this.prisma.userDevice.findMany({
       where: { userId },
-      select: { pushToken: true },
+      select: { platform: true, pushToken: true, p256dh: true, auth: true },
     });
     if (devices.length === 0) {
       this.logger.warn(
@@ -133,35 +158,74 @@ export class PushService {
       return;
     }
 
-    const topics = devices.map((d) => d.pushToken);
-    this.logger.log(`sendToUser(${userId}): ${topics.length} device(s)`);
+    const android = wants("fcm")
+      ? devices.filter((d) => d.platform === "ANDROID").map((d) => d.pushToken)
+      : [];
+    const ios = wants("apns")
+      ? devices.filter((d) => d.platform === "IOS").map((d) => d.pushToken)
+      : [];
+    // A WEB row without its keys cannot be encrypted for; skip it.
+    const web: WebPushTarget[] = wants("web")
+      ? devices.flatMap((d) =>
+          d.platform === "WEB" && d.p256dh && d.auth
+            ? [{ endpoint: d.pushToken, p256dh: d.p256dh, auth: d.auth }]
+            : [],
+        )
+      : [];
+    this.logger.log(
+      `sendToUser(${userId}): ${android.length} android + ${ios.length} ios + ${web.length} web device(s)` +
+        `${!this.fcm.enabled && android.length ? " [FCM disabled]" : ""}` +
+        `${!this.apns.enabled && ios.length ? " [APNs disabled]" : ""}` +
+        `${!this.web.enabled && web.length ? " [Web Push disabled]" : ""}`,
+    );
 
-    const { invalidTokens } = await this.sendVia(topics, msg, guard);
-    if (invalidTokens.length > 0) {
+    const settled = await Promise.allSettled([
+      this.sendVia("fcm", this.fcm, android, msg, guard),
+      this.sendVia("apns", this.apns, ios, msg, guard),
+      this.sendVia("web", this.web, web, msg, guard),
+    ]);
+    const stale = settled.flatMap((r) =>
+      r.status === "fulfilled" ? r.value.invalidTokens : [],
+    );
+    if (stale.length > 0) {
       const { count } = await this.prisma.userDevice.deleteMany({
-        where: { pushToken: { in: invalidTokens } },
+        where: { pushToken: { in: stale } },
       });
-      this.logger.log(`pruned ${count} malformed device topic(s)`);
+      this.logger.log(`pruned ${count} dead device token(s)`);
       pushDevicesPruned.add(count);
     }
+    // Every provider has been tried (and dead tokens pruned) before a failure
+    // surfaces, so a retry never re-sends to the one that succeeded unless the
+    // job was provider-less.
+    const failed = settled.find((r) => r.status === "rejected");
+    if (failed) throw failed.reason;
   }
 
-  private async sendVia(
-    topics: string[],
+  private async sendVia<T>(
+    provider: PushProvider,
+    sender: {
+      enabled: boolean;
+      send(targets: T[], m: PushMessage): Promise<SendResult>;
+    },
+    targets: T[],
     msg: PushMessage,
     guard: ProviderGuard,
   ): Promise<SendResult> {
-    return guard("ntfy", async () => {
-      const r = await this.ntfy.send(topics, msg);
-      recordPushResult("ntfy", topics.length, r);
+    if (targets.length === 0 || !sender.enabled) {
+      return { sent: 0, invalidTokens: [] };
+    }
+    const res = await guard(provider, async () => {
+      const r = await sender.send(targets, msg);
+      recordPushResult(provider, targets.length, r);
       this.logger.log(
-        `ntfy: ${r.sent}/${topics.length} ok, ${r.invalidTokens.length} invalid`,
+        `${provider}: ${r.sent}/${targets.length} ok, ${r.invalidTokens.length} dead`,
       );
       if (r.sent === 0 && r.invalidTokens.length === 0) {
-        throw new PushProviderError("ntfy", topics.length);
+        throw new PushProviderError(provider, targets.length);
       }
       return r;
     });
+    return res;
   }
 
   private dataFor(row: Notification): PushDataPayload {

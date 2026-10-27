@@ -79,20 +79,6 @@ services:
     networks:
       - mail
 
-  # Self-hosted push (ADR-0047), open access. Set NTFY_BASE_URL=http://<lan-ip>:8090 so a phone can reach it.
-  ntfy:
-    container_name: zenflow-ntfy-dev
-    image: binwiederhier/ntfy:v2.34.0
-    command: ["serve"]
-    environment:
-      NTFY_BASE_URL: ${NTFY_BASE_URL:-http://localhost:8090}
-      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
-      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
-    ports:
-      - "8090:80"
-    volumes:
-      - ntfy_cache:/var/lib/ntfy
-
 networks:
   db:
     driver: bridge
@@ -103,7 +89,6 @@ networks:
   bandit:
     driver: bridge
 volumes:
-  ntfy_cache:
   postgres_data:
   redis_killswitch_data:
   redis_queue_data:

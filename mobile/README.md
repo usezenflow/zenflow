@@ -1,7 +1,7 @@
 # Zenflow Mobile
 
-For developers. Expo + React Native app (iOS, Android) that shares `@zenflow/shared`
-(contract) and `@zenflow/core` (logic).
+For developers. Expo + React Native app (iOS, Android, web) that shares `@zenflow/shared`
+(contract) and `@zenflow/core` (logic) with the web [`pwa/`](../pwa/README.md).
 Part of the [Zenflow monorepo](../README.md). Screens are designed first in [`mockups/`](../mockups/); look and feel rules are in [`docs/mobile/design.md`](../docs/mobile/design.md).
 
 ## Run it
@@ -43,7 +43,8 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 
 - A loopback API host is rewritten to the dev machine's LAN address on device/emulator ([`lib/api-client.ts`](lib/api-client.ts)).
 - Offline behaviour and how to simulate it (dev menu *Toggle offline*): [docs/mobile/offline.md](../docs/mobile/offline.md).
-- Notifications arrive through the ntfy app. Set `EXPO_PUBLIC_NTFY_BASE_URL` to the backend's ntfy server.
+- Android push needs `google-services.json` next to `app.config.ts` (absent: push inert).
+- iOS push needs the `expo-notifications` plugin, a backend APNs key and a real device.
 
 ## Tech stack
 
@@ -107,7 +108,7 @@ Backend: `backend/src/devices/`, `backend/src/notifications/`.
 - **SSE:** bell badge and inbox read `GET /notifications/stream` via `react-native-sse` ([`api/notifications.ts`](api/notifications.ts)); no polling. `GET /notifications` is for the initial list and reconnect catch-up.
 - **Inbox** ([`app/notifications.tsx`](app/notifications.tsx)): per-topic icon, `NEW`/`CHANGE`/`DROP` badges, relative time, `eventEndsAt`. Swipe left dismisses (`DELETE /notifications/:id`, optimistic).
 - **Foreground:** a tap-to-act toast jumps to the affected session (404-guarded).
-- **Push:** the app keeps a random ntfy topic in SecureStore and registers it via `POST /devices`; the backend publishes to it. "Open ntfy" subscribes the ntfy app to the topic. See [`lib/push.ts`](lib/push.ts) and the `use-push-registration` / `use-notifications` hooks. Sign-out unregisters.
+- **Native push:** the backend speaks FCM/APNs directly, so the app registers the raw device token (not an Expo token) via `POST /devices`. See [`lib/push.ts`](lib/push.ts) and the `use-push-registration` / `use-notifications` hooks. Sign-out unregisters.
 
 
 ## Language

@@ -28,7 +28,7 @@ import { QueueService } from "../queue/queue.service";
 import { NOTIFY_QUEUE, type PushProvider } from "../queue/queues";
 import { idempotencyKey } from "../queue/queue.types";
 
-const PUSH_PROVIDERS: readonly PushProvider[] = ["ntfy"];
+const PUSH_PROVIDERS: readonly PushProvider[] = ["fcm", "apns", "web"];
 
 /** Delay before each enqueue attempt of {@link NotificationsService.announce}. */
 const ENQUEUE_RETRY_DELAYS_MS = [0, 250, 1_000];

@@ -9,10 +9,10 @@ import { withBreaker } from "../queue/with-breaker";
 
 /**
  * The `notify` queue consumer (role `worker-notify`, `worker`, `all`):
- * `push` -> {@link PushService}. Each handler throws on a real failure
+ * `push` (one provider per job) -> {@link PushService}. Each handler throws on a real failure
  * (BullMQ retries with backoff, then dead-letters) and returns normally when
- * there is nothing to send. Push runs under the `ntfy` breaker: when it is
- * open the job is parked without using an attempt.
+ * there is nothing to send. Push providers run under the `fcm` / `apns` /
+ * `web` breakers: when one is open the job is parked without using an attempt.
  */
 @Injectable()
 export class NotifyProcessor implements OnModuleInit {
@@ -40,11 +40,12 @@ export class NotifyProcessor implements OnModuleInit {
     }
     switch (data.type) {
       case "push":
-        // A job queued for a removed provider (fcm, apns, web) cannot run.
-        if (data.provider !== "ntfy") {
+        // One job per provider: a breaker park re-runs only that provider.
+        if (!data.provider) {
           throw new UnrecoverableError(`push job ${job.id} has no provider`);
         }
         return this.push.deliver(data.notificationId, {
+          provider: data.provider,
           guard: (provider, fn) =>
             withBreaker(this.breakers, provider, job, token, fn, {
               queue: NOTIFY_QUEUE.name,

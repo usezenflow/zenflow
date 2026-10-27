@@ -22,8 +22,8 @@ Run on the host from the deploy `backend/` directory (`ZENFLOW_ENV=staging` for 
 
 ```sh
 ./killswitch status
-./killswitch off notifications ntfy outage INC-123     # everything after the flag is the reason
-./killswitch on  notifications ntfy recovered
+./killswitch off notifications FCM outage INC-123     # everything after the flag is the reason
+./killswitch on  notifications FCM recovered
 ./killswitch history
 ```
 
