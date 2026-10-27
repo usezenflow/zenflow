@@ -318,22 +318,18 @@ V2_STEPS = {
 
 
 def v2_spec(arm: str) -> dict[str, Any]:
-    """L with the reward v2 signals named by ``arm``'s letters.
+    """L with the signals production sends: KEPT +1, the drag on a MOVE, no delete.
 
-    A signal not named is ``None``.
-
-    K: KEPT pays ``v2_kept`` instead of 1. D: a delete pays ``v2_delete``.
-    M: a MOVE also pays ``v2_move`` to the destination hour. C: a hand-made
-    block pays ``v2_create`` to its hour.
+    The reward v2 terms (destination, delete, create) are off in production
+    (ADR-0045), so the ``Lv2-*`` arms take none of them. The letters in ``arm``
+    are kept for the arm names only.
     """
-    steps = V2_STEPS[arm]
-    cfg = core.CFG
     return {
         "policy": "LINUCB",
-        "kept_reward": cfg["v2_kept"] if "K" in steps else None,
-        "delete_reward": cfg["v2_delete"] if "D" in steps else None,
-        "move_dest_reward": cfg["v2_move"] if "M" in steps else None,
-        "create_reward": cfg["v2_create"] if "C" in steps else None,
+        "kept_reward": KEPT_REWARD,
+        "delete_reward": None,
+        "move_dest_reward": None,
+        "create_reward": None,
     }
 
 
