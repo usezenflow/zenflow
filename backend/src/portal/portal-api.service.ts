@@ -1,3 +1,4 @@
+import { UPSTREAM_USER_AGENT } from "../common/constants";
 import { ConfigService } from "@nestjs/config";
 import { HttpStatus, Injectable, Logger } from "@nestjs/common";
 import type {
@@ -386,6 +387,7 @@ export class PortalAPIService {
     try {
       const res = await fetch(url, {
         ...init,
+        headers: { "user-agent": UPSTREAM_USER_AGENT, ...init.headers },
         signal: AbortSignal.timeout(this.requestTimeout),
       });
       record(String(res.status));
