@@ -71,7 +71,7 @@ export const STABILITY_SATURATION_HOURS = 4;
  * passed unmoved is `KEPT`. `CREATE` events carry a neutral 0.
  */
 export const SESSION_MOVE_REWARD = -1.0;
-export const SESSION_KEPT_REWARD = 1.0;
+export const SESSION_KEPT_REWARD = 0.5;
 /** A placement counts as kept once its slot began this long ago and it was never moved. */
 export const KEPT_GRACE_MS = 15 * 60_000;
 /** The sweep ignores placements older than this: they were swept already or predate the signal. */
@@ -98,10 +98,9 @@ export const PAIRWISE_KEEP_PREFERENCE_WEIGHT =
 
 /**
  * Reward for the LinUCB arm when the user deletes a placed TASK at least an hour
- * before it starts (`core/reward.ts` `deleteReward`). Tuned on seeds 100 to 109
- * (docs/adr/0045); the optimum sits at the edge of the searched range.
+ * before it starts (`core/reward.ts` `deleteReward`). Eval value on seeds 1400 to 1499.
  */
-export const DELETE_REWARD = -1;
+export const DELETE_REWARD = -0.2;
 /** Off until the offline evaluation passes. While off, the event stores the reward but the arm does not learn from it. */
 export const DELETE_REWARD_ENABLED = false;
 /**
@@ -112,7 +111,7 @@ export const DELETE_REWARD_ENABLED = false;
  */
 export const REWARD_V2_ENABLED = false;
 export const REWARD_V2_KEPT = 1;
-export const REWARD_V2_DESTINATION = 2;
+export const REWARD_V2_DESTINATION = 0.5;
 /**
  * Preference-matrix weight on the deleted slot. The matrix variant exists only in
  * the simulator (`services/bandit/evalx`), so production keeps it at 0.
