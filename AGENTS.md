@@ -106,6 +106,22 @@ mobile `dev | typecheck | test`; dashboard `dev | build | typecheck | lint` (por
   primitives; Tailwind v4 tokens ("Warm Sunrise", `packages/core/src/palette.ts`);
   **no mobile-responsive target**.
 
+## Workflow
+
+Plan first, then delegate the implementation.
+
+- **Plan mode first.** On the first prompt of a chat, enter plan mode (`EnterPlanMode`) unless the user already did. Edit nothing until the plan is approved.
+- **Plan detail.** The plan must let a weaker model implement it without guessing:
+  - Name every file and function to add or change, with signatures and types.
+  - State the algorithm: LinUCB (feature vector, `A`/`b` update, alpha, reward), heuristic (each term, weight, tie-break), eval (seeds, arms, metric, pass bar), or the architecture (modules, data flow, ownership). Give formulas and constants, not adjectives.
+  - List edge cases, invariants from this file that apply, and the tests to add with expected values.
+  - Say what is out of scope. Mark anything unverified as "check in code", never invent an API.
+- **Delegate by default.** After approval, spawn subagents for the implementation; do not code in the main thread. Use the domain agent for the folder, one per plan section, in parallel when files don't overlap.
+- **Weakest model that works.** Exploration, search, implementation, tests and docs run on the lightest model: `model: "haiku"` in Claude Code, the smallest available model in Codex or any other tool. Keep the strongest model for planning, review and decisions the plan leaves open.
+- **Subagent prompt.** Plan section verbatim, exact paths, signatures, constants and tests. The subagent reports changed files and test output.
+- **Review.** The main model reads the diff and runs `pnpm check` and the tests.
+- **Code comments** follow the same rule: say what the algorithm does where the code can't.
+
 ## Tests, lint, typecheck
 
 - Backend unit tests are `*.spec.ts` (Jest) next to the code — pure functions like the
