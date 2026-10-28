@@ -128,7 +128,21 @@ function row(over: Partial<Row> & { id: string }): Row {
   };
 }
 
-async function makeService(rows: Row[]) {
+const ALL_PROVIDERS = {
+  FCM_SERVICE_ACCOUNT: "x",
+  APNS_KEY: "x",
+  APNS_KEY_ID: "x",
+  APNS_TEAM_ID: "x",
+  APNS_BUNDLE_ID: "x",
+  VAPID_PUBLIC_KEY: "x",
+  VAPID_PRIVATE_KEY: "x",
+  VAPID_SUBJECT: "x",
+};
+
+async function makeService(
+  rows: Row[],
+  config: Record<string, string> = ALL_PROVIDERS,
+) {
   const db = makePrismaDouble(rows);
   const queue = {
     enqueueBestEffort: jest.fn().mockResolvedValue({ id: "job" }),
@@ -138,7 +152,7 @@ async function makeService(rows: Row[]) {
     providers: [
       NotificationsService,
       NotificationPubSub,
-      { provide: ConfigService, useValue: new ConfigService({}) },
+      { provide: ConfigService, useValue: new ConfigService(config) },
       { provide: PrismaService, useValue: db.client },
       { provide: QueueService, useValue: queue },
     ],
@@ -184,6 +198,21 @@ describe("NotificationsService", () => {
         notificationId: "n1",
         provider: "fcm",
       });
+    });
+    it("skips providers without credentials", async () => {
+      const { service, queue } = await makeService([], {
+        FCM_SERVICE_ACCOUNT: "x",
+        APNS_KEY: "x",
+      });
+      service.notify("session.new", ROW);
+      const ids = (
+        queue.enqueueBestEffort.mock.calls as [
+          unknown,
+          unknown,
+          { jobId: string },
+        ][]
+      ).map((c) => c[2].jobId);
+      expect(ids).toEqual(["push_n1_fcm"]);
     });
     it("retries a failed enqueue, then counts it dropped without throwing", async () => {
       jest.useFakeTimers();
