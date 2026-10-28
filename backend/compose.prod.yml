@@ -181,8 +181,8 @@ services:
     stop_grace_period: 60s
     deploy:
       replicas: 1
-    cpus: 1
-    mem_limit: 1g
+    cpus: 0.5
+    mem_limit: 512m
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/health/live').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 15s
