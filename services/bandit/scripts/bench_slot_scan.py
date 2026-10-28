@@ -8,10 +8,10 @@ from __future__ import annotations
 import time
 
 import numpy as np
+from tests.test_core_scan import _scalar_best
 
 from src.core.constants import MAX_SCAN_DAYS, SLOT_MS
 from src.core.slot_score import best_free_slot
-from tests.test_core_scan import _scalar_best
 
 N = 1000
 NOW = 1_767_571_200_000  # fixed "now" (2026-01-05T00:00Z)

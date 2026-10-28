@@ -29,8 +29,6 @@ from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
-
-from src.core.constants import LINUCB_PREF_WEIGHT
 from src.simulation.engine import HEURISTIC, SimConfig, linucb_label
 from src.simulation.metrics import (
     BUCKET_LABELS,
@@ -41,6 +39,8 @@ from src.simulation.metrics import (
 )
 from src.simulation.rng import stream
 from src.simulation.run import _run_one
+
+from src.core.constants import LINUCB_PREF_WEIGHT
 
 Floats = NDArray[np.float64]
 METRICS = ("regret", "accept", "drag")
