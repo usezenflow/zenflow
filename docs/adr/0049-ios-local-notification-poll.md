@@ -16,6 +16,6 @@
 - Android is unchanged.
 
 ## Consequences
-- Server alerts on iOS are best effort. iOS picks when the task runs (at best hourly) and skips it after a force quit.
+- Server alerts on iOS are best effort. iOS picks when the task runs (at best every 30 minutes) and skips it after a force quit.
 - Calendar alarms are unaffected and fire reliably.
 - Notification action buttons (Reschedule, Keep, Prefer) still work on local notifications through the same categories.

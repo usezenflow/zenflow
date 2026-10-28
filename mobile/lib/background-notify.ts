@@ -13,7 +13,7 @@ import { Platform } from "react-native";
 /**
  * iOS without APNs (a free Apple ID, e.g. SideStore, cannot carry the push
  * entitlement): poll the inbox in the background and post local notifications.
- * Best effort. iOS runs the task when it chooses, at most hourly.
+ * Best effort. iOS runs the task when it chooses, at most every 30 minutes.
  */
 export const usesLocalPoll =
   Platform.OS === "ios" && Constants.expoConfig?.extra?.iosRemotePush !== true;
@@ -69,7 +69,7 @@ export async function startLocalPoll(): Promise<void> {
       await SecureStore.setItemAsync(SEEN_KEY, new Date().toISOString());
     }
     if (await TaskManager.isTaskRegisteredAsync(TASK)) return;
-    await BackgroundTask.registerTaskAsync(TASK, { minimumInterval: 60 });
+    await BackgroundTask.registerTaskAsync(TASK, { minimumInterval: 30 });
   } catch (err) {
     debugLog("push", `poll start failed: ${String(err)}`);
   }
