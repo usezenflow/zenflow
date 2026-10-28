@@ -77,8 +77,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     adaptiveIcon: {
-      foregroundImage: "./assets/images/splash.png",
-      backgroundColor: "#ffffff",
+      // The orb is scaled so the 72dp visible circle frames it like the iOS tile; background is the iOS icon's cream.
+      foregroundImage: "./assets/images/adaptive-icon.png",
+      backgroundColor: "#FCFBFA",
     },
     package: "com.zenflow.app",
     versionCode: androidVersionCode,
