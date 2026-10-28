@@ -12,6 +12,7 @@ import { useUserStore } from "@/hooks/use-user-store";
 import { goToCalendar, navigateOnce } from "@/lib/nav";
 import { notificationToastVisual } from "@/lib/notification-visual";
 import { rescheduleWithToast } from "@/lib/reschedule-toast";
+import { markNotificationSeen } from "@/lib/background-notify";
 import { claimNotification, LOCAL_NOTIFICATION_SOURCE } from "@/lib/push";
 import { notifySessionsMutated } from "@/lib/session-cache";
 import {
@@ -347,6 +348,7 @@ export function useNotificationsSubscription(): void {
         // 2. System notification in Android notification shade / lock screen
         // Only while the app is open: a backgrounded app is already covered by
         // the server's native push, and posting this too showed it twice.
+        markNotificationSeen(n.sentAt);
         if (Platform.OS !== "web" && AppState.currentState === "active") {
           const tone = pushToneFor(n.eventName);
           void Notifications.scheduleNotificationAsync({

@@ -1,5 +1,10 @@
 import { registerDevice, unregisterDevice } from "@/api/devices";
 import { debugLog } from "@/lib/debug-log";
+import {
+  startLocalPoll,
+  stopLocalPoll,
+  usesLocalPoll,
+} from "@/lib/background-notify";
 import type { PushPermission } from "@/lib/push-sync";
 import {
   type DevicePlatform,
@@ -238,6 +243,10 @@ export async function registerThisDevice(
   isCurrent: () => boolean = () => true,
 ): Promise<boolean> {
   if (Platform.OS === "web") return false;
+  if (usesLocalPoll) {
+    await startLocalPoll();
+    return true;
+  }
   if (Platform.OS === "ios" && !Device.isDevice) {
     debugLog("push", "skipped: iOS simulator has no APNs");
     return false;
@@ -272,6 +281,7 @@ export async function registerThisDevice(
  */
 export async function dropPushRegistration(): Promise<void> {
   if (Platform.OS === "web") return;
+  if (usesLocalPoll) return stopLocalPoll();
   try {
     const t = await Notifications.getDevicePushTokenAsync();
     await unregisterDevice(String(t.data));

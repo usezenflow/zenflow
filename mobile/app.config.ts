@@ -146,6 +146,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         remindersPermission: false,
       },
     ],
+    "expo-background-task",
     "expo-status-bar",
     "expo-web-browser",
     withAndroidBuildFixes,
@@ -159,6 +160,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // The full version including `-beta.N`, which `version` above drops. The updater
     // compares it with the latest GitHub release tag.
     releaseVersion: fullVersion,
+    // iOS remote push (APNs) needs a paid Apple account; off, iOS polls and posts local notifications.
+    iosRemotePush: process.env.APNS_ENABLED === "true",
     eas: {
       projectId: "",
     },
