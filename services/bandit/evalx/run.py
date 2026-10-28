@@ -160,9 +160,8 @@ CFG: dict[str, Any] = {
     # 100 to 109 (docs/adr/0045). Move, create and delete sit at the edge of the
     # searched range, so the optimum may lie beyond it.
     "v2_kept": 1.0,
-    "v2_delete": -1.0,
-    "v2_move": 2.0,
-    "v2_create": 2.0,
+    "v2_delete": -0.2,
+    "v2_move": 0.5,
     # Assumed share of tasks the student also makes by hand (never measured).
     "create_share": 0.1,
     # Hand-made blocks at the best free hour (1) or at a random free hour (0).

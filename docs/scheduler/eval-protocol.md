@@ -112,7 +112,7 @@ One student lives through one 15-week semester. Every method sees the same semes
 - **Student.** Peak hour (chronotype), willingness to start, extra willingness close to a deadline, and a chance to answer offers (30% never do).
 - **Start chance.** The start probability is the willingness times how well the hour fits the student's curve, times a factor for recent lectures, times a factor for the weekend, times the deadline boost. A block starts when a fixed random draw falls under that probability.
 - **Signals.** The learner hears KEPT for a block left in place, MOVE when the student drags it, and an offer answer. These match the production signals. KEPT stands in for a start only in the sense that the block was not changed; whether it was started is latent and never shown to the learner.
-- **Reward v2 terms (ADR-0045), removed from the arms on 27 Oct 2026.** Until then the `Lv2-*` arms added a delete term (D), a move-destination term (M) and a hand-made block term (C), tested on seeds 800 to 1199. The `Lv2-*` arms now use the production signals only, so they equal `L`. The `v2_*` settings and the D, M, C letters no longer change any arm.
+- **Reward v2 terms (ADR-0045), removed from the arms on 27 Oct 2026.** Until then the `Lv2-*` arms added a delete term (D), a move-destination term (M) and a hand-made block term (C), tested on seeds 800 to 1199. On 28 Oct 2026 the `Lv2-*` arms were rebuilt: `v2_kept`, `v2_delete` and `v2_move` set their values (1, -0.2 and 0.5 by default). The create term is gone. The letters select the terms (`Lv2-D` for deletes, `Lv2-M` for move destination).
   - The simulator still has the knobs behind those terms: `delete_slot` and `delete_noise` set how deletes happen, and `create_share` and `create_fit` set how hand-made blocks happen. Both are described in section 5.
   - Drag is off in the headline world (`drag` 0), so moves never occur there. The signal world sets `drag` 0.3.
 - **Two placement paths.** H, H+K and L24N production run through the production placer (`run_place` in `evalx/run.py`). L24, L24K and the L24N reference run offline in `evalx/hourly.py`, which has no series, displacement, last-resort or 409 rules.
@@ -211,7 +211,8 @@ $f_{\mathrm{before}}$ and $f_{\mathrm{after}}$ are the free minutes to the previ
 | 1100 to 1199 | Benchmark of the old arms in two KEPT worlds | Spent 26 Oct 2026. |
 | 1200 to 1299 | L6, the L24 family and the candidate, heuristic metrics | Spent 26 Oct 2026. |
 | 1300 to 1399 | Production-signal rerun: H, H+K, L6 and the L24 family | Spent 27 Oct 2026. |
-| 1400 and up | Next held-out check | Free. |
+| 1400 to 1499 | Signal values: KEPT 1, 0.5 and 0.25, delete -0.2, move destination 0.5 | Spent 28 Oct 2026. |
+| 1500 and up | Next held-out check | Free. |
 
 A seed used for a decision is spent. A change made after a held-out check needs a new held-out block. Diagnostics run on a block after its ladder count as spent for decisions.
 
@@ -274,6 +275,7 @@ The `L` arm means production in archives from 23 Oct 2026 and six-band L6 in the
 - `--seeds N --seed-offset K` runs seeds $K$ to $K+N-1$. `--students` is per seed.
 - `--config` takes a JSON object of settings: `kernel_sd`, `kernel_pool`, `timing`, `detect`, `false_start`, `delay`, `drift`, `discount`, `shape`, `chrono`, `attention_scale`, `opens_shift`, `opens_uninformative`, `fatigue_scale`, and for reward v2 `drag`, `delete_slot`, `delete_noise`, `create_share`, `create_fit`, `v2_kept`, `v2_delete`, `v2_move`, `v2_create`.
 - `python -m evalx.proposal summary --parts <parts dir> --arms A,B --pairs A:B,C:D` prints the proposal metrics and paired contrasts for one run. `--by chrono` splits by chronotype. `python -m evalx.proposal robust --out <dir> --arms ... --pairs ... --config ...` runs the 15 reality worlds and prints their contrasts. Finished seeds are reused.
+- Signal value runs (cwd `services/bandit`, seeds 1400 to 1499): the `v2_kept`, `v2_delete` and `v2_move` settings in `run.CFG` set the values. For example, `--arms Lv2-K --config '{"v2_kept":0.5}'`. Arms: `Lv2-K` (KEPT), `Lv2-D` (delete), `Lv2-M` (move destination), `Lv2-DM`.
 - Reward v2 commands (cwd `services/bandit`). These ran before 27 Oct 2026. Since then `Lv2-*` arms equal `L`, so these commands no longer test reward v2 terms:
 
   ```bash

@@ -308,27 +308,26 @@ Noise = list[tuple[float, float, float]]
 # Reward v2 signals (plan: reward v2). Arms named Lv2-* add these to L; the
 # weights live in run.CFG (``v2_*``) so tuning can sweep them.
 V2_STEPS = {
+    "Lv2-K": "",
+    "Lv2-D": "D",
     "Lv2-M": "M",
-    "Lv2-K": "K",
-    "Lv2-KD": "KD",
-    "Lv2-KDM": "KDM",
-    "Lv2-KDMC": "KDMC",
-    "Lv2-DMC": "DMC",
+    "Lv2-DM": "DM",
 }
 
 
 def v2_spec(arm: str) -> dict[str, Any]:
-    """L with the signals production sends: KEPT +1, the drag on a MOVE, no delete.
+    """L with the signal values in ``run.CFG`` (``v2_*``), per the letters in ``arm``.
 
-    The reward v2 terms (destination, delete, create) are off in production
-    (ADR-0045), so the ``Lv2-*`` arms take none of them. The letters in ``arm``
-    are kept for the arm names only.
+    K: KEPT pays ``v2_kept`` (always). D: a delete pays ``v2_delete``.
+    M: a MOVE also pays ``v2_move`` to the destination hour.
     """
+    steps = V2_STEPS[arm]
+    cfg = core.CFG
     return {
         "policy": "LINUCB",
-        "kept_reward": KEPT_REWARD,
-        "delete_reward": None,
-        "move_dest_reward": None,
+        "kept_reward": cfg["v2_kept"],
+        "delete_reward": cfg["v2_delete"] if "D" in steps else None,
+        "move_dest_reward": cfg["v2_move"] if "M" in steps else None,
         "create_reward": None,
     }
 
@@ -1198,7 +1197,7 @@ REALITY: dict[str, dict[str, Any]] = {
 }
 
 
-REALITY_ARMS = ("H+K", "L", "Lv2-KDMC")
+REALITY_ARMS = ("H+K", "L", "Lv2-DM")
 
 
 def reality_sweep(

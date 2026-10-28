@@ -86,22 +86,49 @@ Two of the extra signals are unreliable in this simulator:
 
 The earlier coupling checks predate the current metrics and have not been rerun. The candidate is not shipped, and it is not being tested further in this round.
 
+## Rerun on seeds 1400 to 1499 (28 Oct 2026)
+
+Signals tested: KEPT at 1, 0.5 and 0.25, delete at -0.2 with deletes decoupled from slot quality, and move destination at 0.5. Signal world uses drag 0.3 and `delete_slot` 0, `delete_noise` 0.3.
+
+| Arm | Regret | Kept | Drag (min) | Versus L |
+|---|---|---|---|---|
+| L (KEPT 1) | 0.160 | 65.4% | 29 | baseline |
+| KEPT 0.5 | 0.154 | 65.8% | 26 | regret -0.006, kept +0.4 points |
+| KEPT 0.25 | 0.173 | 64.8% | 33 | regret +0.013, kept -0.6 points |
+| Delete -0.2 | 0.181 | 64.1% | 38 | regret +0.021, kept -1.3 points |
+| Move destination 0.5 | 0.148 | 66.2% | 23 | regret -0.012, kept +0.8 points |
+| Delete and move | 0.164 | 65.3% | 30 | no gain |
+
+Headline world (no drag, no deletes): KEPT 0.5 gives regret 0.312 and KEPT 0.25 gives 0.315, against 0.316 for KEPT 1.
+
+What this says:
+- Deletes hurt, even with the circular link cut. Random deletes teach the learner the wrong thing.
+- KEPT 0.5 is a small gain. Its interval does not overlap with KEPT 1, but the ship rule also needs adherence, which this run does not report.
+- Move destination pulls toward the student's peak by construction, and the eval has no knob to cut that link, so rule 6 cannot be checked for it yet.
+- None of the candidates clears rule 1 (+1.0 points adherence) on the data we have.
+
 ## Decision
 
-Keep L24N production as the shipped placer for now. It has the lowest regret of the options we ship, and the difference from H+K is small. Choosing it over H+K is a product call: H+K is simpler, and L24N moves blocks a bit more.
+L24N production stays the shipped placer. Its regret is the lowest of the shipped options, and the gap to H+K is small. Choosing it over H+K is a product call.
+
+Shipped locally on 28 Oct 2026, not yet verified against the ship rule:
+- KEPT reward 0.5 (`SESSION_KEPT_REWARD` and the Python mirror `KEPT_REWARD`). This also changes the heuristic's table update, which is scaled by the same constant. The eval tested KEPT 0.5 for the LinUCB arm only, so the heuristic side is unmeasured.
+- Delete reward off (`DELETE_REWARD_ENABLED = false`). The value stays -0.2 and is logged with each delete.
+- The golden scheduler fixture is regenerated for the KEPT change.
 
 ## Changes in this round
 
-- The `Lv2-*` arms (the reward v2 candidate) use production signals only. Code: `services/bandit/evalx/semester.py`, function `v2_spec`.
-- The report and the protocol are updated to match.
-- New fresh seeds 1300 to 1399 are spent. The next held-out block is 1400 and up.
+- The `Lv2-*` arms use the signal values in `run.CFG` (`v2_kept`, `v2_delete`, `v2_move`). Code: `services/bandit/evalx/semester.py`, `services/bandit/evalx/run.py`.
+- The move destination is restored in the eval at 0.5, and the create term is removed.
+- Seeds 1400 to 1499 are spent.
 
 ## Open items
 
-1. Decide whether to ship L24N production over H+K. This is a product choice, not something the eval can settle.
-2. If reward v2 is still wanted, test lower values on fresh seeds (1400 and up). First cut the links the simulator makes by construction, as the protocol's ship rule describes.
-3. The ship rule's adherence check is not in this report. It needs its owners to confirm it (protocol section 7).
-4. Device delete, pairwise picks and last-resort placement are unchanged from the earlier report. They are product decisions, not eval results.
+1. Verify KEPT 0.5 against the ship rule: adherence, the worse share, the robustness worlds, and a lazy-student world. Until then it is unvalidated.
+2. Measure the heuristic side of the KEPT change, which the eval does not cover.
+3. Decide whether delete scoring returns. The eval says no at -0.2 in the decoupled world. Its coupled world has not been run.
+4. Decide whether to ship L24N production over H+K. This is a product choice, not something the eval can settle.
+5. Device delete, pairwise picks and last-resort placement are unchanged. They are product decisions, not eval results.
 
 ## Limits
 
