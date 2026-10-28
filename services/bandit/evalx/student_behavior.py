@@ -1,9 +1,11 @@
-"""A passive student: completes what is placed when it suits them, answers prompts or not.
+"""A passive student: completes what is placed when it suits them, answers
+prompts or not.
 
 Students do not create tasks or tick boxes. Three signals reach the learner: a
 placed block whose slot passes unmoved is KEPT, a dragged block is a MOVE, and
-the keep or try pick on a pairwise offer is a tap. Every number here is an assumption, drawn per student so the report shows
-a spread rather than one tuned setting.
+the keep or try pick on a pairwise offer is a tap. Every number here is an
+assumption, drawn per student so the report shows a spread rather than one
+tuned setting.
 
 The chance to complete a block is ``attention`` scaled by four factors:
   circadian   a bump around the chronotype's peak hour

@@ -152,7 +152,7 @@ describe("SessionsService.bulkCreate", () => {
 
     await service.bulkCreate(bulk([TASK, TASK], true), USER);
 
-    expect(crud.proposeCreate.mock.calls[1][2]).toEqual([
+    expect((crud.proposeCreate.mock.calls[1] as unknown[])[2]).toEqual([
       {
         startMs: Date.parse("2026-10-26T01:00:00.000Z"),
         endMs: Date.parse("2026-10-26T02:00:00.000Z"),

@@ -336,7 +336,9 @@ def paper_regret(res: dict[str, Any], out: Path) -> None:
             color=colour, lw=1.2, ls="--", label=label)  # fmt: skip
     ax.set_xlabel("Proposal number")
     ax.set_ylabel("Cumulative regret per student")
-    ax.set_title("Regret against the Oracle, headline KEPT world", loc="left", fontsize=10)
+    ax.set_title(
+        "Regret against the Oracle, headline KEPT world", loc="left", fontsize=10
+    )
     ax.legend(
         frameon=False, fontsize=8, labelcolor=MUTED, loc="center left",
         bbox_to_anchor=(1.01, 0.5),
@@ -346,7 +348,9 @@ def paper_regret(res: dict[str, Any], out: Path) -> None:
     _save(fig, out / "regret-curve.png", PAPER_DPI)
 
 
-def _cluster_ci(values: np.ndarray, groups: np.ndarray, draws: int = 2000) -> dict[str, float]:
+def _cluster_ci(
+    values: np.ndarray, groups: np.ndarray, draws: int = 2000
+) -> dict[str, float]:
     """Mean with a student-cluster interval and a seed-cluster interval."""
     rng = np.random.default_rng(0)
     point = float(values.mean())
@@ -359,11 +363,17 @@ def _cluster_ci(values: np.ndarray, groups: np.ndarray, draws: int = 2000) -> di
     )
     ci_lo, ci_hi = np.percentile(students, [2.5, 97.5])
     seed_lo, seed_hi = np.percentile(seed_draws, [2.5, 97.5])
-    return {"mean": point, "ci_lo": ci_lo, "ci_hi": ci_hi, "seed_lo": seed_lo, "seed_hi": seed_hi}
+    return {
+        "mean": point,
+        "ci_lo": ci_lo,
+        "ci_hi": ci_hi,
+        "seed_lo": seed_lo,
+        "seed_hi": seed_hi,
+    }
 
 
 def robustness_regret(root: Path, pair: tuple[str, str]) -> dict[str, dict[str, float]]:
-    """Per world, regret per proposal of ``pair[0]`` minus ``pair[1]``, with intervals."""
+    """Per world, regret per proposal of ``pair[0]`` minus ``pair[1]``, with CIs."""
     from evalx.semester import REALITY
 
     rows: dict[str, dict[str, float]] = {}
@@ -386,7 +396,9 @@ def robustness_regret(root: Path, pair: tuple[str, str]) -> dict[str, dict[str, 
     return rows
 
 
-def paper_robustness(rows: dict[str, dict[str, float]], out: Path, pair: tuple[str, str]) -> None:
+def paper_robustness(
+    rows: dict[str, dict[str, float]], out: Path, pair: tuple[str, str]
+) -> None:
     worlds = list(rows)
     fig, ax = plt.subplots(figsize=(8, 0.28 * len(worlds) + 1.2))
     for i, name in enumerate(worlds):
@@ -394,10 +406,13 @@ def paper_robustness(rows: dict[str, dict[str, float]], out: Path, pair: tuple[s
     ax.axvline(0, color=INK, lw=0.8)
     ax.set_yticks(range(len(worlds)), worlds)
     ax.invert_yaxis()
-    ax.set_xlabel(f"Regret per proposal, {pair[0]} minus {pair[1]} (below 0 favours {pair[0]})")
+    ax.set_xlabel(
+        f"Regret per proposal, {pair[0]} minus {pair[1]} (below 0 favours {pair[0]})"
+    )
     ax.set_title(
         "Robustness, signal world, seeds 1000 to 1099 (thin: students, thick: seeds)",
-        loc="left", fontsize=10,
+        loc="left",
+        fontsize=10,
     )
     _style(ax)
     _save(fig, out / "robustness-forest.png", PAPER_DPI)

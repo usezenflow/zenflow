@@ -87,7 +87,7 @@ def test_rewards_match_the_backend() -> None:
         _ts_constant("MIN_ALTERNATIVE_GAP_MINUTES")
         == harness.MIN_ALTERNATIVE_GAP_MINUTES
     )
-    assert consts.KEPT_REWARD == _ts_constant("SESSION_KEPT_REWARD")  # ADR-0042
+    assert _ts_constant("SESSION_KEPT_REWARD") == consts.KEPT_REWARD  # ADR-0042
     assert harness.CFG["move_scale"] == consts.MOVE_REWARD_SCALE_MINUTES
 
 

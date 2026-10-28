@@ -7,7 +7,10 @@ import {
   Length,
   ValidateNested,
 } from "class-validator";
-import { MAX_BULK_SESSIONS, type BulkUpdateSessionsInput } from "@zenflow/shared";
+import {
+  MAX_BULK_SESSIONS,
+  type BulkUpdateSessionsInput,
+} from "@zenflow/shared";
 import { UpdateSessionDto } from "./update-session.dto";
 
 export class BulkUpdateItemDto {
