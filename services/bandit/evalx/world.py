@@ -172,9 +172,22 @@ CEILING_QUIET = (2 * 60, 6 * 60)
 
 @dataclass(frozen=True)
 class Calendar:
-    """Busy minutes of each absolute day (day 0 is 1970-01-01, a Thursday)."""
+    """Busy minutes of each absolute day (day 0 is 1970-01-01, a Thursday).
+
+    ``busy`` is what a start must avoid: lectures and the student's DND blocks.
+    ``lectures`` and ``dnd`` split it. Fatigue and the lecture workload read
+    lectures only; with neither set, ``busy`` is all lectures.
+    """
 
     busy: dict[int, list[tuple[int, int]]]
+    lectures: dict[int, list[tuple[int, int]]] | None = None
+    dnd: dict[int, list[tuple[int, int]]] | None = None
+
+    def lecture_blocks(self, day: int) -> list[tuple[int, int]]:
+        return (self.lectures if self.lectures is not None else self.busy).get(day, [])
+
+    def dnd_blocks(self, day: int) -> list[tuple[int, int]]:
+        return (self.dnd or {}).get(day, [])
 
 
 def build_calendar(rng: random.Random, days: int) -> Calendar:

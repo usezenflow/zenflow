@@ -18,6 +18,29 @@ export const handlers = [
   http.get(`${API}/auth/me`, () => HttpResponse.json({ data: testUser })),
   // A healthy server: a 401/403 then means the session really is gone.
   http.get(`${API}/health/ready`, () => HttpResponse.json({ success: true })),
+  http.get(`${API}/users/me/api-access`, () =>
+    HttpResponse.json({
+      data: {
+        mcpUrl: `${API}/mcp`,
+        restBaseUrl: API,
+        prompt: "Use the Zenflow tools to read and change the plan.",
+        setup: [
+          { id: "chatgpt", label: "ChatGPT", steps: ["Mở ChatGPT, vào Settings."] },
+          { id: "claude", label: "Claude", steps: ["Mở claude.ai, vào Customize."] },
+        ],
+      },
+    }),
+  ),
+  http.get(`${API}/users/me/insights`, () =>
+    HttpResponse.json({
+      data: {
+        window: { from: "2026-10-17", to: "2026-10-23" },
+        focus: [],
+        recap: { plannedMinutes: 0, doneMinutes: 0, notThisTimeCount: 0, onTimeCount: 0 },
+        buffers: [],
+      },
+    }),
+  ),
   http.get(`${API}/integrations`, () =>
     HttpResponse.json({ data: { integrations: [] } }),
   ),
@@ -37,4 +60,6 @@ export const handlers = [
   http.get(`${API}/tags`, () => HttpResponse.json({ data: { tags: [] } })),
   http.patch(`${API}/users/update/basic-info`, () => HttpResponse.json({ data: testUser })),
   http.patch(`${API}/users/me`, () => HttpResponse.json({ data: testUser })),
+  http.patch(`${API}/users/update/calendar-target`, () => HttpResponse.json({ data: testUser })),
+  http.get(`${API}/oauth/apps`, () => HttpResponse.json({ data: { apps: [] } })),
 ];

@@ -1,142 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1480 960" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Zenflow C4 container diagram: clients, nginx, one backend image run as several ROLEs, bandit service, Redis instances, Postgres and external systems">
-  <title>Zenflow C4 container diagram: clients, nginx, one backend image run as several ROLEs, bandit service, Redis instances, Postgres and external systems</title>
-  <defs><marker id="aO" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#FF6900"/></marker><marker id="aA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#F0B100"/></marker><marker id="aB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3B7EA1"/></marker><marker id="aN" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2B2724" fill-opacity="0.55"/></marker><marker id="aR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#C2410C"/></marker></defs>
-  <rect width="1480" height="960" fill="#FCFBFA"/>
-  <text x="30" y="34" text-anchor="start" font-size="21" font-weight="700" fill="#2B2724">Zenflow — containers</text>
-  <line x1="30" x2="58" y1="70" y2="70" stroke="#FF6900" stroke-width="2.5"/>
-  <text x="66" y="74" text-anchor="start" font-size="10.5" font-weight="400" fill="#2B2724">sync HTTP</text>
-  <line x1="160" x2="188" y1="70" y2="70" stroke="#3B7EA1" stroke-width="2.5"/>
-  <text x="196" y="74" text-anchor="start" font-size="10.5" font-weight="400" fill="#2B2724">queue job</text>
-  <line x1="270" x2="298" y1="70" y2="70" stroke="#F0B100" stroke-width="2.5"/>
-  <text x="306" y="74" text-anchor="start" font-size="10.5" font-weight="400" fill="#2B2724">pull from university</text>
-  <line x1="450" x2="478" y1="70" y2="70" stroke="#2B2724" stroke-width="2.5" stroke-opacity=".55" stroke-dasharray="5 4"/>
-  <text x="486" y="74" text-anchor="start" font-size="10.5" font-weight="400" fill="#2B2724">push / publish (dashed = pub/sub)</text>
-  <rect x="40" y="150" width="200" height="70" rx="8" fill="#F5F3F0" stroke="#E3DFDA" stroke-width="1.5"/>
-  <text x="140" y="181.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">DLU Portal + DKHP</text>
-  <text x="140" y="197.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">timetable, exams</text>
-  <rect x="260" y="150" width="200" height="70" rx="8" fill="#F5F3F0" stroke="#E3DFDA" stroke-width="1.5"/>
-  <text x="360" y="181.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">Moodle LMS</text>
-  <text x="360" y="197.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">assignments</text>
-  <rect x="480" y="150" width="100" height="70" rx="8" fill="#F5F3F0" stroke="#E3DFDA" stroke-width="1.5"/>
-  <text x="530" y="181.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">FCM</text>
-  <text x="530" y="197.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">Android</text>
-  <rect x="590" y="150" width="100" height="70" rx="8" fill="#F5F3F0" stroke="#E3DFDA" stroke-width="1.5"/>
-  <text x="640" y="181.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">APNs</text>
-  <text x="640" y="197.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">iOS</text>
-  <rect x="1090" y="40" width="200" height="56" rx="8" fill="#F5F3F0" stroke="#E3DFDA" stroke-width="1.5"/>
-  <text x="1190" y="72.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">Student</text>
-  <rect x="980" y="130" width="200" height="64" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <text x="1080" y="158.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">Web PWA</text>
-  <text x="1080" y="174.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">React</text>
-  <rect x="1210" y="130" width="200" height="64" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <text x="1310" y="158.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">Mobile app</text>
-  <text x="1310" y="174.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">Expo</text>
-  <rect x="1040" y="238" width="300" height="52" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
-  <text x="1190" y="260.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">nginx</text>
-  <text x="1190" y="276.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">TLS edge</text>
-  <path d="M1190,96 L1190,112 L1080,112 L1080,130" fill="none" stroke="#2B2724" stroke-width="2.2" stroke-opacity=".5" marker-end="url(#aN)"/>
-  <path d="M1190,96 L1190,112 L1310,112 L1310,130" fill="none" stroke="#2B2724" stroke-width="2.2" stroke-opacity=".5" marker-end="url(#aN)"/>
-  <path d="M1080,194 L1080,216 L1150,216 L1150,238" fill="none" stroke="#FF6900" stroke-width="2.2" marker-end="url(#aO)"/>
-  <path d="M1310,194 L1310,216 L1230,216 L1230,238" fill="none" stroke="#FF6900" stroke-width="2.2" marker-end="url(#aO)"/>
-  <path d="M1190,290 L1190,360" fill="none" stroke="#FF6900" stroke-width="2.2" marker-end="url(#aO)"/>
-  <rect x="1158" y="305" width="64" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="1190" y="316" text-anchor="middle" font-size="10.5" font-weight="400" fill="#FF6900">REST + SSE</text>
-  <rect x="20" y="330" width="1250" height="190" rx="14" fill="none" stroke="#FF6900" stroke-width="1.8" stroke-dasharray="9 6"/>
-  <rect x="702" y="311" width="160" height="18" fill="#FCFBFA"/>
-  <text x="708" y="324" text-anchor="start" font-size="13" font-weight="700" fill="#FF6900">ONE IMAGE · ROLE env</text>
-  <rect x="40" y="360" width="200" height="140" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
-  <text x="140" y="419.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">worker-portal</text>
-  <text x="140" y="435.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">portal-fetch</text>
-  <text x="140" y="449.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">concurrency 1</text>
-  <rect x="260" y="360" width="200" height="140" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
-  <text x="360" y="419.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">worker-lms</text>
-  <text x="360" y="435.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">lms-fetch</text>
-  <text x="360" y="449.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">concurrency 1</text>
-  <rect x="480" y="360" width="220" height="140" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
-  <text x="590" y="419.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">worker-notify</text>
-  <text x="590" y="435.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">notify queue</text>
-  <text x="590" y="449.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">push + reminders</text>
-  <rect x="720" y="360" width="230" height="140" rx="8" fill="#FFF8E6" stroke="#F0B100" stroke-width="2"/>
-  <text x="835" y="419.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">watcher (×1)</text>
-  <text x="835" y="435.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">all crons</text>
-  <text x="835" y="449.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">enqueues only</text>
-  <rect x="970" y="360" width="280" height="140" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
-  <text x="1110" y="419.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">NestJS API</text>
-  <text x="1110" y="435.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">HTTP only</text>
-  <text x="1110" y="449.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">REST + SSE</text>
-  <path d="M140,360 L140,220" fill="none" stroke="#F0B100" stroke-width="2.2" marker-end="url(#aA)"/>
-  <rect x="122" y="289" width="36" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="140" y="300" text-anchor="middle" font-size="10.5" font-weight="400" fill="#F0B100">pull</text>
-  <path d="M360,360 L360,220" fill="none" stroke="#F0B100" stroke-width="2.2" marker-end="url(#aA)"/>
-  <rect x="342" y="289" width="36" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="360" y="300" text-anchor="middle" font-size="10.5" font-weight="400" fill="#F0B100">pull</text>
-  <path d="M530,360 L530,220" fill="none" stroke="#2B2724" stroke-width="2.2" stroke-opacity=".5" marker-end="url(#aN)"/>
-  <rect x="511" y="289" width="38" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="530" y="300" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.8">push</text>
-  <path d="M640,360 L640,220" fill="none" stroke="#2B2724" stroke-width="2.2" stroke-opacity=".5" marker-end="url(#aN)"/>
-  <rect x="621" y="289" width="38" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="640" y="300" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.8">push</text>
-  <rect x="730" y="150" width="210" height="70" rx="8" fill="#F5F3F0" stroke="#CFC9C2" stroke-width="1.5"/>
-  <text x="835" y="181.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">redis-pubsub</text>
-  <text x="835" y="197.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">SSE fan-out</text>
-  <path d="M690,360 L690,185 L730,185" fill="none" stroke="#2B2724" stroke-width="2.2" stroke-opacity=".5" stroke-dasharray="6 4" marker-end="url(#aN)"/>
-  <rect x="665" y="259" width="50" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="690" y="270" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.8">publish</text>
-  <path d="M940,185 L1000,185 L1000,360" fill="none" stroke="#2B2724" stroke-width="2.2" stroke-opacity=".5" stroke-dasharray="6 4" marker-end="url(#aN)"/>
-  <rect x="970" y="251" width="60" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="1000" y="262" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.8">subscribe</text>
-  <rect x="40" y="590" width="640" height="90" rx="8" fill="#EEF5F9" stroke="#3B7EA1" stroke-width="2"/>
-  <text x="360" y="624.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">redis-queue</text>
-  <text x="360" y="640.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">noeviction + AOF</text>
-  <text x="360" y="654.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">3 queues + DLQs</text>
-  <path d="M140,590 L140,500" fill="none" stroke="#3B7EA1" stroke-width="2.2" marker-end="url(#aB)"/>
-  <path d="M360,590 L360,500" fill="none" stroke="#3B7EA1" stroke-width="2.2" marker-end="url(#aB)"/>
-  <path d="M590,590 L590,500" fill="none" stroke="#3B7EA1" stroke-width="2.2" marker-end="url(#aB)"/>
-  <text x="150" y="555" text-anchor="start" font-size="10.5" font-weight="400" fill="#3B7EA1">consume</text>
-  <text x="370" y="555" text-anchor="start" font-size="10.5" font-weight="400" fill="#3B7EA1">consume</text>
-  <text x="600" y="555" text-anchor="start" font-size="10.5" font-weight="400" fill="#3B7EA1">consume</text>
-  <path d="M740,500 L740,545 L650,545 L650,590" fill="none" stroke="#3B7EA1" stroke-width="2.2" marker-end="url(#aB)"/>
-  <rect x="747" y="555" width="56" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="775" y="566" text-anchor="middle" font-size="10.5" font-weight="400" fill="#3B7EA1">enqueue</text>
-  <path d="M1250,430 L1290,430 L1290,725 L300,725 L300,680" fill="none" stroke="#3B7EA1" stroke-width="2.2" marker-end="url(#aB)"/>
-  <rect x="772" y="734" width="56" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="800" y="745" text-anchor="middle" font-size="10.5" font-weight="400" fill="#3B7EA1">enqueue</text>
-  <rect x="800" y="590" width="360" height="90" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="2"/>
-  <text x="980" y="624.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">Bandit service</text>
-  <text x="980" y="640.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">Python, stateless</text>
-  <text x="980" y="654.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">/v1/place · /v1/update</text>
-  <path d="M860,500 L860,590" fill="none" stroke="#FF6900" stroke-width="2.2" marker-end="url(#aO)"/>
-  <rect x="868" y="537" width="64" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="900" y="548" text-anchor="middle" font-size="10.5" font-weight="400" fill="#FF6900">/v1/update</text>
-  <path d="M1100,500 L1100,590" fill="none" stroke="#FF6900" stroke-width="2.2" marker-end="url(#aO)"/>
-  <rect x="1107" y="537" width="58" height="15" rx="3" fill="#FCFBFA"/>
-  <text x="1136" y="548" text-anchor="middle" font-size="10.5" font-weight="400" fill="#FF6900">/v1/place</text>
-  <text x="30" y="800" text-anchor="start" font-size="12" font-weight="700" fill="#2B2724" opacity="0.7">Shared infrastructure</text>
-  <rect x="30" y="815" width="190" height="88" rx="8" fill="#F5F3F0" stroke="#CFC9C2" stroke-width="1.5"/>
-  <text x="125" y="855.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">PostgreSQL</text>
-  <text x="125" y="871.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">all roles</text>
-  <rect x="235" y="815" width="190" height="88" rx="8" fill="#F5F3F0" stroke="#CFC9C2" stroke-width="1.5"/>
-  <text x="330" y="848.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">session-redis</text>
-  <text x="330" y="864.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">sessions, OTP</text>
-  <text x="330" y="878.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">api</text>
-  <rect x="440" y="815" width="190" height="88" rx="8" fill="#F5F3F0" stroke="#CFC9C2" stroke-width="1.5"/>
-  <text x="535" y="848.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">redis-ratelimit</text>
-  <text x="535" y="864.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">limits, sync lock</text>
-  <text x="535" y="878.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">api</text>
-  <rect x="645" y="815" width="190" height="88" rx="8" fill="#F5F3F0" stroke="#CFC9C2" stroke-width="1.5"/>
-  <text x="740" y="848.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">redis-killswitch</text>
-  <text x="740" y="864.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">5 flags</text>
-  <text x="740" y="878.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">all roles</text>
-  <rect x="850" y="815" width="190" height="88" rx="8" fill="#F5F3F0" stroke="#CFC9C2" stroke-width="1.5"/>
-  <text x="945" y="848.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">S3 / MinIO</text>
-  <text x="945" y="864.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">files</text>
-  <text x="945" y="878.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">api</text>
-  <rect x="1055" y="815" width="190" height="88" rx="8" fill="#F5F3F0" stroke="#CFC9C2" stroke-width="1.5"/>
-  <text x="1150" y="848.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">SMTP</text>
-  <text x="1150" y="864.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">OTP email</text>
-  <text x="1150" y="878.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">api</text>
-  <rect x="1260" y="815" width="190" height="88" rx="8" fill="#F5F3F0" stroke="#CFC9C2" stroke-width="1.5"/>
-  <text x="1355" y="848.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">OTel collector</text>
-  <text x="1355" y="864.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">traces, metrics</text>
-  <text x="1355" y="878.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">all roles</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 700" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="Zenflow container diagram: clients, the NestJS API, background workers, the Bandit service and external systems">
+  <title>Zenflow container diagram: clients, the NestJS API, background workers, the Bandit service and external systems</title>
+  <defs>
+    <marker id="a-o" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#FF6900"/></marker>
+    <marker id="a-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3B7EA1"/></marker>
+    <marker id="a-i" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2B2724"/></marker>
+    <marker id="a-r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#C2410C"/></marker>
+    <marker id="a-m" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8A817C"/></marker>
+  </defs>
+  <rect width="1440" height="700" fill="#FCFBFA"/>
+  <text x="30" y="34" font-size="21" font-weight="700" fill="#2B2724">Zenflow — containers</text>
+  <text x="30" y="56" font-size="11" fill="#2B2724" opacity="0.7">Solid orange: Zenflow. Dashed: outside Zenflow. Arrows show the main calls.</text>
+  <rect x="40" y="80" width="200" height="60" rx="8" fill="#FFFFFF" stroke="#2B2724" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="140" y="106" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">AI assistants</text>
+  <text x="140" y="124" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">ChatGPT, Claude, Gemini</text>
+  <rect x="40" y="200" width="200" height="64" rx="8" fill="#FFFFFF" stroke="#2B2724" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="140" y="237" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">Student</text>
+  <rect x="330" y="250" width="210" height="64" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="1.8"/>
+  <text x="435" y="278" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">Mobile app</text>
+  <text x="435" y="296" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">Expo</text>
+  <rect x="330" y="410" width="210" height="64" rx="8" fill="#FFFFFF" stroke="#3B7EA1" stroke-width="1.8"/>
+  <text x="435" y="438" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">Phone calendar</text>
+  <text x="435" y="456" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">on the device</text>
+  <rect x="640" y="200" width="230" height="90" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="1.8"/>
+  <text x="755" y="241" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">NestJS API</text>
+  <text x="755" y="259" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">REST, SSE and MCP</text>
+  <rect x="640" y="420" width="230" height="70" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="1.8"/>
+  <text x="755" y="451" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">Background workers</text>
+  <text x="755" y="469" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">jobs and crons</text>
+  <rect x="940" y="200" width="210" height="64" rx="8" fill="#FFFFFF" stroke="#FF6900" stroke-width="1.8"/>
+  <text x="1045" y="228" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">Bandit service</text>
+  <text x="1045" y="246" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">placement and learning</text>
+  <rect x="940" y="420" width="210" height="70" rx="8" fill="#FFFFFF" stroke="#C2410C" stroke-width="1.8"/>
+  <text x="1045" y="451" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">PostgreSQL and Redis</text>
+  <text x="1045" y="469" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">data and job queues</text>
+  <rect x="560" y="580" width="220" height="64" rx="8" fill="#FFFFFF" stroke="#2B2724" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="670" y="608" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">DLU Portal and Moodle</text>
+  <text x="670" y="626" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">university systems</text>
+  <rect x="1080" y="580" width="220" height="64" rx="8" fill="#FFFFFF" stroke="#2B2724" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="1190" y="608" text-anchor="middle" font-size="14" font-weight="700" fill="#2B2724">FCM and APNs</text>
+  <text x="1190" y="626" text-anchor="middle" font-size="11" fill="#2B2724" opacity="0.75">push notifications</text>
+  <path d="M240,110 L600,110 L600,200 L640,200" fill="none" stroke="#2B2724" stroke-width="1.6" marker-end="url(#a-i)"/>
+  <path d="M240,232 L285,232 L285,282 L330,282" fill="none" stroke="#2B2724" stroke-width="1.6" marker-end="url(#a-i)"/>
+  <path d="M540,282 L590,282 L590,260 L640,260" fill="none" stroke="#2B2724" stroke-width="1.6" marker-end="url(#a-i)"/>
+  <path d="M435,314 L435,410" fill="none" stroke="#3B7EA1" stroke-width="1.6" marker-start="url(#a-b)" marker-end="url(#a-b)"/>
+  <path d="M870,232 L905,232 L905,232 L940,232" fill="none" stroke="#2B2724" stroke-width="1.6" marker-start="url(#a-i)" marker-end="url(#a-i)"/>
+  <path d="M755,290 L755,420" fill="none" stroke="#2B2724" stroke-width="1.6" marker-end="url(#a-i)"/>
+  <text x="762" y="360" font-size="10.5" fill="#2B2724" font-weight="700">jobs</text>
+  <path d="M870,275 L900,275 L900,440 L940,440" fill="none" stroke="#2B2724" stroke-width="1.6" marker-start="url(#a-i)" marker-end="url(#a-i)"/>
+  <path d="M870,455 L940,455" fill="none" stroke="#2B2724" stroke-width="1.6"/>
+  <path d="M755,490 L755,535" fill="none" stroke="#2B2724" stroke-width="1.6"/>
+  <path d="M670,535 L1190,535" fill="none" stroke="#2B2724" stroke-width="1.6"/>
+  <path d="M670,535 L670,580" fill="none" stroke="#2B2724" stroke-width="1.6" marker-end="url(#a-i)"/>
+  <path d="M1190,535 L1190,580" fill="none" stroke="#2B2724" stroke-width="1.6" marker-end="url(#a-i)"/>
+  <text x="30" y="680" font-size="11" fill="#8A817C">Also in production: an nginx TLS edge, SMTP mail and OpenTelemetry tracing. The phone calendar is written by the mobile app.</text>
 </svg>

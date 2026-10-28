@@ -4,14 +4,14 @@ import { Shell } from "@/components/shell";
 import { Card, Empty, LoadingGrid, Stat } from "@/components/ui";
 import { pct } from "@/lib/format";
 import { useViewState } from "@/lib/view-state";
-import { startRate, keptRate, learning, type Policy, type SettledEvent } from "./fixtures";
+import { settledKeptRate, keptRate, learning, type Policy, type SettledEvent } from "./fixtures";
 
 const AXIS = { fontSize: 12, fill: "var(--muted-foreground)" };
 const TIP = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8 };
 const COLOR: Record<Policy, string> = { HEURISTIC: "var(--chart-2)", LINUCB: "var(--chart-1)" };
 const NAME: Record<Policy, string> = { HEURISTIC: "Heuristic", LINUCB: "LinUCB" };
 const EVENTS: [SettledEvent, string][] = [
-  ["START", "Started"],
+  ["KEPT", "Kept at start"],
   ["MOVE", "Moved"],
 ];
 
@@ -28,7 +28,7 @@ export function LearningQuality() {
     return row;
   });
   return (
-    <Shell title="Learning quality" subtitle="Kept, started and drag minutes per policy">
+    <Shell title="Learning quality" subtitle="Kept, settled and drag minutes per policy">
       {state === "loading" && <LoadingGrid tiles={4} />}
       {state === "empty" && <Empty title="No proposals yet" body="Results appear after students get placements." />}
       {state === "ready" && (
@@ -43,7 +43,7 @@ export function LearningQuality() {
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <Stat label="Kept" value={pct(keptRate(p))} hint="Accepted unmodified" />
-                  <Stat label="Started" value={pct(startRate(p))} hint="Of sessions whose slot has passed" />
+                  <Stat label="Settled" value={pct(settledKeptRate(p))} hint="Of sessions whose slot has passed" />
                   <Stat label="Drag" value={`${p.dragMinutes} min`} hint="Average per move" />
                 </div>
               </div>

@@ -8,6 +8,8 @@ import {
   Globe,
   Sliders,
 } from "@/components/Icons";
+import { updateBasicInfo } from "@/api/users";
+import { useUserStore } from "@/hooks/use-user-store";
 import {
   OptionSheet,
   type OptionSheetHandle,
@@ -19,13 +21,13 @@ import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
 import {
   LANGUAGES,
-  REMINDERS,
   allTimezones,
   deviceTimezone,
   usePreferences,
 } from "@/lib/preferences";
 import { filterTimezones, gmtOffset } from "@/lib/onboarding";
 import { timezonePickerValue } from "@/lib/preferences-sync";
+import { DEFAULT_REMINDER_CHOICES, type DefaultReminderChoice } from "@zenflow/shared";
 import { type ComponentType, useMemo, useRef } from "react";
 import { Pressable, View } from "react-native";
 
@@ -77,11 +79,11 @@ function usePreferenceSave() {
 }
 
 /**
- * The timezone row, shown under Advanced. Searchable, nearest-to-device-first
+ * The timezone row and its sheet, placed in Preferences. Searchable, nearest-to-device-first
  * (same ordering as onboarding). With no query the pinned "Device" row leads;
  * the full list is capped, with a "refine your search" hint for the rest.
  */
-export function TimezoneRow() {
+function useTimezoneRow() {
   useLanguage();
   const { prefs } = usePreferences();
   const save = usePreferenceSave();
@@ -114,16 +116,16 @@ export function TimezoneRow() {
   );
   const tzLabel = prefs.timezoneMode === "device" ? device : prefs.timezone;
 
-  return (
-    <>
-      <View className="overflow-hidden rounded-2xl border border-border bg-card">
-        <Row
-          Icon={Clock}
-          title={t("Timezone")}
-          value={tzLabel}
-          onPress={() => timezoneSheet.current?.open()}
-        />
-      </View>
+  return {
+    row: (
+      <Row
+        Icon={Clock}
+        title={t("Timezone")}
+        value={tzLabel}
+        onPress={() => timezoneSheet.current?.open()}
+      />
+    ),
+    sheet: (
       <OptionSheet
         ref={timezoneSheet}
         title={t("Timezone")}
@@ -132,8 +134,14 @@ export function TimezoneRow() {
         value={timezonePickerValue(prefs)}
         onSelect={(timezone) => save({ timezone })}
       />
-    </>
-  );
+    ),
+  };
+}
+
+function reminderLabel(minutes: number): string {
+  if (minutes === 0) return t("None");
+  if (minutes === 60) return t("1 hour before");
+  return t("{minutes} min before", { minutes });
 }
 
 /** Preferences + Notifications sections (mockups/settings.html). */
@@ -142,8 +150,29 @@ export function PreferencesSection() {
   const { prefs } = usePreferences();
   const { setEnabled, active } = useNotificationState();
   const save = usePreferenceSave();
-  const languageSheet = useRef<OptionSheetHandle>(null);
+  const { toast } = useToast();
+  const reminderMinutes = useUserStore((s) => s.user?.defaultReminderMinutes ?? 30);
   const reminderSheet = useRef<OptionSheetHandle>(null);
+  const languageSheet = useRef<OptionSheetHandle>(null);
+  const timezone = useTimezoneRow();
+  const reminderOptions = DEFAULT_REMINDER_CHOICES.map((value) => ({
+    value,
+    label: reminderLabel(value),
+    icon: AlarmClockIcon,
+  }));
+
+  async function saveReminder(defaultReminderMinutes: DefaultReminderChoice) {
+    try {
+      useUserStore.getState().updateUser(await updateBasicInfo({ defaultReminderMinutes }));
+    } catch {
+      toast({
+        title: t("Couldn't save preference"),
+        description: t("Try again in a moment."),
+        variant: "destructive",
+        icon: Sliders,
+      });
+    }
+  }
 
   async function toggleNotifications(on: boolean) {
     await setEnabled(on);
@@ -162,14 +191,11 @@ export function PreferencesSection() {
           })()}
           onPress={() => languageSheet.current?.open()}
         />
-        <View className="h-px bg-border" />
+        {timezone.row}
         <Row
           Icon={AlarmClockIcon}
           title={t("Reminder")}
-          value={
-            REMINDERS.find((r) => r.value === prefs.defaultReminder)?.label ??
-            ""
-          }
+          value={reminderLabel(reminderMinutes)}
           onPress={() => reminderSheet.current?.open()}
         />
       </View>
@@ -185,13 +211,14 @@ export function PreferencesSection() {
               {t("Allow notifications")}
             </Text>
             <Text className="mt-0.5 text-[14px] text-muted-foreground">
-              {t("Push alerts for reminders and schedule changes")}
+              {t("Push alerts for schedule changes and sync problems")}
             </Text>
           </View>
           <Switch checked={active} onCheckedChange={toggleNotifications} />
         </View>
       </View>
 
+      {timezone.sheet}
       <OptionSheet
         ref={languageSheet}
         title={t("Language")}
@@ -202,9 +229,9 @@ export function PreferencesSection() {
       <OptionSheet
         ref={reminderSheet}
         title={t("Reminder")}
-        options={REMINDERS}
-        value={prefs.defaultReminder}
-        onSelect={(defaultReminder) => save({ defaultReminder })}
+        options={reminderOptions}
+        value={reminderMinutes as DefaultReminderChoice}
+        onSelect={(minutes) => void saveReminder(minutes)}
       />
     </>
   );

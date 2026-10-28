@@ -62,9 +62,7 @@ export interface UnitJobData {
 /** Channel jobs on the `notify` queue. */
 export type NotifyJobData =
   /** Native push for one provider of a notification row. */
-  | { type: "push"; notificationId: string; provider: PushProvider }
-  /** Fire one session reminder; `startsAt` (ISO) is the occurrence it was armed for. */
-  | { type: "reminder"; reminderId: string; startsAt: string };
+  { type: "push"; notificationId: string; provider: PushProvider };
 
 export type PushProvider = "fcm" | "apns" | "web";
 
@@ -119,7 +117,7 @@ export const LMS_MONTH_QUEUE = defineQueue<UnitJobData>({
   concurrency: 1,
 });
 
-/** Push and reminder jobs. */
+/** Push jobs. */
 export const NOTIFY_QUEUE = defineQueue<NotifyJobData>({
   name: "notify",
   concurrency: 10,

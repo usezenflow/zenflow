@@ -1,0 +1,28 @@
+import { Controller, Get, Req, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
+import { CookieAuthGuard } from "../auth/guards";
+import { PublicUrls } from "../common/config/public-urls";
+import { CurrentUser } from "../users/decorators/current-user.decorator";
+import { type User } from "../../generated/prisma";
+import { ApiAccessService } from "./api-access.service";
+
+/** Connection details for AI assistants. Cookie session only. */
+@Controller("users/me/api-access")
+@UseGuards(CookieAuthGuard)
+export class ApiAccessController {
+  constructor(
+    private readonly access: ApiAccessService,
+    private readonly urls: PublicUrls,
+  ) {}
+
+  @Get()
+  get(@Req() req: Request, @CurrentUser() user: User) {
+    const data = this.access.summary(user, this.urls.api || apiBaseOf(req));
+    return { success: true, data };
+  }
+}
+
+/** Fallback when `PUBLIC_API_URL` is unset: the request origin (trust proxy applies) plus the global prefix. */
+function apiBaseOf(req: Request): string {
+  return `${req.protocol}://${req.get("host")}/api/v1`;
+}

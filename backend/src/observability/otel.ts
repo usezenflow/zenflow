@@ -50,8 +50,3 @@ export async function withSpan<T>(
     }
   });
 }
-
-/** Set attributes on the current active span, if any. */
-export function annotateSpan(attributes: Attributes): void {
-  trace.getActiveSpan()?.setAttributes(attributes);
-}

@@ -5,7 +5,7 @@ import { loadPendingPrefs, queuePendingPrefs } from "@/lib/pending-prefs";
 import { useUserStore } from "@/hooks/use-user-store";
 import { IANA_TIMEZONES } from "@/lib/timezones";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { DefaultReminderChoice, Lang } from "@zenflow/shared";
+import type { Lang } from "@zenflow/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type SyncedPatch,
@@ -20,8 +20,8 @@ import {
 } from "./preferences-sync";
 
 /**
- * Settings preferences. `language`, `timezone` and `defaultReminder` are
- * server-backed (`User.lang` / `timezone` / `defaultReminderMinutes`, via
+ * Settings preferences. `language` and `timezone` are
+ * server-backed (`User.lang` / `timezone`, via
  * `PATCH /users/update/basic-info`); the server user is the source of truth
  * and AsyncStorage only caches them for offline. `timezoneMode` is
  * device-local. ("Allow notifications" is not a preference: it is derived from
@@ -34,15 +34,12 @@ export interface Preferences {
   timezone: string;
   /** "device" follows the phone's zone (re-synced on start); else explicit. */
   timezoneMode: TimezoneMode;
-  /** Minutes before a session starts; 0 = no reminder. */
-  defaultReminder: DefaultReminderChoice;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   language: "vi",
   timezone: deviceTimezone(),
   timezoneMode: "device",
-  defaultReminder: 10,
 };
 
 export const PREFERENCES_KEY = "preferences";
@@ -50,45 +47,6 @@ export const PREFERENCES_KEY = "preferences";
 export const LANGUAGES: { value: Lang; label: string; flag: string }[] = [
   { value: "en", label: "English", flag: "🇬🇧" },
   { value: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
-];
-
-export const REMINDERS: { value: DefaultReminderChoice; label: string }[] = [
-  {
-    value: 0,
-    get label() {
-      return t("None");
-    },
-  },
-  {
-    value: 5,
-    get label() {
-      return t("5 min before");
-    },
-  },
-  {
-    value: 10,
-    get label() {
-      return t("10 min before");
-    },
-  },
-  {
-    value: 15,
-    get label() {
-      return t("15 min before");
-    },
-  },
-  {
-    value: 30,
-    get label() {
-      return t("30 min before");
-    },
-  },
-  {
-    value: 60,
-    get label() {
-      return t("1 hour before");
-    },
-  },
 ];
 
 export const TIMEZONES = [
@@ -210,9 +168,6 @@ export function usePreferences() {
         ...synced,
         ...(waiting.lang !== undefined && { language: waiting.lang }),
         ...(waiting.timezone !== undefined && { timezone: waiting.timezone }),
-        ...(waiting.defaultReminderMinutes !== undefined && {
-          defaultReminder: waiting.defaultReminderMinutes,
-        }),
       };
       setLanguage(next.language);
       setPrefs(next);
@@ -250,9 +205,6 @@ export function usePreferences() {
       const optimistic: Preferences = {
         ...previous,
         ...(synced.language !== undefined && { language: synced.language }),
-        ...(synced.defaultReminder !== undefined && {
-          defaultReminder: synced.defaultReminder,
-        }),
         ...(synced.timezone !== undefined && {
           timezoneMode: mode as TimezoneMode,
           timezone:
@@ -282,9 +234,6 @@ export function usePreferences() {
             ...current,
             ...(input.lang !== undefined && { lang: input.lang }),
             ...(input.timezone !== undefined && { timezone: input.timezone }),
-            ...(input.defaultReminderMinutes !== undefined && {
-              defaultReminderMinutes: input.defaultReminderMinutes,
-            }),
           });
         }
         return true;
@@ -303,9 +252,6 @@ export function usePreferences() {
           const next: Preferences = {
             ...latest,
             ...(input.lang !== undefined && { language: server.language }),
-            ...(input.defaultReminderMinutes !== undefined && {
-              defaultReminder: server.defaultReminder,
-            }),
             ...(input.timezone !== undefined && { timezone: server.timezone }),
           };
           setPrefs(next);
@@ -322,9 +268,6 @@ export function usePreferences() {
           const rolled: Preferences = {
             ...latest,
             ...(input.lang !== undefined && { language: previous.language }),
-            ...(input.defaultReminderMinutes !== undefined && {
-              defaultReminder: previous.defaultReminder,
-            }),
             ...(input.timezone !== undefined && {
               timezone: previous.timezone,
               timezoneMode: previous.timezoneMode,

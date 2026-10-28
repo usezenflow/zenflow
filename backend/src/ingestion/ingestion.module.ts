@@ -1,12 +1,10 @@
 import { forwardRef, Module } from "@nestjs/common";
-import { CommuteModule } from "../commute/commute.module";
 import { QueueModule } from "../queue/queue.module";
 import { IntegrationsModule } from "../integrations/integrations.module";
 import { LMSModule } from "../lms/lms.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { PortalAPIModule } from "../portal/portal-api.module";
 import { PrismaModule } from "../prisma/prisma.module";
-import { TagsModule } from "../tags/tags.module";
 import { EnrollmentDiscoveryService } from "./enrollment-discovery.service";
 import { ExamWatcherService } from "./exam-watcher.service";
 import { IngestionFetchService } from "./ingestion-fetch.service";
@@ -56,10 +54,8 @@ import { TimetableWatcherService } from "./timetable-watcher.service";
     PrismaModule,
     LMSModule,
     PortalAPIModule,
-    TagsModule,
     NotificationsModule,
     QueueModule,
-    CommuteModule,
     forwardRef(() => IntegrationsModule),
   ],
   providers: [

@@ -101,6 +101,24 @@ describe("ApnsSender", () => {
     });
   });
 
+  it("carries the category and both action ids in the payload of a plan-offer push", async () => {
+    send.mockResolvedValue({ sent: [{ device: "t1" }], failed: [] });
+    const sender = await make(FULL);
+
+    await sender.send(["t1"], {
+      ...MSG,
+      category: "plan_offer",
+      actions: ["keep", "prefer"],
+    });
+
+    const [note] = send.mock.calls[0];
+    expect(note.category).toBe("plan_offer");
+    expect(note.payload).toMatchObject({
+      category: "plan_offer",
+      actions: "keep,prefer",
+    });
+  });
+
   it("sets the category only when the message has one", async () => {
     send.mockResolvedValue({ sent: [{ device: "t1" }], failed: [] });
     const sender = await make(FULL);

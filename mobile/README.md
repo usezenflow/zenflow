@@ -44,7 +44,7 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 - A loopback API host is rewritten to the dev machine's LAN address on device/emulator ([`lib/api-client.ts`](lib/api-client.ts)).
 - Offline behaviour and how to simulate it (dev menu *Toggle offline*): [docs/mobile/offline.md](../docs/mobile/offline.md).
 - Android push needs `google-services.json` next to `app.config.ts` (absent: push inert).
-- iOS push needs the `expo-notifications` plugin, a backend APNs key and a real device.
+- iOS push needs the `expo-notifications` plugin, a backend APNs key, a real device and `APNS_ENABLED=true` at build time. Without it, iOS polls the inbox in the background and posts local notifications ([ADR 0049](../docs/adr/0049-ios-local-notification-poll.md)).
 
 ## Tech stack
 
@@ -57,7 +57,7 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 | Language      | TypeScript (strict, `@/*` alias)                                              |
 | State / forms | Zustand; React Hook Form + Zod                                                |
 | HTTP          | axios (`api/`), cookie session                                                |
-| UI libs       | `@gorhom/bottom-sheet` v5, `@react-native-community/datetimepicker`, `@10play/tentap-editor` (rich text) |
+| UI libs       | `@gorhom/bottom-sheet` v5, `@react-native-community/datetimepicker` |
 | Formatter     | Biome                                                                         |
 
 ## Structure
@@ -65,10 +65,10 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 ```
 mobile/
 ├── app/            # Expo Router: _layout (Stack.Protected guards), (auth), (onboarding), (app) tabs, task/, notifications
-├── api/            # the only HTTP layer: auth, tasks, users, tags, files, devices, integrations, notifications
+├── api/            # the only HTTP layer: auth, tasks, users, tags, files, devices, integrations, notifications, api-access, insights
 ├── components/     # ui/, primitives/ (.native/.web), calendar/, tasks/ (+ form/), settings/, onboarding/
-├── hooks/          # use-user-store, use-task-form, use-notifications, use-push-registration, ...
-├── lib/            # api-client, session, i18n*, push, blocks, overlap, date math, ...
+├── hooks/          # use-user-store, use-notifications, use-push-registration, use-device-calendar, ...
+├── lib/            # api-client, session, i18n*, push, device-calendar/, date math, ...
 ├── plugins/        # Expo config plugins: withAndroidBuildFixes, withIosBuildFixes
 ├── scripts/        # iOS personal-team helpers
 └── global.css, tailwind.config.ts, metro.config.js, babel.config.js   # NativeWind wiring
@@ -84,9 +84,9 @@ is mounted under the splash so the launch URL `/` resolves, then the guards narr
 | ------------------- | --------------------------------------------------------------------------------- |
 | `/(auth)/login`     | student ID or email then OTP; timezone captured on verify                         |
 | `/(onboarding)`     | first-run setup (focus band, LMS, notifications)                                                      |
-| `/(app)` (Calendar) | home: Day, Week or Month view behind one header; Day is the timeline + 7-day chip strip |
+| `/(app)` (Calendar) | home: Day, Week or Month view behind one header; Day is the timeline + 7-day chip strip, with the Today card and a collapsed Insights section (focus map, last 7 days, prep buffers) |
 | `/(app)/today`      | Today tab: redirects to the calendar's Day view on today                          |
-| `/(app)/settings`   | Me tab: profile, appearance, preferences (language, default reminder), integrations; Advanced holds timezone and storage |
+| `/(app)/settings`   | Me tab: profile, appearance, preferences (language, default reminder), integrations; Advanced holds timezone, storage and AI assistants (MCP and REST endpoints, prompt, tokens) |
 | `/task/new`         | create task or event (bottom-sheet composer)                                      |
 | `/task/[id]/edit`   | edit session (same composer; type fixed), opened from a block's detail sheet      |
 | `/notifications`    | ingestion inbox (modal)                                                           |
@@ -95,7 +95,11 @@ A calendar block opens its detail sheet in place (`components/calendar/session-d
 
 Session model, series-scope editing, recurrence and reschedule match web: see
 [ADR-0002](../docs/adr/0002-scheduling-simplification.md).
-Task composer is `components/tasks/composer/` (fields in `composer-fields.tsx`, reminders in `reminder-field.tsx`, hidden for `DND`); quick-add parsing is `lib/task-parser.ts`; labels and the no-duplicate rule come from `@zenflow/core`.
+Task composer is `components/tasks/composer/` (fields in `composer-fields.tsx`); quick-add parsing is `lib/task-parser.ts`; labels and the no-duplicate rule come from `@zenflow/core`.
+
+## Phone calendar
+
+Settings has a "Phone calendar" switch ([ADR-0039](../docs/adr/0039-thin-layer-calendar-native.md)). On, `lib/device-calendar/` writes the schedule into a local "Zenflow" calendar through `expo-calendar`: on launch, on return to the app and after edits. Zenflow is the source of truth; the plan (`plan.ts`) and sync (`sync.ts`) are pure and unit tested, `expo-adapter.ts` is the only code that touches the OS. Event reminders use the account's default reminder.
 
 ## Push and live notifications
 
@@ -106,16 +110,6 @@ Backend: `backend/src/devices/`, `backend/src/notifications/`.
 - **Foreground:** a tap-to-act toast jumps to the affected session (404-guarded).
 - **Native push:** the backend speaks FCM/APNs directly, so the app registers the raw device token (not an Expo token) via `POST /devices`. See [`lib/push.ts`](lib/push.ts) and the `use-push-registration` / `use-notifications` hooks. Sign-out unregisters.
 
-## Android home screen widgets
-
-- Add **Zenflow month** (4×2) from the Android widget picker.
-- The widget shows a Monday-first calendar and today's sessions.
-- Do not disturb sessions stay hidden.
-- Tap a session to open its details.
-- Tap the calendar to open Month view, or + to open a new task with today's deadline preselected.
-- Sign-in, calendar refreshes and session changes refresh widgets. Android also requests an update every 30 minutes.
-- A signed-out widget prompts sign-in. An account with no upcoming session shows an empty state.
-- The widget needs a fresh Android dev-client build after installation: `pnpm android`.
 
 ## Language
 

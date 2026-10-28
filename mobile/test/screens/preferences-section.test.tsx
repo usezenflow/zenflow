@@ -1,10 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  PreferencesSection,
-  TimezoneRow,
-} from "@/components/settings/preferences-section";
+import { PreferencesSection } from "@/components/settings/preferences-section";
 import { useUserStore } from "@/hooks/use-user-store";
 import { API, testUser } from "@/test/msw/handlers";
 import { server } from "@/test/msw/server";
@@ -36,20 +33,10 @@ beforeEach(() => {
 });
 
 describe("PreferencesSection", () => {
-  it("shows the account's language and default reminder, not the timezone", async () => {
+  it("shows the language and the timezone", async () => {
     renderScreen(<PreferencesSection />);
     expect(await screen.findByText("🇬🇧 English")).toBeTruthy();
-    expect(screen.getByText("10 min before")).toBeTruthy();
-    expect(screen.queryByText("Asia/Ho_Chi_Minh")).toBeNull();
-  });
-
-  it("saves a new default reminder", async () => {
-    renderScreen(<PreferencesSection />);
-    await screen.findByText("10 min before");
-    fireEvent.click(screen.getByText("Reminder", { selector: "div" }));
-    fireEvent.click(await screen.findByText("5 min before"));
-    await waitFor(() => expect(patches).toEqual([{ defaultReminderMinutes: 5 }]));
-    await waitFor(() => expect(screen.getAllByText("5 min before").length).toBeGreaterThan(0));
+    expect(screen.getByText("Asia/Ho_Chi_Minh")).toBeTruthy();
   });
 
   it("saves a new language", async () => {
@@ -58,18 +45,6 @@ describe("PreferencesSection", () => {
     fireEvent.click(screen.getByText("Language", { selector: "div" }));
     fireEvent.click(await screen.findByText("Tiếng Việt"));
     await waitFor(() => expect(patches).toEqual([{ lang: "vi" }]));
-  });
-
-  it("rolls the row back and toasts when saving fails", async () => {
-    server.use(http.patch(BASIC_INFO, () => HttpResponse.json({ message: "no" }, { status: 500 })));
-    renderScreen(<PreferencesSection />);
-    await screen.findByText("10 min before");
-    fireEvent.click(screen.getByText("Reminder", { selector: "div" }));
-    fireEvent.click(await screen.findByText("5 min before"));
-    await waitFor(() =>
-      expect(screen.getAllByText("Couldn't save preference").length).toBeGreaterThan(0),
-    );
-    expect(screen.getByText("10 min before")).toBeTruthy();
   });
 
   it("turns notifications on through the shared toggle", async () => {
@@ -87,12 +62,5 @@ describe("PreferencesSection", () => {
     expect(sw.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(sw);
     await waitFor(() => expect(toggle.setEnabled).toHaveBeenCalledWith(false));
-  });
-});
-
-describe("TimezoneRow", () => {
-  it("shows the account's timezone", async () => {
-    renderScreen(<TimezoneRow />);
-    expect(await screen.findByText("Asia/Ho_Chi_Minh")).toBeTruthy();
   });
 });

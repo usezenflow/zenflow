@@ -2,207 +2,73 @@ import { t } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/use-language";
 import { listIntegrations } from "@/api/integrations";
 import { updateBasicInfo } from "@/api/users";
-import {
-  AlertCircle,
-  Bell,
-  Check,
-  ChevronLeft,
-  GraduationCap,
-  LocateFixed,
-  Sliders,
-  User,
-} from "@/components/Icons";
-import { ImportedTimetable } from "@/components/onboarding/imported-timetable";
-import { DluAccountsSection } from "@/components/settings/dlu-accounts-section";
-import { TravelSection } from "@/components/settings/travel-section";
+import { Sliders } from "@/components/Icons";
+import { StepMark } from "@/components/brand/onboarding-marks";
+import { SunriseBackdrop } from "@/components/brand/sunrise-backdrop";
+import { FlipWords } from "@/components/fx/flip-words";
+import { LampProgress } from "@/components/fx/lamp-progress";
+import { MovingBorder } from "@/components/fx/moving-border";
+import { Burst, Sparkles } from "@/components/fx/sparkles";
+import { Spotlight } from "@/components/fx/spotlight";
+import { TiltCard } from "@/components/fx/tilt-card";
+import { TextGenerate } from "@/components/fx/text-generate";
+import { Logo } from "@/components/logo";
+import { Glass } from "@/components/ui/glass";
+import { AssistantsStep } from "@/components/onboarding/assistants-step";
+import { CalendarStep } from "@/components/onboarding/calendar-step";
+import { CampusStep } from "@/components/onboarding/campus-step";
 import { Button } from "@/components/ui/button";
+import { BusyOr } from "@/components/ui/delayed-spinner";
 import { Text } from "@/components/ui/text";
 import { useToast } from "@/components/ui/toast";
 import { useIntegrationStore } from "@/hooks/use-integration-store";
-import { useMyLocationStop } from "@/hooks/use-my-location-stop";
 import { useNotificationToggle } from "@/hooks/use-notification-toggle";
 import { usePushStatusStore } from "@/hooks/use-push-status-store";
 import { useUserStore } from "@/hooks/use-user-store";
-import { homeStop } from "@/lib/home-stop";
-import {
-  FIRST_STEP,
-  type OnboardingStep,
-  canGoBack,
-  nextStep,
-  prevStep,
-  stepProgress,
-} from "@/lib/onboarding";
-import { LANGUAGES } from "@/lib/preferences";
-import { cn } from "@/lib/utils";
+import { useReducedMotion } from "@/lib/motion";
+import { useColorScheme } from "@/lib/useColorScheme";
+import * as Haptics from "expo-haptics";
 import { useEffect, useRef, useState } from "react";
-import { BusyOr } from "@/components/ui/delayed-spinner";
 import {
   AppState,
   KeyboardAvoidingView,
-  Linking,
   Platform,
-  Pressable,
   ScrollView,
   View,
 } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-/**
- * Placeholder English copy, centralized so #78 (localization) can swap it for
- * translation keys in one place.
- */
-const COPY = {
-  get skip() {
-    return t("Skip");
-  },
-  get skipForNow() {
-    return t("Skip for now");
-  },
-  get continue() {
-    return t("Continue");
-  },
-  get back() {
-    return t("Back");
-  },
-  dlu: {
-    get title() {
-      return t("Connect your LMS or portal");
-    },
-    get body() {
-      return t(
-        "Zenflow keeps an eye on your timetable, exams and assignments, so they land on your calendar. Your login is only used to check your LMS and portal for you.",
-      );
-    },
-    get hint() {
-      return t(
-        "You can also do this later in Settings, under Connect your LMS or portal.",
-      );
-    },
-    get trust() {
-      return t(
-        "Your password is stored encrypted. Disconnect in Settings to delete it.",
-      );
-    },
-  },
-  commute: {
-    get title() {
-      return t("Plan your commute");
-    },
-    get body() {
-      return t(
-        "Share where you leave from and how you travel. We'll add buffer time before sessions on campus.",
-      );
-    },
-    get useLocation() {
-      return t("Use my location");
-    },
-    get useLocationBody() {
-      return t("Set your home to where you are now");
-    },
-    get openSettings() {
-      return t("Open settings");
-    },
-  },
-  notifications: {
-    get title() {
-      return t("Stay ahead of deadlines");
-    },
-    get body() {
-      return t(
-        "Get a nudge when a session is near or your schedule changes. We'll ask for permission next.",
-      );
-    },
-    get rowTitle() {
-      return t("Allow notifications");
-    },
-    get rowBody() {
-      return t("Reminders and schedule changes");
-    },
-    bullets: [
-      "Reminder before each study session",
-      "Alert when the timetable or an exam changes",
-      "New LMS assignments, scheduled for you",
-    ],
-    get enable() {
-      return t("Turn on notifications");
-    },
-    get notNow() {
-      return t("Not now");
-    },
-    get blockedTitle() {
-      return t("Notifications are blocked");
-    },
-    get blockedBody() {
-      return t(
-        "Turn them on in system settings to get reminders. For now, they stay off.",
-      );
-    },
-    get openSettings() {
-      return t("Open system settings");
-    },
-  },
-  done: {
-    get title() {
-      return t("You’re all set");
-    },
-    get body() {
-      return t("Skipped steps are waiting for you in Settings.");
-    },
-    get open() {
-      return t("Open my calendar");
-    },
-  },
-  get saveFailed() {
-    return {
-      title: t("Couldn't save"),
-      description: t("Try again in a moment."),
-      variant: "destructive",
-      icon: Sliders,
-    } as const;
-  },
-} as const;
+const STEPS = ["welcome", "campus", "calendar", "assistants", "done"] as const;
+type Step = (typeof STEPS)[number];
 
-const STEP_ICON: Partial<Record<OnboardingStep, typeof User>> = {
-  dlu: GraduationCap,
-  commute: LocateFixed,
-  notifications: Bell,
+const COPY: Record<
+  Exclude<Step, "welcome">,
+  { title: string; body: string }
+> = {
+  campus: { title: "Bring your classes", body: "Import your timetable" },
+  calendar: { title: "Stay in the loop", body: "Sync and get reminders" },
+  assistants: { title: "Plan by chatting", body: "Link your AI assistant" },
+  done: { title: "You're all set", body: "Your week is ready" },
 };
 
-/** Rounded card whose children are separated by hairlines. */
-function Group({ children }: { children: React.ReactNode }) {
-  useLanguage();
-  const items = (Array.isArray(children) ? children : [children]).flat();
-  return (
-    <View className="overflow-hidden rounded-2xl border border-border bg-card">
-      {items.filter(Boolean).map((child, i) => (
-        <View
-          // biome-ignore lint/suspicious/noArrayIndexKey: static ordering
-          key={i}
-          className={cn(i > 0 && "border-t border-border")}
-        >
-          {child}
-        </View>
-      ))}
-    </View>
-  );
-}
-
+/**
+ * First-run setup as a short tap-first story: welcome, campus, calendar,
+ * assistant, done. Every step is optional; Skip moves on, the last button
+ * leaves the screen either way.
+ */
 export default function OnboardingScreen() {
   useLanguage();
   const insets = useSafeAreaInsets();
   const { toast } = useToast();
-  const user = useUserStore((s) => s.user);
   const updateUser = useUserStore((s) => s.updateUser);
   const { setIntegrations, setLoading, integrations } = useIntegrationStore();
   const notif = useNotificationToggle();
-  const { prefs, update } = notif;
-  const myLocation = useMyLocationStop();
 
-  // Local UI step index only; every value below is persisted server-side.
-  const [step, setStep] = useState<OnboardingStep>(FIRST_STEP);
-  // Set when a skipped step is reopened from the done summary: finishing,
-  // skipping or going back returns straight to the summary.
-  const [fromSummary, setFromSummary] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const step = STEPS[stepIndex];
+  const reduce = useReducedMotion();
+  const { isDarkColorScheme } = useColorScheme();
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(false);
 
@@ -224,63 +90,18 @@ export default function OnboardingScreen() {
     return () => sub.remove();
   }, []);
 
-  const go = () => {
-    if (fromSummary) {
-      setFromSummary(false);
-      setStep("done");
-    } else {
-      setStep((s) => nextStep(s));
-    }
-  };
-  const goBack = () => {
-    setBlocked(false);
-    if (fromSummary) {
-      setFromSummary(false);
-      setStep("done");
-    } else {
-      setStep((s) => prevStep(s));
-    }
-  };
-  const dluConnected = integrations.some((i) => i.connected);
-  const home = homeStop(user);
-
-  /** Asks for location permission, then saves the position as home. */
-  async function useMyLocation() {
-    const point = await myLocation.locate();
-    if (!point) return;
-    setBusy(true);
-    try {
-      updateUser(
-        await updateBasicInfo({
-          homeLocation: t("My location"),
-          homeLat: point.lat,
-          homeLng: point.lng,
-        }),
-      );
-    } catch {
-      toast(COPY.saveFailed);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function run(fn: () => Promise<undefined | false>) {
-    setBusy(true);
-    try {
-      if ((await fn()) !== false) go();
-    } catch {
-      toast(COPY.saveFailed);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const advance = () => go();
+  const saveFailed = () =>
+    toast({
+      title: t("Couldn't save"),
+      description: t("Try again in a moment."),
+      variant: "destructive",
+      icon: Sliders,
+    });
 
   /**
    * Turn notifications on. "saved" = the preference is on but this device
-   * couldn't register (simulator / no FCM) — a quiet success, retried next
-   * launch. A failed preference save is NOT that: it stays on the step.
+   * couldn't register (simulator / no FCM): a quiet success, retried next
+   * launch. A failed preference save is NOT that.
    */
   async function turnOnNotifications(): Promise<
     "on" | "saved" | "blocked" | "failed"
@@ -291,7 +112,7 @@ export default function OnboardingScreen() {
     if (useUserStore.getState().user?.allowNotifications === true) {
       return "saved";
     }
-    toast(COPY.saveFailed);
+    saveFailed();
     return "failed";
   }
 
@@ -306,33 +127,11 @@ export default function OnboardingScreen() {
     try {
       const result = await turnOnNotifications();
       setBusy(false);
-      if (result === "on" || result === "saved") go();
-      else setBlocked(result === "blocked");
+      setBlocked(result === "blocked");
     } finally {
       notifPending.current = false;
       setBusy(false);
     }
-  }
-
-  async function toggleNotifications() {
-    if (notifPending.current) return;
-    notifPending.current = true;
-    setBusy(true);
-    try {
-      if (notif.active) {
-        await notif.setEnabled(false);
-        return;
-      }
-      setBlocked((await turnOnNotifications()) === "blocked");
-    } finally {
-      notifPending.current = false;
-      setBusy(false);
-    }
-  }
-
-  async function notNow() {
-    await notif.setEnabled(false);
-    go();
   }
 
   async function finish() {
@@ -341,376 +140,169 @@ export default function OnboardingScreen() {
       // Idempotent; the root AuthGate then routes to the app.
       updateUser(await updateBasicInfo({ onboarded: true }));
     } catch {
-      toast(COPY.saveFailed);
+      saveFailed();
       setBusy(false);
     }
   }
 
-  const progress = stepProgress(step);
-  const primary = (label: string, onPress: () => void, disabled = false) => (
-    <Button
-      size="lg"
-      className="rounded-full"
-      testID="onboarding.primary"
-      disabled={busy || disabled}
-      onPress={onPress}
-    >
-      <BusyOr busy={busy} testID="onboarding.busy" tone="onPrimary">
-        <Text className="font-semibold text-primary-foreground">{label}</Text>
-      </BusyOr>
-    </Button>
-  );
-  const ghost = (label: string, onPress: () => void) => (
-    <Pressable
-      testID="onboarding.secondary"
-      onPress={onPress}
-      disabled={busy}
-      className="items-center py-3"
-    >
-      <Text className="text-[14px] font-medium text-muted-foreground">
-        {label}
-      </Text>
-    </Pressable>
-  );
-
-  let title = "";
-  let body = "";
-  let content: React.ReactNode = null;
-  let footer: React.ReactNode = null;
-
-  switch (step) {
-    case "dlu":
-      ({ title, body } = COPY.dlu);
-      content = (
-        <View>
-          <DluAccountsSection hideLabel />
-          {dluConnected && <ImportedTimetable />}
-          <Text className="mt-3.5 px-1 text-[12px] leading-snug text-muted-foreground">
-            {COPY.dlu.trust}
-          </Text>
-          <Text className="mt-1.5 px-1 text-[12px] leading-snug text-muted-foreground">
-            {COPY.dlu.hint}
-          </Text>
-        </View>
-      );
-      footer = (
-        <>
-          {primary(COPY.continue, advance)}
-          {!dluConnected && ghost(COPY.skipForNow, advance)}
-        </>
-      );
-      break;
-    case "commute":
-      ({ title, body } = COPY.commute);
-      content = (
-        <View className="gap-4">
-          <Pressable
-            testID="onboarding.commute.use-location"
-            onPress={() => void useMyLocation()}
-            disabled={busy || myLocation.locating}
-            accessibilityRole="button"
-            className="flex-row items-center gap-[13px] rounded-2xl border border-border bg-card px-4 py-3.5 active:opacity-80"
-          >
-            <View className="size-[38px] items-center justify-center rounded-xl bg-primary/10">
-              <BusyOr busy={myLocation.locating}>
-                <LocateFixed size={18} className="text-primary" />
-              </BusyOr>
-            </View>
-            <View className="min-w-0 flex-1">
-              <Text className="text-[15px] font-semibold">
-                {COPY.commute.useLocation}
-              </Text>
-              <Text className="mt-0.5 text-[13px] text-muted-foreground">
-                {COPY.commute.useLocationBody}
-              </Text>
-            </View>
-          </Pressable>
-          {myLocation.note && (
-            <View className="flex-row gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
-              <AlertCircle size={20} className="text-destructive" />
-              <View className="flex-1">
-                <Text className="text-[13.5px] leading-snug">
-                  {myLocation.note}
-                </Text>
-                {myLocation.settingsNeeded && (
-                  <Pressable
-                    onPress={() => void Linking.openSettings()}
-                    className="mt-2"
-                  >
-                    <Text className="text-[13.5px] font-semibold text-primary">
-                      {COPY.commute.openSettings}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          )}
-          <TravelSection hideLabel />
-        </View>
-      );
-      footer = (
-        <>
-          {primary(COPY.continue, advance)}
-          {!home && ghost(COPY.skipForNow, advance)}
-        </>
-      );
-      break;
-    case "notifications":
-      ({ title, body } = COPY.notifications);
-      content = (
-        <View>
-          <Group>
-            <View className="flex-row items-center gap-[13px] px-4 py-3.5">
-              <View className="size-[38px] items-center justify-center rounded-xl bg-muted">
-                <Bell size={18} className="text-foreground" />
-              </View>
-              <View className="min-w-0 flex-1">
-                <Text className="text-[15px] font-semibold">
-                  {COPY.notifications.rowTitle}
-                </Text>
-                <Text className="mt-0.5 text-[13px] text-muted-foreground">
-                  {COPY.notifications.rowBody}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => void toggleNotifications()}
-                disabled={busy}
-                hitSlop={8}
-                role="switch"
-                aria-checked={notif.active}
-                accessibilityLabel={COPY.notifications.rowTitle}
-                testID="onboarding.notifications-switch"
-                className={cn(
-                  "h-[26px] w-[46px] justify-center rounded-full px-[3px]",
-                  busy && "opacity-60",
-                  notif.active
-                    ? "items-end bg-primary"
-                    : "items-start bg-muted",
-                )}
-              >
-                <View
-                  className={cn(
-                    "size-5 rounded-full shadow",
-                    notif.active ? "bg-white" : "bg-card",
-                  )}
-                />
-              </Pressable>
-            </View>
-          </Group>
-          <View className="mt-4 gap-3 px-1">
-            {COPY.notifications.bullets.map((b) => (
-              <View key={t(b)} className="flex-row items-start gap-2.5">
-                <Check size={16} className="mt-0.5 text-primary" />
-                <Text className="flex-1 text-[13.5px] text-muted-foreground">
-                  {t(b)}
-                </Text>
-              </View>
-            ))}
-          </View>
-          {blocked && (
-            <View className="mt-5 flex-row gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4">
-              <AlertCircle size={20} className="text-destructive" />
-              <View className="flex-1">
-                <Text className="text-[13.5px] font-semibold">
-                  {COPY.notifications.blockedTitle}
-                </Text>
-                <Text className="mt-1 text-[13.5px] leading-snug text-muted-foreground">
-                  {COPY.notifications.blockedBody}
-                </Text>
-                <Pressable
-                  onPress={() => void Linking.openSettings()}
-                  className="mt-2"
-                >
-                  <Text className="text-[13.5px] font-semibold text-primary">
-                    {COPY.notifications.openSettings}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        </View>
-      );
-      footer = (
-        <>
-          {primary(
-            notif.active
-              ? COPY.continue
-              : blocked
-                ? COPY.notifications.openSettings
-                : COPY.notifications.enable,
-            notif.active
-              ? advance
-              : blocked
-                ? () => void Linking.openSettings()
-                : enableNotifications,
-          )}
-          {!notif.active &&
-            ghost(COPY.notifications.notNow, blocked ? advance : notNow)}
-        </>
-      );
-      break;
-    case "done": {
-      ({ title, body } = COPY.done);
-      const rows: {
-        k: string;
-        v: string;
-        skipped?: boolean;
-        step?: OnboardingStep;
-      }[] = [
-        {
-          k: t("Language"),
-          v: LANGUAGES.find((l) => l.value === prefs.language)?.label ?? "",
-        },
-        { k: t("Name"), v: user?.name ?? "" },
-        {
-          k: t("LMS & portal"),
-          v: dluConnected ? t("Connected") : t("Skipped"),
-          skipped: !dluConnected,
-          step: "dlu",
-        },
-        {
-          k: t("Home"),
-          v: home?.text ?? t("Skipped"),
-          skipped: !home,
-          step: "commute",
-        },
-        {
-          k: t("Notifications"),
-          v: notif.active ? t("On") : t("Skipped"),
-          skipped: !notif.active,
-          step: "notifications",
-        },
-      ];
-      content = (
-        <Group>
-          {rows.map((r) => (
-            <View
-              key={r.k}
-              className="flex-row items-center justify-between px-4 py-3"
-            >
-              <Text className="text-[14.5px] font-medium">{r.k}</Text>
-              <View className="flex-row items-center gap-2.5">
-                <Text className="text-[13px] text-muted-foreground">{r.v}</Text>
-                {r.skipped && r.step ? (
-                  <Pressable
-                    onPress={() => {
-                      setFromSummary(true);
-                      setStep(r.step as OnboardingStep);
-                    }}
-                  >
-                    <Text className="text-[13px] font-semibold text-primary">
-                      {t("Set up")}
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <Check size={16} className="text-brand-lime" />
-                )}
-              </View>
-            </View>
-          ))}
-        </Group>
-      );
-      footer = primary(COPY.done.open, finish);
-      break;
-    }
+  function next() {
+    void Haptics.selectionAsync();
+    setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
   }
 
-  const Hero = STEP_ICON[step];
+  useEffect(() => {
+    if (step === "done")
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [step]);
+
+  const last = step === "done";
+  const showCard =
+    step === "campus" || step === "calendar" || step === "assistants";
+  const copy = step === "welcome" ? null : COPY[step];
 
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-background"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {step !== "done" ? (
-        <View
-          className="flex-row items-center gap-3 px-3 pb-3"
-          style={{ paddingTop: insets.top + 6 }}
-        >
-          {canGoBack(step) ? (
-            <Pressable
-              onPress={goBack}
-              hitSlop={8}
-              accessibilityLabel={COPY.back}
-              className="size-[38px] items-center justify-center rounded-xl"
-            >
-              <ChevronLeft size={22} className="text-foreground" />
-            </Pressable>
-          ) : (
-            <View className="size-[38px]" />
-          )}
-          <View className="flex-1 flex-row gap-1.5">
-            {Array.from({ length: progress.total }, (_, i) => (
-              <View
-                // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length bar
-                key={i}
-                className={cn(
-                  "h-1 flex-1 rounded-full",
-                  i < progress.index ? "bg-primary" : "bg-muted",
-                )}
-              />
-            ))}
-          </View>
-          <Pressable
-            onPress={() => {
-              setBlocked(false);
-              void advance();
-            }}
-            hitSlop={8}
-            disabled={busy}
-            className="px-2"
-          >
-            <Text className="text-[14px] font-semibold text-muted-foreground">
-              {COPY.skip}
-            </Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={{ paddingTop: insets.top + 10 }} />
-      )}
+      <SunriseBackdrop
+        dark={isDarkColorScheme}
+        energy={step === "welcome" || last ? "lively" : "calm"}
+      />
+      {step === "welcome" || last ? <Sparkles /> : null}
+      {last ? <Burst /> : null}
+      <View className="px-8" style={{ paddingTop: insets.top + 16 }}>
+        <LampProgress step={stepIndex} total={STEPS.length} />
+      </View>
       <ScrollView
         className="flex-1"
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "center",
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+        }}
       >
-        <View
-          className={cn("px-6 pt-3", step === "done" && "items-center pt-8")}
+        <Animated.View
+          key={step}
+          entering={reduce ? undefined : FadeInDown.duration(320)}
+          className="items-center gap-5"
         >
-          {step === "done" ? (
-            <View className="mb-5 size-16 items-center justify-center rounded-full bg-primary">
-              <Check size={30} className="text-primary-foreground" />
-            </View>
-          ) : Hero ? (
-            <View className="mb-4 size-12 items-center justify-center rounded-2xl bg-primary/10">
-              <Hero size={24} className="text-primary" />
-            </View>
+          {step === "welcome" ? (
+            <>
+              <View
+                className="items-center justify-center"
+                style={{ height: 200, width: 280 }}
+              >
+                <Spotlight />
+                <Logo glow breathe className="h-[96px] w-[96px]" />
+              </View>
+              <TextGenerate
+                text={t("Your days, on autopilot")}
+                className="text-[32px] font-bold leading-tight tracking-tight"
+              />
+              <FlipWords
+                words={[t("Classes"), t("Deadlines"), t("Focus time")]}
+                className="text-[20px] font-semibold text-primary"
+              />
+            </>
+          ) : copy ? (
+            <>
+              {step === "done" ? <StepMark kind="done" /> : null}
+              <View className="items-center gap-1">
+                <Text className="text-[28px] font-bold leading-tight tracking-tight">
+                  {t(copy.title)}
+                </Text>
+                <Text className="text-[15px] text-muted-foreground">
+                  {t(copy.body)}
+                </Text>
+              </View>
+            </>
           ) : null}
-          <Text
-            className={cn(
-              "text-[26px] font-bold leading-tight tracking-tight",
-              step === "done" && "text-center",
-            )}
-          >
-            {title}
-          </Text>
-          <Text
-            className={cn(
-              "mt-2 text-[14.5px] leading-relaxed text-muted-foreground",
-              step === "done" && "text-center",
-            )}
-          >
-            {body}
-          </Text>
-        </View>
-        <View className="px-5 mt-6">
-          {content}
-        </View>
+          {showCard ? (
+            <TiltCard>
+              <View
+                className="w-full"
+                style={{
+                  borderRadius: 24,
+                  shadowColor: isDarkColorScheme ? "#000" : "#B4540A",
+                  shadowOpacity: isDarkColorScheme ? 0.4 : 0.14,
+                  shadowRadius: 22,
+                  shadowOffset: { width: 0, height: 10 },
+                  elevation: 6,
+                }}
+              >
+                <Glass
+                  frosted
+                  radius={24}
+                  intensity={60}
+                  style={{ padding: 12, borderWidth: 1 }}
+                >
+                  {step === "campus" ? (
+                    <CampusStep
+                      statuses={integrations}
+                      onConnected={(status) => {
+                        setIntegrations([
+                          ...integrations.filter(
+                            (i) => i.provider !== status.provider,
+                          ),
+                          status,
+                        ]);
+                      }}
+                    />
+                  ) : step === "calendar" ? (
+                    <CalendarStep
+                      notificationsOn={notif.active}
+                      blocked={blocked}
+                      busy={busy}
+                      onEnableNotifications={() => void enableNotifications()}
+                    />
+                  ) : (
+                    <AssistantsStep />
+                  )}
+                </Glass>
+              </View>
+            </TiltCard>
+          ) : null}
+        </Animated.View>
       </ScrollView>
       <View
         className="gap-1 px-5 pt-3"
         style={{ paddingBottom: insets.bottom + 12 }}
       >
-        {footer}
+        <MovingBorder>
+          <Button
+            size="lg"
+            className="rounded-full"
+            testID="onboarding.primary"
+            disabled={busy}
+            onPress={last ? () => void finish() : next}
+          >
+            <BusyOr busy={busy} testID="onboarding.busy" tone="onPrimary">
+              <Text className="font-semibold text-primary-foreground">
+                {last
+                  ? t("Open my calendar")
+                  : step === "welcome"
+                    ? t("Let's go")
+                    : t("Next")}
+              </Text>
+            </BusyOr>
+          </Button>
+        </MovingBorder>
+        {showCard ? (
+          <Button
+            variant="ghost"
+            size="lg"
+            className="rounded-full"
+            testID="onboarding.secondary"
+            onPress={next}
+          >
+            <Text className="font-medium text-muted-foreground">
+              {t("Skip")}
+            </Text>
+          </Button>
+        ) : null}
       </View>
     </KeyboardAvoidingView>
   );

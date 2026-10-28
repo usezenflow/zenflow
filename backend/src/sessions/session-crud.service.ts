@@ -14,12 +14,15 @@ import type {
   SessionSuggestionsResponse,
   SessionsListResponse,
 } from "@zenflow/shared";
-import { Prisma, type SessionType, type User } from "../../generated/prisma";
+import {
+  Prisma,
+  type SessionEventSource,
+  type SessionType,
+  type User,
+} from "../../generated/prisma";
 import { minutesToUtc } from "../common/utils";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
-import { displayDayRange } from "../scheduler/core/horizon";
 import {
   expandRrule,
   firstOccurrence,
@@ -29,43 +32,31 @@ import {
 import { DAY_MS } from "../scheduler/core/slot";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
-import { ListSessionsDto } from "./dto/list-sessions.dto";
-import { SessionRow, WITH_TAGS_AND_SERIES } from "./types/session-row";
+import { ListSessionsDto, MAX_RANGE_DAYS } from "./dto/list-sessions.dto";
+import { SessionRow, WITH_SERIES } from "./types/session-row";
 import { PlacementNeedsConfirmationException } from "./placement-plan.exception";
 import {
   slotProposalFieldsOf,
   toCreateSessionResponse,
   toSessionDto,
 } from "./session-mapper";
-import { createEventData, recordCreateEvent } from "./session-events";
+import {
+  createEventData,
+  deleteEventData,
+  recordCreateEvent,
+  snapshotOf,
+} from "./session-events";
 import { insertFixedSession } from "./fixed-session-writer";
-import { assertSyncedDeletable } from "./synced-lock";
 import { mapSessionPrismaError } from "./prisma-error";
 import { placeOrDiscard } from "./placement-compensation";
 import { SeriesService } from "./series.service";
+import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
+import { assertTaskBounds, constraintOf } from "./task-bounds";
+import { wouldConflict } from "../scheduler/io/conflict-check";
 
-/** How far ahead, and how many occurrences, to look for the next unskipped class. */
+/** How far ahead, and how many occurrences, to look for the next class without a prep plan. */
 const NEXT_OCCURRENCE_WINDOW_DAYS = 120;
 const NEXT_OCCURRENCE_SCAN = 8;
-
-type OccurrenceSkip = Pick<SharedSession, "skipped">;
-
-const occurrenceStateKey = (seriesId: string, start: Date): string =>
-  `${seriesId}|${start.getTime()}`;
-
-/** An occurrence's skipped state; a missing row means not skipped. */
-function occurrenceSkip(
-  states: Map<string, OccurrenceSkip>,
-  seriesId: string,
-  start: Date,
-  skippedFrom: Date | null = null,
-): OccurrenceSkip {
-  const state = states.get(occurrenceStateKey(seriesId, start)) ?? {
-    skipped: false,
-  };
-  const exempt = skippedFrom !== null && start >= skippedFrom;
-  return exempt && !state.skipped ? { skipped: true } : state;
-}
 
 /**
  * Plain session CRUD: `create` (dispatches by type — single `TASK`,
@@ -80,20 +71,24 @@ function occurrenceSkip(
 export class SessionCrudService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tagsService: TagsService,
     private readonly taskPlacement: TaskPlacementService,
     private readonly series: SeriesService,
+    private readonly schedulingFeedback: SchedulingFeedbackService,
   ) {}
 
   async create(
     dto: CreateSessionDto,
     user: User,
   ): Promise<CreateSessionResponse> {
-    const cleanTags = (dto.tags ?? []).map((t) => t.trim()).filter(Boolean);
     const now = new Date();
 
     if (dto.type === "TASK") {
       const deadline = new Date(dto.deadline as string);
+      assertTaskBounds({
+        ...constraintOf(dto),
+        durationMinutes: dto.durationMinutes,
+        deadline,
+      });
 
       // Pre-flight feasibility — BEFORE any row is inserted, so an
       // infeasible request never leaves an unplaced task behind (no rollback
@@ -106,14 +101,48 @@ export class SessionCrudService {
         deadline,
         now,
         policy: dto.infeasiblePolicy,
+        constraint: constraintOf(dto),
       });
-      return this.createSingleTask(dto, user, cleanTags, deadline, now);
+      return this.createSingleTask(dto, user, deadline, now);
     }
 
     if (dto.rrule) {
-      return this.createFixedRecurring(dto, user, cleanTags);
+      return this.createFixedRecurring(dto, user);
     }
-    return this.createFixedOneOff(dto, user, cleanTags);
+    return this.createFixedOneOff(dto, user);
+  }
+
+  /**
+   * The start `create` would give this item, with nothing written (bulk dry
+   * run). Fixed sessions are not placed, so their own start is the proposal.
+   */
+  /** Whether a fixed one-off item's own start overlaps something already on the calendar. */
+  async proposeOverlaps(dto: CreateSessionDto, user: User): Promise<boolean> {
+    if (dto.type === "TASK" || !dto.scheduledStartTime) return false;
+    return wouldConflict(this.prisma, {
+      userId: user.id,
+      timezone: user.timezone,
+      start: new Date(dto.scheduledStartTime),
+      durationMinutes: dto.durationMinutes,
+    });
+  }
+
+  async proposeCreate(
+    dto: CreateSessionDto,
+    user: User,
+    claimed: { startMs: number; endMs: number }[] = [],
+  ): Promise<Date | null> {
+    if (dto.type !== "TASK") {
+      return dto.scheduledStartTime ? new Date(dto.scheduledStartTime) : null;
+    }
+    return this.taskPlacement.proposeSingle({
+      user,
+      durationMinutes: dto.durationMinutes,
+      deadline: new Date(dto.deadline as string),
+      now: new Date(),
+      policy: dto.infeasiblePolicy,
+      constraint: { ...constraintOf(dto), extraOccupied: claimed },
+    });
   }
 
   /**
@@ -125,11 +154,9 @@ export class SessionCrudService {
     tx: Prisma.TransactionClient,
     user: User,
     dto: CreateSessionDto,
-    cleanTags: string[],
     deadline: Date,
     undoGroupId?: string,
   ): Promise<SessionRow> {
-    const tagIds = await this.tagsService.resolveTagIds(tx, user.id, cleanTags);
     const prepFor = dto.prepForSessionId
       ? await this.resolvePrepTarget(tx, user, dto.prepForSessionId)
       : null;
@@ -142,18 +169,14 @@ export class SessionCrudService {
         title: dto.title,
         note: dto.note ?? null,
         location: dto.location ?? null,
-        locationLat: dto.locationLat ?? null,
-        locationLng: dto.locationLng ?? null,
-        originLocation: dto.originLocation ?? null,
-        originLat: dto.originLocation ? (dto.originLat ?? null) : null,
-        originLng: dto.originLocation ? (dto.originLng ?? null) : null,
-        commuteMinutes: dto.commuteMinutes ?? null,
+        reminderMinutes: dto.reminderMinutes ?? null,
         durationMinutes: dto.durationMinutes,
         deadline,
-        tags: { connect: tagIds.map((id) => ({ id })) },
+        notBefore: dto.notBefore ? new Date(dto.notBefore) : null,
+        window: dto.window ?? null,
         userId: user.id,
       },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     await tx.sessionEvent.create({
       data: {
@@ -204,14 +227,13 @@ export class SessionCrudService {
   private async createSingleTask(
     dto: CreateSessionDto,
     user: User,
-    cleanTags: string[],
     deadline: Date,
     now: Date,
   ): Promise<CreateSessionResponse> {
     // One undo entry covers the create and whatever its placement displaced.
     const undoGroupId = randomUUID();
     const created = await this.prisma.$transaction((tx) =>
-      this.insertSingleTask(tx, user, dto, cleanTags, deadline, undoGroupId),
+      this.insertSingleTask(tx, user, dto, deadline, undoGroupId),
     );
 
     // heuristic → 50/50 A/B → optional LinUCB override + SlotProposal. Never
@@ -228,6 +250,7 @@ export class SessionCrudService {
             id: created.id,
             durationMinutes: created.durationMinutes,
             deadline,
+            constraint: constraintOf(dto),
           },
           now,
           infeasiblePolicy: dto.infeasiblePolicy,
@@ -260,7 +283,6 @@ export class SessionCrudService {
   private async createFixedRecurring(
     dto: CreateSessionDto,
     user: User,
-    cleanTags: string[],
   ): Promise<CreateSessionResponse> {
     const anchor = new Date(dto.scheduledStartTime as string);
     const repStart = firstOccurrence(
@@ -270,11 +292,6 @@ export class SessionCrudService {
     );
 
     const created = await this.prisma.$transaction(async (tx) => {
-      const tagIds = await this.tagsService.resolveTagIds(
-        tx,
-        user.id,
-        cleanTags,
-      );
       const series = await tx.sessionSeries.create({
         data: {
           type: dto.type,
@@ -289,10 +306,10 @@ export class SessionCrudService {
         title: dto.title,
         note: dto.note,
         location: dto.location,
+        reminderMinutes: dto.reminderMinutes,
         durationMinutes: dto.durationMinutes,
         scheduledStartTime: repStart,
         seriesId: series.id,
-        tagIds,
       });
     });
 
@@ -304,15 +321,9 @@ export class SessionCrudService {
   private async createFixedOneOff(
     dto: CreateSessionDto,
     user: User,
-    cleanTags: string[],
   ): Promise<CreateSessionResponse> {
     const start = new Date(dto.scheduledStartTime as string);
     const created = await this.prisma.$transaction(async (tx) => {
-      const tagIds = await this.tagsService.resolveTagIds(
-        tx,
-        user.id,
-        cleanTags,
-      );
       // Shared with the DLU watchers' materializer so `source` /
       // `externalKey` / the CREATE event can't drift between the two paths.
       return insertFixedSession(tx, {
@@ -322,9 +333,9 @@ export class SessionCrudService {
         title: dto.title,
         note: dto.note,
         location: dto.location,
+        reminderMinutes: dto.reminderMinutes,
         durationMinutes: dto.durationMinutes,
         scheduledStartTime: start,
-        tagIds,
       });
     });
 
@@ -333,41 +344,63 @@ export class SessionCrudService {
 
   async list(dto: ListSessionsDto, user: User): Promise<SessionsListResponse> {
     const tz = user.timezone;
-    const { startStr: displayStartStr, endStr: displayEndStr } =
-      displayDayRange(dto.view, dto.date);
-    const displayStart = minutesToUtc(displayStartStr, 0, tz);
-    const displayEnd = minutesToUtc(displayEndStr, 1439, tz);
+    const span = daysBetween(dto.from, dto.to) + 1;
+    if (span < 1 || span > MAX_RANGE_DAYS) {
+      throw new BadRequestException(
+        `Range must be 1 to ${MAX_RANGE_DAYS} days`,
+      );
+    }
+    const displayStart = minutesToUtc(dto.from, 0, tz);
+    const displayEnd = minutesToUtc(dto.to, 1439, tz);
+
+    const filters: Prisma.SessionWhereInput[] = [];
+    if (dto.q)
+      filters.push({ id: { in: await this.matchingIds(dto.q, user) } });
+    if (dto.types?.length) filters.push({ type: { in: dto.types } });
+    if (dto.minDuration !== undefined || dto.maxDuration !== undefined) {
+      filters.push({
+        durationMinutes: { gte: dto.minDuration, lte: dto.maxDuration },
+      });
+    }
+    if (dto.deadlineFrom || dto.deadlineTo) {
+      filters.push({
+        deadline: {
+          gte: dto.deadlineFrom
+            ? minutesToUtc(dto.deadlineFrom, 0, tz)
+            : undefined,
+          lte: dto.deadlineTo
+            ? minutesToUtc(dto.deadlineTo, 1439, tz)
+            : undefined,
+        },
+      });
+    }
 
     const rows = await this.prisma.session.findMany({
       where: {
-        userId: user.id,
-        deleted: false,
-        OR: [
-          { scheduledStartTime: null },
-          // A day back so a plain session that started the previous evening
-          // and runs past midnight into this window is still fetched —
-          // filtered to actual overlap below (mirrors day-load.ts's
-          // occupancy scan for the same class of bug on the placement side).
+        AND: [
+          { userId: user.id, deleted: false },
           {
-            scheduledStartTime: {
-              gte: new Date(displayStart.getTime() - DAY_MS),
-              lte: displayEnd,
-            },
+            OR: [
+              { scheduledStartTime: null },
+              // A day back so a plain session that started the previous evening
+              // and runs past midnight into this window is still fetched —
+              // filtered to actual overlap below.
+              {
+                scheduledStartTime: {
+                  gte: new Date(displayStart.getTime() - DAY_MS),
+                  lte: displayEnd,
+                },
+              },
+              // Series representatives: first-occurrence instant may be outside the
+              // window; expanded below.
+              { seriesId: { not: null } },
+            ],
           },
-          // Series representatives: first-occurrence instant may be outside the
-          // window; expanded below.
-          { seriesId: { not: null } },
+          ...filters,
         ],
       },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
-
-    const states = await this.occurrenceStates(
-      user.id,
-      rows,
-      new Date(displayStart.getTime() - DAY_MS),
-      displayEnd,
-    );
 
     const sessions: SharedSession[] = [];
     for (const row of rows) {
@@ -376,8 +409,6 @@ export class SessionCrudService {
         for (const occ of expandRrule(
           row.series.rrule,
           row.scheduledStartTime,
-          // Same day-back widening as above, so an occurrence that started
-          // the previous day and crosses into this window isn't dropped.
           new Date(displayStart.getTime() - DAY_MS),
           displayEnd,
           tz,
@@ -389,12 +420,6 @@ export class SessionCrudService {
             ...base,
             id: occurrenceId(row.seriesId, occ),
             scheduledStartTime: occ.toISOString(),
-            ...occurrenceSkip(
-              states,
-              row.seriesId,
-              occ,
-              row.series.skippedFrom,
-            ),
           });
         }
       } else {
@@ -413,36 +438,25 @@ export class SessionCrudService {
       }
     }
 
-    return { sessions };
+    return { sessions: sortSessions(sessions, dto.sort ?? "start", dto.order) };
   }
 
-  /** Done or skipped occurrences of the recurring reps in `rows`, keyed by {@link occurrenceStateKey}. */
-  private async occurrenceStates(
-    userId: string,
-    rows: {
-      seriesId: string | null;
-      series: { rrule: string | null } | null;
-    }[],
-    from: Date,
-    to: Date,
-  ): Promise<Map<string, OccurrenceSkip>> {
-    const seriesIds = rows
-      .filter((r) => r.seriesId && r.series?.rrule)
-      .map((r) => r.seriesId as string);
-    if (seriesIds.length === 0) return new Map();
-    const found = await this.prisma.sessionOccurrenceState.findMany({
-      where: {
-        userId,
-        seriesId: { in: seriesIds },
-        occurrenceStart: { gte: from, lt: to },
-      },
-    });
-    return new Map(
-      found.map((s) => [
-        occurrenceStateKey(s.seriesId, s.occurrenceStart),
-        { skipped: s.skipped },
-      ]),
-    );
+  /** Ids of the user's sessions whose title, note or location matches the regex `pattern`. */
+  private async matchingIds(pattern: string, user: User): Promise<string[]> {
+    try {
+      const rows = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+        SELECT id FROM "Session"
+        WHERE "userId" = ${user.id} AND deleted = false
+          AND (title ~* ${pattern}
+            OR coalesce(note, '') ~* ${pattern}
+            OR coalesce(location, '') ~* ${pattern})`);
+      return rows.map((r) => r.id);
+    } catch (error) {
+      if (error instanceof Error && /regular expression/i.test(error.message)) {
+        throw new BadRequestException("Invalid search pattern");
+      }
+      throw error;
+    }
   }
 
   async suggestions(
@@ -467,7 +481,7 @@ export class SessionCrudService {
     const rows = await this.prisma.session.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
       take: overfetch,
     });
 
@@ -497,27 +511,15 @@ export class SessionCrudService {
       const rep = await this.prisma.session.findFirst({
         where: { seriesId: occ.seriesId, userId: user.id, deleted: false },
         orderBy: { createdAt: "asc" },
-        include: WITH_TAGS_AND_SERIES,
+        include: WITH_SERIES,
       });
       if (!rep)
         throw new NotFoundException(`Cannot find session with id ${id}`);
       const start = new Date(occ.startISO);
-      const states = await this.occurrenceStates(
-        user.id,
-        [rep],
-        start,
-        new Date(start.getTime() + 1),
-      );
       return {
         ...toSessionDto(rep),
         id,
         scheduledStartTime: occ.startISO,
-        ...occurrenceSkip(
-          states,
-          occ.seriesId,
-          start,
-          rep.series?.skippedFrom ?? null,
-        ),
         prepSessions: await this.prepSessionsOf(user, rep.id, start),
         nextPrepOccurrenceStart: await this.nextPrepOccurrence(
           user,
@@ -525,12 +527,13 @@ export class SessionCrudService {
           start,
         ),
         prepTarget: null,
+        placementChips: [],
       };
     }
 
     const session = await this.prisma.session.findFirst({
       where: { id, userId: user.id, deleted: false },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     if (!session)
       throw new NotFoundException(`Cannot find session with id ${id}`);
@@ -540,6 +543,7 @@ export class SessionCrudService {
       prepSessions: await this.prepSessionsOf(user, session.id, null),
       nextPrepOccurrenceStart: null,
       prepTarget: await this.prepTargetOf(user, session),
+      placementChips: [],
     };
   }
 
@@ -551,7 +555,7 @@ export class SessionCrudService {
     if (!plan.prepForSessionId) return null;
     const target = await this.prisma.session.findFirst({
       where: { id: plan.prepForSessionId, userId: user.id, deleted: false },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
     });
     if (!target) return null;
     const dto = toSessionDto(target);
@@ -564,7 +568,7 @@ export class SessionCrudService {
     };
   }
 
-  /** The next occurrence after `after` that is not skipped, unless it already has a prep plan. */
+  /** The next occurrence after `after`, unless it already has a prep plan. */
   private async nextPrepOccurrence(
     user: User,
     rep: SessionRow,
@@ -582,16 +586,7 @@ export class SessionCrudService {
       series.exdates,
     ).slice(0, NEXT_OCCURRENCE_SCAN);
     if (candidates.length === 0) return null;
-    const states = await this.occurrenceStates(
-      user.id,
-      [rep],
-      candidates[0],
-      new Date(candidates[candidates.length - 1].getTime() + 1),
-    );
-    const next = candidates.find(
-      (c) => !occurrenceSkip(states, series.id, c, series.skippedFrom).skipped,
-    );
-    if (!next) return null;
+    const next = candidates[0];
     const taken = await this.prisma.session.findFirst({
       where: {
         userId: user.id,
@@ -616,13 +611,17 @@ export class SessionCrudService {
         prepForSessionId: targetId,
         prepForOccurrenceStart: occurrenceStart,
       },
-      include: WITH_TAGS_AND_SERIES,
+      include: WITH_SERIES,
       orderBy: { createdAt: "asc" },
     });
     return rows.map(toSessionDto);
   }
 
-  async remove(id: string, user: User): Promise<RemoveSessionResponse> {
+  async remove(
+    id: string,
+    user: User,
+    origin: SessionEventSource = "ZENFLOW",
+  ): Promise<RemoveSessionResponse> {
     try {
       // A recurring occurrence ref → add the instant to the series' exdates
       // ("delete this one"); the row and other occurrences stay put.
@@ -634,13 +633,21 @@ export class SessionCrudService {
           user,
         );
 
-      return await this.prisma.$transaction(async (tx) => {
+      const removed = await this.prisma.$transaction(async (tx) => {
         const existing = await tx.session.findFirst({
           where: { id, userId: user.id, deleted: false },
         });
         if (!existing)
           throw new NotFoundException(`Cannot find session with id ${id}`);
-        assertSyncedDeletable(existing);
+        const event = await tx.sessionEvent.create({
+          data: deleteEventData({
+            sessionId: id,
+            userId: user.id,
+            snapshot: snapshotOf(existing),
+            source: origin,
+          }),
+          select: { id: true },
+        });
         // Soft-delete: an ingested item's externalKey stays unique, so the
         // materializer recognizes this row on the next re-fetch and leaves
         // it alone instead of recreating it.
@@ -648,8 +655,15 @@ export class SessionCrudService {
           where: { id, userId: user.id },
           data: { deleted: true },
         });
-        return { id };
+        return { existing, eventId: event.id };
       });
+      await this.schedulingFeedback.onDelete(
+        user.id,
+        removed.existing,
+        removed.eventId,
+        new Date(),
+      );
+      return { id };
     } catch (error) {
       mapSessionPrismaError(error, id, "remove");
     }
@@ -745,4 +759,97 @@ export class SessionCrudService {
 
     return { removedSessionIds };
   }
+
+  /** What a bulk delete item would remove: a title and how many rows go. Nothing is written. */
+  async describeDelete(
+    kind: "session" | "series" | "timetable",
+    id: string,
+    scope: "all" | "following",
+    user: User,
+  ): Promise<{ title: string; count: number }> {
+    if (kind === "session") {
+      const found = await this.findById(id, user);
+      return { title: found.title, count: 1 };
+    }
+    if (kind === "series") {
+      const rows = await this.prisma.session.findMany({
+        where: { seriesId: id, userId: user.id, deleted: false },
+        orderBy: { createdAt: "asc" },
+        select: { title: true },
+      });
+      if (rows.length === 0)
+        throw new NotFoundException(`Cannot find series with id ${id}`);
+      return { title: rows[0].title, count: rows.length };
+    }
+    const anchor = await this.prisma.session.findFirst({
+      where: {
+        id,
+        userId: user.id,
+        deleted: false,
+        scheduleStudyUnitId: { not: null },
+      },
+      select: {
+        title: true,
+        scheduleStudyUnitId: true,
+        scheduledStartTime: true,
+      },
+    });
+    if (!anchor)
+      throw new NotFoundException(
+        `Cannot find groupable timetable session ${id}`,
+      );
+    const count = await this.prisma.session.count({
+      where: {
+        userId: user.id,
+        deleted: false,
+        scheduleStudyUnitId: anchor.scheduleStudyUnitId,
+        ...(scope === "following" && anchor.scheduledStartTime
+          ? { scheduledStartTime: { gte: anchor.scheduledStartTime } }
+          : {}),
+      },
+    });
+    return { title: anchor.title, count };
+  }
+}
+
+/** Whole days from `from` to `to` (`YYYY-MM-DD`), negative when `to` is earlier. */
+function daysBetween(from: string, to: string): number {
+  return Math.round(
+    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS,
+  );
+}
+
+/** Sorts by the chosen key; sessions without that value (or without a start) go last in either order. */
+function sortSessions(
+  sessions: SharedSession[],
+  sort: "start" | "duration" | "deadline",
+  order: "asc" | "desc" | undefined,
+): SharedSession[] {
+  const dir = order === "desc" ? -1 : 1;
+  const startOf = (s: SharedSession): number | null =>
+    s.scheduledStartTime ? Date.parse(s.scheduledStartTime) : null;
+  const keyOf = (s: SharedSession): number | null => {
+    if (sort === "duration") return s.durationMinutes;
+    if (sort === "deadline") return s.deadline ? Date.parse(s.deadline) : null;
+    return startOf(s);
+  };
+  const byNullable = (x: number | null, y: number | null): number | null => {
+    if (x === y) return null;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return 0;
+  };
+  return [...sessions].sort((a, b) => {
+    const ka = keyOf(a);
+    const kb = keyOf(b);
+    const nulls = byNullable(ka, kb);
+    if (nulls !== null) return nulls;
+    if (ka !== null && kb !== null && ka !== kb) return (ka - kb) * dir;
+    const sa = startOf(a);
+    const sb = startOf(b);
+    const nullStart = byNullable(sa, sb);
+    if (nullStart !== null) return nullStart;
+    if (sa !== null && sb !== null && sa !== sb) return sa - sb;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 }

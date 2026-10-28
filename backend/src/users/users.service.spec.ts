@@ -2,14 +2,11 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException } from "@nestjs/common";
 import { Prisma } from "../../generated/prisma";
 import { PostgresErrorCode } from "../prisma/error-codes";
-import { CommuteDefaultsService } from "../commute/commute-defaults.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { UsersService } from "./users.service";
 import type { User } from "../../generated/prisma";
 
 const user = { id: "user-1" } as User;
-
-const commuteDefaults = { applyQuietly: jest.fn() };
 
 type UpdateArgs = { where: { id: string }; data: Record<string, unknown> };
 
@@ -17,7 +14,6 @@ async function makeService(update: jest.Mock) {
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       UsersService,
-      { provide: CommuteDefaultsService, useValue: commuteDefaults },
       {
         provide: PrismaService,
         useValue: {
@@ -53,7 +49,7 @@ describe("UsersService.update", () => {
     });
   });
 
-  it("maps lang to the DB enum and persists timezone + default reminder", async () => {
+  it("maps lang to the DB enum and persists timezone", async () => {
     const update = jest.fn((args: UpdateArgs) => ({
       id: user.id,
       ...args.data,
@@ -63,7 +59,6 @@ describe("UsersService.update", () => {
     await service.update(user.id, {
       timezone: "Asia/Tokyo",
       lang: "en",
-      defaultReminderMinutes: 0,
     });
 
     expect(update).toHaveBeenCalledWith({
@@ -71,7 +66,6 @@ describe("UsersService.update", () => {
       data: {
         timezone: "Asia/Tokyo",
         lang: "EN_US",
-        defaultReminderMinutes: 0,
       },
     });
   });
@@ -101,7 +95,6 @@ describe("UsersService.update onboarding", () => {
     const module = await Test.createTestingModule({
       providers: [
         UsersService,
-        { provide: CommuteDefaultsService, useValue: commuteDefaults },
         { provide: PrismaService, useValue: { user: { update, updateMany } } },
       ],
     }).compile();
@@ -117,52 +110,5 @@ describe("UsersService.update onboarding", () => {
       where: { id: user.id },
       data: {},
     });
-  });
-});
-
-describe("UsersService.update commute", () => {
-  beforeEach(() => commuteDefaults.applyQuietly.mockClear());
-
-  async function make() {
-    const update = jest.fn((args: UpdateArgs) => ({
-      id: user.id,
-      ...args.data,
-    }));
-    const module = await Test.createTestingModule({
-      providers: [
-        UsersService,
-        { provide: CommuteDefaultsService, useValue: commuteDefaults },
-        { provide: PrismaService, useValue: { user: { update } } },
-      ],
-    }).compile();
-    return module.get(UsersService);
-  }
-
-  it("redoes the commutes when the home changes", async () => {
-    const service = await make();
-
-    await service.update(user.id, {
-      homeLocation: "Home",
-      homeLat: 11.94,
-      homeLng: 108.43,
-    });
-
-    expect(commuteDefaults.applyQuietly).toHaveBeenCalledWith(user.id);
-  });
-
-  it("redoes the commutes when the vehicle changes", async () => {
-    const service = await make();
-
-    await service.update(user.id, { defaultTransport: "BIKE" });
-
-    expect(commuteDefaults.applyQuietly).toHaveBeenCalledWith(user.id);
-  });
-
-  it("leaves them alone for an unrelated change", async () => {
-    const service = await make();
-
-    await service.update(user.id, { name: "New Name" });
-
-    expect(commuteDefaults.applyQuietly).not.toHaveBeenCalled();
   });
 });

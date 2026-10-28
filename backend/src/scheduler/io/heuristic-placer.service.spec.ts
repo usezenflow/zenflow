@@ -111,6 +111,15 @@ describe("HeuristicPlacer.scheduleTask", () => {
     expect(start?.toISOString()).toBe("2026-06-15T09:00:00.000Z");
   });
 
+  it("keeps the start after notBefore when a constraint is given", async () => {
+    const svc = await makeService(makePrisma());
+    const notBefore = new Date("2026-06-15T12:00:00.000Z");
+    const start = await svc.placeTask("u1", task, TZ, MATRIX, now, [], {
+      notBefore,
+    });
+    expect(start!.getTime()).toBeGreaterThanOrEqual(notBefore.getTime());
+  });
+
   it("returns null when the only candidate day is fully occupied", async () => {
     const svc = await makeService(
       makePrisma([

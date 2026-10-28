@@ -11,7 +11,6 @@ Never copy raw volumes of a running Postgres. State lives in four places, and a 
 | Git | Code, compose, nginx, Grafana dashboards and alerts | GitHub |
 | Vault | Every secret | Snapshot with each dump, plus 3 of 5 offline shares |
 | Postgres | All relational data | age dump every 3 h |
-| Uploaded files | Note attachments (MinIO) | age tar daily |
 
 Keep off the server: the age master key, the Vault unseal shares, and the GitHub Environment secrets.
 
@@ -22,7 +21,6 @@ Project `zenflow-prod`, so volumes are `zenflow-prod_<name>`.
 | Volume | Holds | Backed up | If lost |
 | --- | --- | --- | --- |
 | `postgres_data` | Database | Dump every 3 h | Restore (up to 3 h lost) |
-| `storage_data` | Uploaded files | Archive daily | Restore (up to 1 day lost) |
 | `vault_data` | Encrypted secrets | Snapshot with each dump | Restore and unseal |
 | `redis_queue_data` | BullMQ jobs | No | Refills itself |
 | `redis_data` | Sessions, OTPs | No | Users log in again |
@@ -35,8 +33,6 @@ Project `zenflow-prod`, so volumes are `zenflow-prod_<name>`.
 
 Host files outside volumes: `/etc/zenflow/vault/{role_id,secret_id}` ([vault.md](vault.md#rotate-approle-credentials)), `/run/zenflow` (re-rendered by deploy), `$DEPLOY_PATH/backend/state/` and `.env.prod` (written by deploy).
 
-Reminders need no restore. They are Postgres rows, and the watcher re-arms the queue at boot and every minute. Only reminders over ~6 min late are skipped.
-
 ## Move to a new VPS
 
 Keep the old host untouched until the end.
@@ -48,14 +44,13 @@ Keep the old host untouched until the end.
    cd $DEPLOY_PATH/backend
    docker compose -f compose.prod.yml stop api-blue api-green watcher worker-portal worker-lms worker-notify worker-scheduler
    docker compose -f compose.prod.yml stop vault
-   docker exec zenflow-backup-prod sh -c '. /run/backup.env; sh /opt/backup/backup.sh; sh /opt/backup/backup-files.sh'
+   docker exec zenflow-backup-prod sh -c '. /run/backup.env; sh /opt/backup/backup.sh'
    docker compose -f compose.prod.yml start vault      # then unseal (3 shares)
    ```
-4. **Fetch and decrypt** the newest `.dump.age`, `vault-*.tar.age` and `files/**/files-*.tar.age` on a trusted machine:
+4. **Fetch and decrypt** the newest `.dump.age`, and `vault-*.tar.age` on a trusted machine:
    ```bash
    age -d -i master.key -o zenflow.dump  zenflow-<ts>.dump.age
    age -d -i master.key -o vault.tar     vault-<ts>.tar.age
-   age -d -i master.key -o files.tar     files-<ts>.tar.age
    ```
 5. **Restore Vault** on the new host, then unseal with 3 shares:
    ```bash
@@ -72,13 +67,11 @@ Keep the old host untouched until the end.
 8. **Load data** with writers stopped:
    ```bash
    export ZENFLOW_SECRETS_DIR=/run/zenflow/prod
-   docker compose --env-file .env.prod -f compose.prod.yml stop api-blue api-green watcher worker-portal worker-lms worker-notify worker-scheduler storage
+   docker compose --env-file .env.prod -f compose.prod.yml stop api-blue api-green watcher worker-portal worker-lms worker-notify worker-scheduler
    docker exec -i zenflow-db-prod sh -c 'pg_restore --no-owner --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < zenflow.dump
-   docker run --rm -i -v zenflow-prod_storage_data:/data alpine sh -c 'rm -rf /data/* /data/.[!.]* ; tar -xf - -C /data' < files.tar
-   docker compose --env-file .env.prod -f compose.prod.yml up -d storage
    ```
    Restart the stopped services, or redeploy.
-9. **Check.** `docker compose ps` is healthy, sign in, open a note with an attachment, the watcher logs `armed N reminder job(s) from the database at boot`, and **Zenflow Backups** turns green after the next run.
+9. **Check.** `docker compose ps` is healthy, sign in, open the app and **Zenflow Backups** turns green after the next run.
 10. **Switch DNS.** Keep the old host stopped for a week. Rotate anything that was on a retired machine.
 
 ## Restore drill

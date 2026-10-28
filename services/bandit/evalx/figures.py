@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -280,6 +281,7 @@ def semester_learning(res: dict[str, Any], out: Path) -> None:
 # Order passes the light-mode CVD and normal-vision gates (validate_palette.js).
 PAPER_ARMS = (
     ("L", "L24N (production)", "#2a78d6"),
+    ("L6", "L6", "#c9a227"),
     ("H", "H", "#1baf7a"),
     ("H+K", "H+K", "#eb6834"),
     ("L-hourly-K", "L24K", "#6250d6"),
@@ -288,17 +290,33 @@ PAPER_ARMS = (
 PAPER_BOUNDS = (("Oracle", "Oracle", INK), ("Rand", "Rand", MUTED))
 
 
-def paper_learning(res: dict[str, Any], out: Path, tasks: int = 30) -> None:
+def _proposals(parts: Path) -> dict[str, list[list[float]]]:
+    """Per arm, each student's kept flags over placed proposals, in order."""
+    out: dict[str, list[list[float]]] = {}
+    for path in sorted(parts.glob("seed-*.json")):
+        for st in json.loads(path.read_text())["students"]:
+            for arm, rows in st["arms"].items():
+                placed = [r for r in rows if r.get("m") is not None]
+                out.setdefault(arm, []).append(
+                    [1.0 - r["mov"] - r["del"] for r in placed]
+                )
+    return out
+
+
+def paper_learning(parts: Path, out: Path, proposals: int = 30) -> None:
+    """Kept share by proposal number: the heuristic report's learning measure."""
+    kept = _proposals(parts)
     fig, ax = plt.subplots(figsize=(7.5, 3.6))
     for arm, label, colour in PAPER_ARMS:
-        ys = [100 * v for v in res["learning"][arm][:tasks]]
-        ax.plot(range(1, tasks + 1), ys, color=colour, lw=1.8, label=label)
-    for arm, label, colour in PAPER_BOUNDS:
-        ys = [100 * v for v in res["learning"][arm][:tasks]]
-        ax.plot(range(1, tasks + 1), ys, color=colour, lw=1.2, ls="--", label=label)
-    ax.set_xlabel("Task index")
-    ax.set_ylabel("Tasks started, %")
-    ax.set_title("Adherence over the first tasks", loc="left", fontsize=10)
+        ys = []
+        for k in range(proposals):
+            vals = [s[k] for s in kept[arm] if len(s) > k]
+            ys.append(100 * float(np.mean(vals)) if vals else float("nan"))
+        ax.plot(range(1, proposals + 1), ys, color=colour, lw=1.8, label=label)
+    ax.set_xlabel("Proposal number")
+    ax.set_ylabel("Kept, %")
+    ax.set_ylim(0, 100)
+    ax.set_title("Kept share by proposal number, signal world", loc="left", fontsize=10)
     ax.legend(
         frameon=False, fontsize=8, labelcolor=MUTED, loc="center left",
         bbox_to_anchor=(1.01, 0.5),
@@ -316,9 +334,11 @@ def paper_regret(res: dict[str, Any], out: Path) -> None:
     arm, label, colour = ("Rand", "Rand", MUTED)
     ax.plot(range(1, len(res["regret"][arm]) + 1), res["regret"][arm],
             color=colour, lw=1.2, ls="--", label=label)  # fmt: skip
-    ax.set_xlabel("Task index")
+    ax.set_xlabel("Proposal number")
     ax.set_ylabel("Cumulative regret per student")
-    ax.set_title("Regret against the Oracle", loc="left", fontsize=10)
+    ax.set_title(
+        "Regret against the Oracle, headline KEPT world", loc="left", fontsize=10
+    )
     ax.legend(
         frameon=False, fontsize=8, labelcolor=MUTED, loc="center left",
         bbox_to_anchor=(1.01, 0.5),
@@ -328,41 +348,95 @@ def paper_regret(res: dict[str, Any], out: Path) -> None:
     _save(fig, out / "regret-curve.png", PAPER_DPI)
 
 
-def paper_robustness(rows: dict[str, Any], out: Path) -> None:
+def _cluster_ci(
+    values: np.ndarray, groups: np.ndarray, draws: int = 2000
+) -> dict[str, float]:
+    """Mean with a student-cluster interval and a seed-cluster interval."""
+    rng = np.random.default_rng(0)
+    point = float(values.mean())
+    n = len(values)
+    students = np.array([values[rng.integers(0, n, n)].mean() for _ in range(draws)])
+    seeds = np.unique(groups)
+    per_seed = np.array([values[groups == g].mean() for g in seeds])
+    seed_draws = np.array(
+        [per_seed[rng.integers(0, len(seeds), len(seeds))].mean() for _ in range(draws)]
+    )
+    ci_lo, ci_hi = np.percentile(students, [2.5, 97.5])
+    seed_lo, seed_hi = np.percentile(seed_draws, [2.5, 97.5])
+    return {
+        "mean": point,
+        "ci_lo": ci_lo,
+        "ci_hi": ci_hi,
+        "seed_lo": seed_lo,
+        "seed_hi": seed_hi,
+    }
+
+
+def robustness_regret(root: Path, pair: tuple[str, str]) -> dict[str, dict[str, float]]:
+    """Per world, regret per proposal of ``pair[0]`` minus ``pair[1]``, with CIs."""
+    from evalx.semester import REALITY
+
+    rows: dict[str, dict[str, float]] = {}
+    for idx, name in enumerate(REALITY):
+        parts = max(
+            (root / f"world-{idx:02d}" / "parts").iterdir(),
+            key=lambda d: len(list(d.glob("seed-*.json"))),
+        )
+        diffs, seeds = [], []
+        for path in sorted(parts.glob("seed-*.json")):
+            seed = int(path.stem.split("-")[1])
+            for st in json.loads(path.read_text())["students"]:
+                reg = {}
+                for arm in pair:
+                    p = st["proposal"][arm]
+                    reg[arm] = p["reg"] / p["n"] if p["n"] else 0.0
+                diffs.append(reg[pair[0]] - reg[pair[1]])
+                seeds.append(seed)
+        rows[name] = _cluster_ci(np.asarray(diffs), np.asarray(seeds))
+    return rows
+
+
+def paper_robustness(
+    rows: dict[str, dict[str, float]], out: Path, pair: tuple[str, str]
+) -> None:
     worlds = list(rows)
     fig, ax = plt.subplots(figsize=(8, 0.28 * len(worlds) + 1.2))
     for i, name in enumerate(worlds):
-        keys = ("mean", "ci_lo", "ci_hi", "seed_lo", "seed_hi")
-        c = {k: 100 * rows[name]["L_minus_HK"][k] for k in keys}
-        _point(ax, i, c, PAPER_ARMS[0][2])
+        _point(ax, i, rows[name], PAPER_ARMS[0][2])
     ax.axvline(0, color=INK, lw=0.8)
     ax.set_yticks(range(len(worlds)), worlds)
     ax.invert_yaxis()
     ax.set_xlabel(
-        "Adherence points, L24N (production) minus H+K (thin: students, thick: seeds)"
+        f"Regret per proposal, {pair[0]} minus {pair[1]} (below 0 favours {pair[0]})"
     )
-    ax.set_title("Robustness on seeds 700 to 799", loc="left", fontsize=10)
+    ax.set_title(
+        "Robustness, signal world, seeds 1000 to 1099 (thin: students, thick: seeds)",
+        loc="left",
+        fontsize=10,
+    )
     _style(ax)
     _save(fig, out / "robustness-forest.png", PAPER_DPI)
 
 
-def paper_figures(run: Path, docs: Path) -> None:
-    """The paper's figures, from the held-out ladder and robustness runs."""
+def paper_figures(headline: Path, signal: Path, robust: Path, docs: Path) -> None:
+    """The paper's figures: regret from the headline run, kept from the signal run."""
     docs.mkdir(parents=True, exist_ok=True)
-    ladder = json.loads((run / "ladder-700" / "results.json").read_text())
-    rows = json.loads((run / "robust-700" / "reality.json").read_text())
-    paper_learning(ladder, docs)
-    paper_regret(ladder, docs)
-    paper_robustness(rows, docs)
+    res = json.loads((headline / "results.json").read_text())
+    paper_learning(next((signal / "parts").iterdir()), docs)
+    paper_regret(res, docs)
+    pair = ("L", "H+K")
+    paper_robustness(robustness_regret(robust, pair), docs, pair)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(prog="evalx.figures")
     ap.add_argument("--out", type=Path, default=Path(__file__).parent / "out")
     ap.add_argument("--paper", type=Path, help="docs/scheduler/figures for the paper")
+    ap.add_argument("--paper-signal", type=Path, help="signal world run dir")
+    ap.add_argument("--paper-robust", type=Path, help="robustness worlds run dir")
     args = ap.parse_args()
     if args.paper:
-        paper_figures(args.out, args.paper)
+        paper_figures(args.out, args.paper_signal, args.paper_robust, args.paper)
         return 0
     res = json.loads((args.out / "results.json").read_text())
     if "arms" in res:

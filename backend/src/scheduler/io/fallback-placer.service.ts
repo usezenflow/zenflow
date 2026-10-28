@@ -32,6 +32,8 @@ export class FallbackPlacer {
       timezone,
       preferenceMatrix,
       now,
+      [],
+      task.constraint,
     );
   }
 }

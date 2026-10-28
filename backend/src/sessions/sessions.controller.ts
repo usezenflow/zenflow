@@ -8,72 +8,41 @@ import {
   Post,
   Query,
   UseGuards,
-  UseInterceptors,
 } from "@nestjs/common";
 import { SessionsService } from "./sessions.service";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { UpdateSessionDto } from "./dto/update-session.dto";
 import { SlotPickDto } from "./dto/slot-pick.dto";
-import { SkipScopeDto } from "./dto/skip-scope.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { ListSessionSuggestionsDto } from "./dto/list-session-suggestions.dto";
 import { DeadlineOptionsDto } from "./dto/deadline-options.dto";
-import { SearchSessionsDto } from "./dto/search-sessions.dto";
-import { SessionSearchService } from "./session-search.service";
-import { SignNoteFilesInterceptor } from "./sign-note-files.interceptor";
-import { CookieAuthGuard } from "../auth/guards";
+import { AllowApiToken } from "../api-access/allow-api-token.decorator";
+import { ApiTokenGuard } from "../api-access/api-token.guard";
+import { BulkCreateSessionsDto } from "./dto/bulk-create-sessions.dto";
+import { BulkDeleteSessionsDto } from "./dto/bulk-delete-sessions.dto";
+import { BulkUpdateSessionsDto } from "./dto/bulk-update-sessions.dto";
 import { CurrentUser } from "../users/decorators/current-user.decorator";
 import { type User } from "../../generated/prisma";
 import { deadlineOptions } from "./utils/deadline-options";
 import { ConfirmPlacementDto } from "./dto/confirm-placement.dto";
 import { PlacementPlanService } from "./placement-plan.service";
+import { ReplanService } from "./replan.service";
+import { buildRecap, findFreeSlots } from "./session-recap";
+import {
+  FreeSlotsDto,
+  InsightRangeDto,
+  ReplanDto,
+} from "./dto/insight-range.dto";
+import { plainToInstance } from "class-transformer";
 
 @Controller("sessions")
-@UseGuards(CookieAuthGuard)
-@UseInterceptors(SignNoteFilesInterceptor)
+@UseGuards(ApiTokenGuard)
 export class SessionsController {
   constructor(
     private readonly sessionsService: SessionsService,
-    private readonly searchService: SessionSearchService,
     private readonly placementPlans: PlacementPlanService,
+    private readonly replans: ReplanService,
   ) {}
-
-  // NOTE: must precede @Post(":id/...") routes so "timetable-group" isn't matched as an :id.
-  /** Skip every meeting in the timetable group of `:sessionId`, regardless of time. */
-  @Post("timetable-group/:sessionId/skip")
-  async skipTimetableGroup(
-    @Param("sessionId") sessionId: string,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.skipTimetableGroup(
-      sessionId,
-      false,
-      user,
-    );
-    return {
-      success: true,
-      message: `Skipped ${data.skippedSessionIds.length} sessions`,
-      data,
-    };
-  }
-
-  /** Skip `:sessionId` and every later meeting in its timetable group. */
-  @Post("timetable-group/:sessionId/skip/from")
-  async skipTimetableGroupFrom(
-    @Param("sessionId") sessionId: string,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.skipTimetableGroup(
-      sessionId,
-      true,
-      user,
-    );
-    return {
-      success: true,
-      message: `Skipped ${data.skippedSessionIds.length} sessions`,
-      data,
-    };
-  }
 
   // NOTE: must precede @Post(":id/...") routes so "placement" isn't matched as an :id.
   /** Apply a plan the scheduler asked to confirm (ADR-0022). Atomic. */
@@ -106,7 +75,84 @@ export class SessionsController {
     return { success: true, message: "Session created", data };
   }
 
+  /** Revert the newest undoable change, whatever its group. */
+  @Post("undo-latest")
+  async undoLatest(@CurrentUser() user: User) {
+    const data = await this.placementPlans.undoLatest(user);
+    return {
+      success: true,
+      message: `Restored ${data.restored.length} session(s)`,
+      data,
+    };
+  }
+
+  /** Preview a replan of the range. Nothing changes until `replan/confirm`. */
+  @Post("replan")
+  async replan(@Body() dto: ReplanDto, @CurrentUser() user: User) {
+    const data = await this.replans.plan(user, dto.from, dto.to, dto.change);
+    return { success: true, message: "Replan proposed", data };
+  }
+
+  /** Apply the replan for the range; it is recomputed, so it can differ from the preview. */
+  @Post("replan/confirm")
+  async confirmReplan(@Body() dto: ReplanDto, @CurrentUser() user: User) {
+    const data = await this.replans.apply(user, dto.from, dto.to, dto.change);
+    return { success: true, message: "Replan applied", data };
+  }
+
+  /** Up to 50 sessions in one call (`dryRun` previews), each created or proposed on its own. */
+  @Post("bulk")
+  @AllowApiToken()
+  async bulkCreate(
+    @Body() dto: BulkCreateSessionsDto,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.bulkCreate(dto, user);
+    const created = data.results.filter((r) => r.status === "CREATED").length;
+    return {
+      success: true,
+      message: data.dryRun
+        ? `Proposed ${data.results.length} sessions`
+        : `Created ${created} of ${data.results.length} sessions`,
+      data,
+    };
+  }
+
+  /** Up to 50 deletions in one call: sessions, recurring series or timetable groups. */
+  @Post("bulk-delete")
+  @AllowApiToken()
+  async bulkDelete(
+    @Body() dto: BulkDeleteSessionsDto,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.bulkDelete(dto, user);
+    const gone = data.results.filter((r) => r.status === "DELETED").length;
+    return {
+      success: true,
+      message: data.dryRun
+        ? `Previewed ${data.results.length} deletions`
+        : `Deleted ${gone} of ${data.results.length} items`,
+      data,
+    };
+  }
+
+  /** Up to 50 session patches in one call. */
+  @Post("bulk-update")
+  async bulkUpdate(
+    @Body() dto: BulkUpdateSessionsDto,
+    @CurrentUser() user: User,
+  ) {
+    const data = await this.sessionsService.bulkUpdate(dto, user);
+    const done = data.results.filter((r) => r.status === "UPDATED").length;
+    return {
+      success: true,
+      message: `Updated ${done} of ${data.results.length} sessions`,
+      data,
+    };
+  }
+
   @Get()
+  @AllowApiToken()
   async list(@Query() dto: ListSessionsDto, @CurrentUser() user: User) {
     const data = await this.sessionsService.list(dto, user);
     return {
@@ -114,6 +160,40 @@ export class SessionsController {
       message: `Found ${data.sessions.length} sessions`,
       data,
     };
+  }
+
+  // NOTE: must precede @Get(":id") so "recap" isn't matched as an :id.
+  @Get("recap")
+  async recap(@Query() dto: InsightRangeDto, @CurrentUser() user: User) {
+    const { sessions } = await this.sessionsService.list(
+      plainToInstance(ListSessionsDto, dto),
+      user,
+    );
+    const data = buildRecap(
+      sessions,
+      dto.from,
+      dto.to,
+      user.timezone,
+      user.preferenceMatrix,
+    );
+    return { success: true, message: "Recap", data };
+  }
+
+  // NOTE: must precede @Get(":id") so "free-slots" isn't matched as an :id.
+  @Get("free-slots")
+  async freeSlots(@Query() dto: FreeSlotsDto, @CurrentUser() user: User) {
+    const { sessions } = await this.sessionsService.list(
+      plainToInstance(ListSessionsDto, { from: dto.from, to: dto.to }),
+      user,
+    );
+    const data = findFreeSlots(
+      sessions,
+      dto.from,
+      dto.to,
+      dto.durationMinutes,
+      user.timezone,
+    );
+    return { success: true, message: "Free slots", data };
   }
 
   // NOTE: must precede @Get(":id") so "suggestions" isn't matched as an :id.
@@ -130,17 +210,6 @@ export class SessionsController {
     };
   }
 
-  // NOTE: must precede @Get(":id") so "search" isn't matched as an :id.
-  @Get("search")
-  async search(@Query() dto: SearchSessionsDto, @CurrentUser() user: User) {
-    const data = await this.searchService.search(dto, user);
-    return {
-      success: true,
-      message: `Found ${data.sessions.length} sessions`,
-      data,
-    };
-  }
-
   // NOTE: must precede @Get(":id") so "deadline-options" isn't matched as an :id.
   @Get("deadline-options")
   deadlineOptions(@Query() dto: DeadlineOptionsDto, @CurrentUser() user: User) {
@@ -149,6 +218,7 @@ export class SessionsController {
   }
 
   @Get(":id")
+  @AllowApiToken()
   async findOne(@Param("id") id: string, @CurrentUser() user: User) {
     const data = await this.sessionsService.findById(id, user);
     return { success: true, message: "Found session", data };
@@ -178,42 +248,6 @@ export class SessionsController {
   ) {
     const data = await this.sessionsService.slotPick(id, dto, user);
     return { success: true, message: "Slot pick recorded", data };
-  }
-
-  @Post(":id/skip")
-  async skip(
-    @Param("id") id: string,
-    @Query() query: SkipScopeDto,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.setSkip(
-      id,
-      true,
-      user,
-      query.scope,
-    );
-    return { success: true, message: "Session skipped", data };
-  }
-
-  @Delete(":id/skip")
-  async unskip(
-    @Param("id") id: string,
-    @Query() query: SkipScopeDto,
-    @CurrentUser() user: User,
-  ) {
-    const data = await this.sessionsService.setSkip(
-      id,
-      false,
-      user,
-      query.scope,
-    );
-    return { success: true, message: "Skip undone", data };
-  }
-
-  @Post(":id/start")
-  async start(@Param("id") id: string, @CurrentUser() user: User) {
-    const data = await this.sessionsService.recordStart(id, user);
-    return { success: true, message: "Start recorded", data };
   }
 
   // NOTE: must precede @Delete(":id") so "series" isn't matched as an :id.

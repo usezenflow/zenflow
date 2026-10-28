@@ -3,7 +3,6 @@ import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FinishSetupCard } from "@/components/settings/finish-setup-card";
 import { ProfileRow } from "@/components/settings/profile-row";
-import { TagsRow } from "@/components/settings/tags-row";
 import { API, testUser } from "@/test/msw/handlers";
 import { server } from "@/test/msw/server";
 import { renderScreen } from "@/test/utils/render";
@@ -117,53 +116,3 @@ describe("FinishSetupCard", () => {
   });
 });
 
-describe("TagsRow", () => {
-  let bulk: { names: string[] }[];
-  beforeEach(() => {
-    bulk = [];
-    server.use(
-      http.get(`${API}/tags`, () =>
-        HttpResponse.json({ data: { tags: [{ id: "1", name: "Study" }, { id: "2", name: "Exam" }] } }),
-      ),
-      http.post(`${API}/tags/bulk`, async ({ request }) => {
-        const body = (await request.json()) as { names: string[] };
-        bulk.push(body);
-        return HttpResponse.json({ data: { tags: body.names.map((name, i) => ({ id: `n${i}`, name })) } });
-      }),
-    );
-  });
-
-  it("shows how many tags the user has", async () => {
-    renderScreen(<TagsRow />);
-    await waitFor(() => expect(screen.getByText("2")).toBeTruthy());
-  });
-
-  it("posts only the newly ticked tags and updates the count", async () => {
-    renderScreen(<TagsRow />);
-    await waitFor(() => expect(screen.getByText("2")).toBeTruthy());
-    fireEvent.click(screen.getAllByText("Tags")[1]);
-    fireEvent.click(await screen.findByText("Lab"));
-    fireEvent.click(screen.getByText("Save"));
-    await waitFor(() => expect(bulk).toEqual([{ names: ["Lab"] }]));
-    await waitFor(() => expect(screen.getByText("3")).toBeTruthy());
-  });
-
-  it("makes no request when nothing new is ticked", async () => {
-    renderScreen(<TagsRow />);
-    await waitFor(() => expect(screen.getByText("2")).toBeTruthy());
-    fireEvent.click(screen.getAllByText("Tags")[1]);
-    fireEvent.click(await screen.findByText("Save"));
-    await new Promise((r) => setTimeout(r, 50));
-    expect(bulk).toEqual([]);
-  });
-
-  it("toasts when saving tags fails", async () => {
-    server.use(http.post(`${API}/tags/bulk`, () => HttpResponse.json({}, { status: 500 })));
-    renderScreen(<TagsRow />);
-    await waitFor(() => expect(screen.getByText("2")).toBeTruthy());
-    fireEvent.click(screen.getAllByText("Tags")[1]);
-    fireEvent.click(await screen.findByText("Lab"));
-    fireEvent.click(screen.getByText("Save"));
-    await waitFor(() => expect(screen.getAllByText("Couldn't save tags").length).toBeGreaterThan(0));
-  });
-});

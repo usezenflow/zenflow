@@ -113,7 +113,7 @@ Host zenflow-deploy
   IdentitiesOnly yes
 ```
 
-Check it with `ssh zenflow 'sudo -v && docker ps'` and `ssh zenflow-deploy docker ps`. The map push scripts use `admin@zenflow` ([maps.md](maps.md)).
+Check it with `ssh zenflow 'sudo -v && docker ps'` and `ssh zenflow-deploy docker ps`.
 
 ## Record it
 

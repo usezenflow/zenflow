@@ -1,7 +1,6 @@
 import { Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { fromZonedTime } from "date-fns-tz";
-import { DEFAULT_REMINDER_MINUTES } from "@zenflow/shared";
 import {
   Prisma,
   type Notification,
@@ -12,7 +11,6 @@ import { PREP_QUEUE, prepJobId } from "../queue/queues";
 import { QueueService } from "../queue/queue.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { insertFixedSession } from "../sessions/fixed-session-writer";
-import { TagsService } from "../tags/tags.service";
 import { monthsFrom, resolveSemester } from "./core/semester";
 import { digestNotifications, SyncDigest } from "./core/sync-digest";
 import { prepTargetOf } from "./core/prep-target";
@@ -28,7 +26,6 @@ import {
   ingestionReconcileDeleted,
 } from "../observability/metrics";
 import { NotificationEvent } from "../notifications/types";
-import { CommuteDefaultsService } from "../commute/commute-defaults.service";
 import { SyncConflictsService } from "./sync-conflicts.service";
 
 /** Which DLU system a batch of blocks came from. */
@@ -57,16 +54,6 @@ export interface MaterializeOutcome {
 export interface ReconcileOutcome {
   /** Soft-deleted because a fetch no longer lists them. */
   deleted: number;
-}
-
-/**
- * Tag names to hang on the session. Today that is the LMS course's full name
- * (portal timetable blocks carry their section metadata in `note`/`location`
- * instead) — an empty list for anything without one.
- */
-function tagNamesOf(block: ParsedBlock): string[] {
-  const course = (block as Partial<ParsedLmsItem>).lmsCourse;
-  return course ? [course.fullName] : [];
 }
 
 /** A created/updated block as a digest entry. */
@@ -106,6 +93,20 @@ function submittedAtOf(block: ParsedBlock, now: Date): Date | null {
   return (block as Partial<ParsedLmsItem>).submitted ? now : null;
 }
 
+/**
+ * The exam fields of a portal exam; all null for every other block. Not part of
+ * `differsFromUpstream`: a format, credits or retake change alone should not
+ * announce an update, and an existing exam picks them up on its next real change.
+ */
+function examFieldsOf(block: ParsedBlock) {
+  const exam = block as Partial<ParsedPortalItem>;
+  return {
+    examFormat: exam.examFormat ?? null,
+    examCredits: exam.examCredits ?? null,
+    examRetake: exam.examRetake ?? null,
+  };
+}
+
 function differsFromUpstream(
   existing: ComparableSession,
   block: ParsedBlock,
@@ -132,6 +133,9 @@ const EXISTING_SESSION_SELECT = {
   title: true,
   note: true,
   location: true,
+  examFormat: true,
+  examCredits: true,
+  examRetake: true,
   durationMinutes: true,
   scheduledStartTime: true,
   deleted: true,
@@ -171,12 +175,10 @@ export class MaterializerService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tagsService: TagsService,
     private readonly notifications: NotificationsService,
     private readonly queues: QueueService,
     config: ConfigService,
     @Optional() private readonly syncConflicts?: SyncConflictsService,
-    @Optional() private readonly commuteDefaults?: CommuteDefaultsService,
   ) {
     this.dluTz = config.get<string>("DLU_TZ") ?? "Asia/Ho_Chi_Minh";
   }
@@ -247,10 +249,6 @@ export class MaterializerService {
     }
 
     if (!digest) await this.flushDigest(userId, runDigest, now);
-
-    // New or moved rows may name a campus place: give them the home commute.
-    if (outcome.created + outcome.updated > 0)
-      void this.commuteDefaults?.applyQuietly(userId);
 
     // `unchanged` / total ≈ how much of the run was redundant re-work (the
     // thing a cache on this path would save). `source` is portal|lms.
@@ -489,11 +487,6 @@ export class MaterializerService {
     try {
       let newId: string | null = null;
       await this.prisma.$transaction(async (tx) => {
-        const tagIds = await this.tagsService.resolveTagIds(
-          tx,
-          userId,
-          tagNamesOf(block),
-        );
         const row = await insertFixedSession(tx, {
           userId,
           type: block.type,
@@ -501,9 +494,9 @@ export class MaterializerService {
           title: block.title,
           note: block.note,
           location: block.location,
+          ...examFieldsOf(block),
           durationMinutes: block.durationMinutes,
           scheduledStartTime: block.scheduledStartTime,
-          tagIds,
           externalKey: block.externalKey,
           scheduleStudyUnitId: (block as Partial<ParsedPortalItem>)
             .scheduleStudyUnitId,
@@ -512,19 +505,6 @@ export class MaterializerService {
           submittedAt: submittedAtOf(block, now),
         });
         newId = row.id;
-
-        // Same default reminder as an in-app task (0 = none).
-        const owner = await tx.user.findUnique({
-          where: { id: userId },
-          select: { defaultReminderMinutes: true },
-        });
-        const reminderMinutes =
-          owner?.defaultReminderMinutes ?? DEFAULT_REMINDER_MINUTES;
-        if (reminderMinutes > 0) {
-          await tx.sessionReminder.create({
-            data: { sessionId: row.id, remindBeforeMinutes: reminderMinutes },
-          });
-        }
       });
       return newId;
     } catch (error) {
@@ -553,7 +533,7 @@ export class MaterializerService {
    * `SessionReminder.sessionId` rows pointing at it, and announce every
    * student's entire timetable as cancelled and re-created.
    *
-   * Renaming in place instead keeps the row id, its tags and its reminders, and
+   * Renaming in place instead keeps the row id and its reminders, and
    * raises nothing: the row then goes through the ordinary diff, so it is
    * reported `unchanged` unless the payload genuinely differs too. A
    * soft-deleted legacy row is renamed as well, so "the student deleted this
@@ -571,6 +551,9 @@ export class MaterializerService {
     title: string;
     note: string | null;
     location: string | null;
+    examFormat: string | null;
+    examCredits: number | null;
+    examRetake: boolean | null;
     durationMinutes: number;
     scheduledStartTime: Date | null;
     deleted: boolean;
@@ -622,6 +605,7 @@ export class MaterializerService {
         title: block.title,
         note: block.note,
         location: block.location,
+        ...examFieldsOf(block),
         durationMinutes: block.durationMinutes,
         scheduledStartTime: block.scheduledStartTime,
       },

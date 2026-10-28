@@ -172,17 +172,3 @@ export function endOfPeriod(
 ): Date {
   return periodRange(anchor, view, timezone, work).end;
 }
-
-/** Walk backwards from `dateStr` (inclusive) to the nearest work day. */
-export function lastWorkdayOnOrBefore(
-  dateStr: string,
-  workDays: number[],
-  floorStr: string,
-): string {
-  let cur = dateStr;
-  for (let i = 0; i < 14 && cur >= floorStr; i++) {
-    if (workDays.includes(isoWeekday(cur))) return cur;
-    cur = addDaysStr(cur, -1);
-  }
-  return dateStr; // fallback: caller still bounds by deadline / capacity
-}

@@ -21,7 +21,7 @@ For readers from traditional ML. Each entry says what the term means here.
 - **Bandit.** A decision problem where you pick one action per round and observe the reward only for that action. Here the action is a start slot for a study block.
 - **Contextual bandit.** A bandit where each round comes with features (the context) that describe the options. Here the context describes each candidate day.
 - **Arm.** One action choice in the bandit. In the six-band model an arm is a band of the day (morning, midday, and so on). In the hour model an arm is one start hour (24 arms).
-- **Reward.** The signal after a placement. Here a start is +1, a move is negative in proportion to how far the block moved, and an offer pick is a smaller positive or negative value.
+- **Reward.** The signal after a placement. Here a block left in place (KEPT) is +1, whether or not the student started it. A move is negative in proportion to how far the block moved, and an offer pick is a smaller positive or negative value. Production does not teach LinUCB from deletes yet (`DELETE_REWARD_ENABLED = false`, [ADR-0043](../adr/0043-delete-signal.md)), and the eval's LinUCB arms follow that. The heuristic arm takes a delete through its `delete_weight` setting.
 - **Exploration and exploitation.** Exploitation picks the arm with the best estimate. Exploration picks arms that are uncertain, so the learner gains information. The bonus for uncertainty below is how the method explores.
 - **Cold start.** Behaviour before any data. The prior decides it.
 
@@ -99,10 +99,22 @@ Names are explicit. Code names are in parentheses where they differ.
 One student lives through one 15-week semester. Every method sees the same semester and the same random draws.
 
 - **Timetable.** A weekly lecture timetable. Weeks 7 and 8 keep morning lectures only. Weeks 14 and 15 have none.
+- **Personal commitments (DND).** Each student keeps some recurring blocks clear, as production's DND blocks do. Prevalence, timing and length are assumptions, not survey data. Each student draws which apply, their weekdays and a habitual start and length, and each occurrence jitters by about 10 minutes and is skipped 10% of the time.
+  - **Nap:** 35% of students, daily, 20 to 45 minutes, starting 12:00 to 15:00.
+  - **Workout:** 50%, 2 to 4 days a week, 45 to 90 minutes, mornings (6:00 to 8:00) or evenings (17:00 to 19:30).
+  - **Weekend break:** 60%, one weekend day a week, 3 to 6 hours, starting 10:00 to 14:00.
+  - **Part-time job:** 15%, 2 to 3 weekdays, 4 to 5 hours, starting 9:00 to 13:00.
+  - **Dinner:** 80%, daily, 45 to 75 minutes, starting 18:00 to 19:30.
+  - **Club or society:** 25%, one evening a week, 1.5 to 2 hours, starting 17:00 to 20:00.
+
+  DND blocks stop a start from being placed in them. They do not change a student's start chance or the fatigue from lectures.
 - **Courses and tasks.** 4 to 6 courses, each with 10 to 15 assignments, plus 4 to 6 exams. Each assignment or exam gets one prep block, sized as the production app sizes it.
 - **Student.** Peak hour (chronotype), willingness to start, extra willingness close to a deadline, and a chance to answer offers (30% never do).
 - **Start chance.** The start probability is the willingness times how well the hour fits the student's curve, times a factor for recent lectures, times a factor for the weekend, times the deadline boost. A block starts when a fixed random draw falls under that probability.
-- **Signals.** Two signals reach the learner: a start, and an offer answer. These match the production signals.
+- **Signals.** The learner hears KEPT for a block left in place, MOVE when the student drags it, and an offer answer. These match the production signals. KEPT stands in for a start only in the sense that the block was not changed; whether it was started is latent and never shown to the learner.
+- **Reward v2 terms (ADR-0045), removed from the arms on 27 Oct 2026.** Until then the `Lv2-*` arms added a delete term (D), a move-destination term (M) and a hand-made block term (C), tested on seeds 800 to 1199. On 28 Oct 2026 the `Lv2-*` arms were rebuilt: `v2_kept`, `v2_delete` and `v2_move` set their values (1, -0.2 and 0.5 by default). The create term is gone. The letters select the terms (`Lv2-D` for deletes, `Lv2-M` for move destination).
+  - The simulator still has the knobs behind those terms: `delete_slot` and `delete_noise` set how deletes happen, and `create_share` and `create_fit` set how hand-made blocks happen. Both are described in section 5.
+  - Drag is off in the headline world (`drag` 0), so moves never occur there. The signal world sets `drag` 0.3.
 - **Two placement paths.** H, H+K and L24N production run through the production placer (`run_place` in `evalx/run.py`). L24, L24K and the L24N reference run offline in `evalx/hourly.py`, which has no series, displacement, last-resort or 409 rules.
 
 Full equations are in [section 5](#5-formal-model).
@@ -111,11 +123,17 @@ Full equations are in [section 5](#5-formal-model).
 
 | Measure | Definition | Tag |
 |---|---|---|
-| **Adherence** | Share of a student's tasks started. Unplaced tasks count as not started. Averaged over students. | MAIN |
+| **Adherence** | Share of a student's tasks started. Unplaced and deleted tasks count as not started. Averaged over students. Its denominator is all tasks, so it differs from kept, whose denominator is placed proposals. | MAIN |
+| **Deleted** | Share of a student's tasks deleted before they started. Zero unless delete scoring is on. | APPX |
 | **Hours before deadline** | Block end to deadline, averaged over placed blocks. | MAIN |
 | **Last-day share** | Share of placed blocks ending within 24 hours of the deadline, over tasks with a window of 3 days or more. | MAIN |
 | **Conflict free** | Share of placed blocks clear of lectures and earlier blocks. | APPX |
-| **Regret** | Sum of the Oracle's start chance minus the method's, per student. | APPX |
+| **Regret** | Mean over placed blocks (proposals) of the best free start's done chance minus the proposed start's done chance. Per proposal, as in the heuristic vs LinUCB report. | MAIN |
+| **Kept** | Share of proposals neither moved nor deleted. Deleted proposals count as not kept. | MAIN |
+| **Drag** | Minutes moved per proposal, averaged over proposals. A kept proposal counts as 0. | MAIN |
+| **Proposals to 60% / 90%** | First proposal number n >= 10 where at least 60% (or 90%) of proposals n-9..n were kept, else the placement count. Averaged over students. | MAIN |
+| **Regret, first 10 / 40+** | Regret over proposals 1 to 11, and over proposals 42 on. | APPX |
+| **Hours before deadline** | Per-proposal lead time, averaged over placed blocks. It must not shrink for a candidate. | MAIN |
 | **Worse share** | Share of students whose adherence is lower under the second method. | MAIN |
 | **Events** | Starts and moves per student. | DROP |
 
@@ -132,6 +150,10 @@ $$\phi(s)=1-0.5\min\!\big(1,\tau/300\big),\qquad \tau=\text{lecture minutes in t
 $$p(s)=\min\!\Big(1,\;\alpha_i\,\mathrm{fit}(s)\,\phi(s)\cdot 0.7^{[\text{weekend}]}\cdot(1+\iota_i)^{[T-s\le 2\text{ days}]}\Big)$$
 
 The student starts when $u<p(s)$, with $u\sim U(0,1)$ fixed per task and shared by every method.
+
+**In plain words.** $\mathrm{fit}(s)$ is how well an hour suits the student: 1 at their peak hour, falling off like a bell about 2.5 hours wide, never below 0.05, and ten times lower between 23:00 and 06:00. $\phi(s)$ halves the chance when 5 hours of lectures fall just before the slot. The weekend factor 0.7 lowers the chance on weekends. Near the deadline, the boost $\iota_i$ raises the chance by up to double. The chance is capped at 1.
+
+With delete scoring on, a placed block that was never moved is deleted when $u_{\rm del}<p_{\rm del}(s)=\delta_0+\delta_1(1-\mathrm{fit}(s))$. Here $\delta_0$ is `delete_noise`, $\delta_1$ is `delete_slot`, and $\mathrm{fit}(s)\in[0,1]$ is how well the hour suits the student. $u_{\rm del}$ is a second draw per task, shared by every method. A deleted block is not started. Students can move and delete placed plans, including exam and assignment prep. Synced timetable items, exams and assignments are fixed and never moved or deleted. With both knobs at 0, no block is deleted.
 
 | Trait | Draw |
 |---|---|
@@ -182,10 +204,17 @@ $f_{\mathrm{before}}$ and $f_{\mathrm{after}}$ are the free minutes to the previ
 | 500 to 509 | Production check | Spent. |
 | 500 to 599 | Main comparison | Spent. |
 | 600 to 699 | Floor and ceiling | Spent. |
-| 700 to 799 | Ladder and robustness | Spent. Latest held-out check. Re-run 23 Oct 2026. |
-| 800 and up | Next held-out check | Free. Not yet used. |
+| 700 to 799 | Ladder and robustness | Spent. Re-run 23 Oct 2026. |
+| 800 to 899 | Reward v2 ladder, coupling checks | Spent 26 Oct 2026. The ladder ran first, then the coupling checks on the same seeds, so the checks are diagnostics. |
+| 900 to 999 | Delete scoring (ADR-0043) | Spent. |
+| 1000 to 1099 | Reward v2 robustness | Spent 26 Oct 2026. |
+| 1100 to 1199 | Benchmark of the old arms in two KEPT worlds | Spent 26 Oct 2026. |
+| 1200 to 1299 | L6, the L24 family and the candidate, heuristic metrics | Spent 26 Oct 2026. |
+| 1300 to 1399 | Production-signal rerun: H, H+K, L6 and the L24 family | Spent 27 Oct 2026. |
+| 1400 to 1499 | Signal values: KEPT 1, 0.5 and 0.25, delete -0.2, move destination 0.5 | Spent 28 Oct 2026. |
+| 1500 and up | Next held-out check | Free. |
 
-A seed used for a decision is spent. A change made after a held-out check needs a new held-out block.
+A seed used for a decision is spent. A change made after a held-out check needs a new held-out block. Diagnostics run on a block after its ladder count as spent for decisions.
 
 ### Ship rule
 
@@ -195,12 +224,16 @@ Pre-registered. Applied per candidate against its direct predecessor:
 2. The worse share does not rise.
 3. Every robustness world's lower bound is above −1.0 points.
 4. `place` p95 under 1 ms (`evalx.bench`).
+5. Hours before deadline does not shrink (lead time), in the headline world and in every robustness world.
+6. A signal candidate (deletes, hand-made blocks, or move destination) also passes rules 1 and 2 with its circular links cut: deletes independent of slot quality (`delete_slot` 0, `delete_noise` 0.3), and hand-made blocks at a random free hour (`create_fit` 0). A candidate whose gain disappears when its circular links are cut is not shipped.
 
 A variant that misses rule 1 is dropped. It is not re-tuned on the same seeds.
 
+Rules 5 and 6 were added on 26 Oct 2026, after the reward v2 ladder on seeds 800 to 899 had been run. The reward v2 decision applies them. Any later candidate is judged against all six rules on a new held-out block.
+
 ## 8. Robustness worlds
 
-Each world changes one assumption, or a named combination, from the headline. Each is run with L24N against H+K, on tuning seeds 100 to 109 and held-out seeds 700 to 799.
+Each world changes one assumption, or a named combination, from the headline. Earlier runs compared L24N with H+K on seeds 100 to 109 and 700 to 799. The reward v2 robustness check (seeds 1000 to 1099, 20 students per seed) runs the 15 worlds below with `drag` 0.3 and `delete_slot` 0.3 on top, and compares the candidate with L (rule 3 is applied to that comparison). The move-only arm was checked in the same worlds.
 
 | World | Config | What it tests | Type |
 |---|---|---|---|
@@ -240,7 +273,19 @@ uv run python -m evalx.figures --out <run dir> --paper ../../docs/scheduler/figu
 The `L` arm means production in archives from 23 Oct 2026 and six-band L6 in the historical archive.
 
 - `--seeds N --seed-offset K` runs seeds $K$ to $K+N-1$. `--students` is per seed.
-- `--config` takes a JSON object of settings: `kernel_sd`, `kernel_pool`, `timing`, `detect`, `false_start`, `delay`, `drift`, `discount`, `shape`, `chrono`, `attention_scale`, `opens_shift`, `opens_uninformative`, `fatigue_scale`.
+- `--config` takes a JSON object of settings: `kernel_sd`, `kernel_pool`, `timing`, `detect`, `false_start`, `delay`, `drift`, `discount`, `shape`, `chrono`, `attention_scale`, `opens_shift`, `opens_uninformative`, `fatigue_scale`, and for reward v2 `drag`, `delete_slot`, `delete_noise`, `create_share`, `create_fit`, `v2_kept`, `v2_delete`, `v2_move`, `v2_create`.
+- `python -m evalx.proposal summary --parts <parts dir> --arms A,B --pairs A:B,C:D` prints the proposal metrics and paired contrasts for one run. `--by chrono` splits by chronotype. `python -m evalx.proposal robust --out <dir> --arms ... --pairs ... --config ...` runs the 15 reality worlds and prints their contrasts. Finished seeds are reused.
+- Signal value runs (cwd `services/bandit`, seeds 1400 to 1499): the `v2_kept`, `v2_delete` and `v2_move` settings in `run.CFG` set the values. For example, `--arms Lv2-K --config '{"v2_kept":0.5}'`. Arms: `Lv2-K` (KEPT), `Lv2-D` (delete), `Lv2-M` (move destination), `Lv2-DM`.
+- Reward v2 commands (cwd `services/bandit`). These ran before 27 Oct 2026. Since then `Lv2-*` arms equal `L`, so these commands no longer test reward v2 terms:
+
+  ```bash
+  uv run python -m evalx run --seeds 100 --seed-offset 100 --students 100 --arms Lv2-KDMC --config '{"drag":0.3,"delete_slot":0.3}'   # tuning, one weight at a time
+  uv run python -m evalx run --seeds 100 --seed-offset 800 --students 100 --arms H,H+K,L,Lv2-KD,Lv2-KDM,Lv2-KDMC,Lv2-DMC,Oracle,Rand --config '{"drag":0.3,"delete_slot":0.3}'
+  uv run python -m evalx run --seeds 100 --seed-offset 800 --students 100 --arms H,H+K,L,Lv2-KDMC --config '{}'                              # no signal world
+  uv run python -m evalx run --seeds 100 --seed-offset 800 --students 100 --arms H+K,L,Lv2-KD,Lv2-KDM,Lv2-KDMC,Lv2-DMC --config '{"drag":0.3,"delete_slot":0.0,"delete_noise":0.3}'   # decoupled deletes
+  uv run python -m evalx run --seeds 100 --seed-offset 800 --students 100 --arms L,Lv2-KD,Lv2-KDM,Lv2-KDMC --config '{"drag":0.3,"delete_slot":0.3,"create_fit":0.0}'          # random hand-made blocks
+  uv run python -m evalx.proposal robust --out <dir> --arms L,Lv2-KDMC --pairs Lv2-KDMC:L --seeds 100 --students 20 --seed-offset 1000 --config '{"drag":0.3,"delete_slot":0.3}'
+  ```
 - Outputs go to `services/bandit/evalx/out/` (ignored by git). `--out <dir>` redirects them.
 - Subcommands `sensitivity`, `deadline`, `heuristic`, `reality` and `misspec` run the older six-band sweeps. They are APPX.
 
@@ -260,4 +305,5 @@ The `L` arm means production in archives from 23 Oct 2026 and six-band L6 in the
 - L6's matrix term is inactive in production. Any claim about matrix smoothing applies to H only.
 - Fallback routing (displacement, last resort, 409) is out of scope for the offline arms. Production has it, and the gap is 0.6 points on seeds 600 to 699.
 - Kernel width was chosen on tuning seeds and is not re-tuned on held-out seeds.
-- L24N has not been timed. The `place` p95 check in the ship rule is still to run.
+- Placer timing: `evalx.bench` gave a `place` p95 of 1.04 to 1.07 ms for L on 26 Oct 2026, 20 students, in two runs. That is above the rule's 1 ms. Earlier archived runs gave 0.98 and 0.996 ms. The placer code was not changed in that work. The reference machine result is not yet recorded.
+- The reward v2 terms are not in the current arms. If they return, they are coupled to utility by construction (deletes, hand-made blocks, moves toward the peak). Rule 6 cuts those links, but a real student's behaviour can still differ from the simulator's.

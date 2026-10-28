@@ -5,7 +5,6 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 - Copy `.env.example` to `.env.{dev,staging,prod,test}`. All vars are validated at boot (`@hapi/joi`).
 - Connections are built from parts (host, port, user, password). No URL vars. Prisma's `DATABASE_URL` comes from `scripts/with-database-url.cjs`.
 - Any variable accepts `FOO_FILE=/path`. Explicit `FOO` wins (`src/common/config/file-secrets.ts`).
-- nginx `client_max_body_size` (`backend/nginx/nginx.{prod,staging}.conf`, 110m) must exceed `UPLOAD_MAX_FILES_PER_REQUEST` x `UPLOAD_MAX_FILE_BYTES` plus multipart overhead.
 - Secrets, rotation and Vault: [secrets.md](../ops/secrets.md). Deploys: [ci-cd.md](../ops/ci-cd.md).
 
 ## Core
@@ -26,17 +25,12 @@ For: developers and operators setting up the API. Source of truth: the Joi schem
 | `ALLOWED_EMAIL_DOMAINS` | unset | Comma-separated sign-in domains (subdomains pass). Unset: anyone. Set in `backend/env/prod.env` only. Enforced on OTP request, verify and every authenticated request, so other domains' sessions drop. Error `EMAIL_DOMAIN_NOT_ALLOWED`. |
 | `MASTER_LMS_ENCRYPTION_KEY_V1` / `MASTER_PORTAL_ENCRYPTION_KEY_V1` | none | Required. 64 hex chars (`openssl rand -hex 32`). Add `_V<n>` and set `MASTER_KEY_CURRENT_VERSION` to rotate. |
 | `MASTER_KEY_CURRENT_VERSION` | `1` | Master-key version used for new wraps; its `_V<n>` keys must exist. |
-| `FILE_URL_SECRET` | none | Required, 32+ chars. HMAC for signed file URLs. |
-| `S3_ENDPOINT` | none | Required. `http://storage:9000` in compose; `http://localhost:9000` for host `start:dev`. |
-| `S3_REGION` | `us-east-1` | |
-| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_BUCKET` | none | Required. Bucket must exist (compose creates it). |
-| `UPLOAD_TMP_DIR` | none | Optional upload buffer dir. |
-| `UPLOAD_MAX_FILE_BYTES` | 20971520 (20 MiB) | Largest file. Served by `GET /files/limits`. |
-| `UPLOAD_MAX_FILES_PER_REQUEST` | 5 | Files per `POST /files/upload`. |
-| `UPLOAD_USER_QUOTA_BYTES` | 157286400 (150 MiB) | Stored bytes per user. Quota x users must fit on disk with Postgres, telemetry and backups. |
+| `API_TOKEN_PEPPER_V<n>`, `API_TOKEN_PEPPER_CURRENT_VERSION` | `1` | Pepper for OAuth token HMACs and MCP plan tokens, 32+ chars. The current version hashes new tokens; older ones still verify until removed. Required in production. |
+| `PUBLIC_API_URL` | none | API base incl. `/api/v1`, e.g. `https://api.usezenflow.com/api/v1`. Turns on OAuth for AI assistants ([ADR-0041](../adr/0041-mcp-oauth.md)) and is where the assistant's browser page lives (`/oauth/connect`). |
+| `PUBLIC_WEB_URL` | first `CORS_ORIGIN` | The public website, advertised as the MCP server's `websiteUrl`. |
 
 | `PORT` | 8000 | |
-| `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` / `worker-scheduler` one consumer each, `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |
+| `ROLE` | `all` | `api` HTTP only, `watcher` enqueueing crons, `worker-portal` / `worker-lms` / `worker-notify` (push) / `worker-scheduler` one consumer each, `worker` watcher plus all consumers, `all` everything (dev, test). Non-HTTP roles serve `GET /health/live` on `WORKER_PORT` (5001). Prod and staging: `api` replicas, one `watcher`, `worker-*` ([ADR-0007](../adr/0007-bullmq-for-notification-queue.md), [ADR-0011](../adr/0011-separate-api-worker-processes.md)). |
 | `NODE_ENV` | `development` | `production` requires `BANDIT_SERVICE_URL` and turns Swagger (`/api`) off. |
 | `SWAGGER_ENABLED` | unset | `true` keeps Swagger on under `NODE_ENV=production` (staging only). |
 

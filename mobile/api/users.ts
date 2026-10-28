@@ -16,3 +16,20 @@ export async function updateBasicInfo(input: UpdateUserInput): Promise<User> {
   const { data } = await api.patch("/users/update/basic-info", input);
   return data.data;
 }
+
+/** Server copy of the palette blob and its ETag; null when the user has none. */
+export async function getPalette(): Promise<{ bytes: Uint8Array; etag: string } | null> {
+  const res = await api.get("/users/me/palette", { responseType: "arraybuffer" });
+  if (res.status === 204) return null;
+  return { bytes: new Uint8Array(res.data), etag: String(res.headers.etag) };
+}
+
+/** Replaces the blob if `etag` is still current ("0" for none); a 412 means refetch and merge. */
+export async function putPalette(bytes: Uint8Array, etag: string): Promise<string> {
+  const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const res = await api.put("/users/me/palette", body, {
+    headers: { "Content-Type": "application/octet-stream", "If-Match": etag },
+    transformRequest: [(d) => d],
+  });
+  return String(res.headers.etag);
+}

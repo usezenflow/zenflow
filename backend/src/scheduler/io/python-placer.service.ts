@@ -27,7 +27,11 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { MIN_ALTERNATIVE_GAP_MINUTES, SCAN_CAP_DAYS } from "../constants";
 import { DAY_MS, lastResortStart, MS_PER_MINUTE } from "../core/slot";
 import { ScheduleInfeasibleException } from "../schedule-infeasible.exception";
-import type { PlaceableTask, PlacementResult } from "../types/placement.types";
+import type {
+  PlaceableTask,
+  PlacementConstraint,
+  PlacementResult,
+} from "../types/placement.types";
 import { DisplacementService, type AppliedMove } from "./displacement.service";
 import { FallbackPlacer } from "./fallback-placer.service";
 import { PlacementGateway } from "./placement-gateway.service";
@@ -83,12 +87,14 @@ export class PythonPlacer {
     deadline: Date;
     now: Date;
     policy?: InfeasiblePolicy;
+    constraint?: PlacementConstraint;
   }): Promise<void> {
     const { user, deadline, now, policy } = args;
     const task: PlaceableTask = {
       id: args.taskId ?? PREFLIGHT_TASK_ID,
       durationMinutes: args.durationMinutes,
       deadline,
+      constraint: args.constraint,
     };
     const req = await this.gateway.buildRequest({
       user,
@@ -98,6 +104,7 @@ export class PythonPlacer {
       mode: "PREFLIGHT",
       maxScanDays: SCAN_CAP_DAYS,
       excludeSessionIds: args.taskId ? [args.taskId] : [],
+      constraint: task.constraint,
     });
     const res = await this.gateway.placeSingleTwoPhase(req, user, task, policy);
     if (!res.ok) {
@@ -118,6 +125,66 @@ export class PythonPlacer {
     // placement returns it as `needsConfirmation` (nothing is written here).
     if (placed(outcome) || policy || outcome === "NEEDS_CONFIRMATION") return;
     throw new ScheduleInfeasibleException();
+  }
+
+  /**
+   * The start a single `TASK` would get, without writing anything (the
+   * dry-run path). `startMs` is null when no slot fits. `needsConfirmation`
+   * is set when the plan would move a `CHOSEN` session.
+   */
+  async proposeSingle(args: {
+    user: User;
+    durationMinutes: number;
+    deadline: Date;
+    now: Date;
+    policy?: InfeasiblePolicy;
+    constraint?: PlacementConstraint;
+    prevStartMs?: number;
+    primaryPolicy?: PlacementPolicy;
+    excludeSessionIds?: string[];
+  }): Promise<{ startMs: number | null; needsConfirmation: boolean }> {
+    const { user, deadline, now, policy } = args;
+    const task: PlaceableTask = {
+      id: PREFLIGHT_TASK_ID,
+      durationMinutes: args.durationMinutes,
+      deadline,
+      constraint: args.constraint,
+      prevStartMs: args.prevStartMs,
+    };
+    const req = await this.gateway.buildRequest({
+      user,
+      member: this.memberOf(task, args.primaryPolicy ?? "HEURISTIC", false),
+      deadline,
+      now,
+      mode: "PREFLIGHT",
+      maxScanDays: SCAN_CAP_DAYS,
+      excludeSessionIds: args.excludeSessionIds ?? [],
+      constraint: task.constraint,
+    });
+    const res = await this.gateway.placeSingleTwoPhase(req, user, task, policy);
+    if (!res.ok) {
+      this.noteFallback(res.reason);
+      const start = await this.fallback.placeSingle(
+        user.id,
+        task,
+        user.timezone,
+        user.preferenceMatrix,
+        now,
+      );
+      return {
+        startMs: start ? start.getTime() : null,
+        needsConfirmation: false,
+      };
+    }
+    this.noteSource("python");
+    const r = res.response.result;
+    if (r.outcome === "NEEDS_CONFIRMATION") {
+      return { startMs: r.startMs, needsConfirmation: true };
+    }
+    return {
+      startMs: placed(r.outcome) ? r.startMs : null,
+      needsConfirmation: false,
+    };
   }
 
   // ---- single TASK -------------------------------------------------------
@@ -152,6 +219,7 @@ export class PythonPlacer {
       mode: "PLACE",
       maxScanDays: SCAN_CAP_DAYS,
       excludeSessionIds: [task.id],
+      constraint: task.constraint,
     });
     const res = await this.gateway.placeSingleTwoPhase(req, user, task, policy);
     if (!res.ok) {

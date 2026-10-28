@@ -14,12 +14,13 @@ describe("UpdateUserDto", () => {
       await errors({
         timezone: "Asia/Ho_Chi_Minh",
         lang: "vi",
-        defaultReminderMinutes: 30,
       }),
     ).toHaveLength(0);
     expect(await errors({})).toHaveLength(0);
     expect(await errors({ onboarded: true })).toHaveLength(0);
     expect(await errors({ allowNotifications: false })).toHaveLength(0);
+    expect(await errors({ defaultReminderMinutes: 10 })).toHaveLength(0);
+    expect(await errors({ defaultReminderMinutes: 0 })).toHaveLength(0);
   });
 
   it.each([
@@ -28,6 +29,8 @@ describe("UpdateUserDto", () => {
     { lang: "fr" },
     { defaultReminderMinutes: 7 },
     { defaultReminderMinutes: "10" },
+    { homeLocation: "Home" },
+    { defaultTransport: "BIKE" },
     { onboarded: false },
     { onboarded: "true" },
     { allowNotifications: "false" },

@@ -20,7 +20,7 @@ describe("mobile language", () => {
   it("translates explicit copy and preserves arbitrary user content", () => {
     setLanguage("vi");
     expect(t("Settings")).toBe("Cài đặt");
-    expect(t("Move {title}", { title: "Settings" })).toBe("Chuyển Settings");
+    expect(t("Synced {when}", { when: "Settings" })).toBe("Đã đồng bộ Settings");
     expect(t("My original note")).toBe("My original note");
     expect(locale()).toBe("vi-VN");
     setLanguage("en");

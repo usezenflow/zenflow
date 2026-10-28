@@ -1,5 +1,4 @@
 packages:
-  - "pwa"
   - "dashboard"
   - "backend"
   - "mobile"

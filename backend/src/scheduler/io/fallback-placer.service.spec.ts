@@ -23,6 +23,31 @@ describe("FallbackPlacer (frozen heuristic, ADR-0003)", () => {
     heuristic.placeTask.mockResolvedValue(null);
     const t = { id: "t", durationMinutes: 60, deadline };
     expect(await fb.placeSingle("u", t, tz, [], now)).toBeNull();
-    expect(heuristic.placeTask).toHaveBeenCalledWith("u", t, tz, [], now);
+    expect(heuristic.placeTask).toHaveBeenCalledWith(
+      "u",
+      t,
+      tz,
+      [],
+      now,
+      [],
+      undefined,
+    );
+  });
+
+  it("passes the task's notBefore and window to the heuristic", async () => {
+    const { fb, heuristic } = await make(jest.fn());
+    heuristic.placeTask.mockResolvedValue(null);
+    const constraint = { window: "MORNING" as const };
+    const t = { id: "t", durationMinutes: 60, deadline, constraint };
+    await fb.placeSingle("u", t, tz, [], now);
+    expect(heuristic.placeTask).toHaveBeenCalledWith(
+      "u",
+      t,
+      tz,
+      [],
+      now,
+      [],
+      constraint,
+    );
   });
 });

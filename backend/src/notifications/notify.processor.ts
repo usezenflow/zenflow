@@ -6,12 +6,10 @@ import { PushService } from "../devices/push.service";
 import { QueueWorkers } from "../queue/queue-workers.service";
 import { NOTIFY_QUEUE, type NotifyJobData } from "../queue/queues";
 import { withBreaker } from "../queue/with-breaker";
-import { ReminderSchedulerService } from "../reminders/reminder-scheduler.service";
 
 /**
  * The `notify` queue consumer (role `worker-notify`, `worker`, `all`):
- * `push` (one provider per job) -> {@link PushService}, `reminder` ->
- * {@link ReminderSchedulerService.fire}. Each handler throws on a real failure
+ * `push` (one provider per job) -> {@link PushService}. Each handler throws on a real failure
  * (BullMQ retries with backoff, then dead-letters) and returns normally when
  * there is nothing to send. Push providers run under the `fcm` / `apns` /
  * `web` breakers: when one is open the job is parked without using an attempt.
@@ -23,7 +21,6 @@ export class NotifyProcessor implements OnModuleInit {
   constructor(
     private readonly workers: QueueWorkers,
     private readonly push: PushService,
-    private readonly reminders: ReminderSchedulerService,
     private readonly breakers: OutboundBreakers,
     private readonly killSwitch: KillSwitchService,
   ) {}
@@ -36,8 +33,7 @@ export class NotifyProcessor implements OnModuleInit {
 
   async process(job: Job<NotifyJobData>, token?: string): Promise<void> {
     const data = job.data;
-    // Kill switch: drop the job (no retry). The reminder sweep and
-    // `reconcileRecent` re-arm anything still due once the flag is back on.
+    // Kill switch: drop the job (no retry).
     if (!(await this.killSwitch.isEnabled("notifications"))) {
       this.logger.warn(`notifications disabled, dropping job ${job.id}`);
       return;
@@ -55,11 +51,6 @@ export class NotifyProcessor implements OnModuleInit {
               queue: NOTIFY_QUEUE.name,
             }),
         });
-      case "reminder":
-        return this.reminders.fire(
-          data.reminderId,
-          new Date(data.startsAt).getTime(),
-        );
       default:
         this.logger.warn(`unknown notify job ${job.id}`);
     }

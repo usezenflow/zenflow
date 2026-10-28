@@ -11,12 +11,11 @@ import { Prisma, SessionEventType, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { wouldConflict } from "../scheduler/io/conflict-check";
 import { DisplacementService } from "../scheduler/io/displacement.service";
-import { RemindersService } from "../reminders/reminders.service";
 import { MS_PER_MINUTE } from "../scheduler/core/slot";
 import { CreateSessionDto } from "./dto/create-session.dto";
 import { SessionCrudService } from "./session-crud.service";
 import { toSessionDto } from "./session-mapper";
-import { WITH_TAGS_AND_SERIES, type SessionRow } from "./types/session-row";
+import { WITH_SERIES, type SessionRow } from "./types/session-row";
 import { PlacementStaleException } from "./placement-plan.exception";
 import { alternativeStartOf } from "./slot-pick.service";
 
@@ -49,7 +48,6 @@ export class PlacementPlanService {
     private readonly prisma: PrismaService,
     private readonly displacement: DisplacementService,
     private readonly crud: SessionCrudService,
-    private readonly reminders: RemindersService,
   ) {}
 
   async confirm(
@@ -170,24 +168,20 @@ export class PlacementPlanService {
         );
         placed = await tx.session.findFirstOrThrow({
           where: { id: subject.id },
-          include: WITH_TAGS_AND_SERIES,
+          include: WITH_SERIES,
         });
       } else {
-        const cleanTags = (createInput?.tags ?? [])
-          .map((t) => t.trim())
-          .filter(Boolean);
         const inserted = await this.crud.insertSingleTask(
           tx,
           user,
           createInput as CreateSessionDto,
-          cleanTags,
           new Date(createInput?.deadline as string),
           groupId,
         );
         placed = await tx.session.update({
           where: { id: inserted.id },
           data: { scheduledStartTime: plan.startAt },
-          include: WITH_TAGS_AND_SERIES,
+          include: WITH_SERIES,
         });
       }
       await this.runWrites(
@@ -202,17 +196,7 @@ export class PlacementPlanService {
       return placed;
     });
 
-    let session: SharedSession = toSessionDto(row);
-    if (!plan.subjectId && createInput) {
-      // A create gets the reminders its request asked for, as a direct create does.
-      const minutes = this.reminders.resolveForCreate(
-        createInput.type,
-        createInput.reminders,
-        user.defaultReminderMinutes,
-      );
-      const { applied } = await this.reminders.replace([row.id], minutes);
-      session = { ...session, reminders: applied };
-    }
+    const session: SharedSession = toSessionDto(row);
 
     return {
       session,
@@ -269,6 +253,25 @@ export class PlacementPlanService {
   /** Runs the writes of an interactive transaction in order. */
   private async runWrites(writes: PromiseLike<unknown>[]): Promise<void> {
     for (const w of writes) await w;
+  }
+
+  /**
+   * Reverts the group of the newest undoable event. shortcut: a reverted group
+   * is not marked, so a second call finds the same group and restores nothing;
+   * upgrade by flagging undone groups.
+   */
+  async undoLatest(user: User): Promise<UndoPlacementResponse> {
+    const latest = await this.prisma.sessionEvent.findFirst({
+      where: {
+        userId: user.id,
+        groupId: { not: null },
+        eventType: { in: UNDOABLE_EVENT_TYPES },
+      },
+      orderBy: { occurredAt: "desc" },
+      select: { groupId: true },
+    });
+    if (!latest?.groupId) throw new NotFoundException("Nothing to undo");
+    return this.undo(user, latest.groupId);
   }
 
   /**

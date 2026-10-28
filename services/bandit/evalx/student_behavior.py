@@ -1,11 +1,13 @@
-"""A passive student: starts what is placed when it suits them, taps offers or not.
+"""A passive student: completes what is placed when it suits them, answers
+prompts or not.
 
-Students do not create tasks, drag blocks or tick boxes. Two signals reach the
-learner: a START inside a placed block, and the keep or try pick on a pairwise
-offer. Every number here is an assumption, drawn per student so the report shows
-a spread rather than one tuned setting.
+Students do not create tasks or tick boxes. Three signals reach the learner: a
+placed block whose slot passes unmoved is KEPT, a dragged block is a MOVE, and
+the keep or try pick on a pairwise offer is a tap. Every number here is an
+assumption, drawn per student so the report shows a spread rather than one
+tuned setting.
 
-The chance to start a block is ``attention`` scaled by four factors:
+The chance to complete a block is ``attention`` scaled by four factors:
   circadian   a bump around the chronotype's peak hour
   fatigue     lower right after a long run of lectures
   quiet       near zero overnight
@@ -13,9 +15,12 @@ The chance to start a block is ``attention`` scaled by four factors:
 ``drag`` is 0 for the headline; a positive value lets the student move a block
 that starts at a poor hour, and exists only as an ablation.
 
+Whether the student completes a block is the latent outcome the metrics read;
+the learner never sees it. It hears only that the block was kept or moved.
+
 Two reality knobs default to the headline student. ``timing`` (1 to 0) pulls the
 circadian bump toward its daily mean, so the hour matters less to a lazy student
-while the average start chance stays put. ``shifts``
+while the average completion chance stays put. ``shifts``
 moves the peak hour over the semester (routine drift).
 """
 
@@ -65,7 +70,7 @@ class PassiveStudent:
     name: str
     chronotype: str
     peak_h: float
-    attention: float  # base chance to start a well-timed block, 0..1
+    attention: float  # base chance to complete a well-timed block, 0..1
     imminence: float  # extra factor when the deadline is close, 0..1
     respond: float  # chance to act on a pairwise offer, 0 for an ignorer
     drag: float = 0.0
@@ -74,6 +79,10 @@ class PassiveStudent:
     # Shapes the learner was not built around (misspecification worlds).
     second_offset_h: float = 0.0  # a second peak this far from the first, 0 for none
     weekday_shift: tuple[float, ...] = ()  # peak offset per weekday, Monday first
+    # Delete behaviour (ADR-0043): noise that ignores the slot, and extra
+    # chance for a slot the student dislikes.
+    delete_noise: float = 0.0
+    delete_slot: float = 0.0
 
     def at(self, ms: int) -> PassiveStudent:
         """The student at instant ``ms``. Routines do not change in a semester."""
@@ -104,8 +113,12 @@ class PassiveStudent:
         quiet = h >= QUIET[0] or h < QUIET[1]
         return bump * (QUIET_FACTOR if quiet else 1.0)
 
-    def start_chance(self, task: Task, start_ms: int, cal: Calendar) -> float:
-        """Chance the student starts a block that begins at ``start_ms``."""
+    def done_chance(self, task: Task, start_ms: int, cal: Calendar) -> float:
+        """Chance the student completes a block that begins at ``start_ms``.
+
+        Completion fidelity: attention scaled by circadian fit, fatigue, quiet
+        hours and deadline imminence.
+        """
         p = self.attention * self.fit(start_ms)
         if is_weekend(start_ms // DAY_MS):
             p *= WEEKEND_ATTENTION
@@ -117,27 +130,41 @@ class PassiveStudent:
         """How good a start looks, -1..1: what the student sees on an offer."""
         return 2 * self.fit(start_ms) - 1
 
+    def delete_chance(self, start_ms: int) -> float:
+        """Chance the student deletes a placed block that starts at ``start_ms``.
+
+        ``delete_slot`` scales with the utility gap: 0 in the best hour, 1 in the worst.
+        """
+        gap = (1 - self.utility(start_ms)) / 2
+        return min(1.0, self.delete_noise + self.delete_slot * gap)
+
     def sees_offer(self, task: Task) -> bool:
         """Whether the student opens and acts on a pairwise offer."""
         return task.u_see < self.respond
 
     def react(
-        self, task: Task, start_ms: int, cal: Calendar
+        self, task: Task, start_ms: int, cal: Calendar, u_delete: float = 1.0
     ) -> tuple[bool, str | None, int, float]:
-        """(started, signal, applied start, start chance) for a block at ``start_ms``.
+        """(done, signal, applied start, done chance) for a block at ``start_ms``.
 
-        A START needs the draw to fall under ``start_chance``. A student with
-        drag first moves a poorly timed block to a better free hour that day;
-        the signal is then MOVE, as in production, even if they also start.
+        ``done`` is the latent outcome. A student with drag first moves a poorly
+        timed block to a better free hour that day; the signal is then MOVE.
+        Any other block stays put and is KEPT, whether or not it suited the
+        student, as in production. A TASK that stays put can instead be DELETED
+        before it starts, when ``u_delete`` falls under :meth:`delete_chance`.
         """
-        applied, signal = start_ms, None
+        applied, signal = start_ms, "KEPT"
         if self.drag > 0 and task.u_drag < self.drag and self.fit(start_ms) < FIT_GOOD:
             moved = self._better_start(task, start_ms, cal)
             if moved is not None:
                 applied, signal = moved, "MOVE"
-        p = self.start_chance(task, applied, cal)
-        started = task.u_open < p
-        return started, signal or ("START" if started else None), applied, p
+        p = self.done_chance(task, applied, cal)
+        # Placed plans can be deleted, exam and assignment prep included. Synced
+        # exams and assignments are fixed and never reach this method.
+        if signal == "KEPT" and u_delete < self.delete_chance(applied):
+            return False, "DELETE", applied, p
+        done = task.u_open < p
+        return done, signal, applied, p
 
     def _better_start(self, task: Task, start_ms: int, cal: Calendar) -> int | None:
         midnight = (start_ms // DAY_MS) * DAY_MS
@@ -152,7 +179,7 @@ class PassiveStudent:
         cal: Calendar,
         placed: dict[int, list[tuple[int, int]]] | None = None,
     ) -> int | None:
-        """The free slot in the window with the best chance of a start.
+        """The free slot in the window with the best chance of a completion.
 
         Free means clear of lectures and of blocks already ``placed``.
         """
@@ -166,7 +193,7 @@ class PassiveStudent:
                     continue
                 if any(m < be and m + task.duration_min > bs for bs, be in busy):
                     continue
-                p = self.start_chance(task, start, cal)
+                p = self.done_chance(task, start, cal)
                 if best is None or p > best[0] + 1e-12:
                     best = (p, start)
         return best[1] if best else None
@@ -183,7 +210,9 @@ def fatigue(cal: Calendar, start_ms: int) -> float:
     day = start_ms // DAY_MS
     minute = (start_ms % DAY_MS) // MS_PER_MINUTE
     lo = minute - FATIGUE_LOOKBACK_MIN
-    taught = sum(max(0, min(b, minute) - max(a, lo)) for a, b in cal.busy.get(day, []))
+    taught = sum(
+        max(0, min(b, minute) - max(a, lo)) for a, b in cal.lecture_blocks(day)
+    )
     drop = FATIGUE_MAX_DROP * FATIGUE_SCALE
     return 1 - drop * min(1.0, taught / FATIGUE_LOOKBACK_MIN)
 

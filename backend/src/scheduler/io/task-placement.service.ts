@@ -1,16 +1,45 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
-import type { InfeasiblePolicy } from "@zenflow/shared";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from "@nestjs/common";
+import {
+  PLACEMENT_NEEDS_CONFIRMATION_CODE,
+  type InfeasiblePolicy,
+  type PlacementPolicy,
+} from "@zenflow/shared";
 import { Prisma, type User } from "../../../generated/prisma";
 import { withSpan } from "../../observability/otel";
 import { PrismaService } from "../../prisma/prisma.service";
+import { PLACEMENT_NEEDS_CONFIRMATION_MESSAGE } from "../../sessions/placement-plan.exception";
 import { PythonPlacer } from "./python-placer.service";
 import { toPlacementPlanDto } from "./placement-plan";
 import { PLACEMENT_PLAN_TTL_MS } from "../constants";
 import { ScheduleInfeasibleException } from "../schedule-infeasible.exception";
 import { ceilToSlot, MS_PER_MINUTE } from "../core/slot";
-import type { PlaceableTask, PlacementResult } from "../types/placement.types";
+import type {
+  PlaceableTask,
+  PlacementConstraint,
+  PlacementResult,
+} from "../types/placement.types";
 
 type Trigger = "create" | "deadline-change";
+
+/** The 400 a `TASK` gets when its duration cannot fit before its deadline. */
+function assertFitsBeforeDeadline(
+  now: Date,
+  durationMinutes: number,
+  deadline: Date,
+): void {
+  if (
+    ceilToSlot(now.getTime()) + durationMinutes * MS_PER_MINUTE >
+    deadline.getTime()
+  ) {
+    throw new BadRequestException(
+      "Won't fit before the deadline\nPick a later deadline.",
+    );
+  }
+}
 
 /** Options a single placement shares with its caller (ADR-0022). */
 interface SinglePlacementOptions {
@@ -162,16 +191,10 @@ export class TaskPlacementService {
     deadline: Date;
     now: Date;
     policy?: InfeasiblePolicy;
+    constraint?: PlacementConstraint;
   }): Promise<void> {
     const { user, durationMinutes, deadline, now } = args;
-    if (
-      ceilToSlot(now.getTime()) + durationMinutes * MS_PER_MINUTE >
-      deadline.getTime()
-    ) {
-      throw new BadRequestException(
-        "Won't fit before the deadline\nPick a later deadline.",
-      );
-    }
+    assertFitsBeforeDeadline(now, durationMinutes, deadline);
     await this.python.preflightSingle({
       user,
       taskId: args.taskId,
@@ -179,7 +202,44 @@ export class TaskPlacementService {
       deadline,
       now,
       policy: args.policy,
+      constraint: args.constraint,
     });
+  }
+
+  /**
+   * The start a single `TASK` create would get, with no write (dry run).
+   * Errors match the create: 400 when it cannot fit the deadline, 409
+   * `SCHEDULE_INFEASIBLE` when no slot exists and no policy is given, 409
+   * `PLACEMENT_NEEDS_CONFIRMATION` when the plan would move a `CHOSEN`
+   * session. Returns null only when no slot exists and a policy is given.
+   */
+  async proposeSingle(args: {
+    user: User;
+    durationMinutes: number;
+    deadline: Date;
+    now: Date;
+    policy?: InfeasiblePolicy;
+    constraint?: PlacementConstraint;
+    prevStartMs?: number;
+    excludeSessionIds?: string[];
+    primaryPolicy?: PlacementPolicy;
+  }): Promise<Date | null> {
+    assertFitsBeforeDeadline(args.now, args.durationMinutes, args.deadline);
+    const { startMs, needsConfirmation } =
+      await this.python.proposeSingle(args);
+    if (needsConfirmation) {
+      throw new ConflictException({
+        success: false,
+        statusCode: 409,
+        message: PLACEMENT_NEEDS_CONFIRMATION_MESSAGE,
+        code: PLACEMENT_NEEDS_CONFIRMATION_CODE,
+      });
+    }
+    if (startMs === null) {
+      if (args.policy) return null;
+      throw new ScheduleInfeasibleException();
+    }
+    return new Date(startMs);
   }
 
   /**

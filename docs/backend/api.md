@@ -27,6 +27,43 @@ For developers and API clients. Live schema: Swagger UI at `<API_URL>/api`.
 | GET | `/users/me/preference-matrix` | 168-float matrix for the Insights heatmap |
 | GET | `/users/me/student` | DLU profile (`StudentResponse`); `profile` is null until the first fetch lands |
 | GET | `/users/me/marks` | Marks grouped by term, newest first; names are clean and `noCredit` flags the portal's red star (`StudentMarksResponse`) |
+| GET | `/users/me/api-access` | `mcpUrl`, `restBaseUrl`, assistant `prompt` and setup steps (`ApiAccessResponse`) |
+| GET | `/users/me/insights` | `from`, `to` as `YYYY-MM-DD` (default last 7 days, max 92 inclusive); focus grid and recap for the window, buffers for exams and assignments due in the next 30 days (`InsightsResponse`) |
+| PATCH | `/users/update/calendar-target` | `{ target }`, `NONE` or `DEVICE`: turns the phone calendar on or off |
+
+## AI assistants (`/mcp`)
+
+[ADR-0038](../adr/0038-personal-api-access.md), [ADR-0041](../adr/0041-mcp-oauth.md), [ADR-0044](../adr/0044-mcp-planning-tools.md). Assistants sign in through OAuth. Access tokens are `zo_...`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/mcp` | Streamable HTTP MCP, stateless. Bearer only; a 401 carries `WWW-Authenticate: Bearer resource_metadata=...`. GET and DELETE answer 405 |
+
+- Tools: `get_time`, `list_schedule`, `recap`, `find_free_slots`, `get_session`, `create_tasks`, `update_session`, `delete_sessions`, `replan`, `undo_last_change`. Writes first return a preview and a `planId`; repeating the call with it applies the change. Each tool calls the same service as the REST route and relays its error code.
+- Bearer tokens are refused (403) on routes not marked for them. Cookie sessions are unchanged.
+- Management routes above take the cookie only.
+
+### OAuth (API origin root, outside `/api/v1`)
+
+Mounted from the MCP SDK in `main.ts`; the provider is `src/oauth/`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/.well-known/oauth-authorization-server` | Server metadata (PKCE `S256`, public clients) |
+| GET | `/.well-known/oauth-protected-resource/api/v1/mcp` | Protected resource metadata |
+| POST | `/register` | Dynamic client registration. Redirect URIs must be https or loopback |
+| GET | `/authorize` | Validates the request, then sends the browser to `/api/v1/oauth/connect` |
+| POST | `/token` | Code and refresh grants. Refresh tokens rotate; a spent one revokes its family |
+| POST | `/revoke` | Revokes a token family |
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/oauth/connect?request=` | Public HTML page for the assistant's browser. Shows an 8 character code and polls |
+| GET | `/api/v1/oauth/connect/status?request=` | Public. `pending`, `expired`, or `done` with the redirect, handed out once |
+| GET | `/oauth/consent?code=` | Who is asking (`OAuthConsentInfo`). Cookie session; binds the request to the caller |
+| POST | `/oauth/consent` | `{ code, approve }`. Stores the redirect (a one-time code or `access_denied`) for the page; returns `{ approved }` |
+| GET | `/oauth/apps` | Connected assistants |
+| DELETE | `/oauth/apps/:clientId` | Disconnect one at once |
 
 - `timezone` is set at signup (`x-timezone`) and editable. Changing it re-keys recurring `exdates`.
 - `defaultReminderMinutes`: 0 none, default 10.
@@ -72,36 +109,6 @@ Drag, resize and reschedule are all `PATCH /sessions/:id` (a `MOVE` signal).
 - **Search:** every word of `q` must match, ignoring case and accents (including đ); empty `q` lists all. `direction` is `forward` (start at or after) or `backward` (before); each page is ascending.
 - Search returns `{ sessions, nextCursor }`; pass `nextCursor` with the same `direction`. Recurring series add occurrences up to a year past the cursor once stored rows run out. Unscheduled rows are skipped.
 - **Skipped:** every `Session` carries `skipped`. Skip routes return `SessionSkipResponse` (`{ session }`) and accept an occurrence id. The representative row id of a recurring series is a 400. Learning signals are START and MOVE only ([ADR-0035](../adr/0035-start-and-move-only-signals.md)).
-- **Reminders:** `POST` and `PATCH` accept `reminders?: number[]` (minutes before start, max 2, not for `DND`). Responses carry `reminders: number[]`.
-- Omitted on create: one at `defaultReminderMinutes` (none if 0). Omitted on `PATCH`: unchanged.
-- Reminders past or under 60 s away are skipped and listed in `skippedReminders`.
-
-## Tags and files
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/tags` | The user's tags |
-| POST | `/tags/bulk` | Idempotent bulk create |
-| GET | `/course-colours` | The user's course colour picks (`CourseColoursResponse`) |
-| PUT | `/course-colours/:courseKey` | Save a pick, `{ swatch }` 0 to 11. Key is `lms:<id>` or `portal:<id>`, URL-encoded |
-| DELETE | `/course-colours/:courseKey` | Drop the pick; the course returns to its automatic colour |
-| GET | `/files/limits` | `maxFileBytes`, `maxFilesPerRequest`, `userQuotaBytes` |
-| GET | `/files/usage` | Limits plus `usedBytes` |
-| POST | `/files/upload` | Multipart. Default 20 MB x 5 files, 150 MB per user. 413 `File too large` or `Storage full`. [ADR-0021](../adr/0021-upload-limits.md) |
-| POST | `/files/remove` | Delete a file |
-| GET | `/files/metadata/:id` | Metadata |
-| GET | `/files/:id` | Download (API proxies S3) |
-
-- Bytes live in an S3-compatible bucket (`S3_*`). `File.path` is `<userId>/<uuid>`. Uploads buffer to `UPLOAD_TMP_DIR`, stream to S3, then are removed. [ADR-0004](../adr/0004-s3-file-storage.md).
-- **Notes:** `Session.note` stores refs as `/api/v1/files/<id>` without `sig`. Responses add `?sig=`. `POST` and `PATCH` strip it and neutralise refs to files the caller does not own.
-
-## Link preview (`/link-preview`)
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/link-preview?url=` | Open Graph card of an http(s) page as `LinkPreview`, or `data: null` when the page has none or cannot be fetched. Successes cached for 1 h |
-
-- Public addresses only, checked on the connected address. Ports 80 and 443, at most 3 redirects, 5 s timeout, 256 KB read, `text/html` only.
 
 ## Integrations (`/integrations`)
 

@@ -1,3 +1,4 @@
+import { UPSTREAM_USER_AGENT } from "../common/constants";
 import { Injectable, Logger } from "@nestjs/common";
 import {
   classifyHttpResult,
@@ -392,6 +393,7 @@ export class LMSService {
     try {
       const res = await fetch(url, {
         ...init,
+        headers: { "user-agent": UPSTREAM_USER_AGENT, ...init.headers },
         signal: AbortSignal.timeout(this.requestTimeout),
       });
       record(String(res.status));

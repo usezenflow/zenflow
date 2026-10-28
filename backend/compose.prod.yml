@@ -25,13 +25,9 @@ services:
       - bandit
       - mail
       - o11y
-      - storage
-      - geo
     volumes:
       - ${ZENFLOW_SECRETS_DIR:-/run/zenflow/prod}/api:/run/secrets/zenflow:ro
     depends_on:
-      storage:
-        condition: service_started
       postgres:
         condition: service_healthy
       session-redis:
@@ -58,7 +54,6 @@ services:
         required: false
     environment:
       ROLE: api
-      NOMINATIM_URL: http://nominatim:8080
     deploy:
       replicas: 2
 
@@ -186,8 +181,8 @@ services:
     stop_grace_period: 60s
     deploy:
       replicas: 1
-    cpus: 1
-    mem_limit: 1g
+    cpus: 0.5
+    mem_limit: 512m
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/health/live').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 15s
@@ -255,62 +250,6 @@ services:
     container_name: zenflow-bandit-prod-green
     image: ${ZENFLOW_BANDIT_IMAGE_GREEN:-${ZENFLOW_BANDIT_IMAGE:-zenflow-bandit:latest}}
 
-  # Place search for the location screen. Run scripts/nominatim-extract.sh on the
-  # host first. The first start imports the Lam Dong extract (a few minutes);
-  # search is empty until /status returns OK. Capped so an import cannot starve
-  # the stack. Only the API reaches it, over the geo network.
-  nominatim:
-    container_name: zenflow-nominatim-prod
-    image: mediagis/nominatim:5.1
-    expose:
-      - "8080"
-    shm_size: 1gb
-    environment:
-      PBF_PATH: /pbf/lamdong.osm.pbf
-      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:-nominatim}
-      IMPORT_STYLE: full
-      THREADS: 2
-    mem_limit: 2g
-    cpus: 2
-    volumes:
-      - ./nominatim/lamdong.osm.pbf:/pbf/lamdong.osm.pbf:ro
-      - nominatim_data:/var/lib/postgresql/16/main
-    healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8080/status"]
-      interval: 30s
-      timeout: 5s
-      retries: 10
-      start_period: 300s
-    restart: unless-stopped
-    networks:
-      - geo
-
-  # Walking and driving routes for the campus map, served at /osrm/foot/ and
-  # /osrm/car/ by nginx. Push the graphs with scripts/push-osrm.sh.
-  osrm-foot:
-    container_name: zenflow-osrm-foot-prod
-    image: osrm/osrm-backend
-    command: osrm-routed --algorithm mld --max-table-size 1000 /data/map.osrm
-    expose:
-      - "5000"
-    volumes:
-      - ./osrm/data/foot:/data:ro
-    restart: unless-stopped
-    networks:
-      - geo
-
-  osrm-car:
-    container_name: zenflow-osrm-car-prod
-    image: osrm/osrm-backend
-    command: osrm-routed --algorithm mld --max-table-size 1000 /data/map.osrm
-    expose:
-      - "5000"
-    volumes:
-      - ./osrm/data/car:/data:ro
-    restart: unless-stopped
-    networks:
-      - geo
-
   migrations:
     container_name: zenflow-db-migration-prod
     build:
@@ -356,8 +295,7 @@ services:
       retries: 5
 
   # Separate cron process (busybox crond): encrypted pg_dump to S3 plus a restore test.
-  # Prod: every 3 h, real S3 (leave BACKUP_S3_ENDPOINT unset); also snapshots Vault file storage,
-  # and daily archives the uploaded files (storage_data).
+  # Prod: every 3 h, real S3 (leave BACKUP_S3_ENDPOINT unset); also snapshots Vault file storage.
   # Secrets come from Vault's backup set (own keys, POSTGRES_PASSWORD). See docs/ops/backups.md.
   backup:
     container_name: zenflow-backup-prod
@@ -377,13 +315,10 @@ services:
     environment:
       BACKUP_ENV: prod
       BACKUP_VAULT_DIR: /vault-data
-      # Uploaded files (MinIO data), archived daily: see docs/ops/backups.md.
-      BACKUP_FILES_DIR: /storage-data
     volumes:
       - ./ops/backup:/opt/backup:ro
       - backup_metrics:/metrics
       - vault_data:/vault-data:ro
-      - storage_data:/storage-data:ro
     networks:
       - db
       - egress
@@ -861,21 +796,15 @@ services:
       # Written by deploy.sh (active colour); a directory mount survives file replacement.
       - ./state:/etc/nginx/zenflow/state:ro
       - ./nginx/snippets-proxy.conf:/etc/nginx/zenflow/snippets-proxy.conf:ro
-      - ./nginx/maps.conf:/etc/nginx/zenflow/maps.conf:ro
-      - ./tiles:/srv/maps:ro
       - ./nginx/sse.conf:/etc/nginx/zenflow/sse.conf:ro
       - ./nginx/grafana.conf:/etc/nginx/zenflow/grafana.conf:ro
-      - ./nginx/minio.conf:/etc/nginx/zenflow/minio.conf:ro
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_webroot:/var/www/certbot:ro
     depends_on:
       - grafana
-      - storage
     networks:
       - edge
       - o11y
-      - storage
-      - geo
 
   # Renews the certificate over the nginx webroot. First issuance: nginx/init-cert.sh.
   certbot:
@@ -888,36 +817,6 @@ services:
       - certbot_webroot:/var/www/certbot
     networks:
       - edge
-
-  storage:
-    container_name: zenflow-storage-prod
-    image: alphatran/minio:latest
-    # The bucket is created before the server starts (a top-level directory in
-    # the data dir is a bucket), so it exists the moment the API can connect —
-    # no init job and no create-if-missing logic in the app.
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        mkdir -p "/data/$$S3_BUCKET" &&
-        MINIO_ROOT_USER="$$S3_ACCESS_KEY_ID"
-        MINIO_ROOT_PASSWORD="$$S3_SECRET_ACCESS_KEY"
-        exec minio server /data --console-address ":9001"
-    environment:
-      # Console redirects and cookies use the public URL behind nginx.
-      MINIO_BROWSER_REDIRECT_URL: https://minio.usezenflow.com
-    expose:
-      - "9000"
-      - "9001"
-    volumes:
-      - storage_data:/data
-    env_file:
-      # Non-secret settings. Vault mode: deploy.sh ships backend/env/prod.env as .env.prod; other providers write it with the secrets.
-      - path: .env.prod
-        required: false
-      - path: ${ZENFLOW_SECRETS_DIR:-/run/zenflow/prod}/minio/files.env
-        required: false
-    networks:
-      - storage
 
   # HashiCorp Vault (OSS, file storage). Secrets store for SECRETS_PROVIDER=vault;
   # see docs/ops/secrets.md. Starts sealed: init/unseal by hand after every restart.
@@ -975,17 +874,10 @@ networks:
     driver: bridge
   mail:
     driver: bridge
-  storage:
-    driver: bridge
-    internal: true
   vault:
     driver: bridge
 
-  geo:
-    driver: bridge
-
 volumes:
-  storage_data:
   postgres_data:
   letsencrypt:
   certbot_webroot:
@@ -1000,4 +892,3 @@ volumes:
   redis_queue_data:
   backup_metrics:
   redis_killswitch_data:
-  nominatim_data:

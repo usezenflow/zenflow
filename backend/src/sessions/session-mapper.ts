@@ -3,15 +3,12 @@ import type {
   CreateSessionResponse,
   PlacementReason,
   Session as SharedSession,
+  SessionWindow,
   SlotProposalFields,
   UpdateSessionResponse,
 } from "@zenflow/shared";
 import type { PlacementResult } from "../scheduler/types/placement.types";
 import type { SessionRow } from "./types/session-row";
-
-/** Sort tag names for stable wire output. */
-const sortedTagNames = (row: SessionRow): string[] =>
-  row.tags.map((t) => t.name).sort((a, b) => a.localeCompare(b));
 
 /** A scheduled TASK that ends after its deadline (user accepted a late deadline). */
 export function isLate(row: SessionRow): boolean {
@@ -63,32 +60,24 @@ export function toSessionDto(row: SessionRow): SharedSession {
     title: row.title,
     note: row.note,
     location: row.location,
-    locationLat: row.locationLat,
-    locationLng: row.locationLng,
-    originLocation: row.originLocation,
-    originLat: row.originLat,
-    originLng: row.originLng,
-    commuteMinutes: row.commuteMinutes,
     durationMinutes: row.durationMinutes,
     deadline: row.deadline ? row.deadline.toISOString() : null,
     type: row.type,
     source: row.source,
     prepForSessionId: row.prepForSessionId,
     prepForOccurrenceStart: row.prepForOccurrenceStart?.toISOString() ?? null,
-    tags: sortedTagNames(row),
     scheduledStartTime: row.scheduledStartTime
       ? row.scheduledStartTime.toISOString()
       : null,
+    reminderMinutes: row.reminderMinutes,
     seriesId: row.seriesId,
     rrule: row.series?.rrule ?? null,
     timetableGroupId: row.scheduleStudyUnitId,
     courseKey: courseKeyOf(row),
-    reminders: (row.reminders ?? [])
-      .map((r) => r.remindBeforeMinutes)
-      .sort((a, b) => b - a),
     late: isLate(row),
-    skipped: row.skipped,
     placementReason: placementReasonOf(row),
+    notBefore: row.notBefore?.toISOString() ?? null,
+    window: (row.window as SessionWindow | null) ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -137,8 +126,8 @@ export function toUpdateSessionResponse(
   return { ...toSessionDto(row), ...slotProposal };
 }
 
-/** The `{ scheduledStartTime, durationMinutes, type, tags }` snapshot stored on a
- * `SessionEvent` (`CREATE` / `START`). */
+/** The `{ scheduledStartTime, durationMinutes, type }` snapshot stored on a
+ * `SessionEvent` (`CREATE`). */
 export function toSessionSnapshot(row: SessionRow): Prisma.InputJsonValue {
   return {
     scheduledStartTime: row.scheduledStartTime
@@ -146,6 +135,5 @@ export function toSessionSnapshot(row: SessionRow): Prisma.InputJsonValue {
       : null,
     durationMinutes: row.durationMinutes,
     type: row.type,
-    tags: sortedTagNames(row),
   };
 }

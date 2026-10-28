@@ -5,7 +5,7 @@ import { Pressable, View } from "react-native";
 
 /**
  * An inline message with an icon. `error` is for something that failed,
- * `info` for something that is merely missing. Optional action sits on the right.
+ * `info` (blue) for a hint. Optional action sits on the right.
  */
 export function Notice({
   tone = "error",
@@ -33,17 +33,17 @@ export function Notice({
       accessibilityRole="alert"
       className={cn(
         "flex-row items-center gap-3 rounded-2xl border px-3.5 py-3",
-        error ? "border-destructive/30 bg-destructive/10" : "border-border bg-muted",
+        error ? "border-destructive/30 bg-destructive/10" : "border-session-lecture/30 bg-session-lecture/10",
         className,
       )}
     >
       <View
         className={cn(
           "h-8 w-8 items-center justify-center rounded-full",
-          error ? "bg-destructive/15" : "bg-background",
+          error ? "bg-destructive/15" : "bg-session-lecture/15",
         )}
       >
-        <Icon size={16} className={error ? "text-destructive" : "text-muted-foreground"} />
+        <Icon size={16} className={error ? "text-destructive" : "text-session-lecture-ink"} />
       </View>
       <View className="min-w-0 flex-1">
         <Text className="text-[14px] font-semibold">{title}</Text>

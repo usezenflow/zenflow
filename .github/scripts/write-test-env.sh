@@ -8,7 +8,6 @@ set -euo pipefail
 out="${1:-backend/.env.test}"
 rnd() { openssl rand -hex "$1"; }
 pg_pass="$(rnd 12)"
-s3_secret="$(rnd 16)"
 
 umask 077
 cat > "$out" <<ENV
@@ -31,17 +30,12 @@ MAIL_HOST=localhost
 MAIL_PORT=1025
 MAIL_FROM=noreply@example.com
 SESSION_SECRET=$(rnd 32)
-FILE_URL_SECRET=$(rnd 32)
+API_TOKEN_PEPPER=$(rnd 32)
 COOKIE_SECURE=false
 COOKIE_SAMESITE=lax
 MASTER_LMS_ENCRYPTION_KEY_V1=$(rnd 32)
 MASTER_PORTAL_ENCRYPTION_KEY_V1=$(rnd 32)
 PORTAL_API_KEY=ci-$(rnd 8)
-S3_ENDPOINT=http://localhost:9010
-S3_REGION=us-east-1
-S3_ACCESS_KEY_ID=ci-$(rnd 4)
-S3_SECRET_ACCESS_KEY=${s3_secret}
-S3_BUCKET=zenflow-test
 INGESTION_ENABLED=false
 INGESTION_REQUEST_DELAY_MS=0
 OTEL_SDK_DISABLED=true
@@ -49,5 +43,5 @@ NODE_ENV=test
 ENV
 # Mask in logs in case anything echoes them.
 if [ -n "${GITHUB_ACTIONS:-}" ]; then
-  for v in "$pg_pass" "$s3_secret"; do echo "::add-mask::$v"; done
+  for v in "$pg_pass"; do echo "::add-mask::$v"; done
 fi

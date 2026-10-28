@@ -2,13 +2,12 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ForbiddenException } from "@nestjs/common";
 import { SessionUpdateService } from "./session-update.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SchedulingFeedbackService } from "../scheduler/io/scheduling-feedback.service";
 import { SeriesService } from "./series.service";
 import { occurrenceId } from "../scheduler/core/recurrence";
 import { DAY_MS } from "../scheduler/core/slot";
-import type { Tag, Session, SessionSeries, User } from "../../generated/prisma";
+import type { Session, SessionSeries, User } from "../../generated/prisma";
 import type { UpdateSessionDto } from "./dto/update-session.dto";
 
 /**
@@ -20,7 +19,7 @@ import type { UpdateSessionDto } from "./dto/update-session.dto";
  * (or lack thereof) can be asserted directly.
  */
 
-type SessionRow = Session & { tags: Tag[]; series: SessionSeries | null };
+type SessionRow = Session & { series: SessionSeries | null };
 
 const user: User = {
   id: "user-1",
@@ -39,16 +38,14 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     title: "Session",
     note: null,
     location: null,
-    locationLat: null,
-    locationLng: null,
-    originLocation: null,
-    originLat: null,
-    originLng: null,
-    commuteMinutes: null,
-    commuteAuto: false,
+    examFormat: null,
+    examCredits: null,
+    examRetake: null,
+    reminderMinutes: null,
     durationMinutes: 60,
     deadline: null,
-    tags: [],
+    notBefore: null,
+    window: null,
     series: null,
     type: "LECTURE",
     source: "USER",
@@ -58,9 +55,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     submittedAt: null,
     prepForSessionId: null,
     prepForOccurrenceStart: null,
-    syncConfirmedAt: null,
-    syncMissedAt: null,
-    skipped: false,
     placementReason: null,
     placementReasonStartAt: null,
     deleted: false,
@@ -85,10 +79,6 @@ function fakeSeries() {
     promoteToSeries: jest.fn(),
     resizeSessionCount: jest.fn(),
   };
-}
-
-function fakeTagsService() {
-  return { resolveTagIds: jest.fn().mockResolvedValue([]) };
 }
 
 function fakeTaskPlacement() {
@@ -125,7 +115,6 @@ async function makeService(
           ...(prisma as object),
         },
       },
-      { provide: TagsService, useValue: fakeTagsService() },
       { provide: TaskPlacementService, useValue: fakeTaskPlacement() },
       { provide: SchedulingFeedbackService, useValue: schedulingFeedback },
       { provide: SeriesService, useValue: series },
@@ -236,6 +225,7 @@ describe("SessionUpdateService — preference-matrix reinforcement (Item 3B3)", 
       "task-1",
       1n,
       60,
+      expect.anything(),
     );
     expect(schedulingFeedback.reinforcePreferenceMove).toHaveBeenCalledWith(
       user.id,
@@ -397,6 +387,7 @@ describe("SessionUpdateService — preference-matrix reinforcement (Item 3B3)", 
       "task-1",
       1n,
       -60,
+      expect.anything(),
     );
     expect(schedulingFeedback.reinforcePreferenceMove).toHaveBeenCalledWith(
       user.id,
@@ -519,7 +510,6 @@ describe("SessionUpdateService — recurring occurrence, scope 'series' (or omit
       type: "LECTURE",
       rrule,
       exdates: [],
-      skippedFrom: null,
       userId: user.id,
     };
     const existing = session({
@@ -599,7 +589,6 @@ describe("SessionUpdateService — recurring occurrence, scope 'series' (or omit
       type: "LECTURE",
       rrule: "FREQ=DAILY;COUNT=3",
       exdates: [],
-      skippedFrom: null,
       userId: user.id,
     };
     const existing = session({

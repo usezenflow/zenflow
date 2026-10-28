@@ -1,5 +1,10 @@
 import { registerDevice, unregisterDevice } from "@/api/devices";
 import { debugLog } from "@/lib/debug-log";
+import {
+  startLocalPoll,
+  stopLocalPoll,
+  usesLocalPoll,
+} from "@/lib/background-notify";
 import type { PushPermission } from "@/lib/push-sync";
 import {
   type DevicePlatform,
@@ -117,7 +122,7 @@ export function configureForegroundHandler(): void {
   });
 }
 
-const TONES: PushTone[] = ["default", "reminder", "urgent"];
+const TONES: PushTone[] = ["default", "urgent"];
 
 /**
  * Android 8+ needs explicit channels or notifications are dropped silently.
@@ -130,13 +135,7 @@ export async function ensureAndroidChannel(): Promise<void> {
   await Promise.all(
     TONES.map((tone) =>
       Notifications.setNotificationChannelAsync(pushChannelId(tone), {
-        name: t(
-          tone === "urgent"
-            ? "Urgent"
-            : tone === "reminder"
-              ? "Reminders"
-              : "General",
-        ),
+        name: t(tone === "urgent" ? "Urgent" : "General"),
         importance: Notifications.AndroidImportance.MAX,
         sound: pushSoundFile(tone),
         vibrationPattern:
@@ -244,6 +243,10 @@ export async function registerThisDevice(
   isCurrent: () => boolean = () => true,
 ): Promise<boolean> {
   if (Platform.OS === "web") return false;
+  if (usesLocalPoll) {
+    await startLocalPoll();
+    return true;
+  }
   if (Platform.OS === "ios" && !Device.isDevice) {
     debugLog("push", "skipped: iOS simulator has no APNs");
     return false;
@@ -278,6 +281,7 @@ export async function registerThisDevice(
  */
 export async function dropPushRegistration(): Promise<void> {
   if (Platform.OS === "web") return;
+  if (usesLocalPoll) return stopLocalPoll();
   try {
     const t = await Notifications.getDevicePushTokenAsync();
     await unregisterDevice(String(t.data));

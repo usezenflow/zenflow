@@ -7,6 +7,7 @@ import { useConnectivity } from "@/lib/connectivity";
 import { OFFLINE_ERROR_CODE } from "@/lib/save-error";
 import { sessionIsDead } from "@/lib/session-guard";
 import { clearDaySessionCache } from "@/lib/session-cache";
+import { paletteDisk } from "@/lib/palette/palette-disk";
 import { resetTimelineScroll } from "@/lib/timeline-scroll";
 import {
   cacheSessionCookie,
@@ -187,6 +188,7 @@ api.interceptors.response.use(undefined, async (error) => {
     useUserStore.getState().setUser(null);
     // Same per-user cleanup as Settings sign-out.
     clearDaySessionCache();
+    paletteDisk.clear();
     resetTimelineScroll();
     await clearCachedSessionUser();
     await clearSession();

@@ -14,6 +14,7 @@ paths = [
   '''backend/\.env\.example''',
   '''backend/certs/.*\.pem''',          # public CA certificate
   '''backend/src/devices/apns\.sender\.spec\.ts''',  # one synthetic private-key fixture
+  '''backend/src/api-access/api-token\.util\.spec\.ts''',  # synthetic pepper fixtures
   '''packages/shared/contract/.*''',
   '''loadtest/compose\.ingestion\.yml''',  # throwaway keys for the synthetic load-test stack
 ]

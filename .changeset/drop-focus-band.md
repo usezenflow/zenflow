@@ -1,7 +1,6 @@
 ---
 "backend": minor
 "mobile": minor
-"pwa": minor
 "@zenflow/shared": minor
 ---
 

@@ -1,5 +1,4 @@
 ---
-"pwa": patch
 "mobile": patch
 "backend": patch
 "@zenflow/shared": patch

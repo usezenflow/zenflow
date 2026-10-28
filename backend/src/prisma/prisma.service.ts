@@ -23,6 +23,8 @@ export class PrismaService
     // reads DATABASE_URL (scripts/with-database-url.cjs).
     super({
       datasourceUrl: databaseUrl((key) => config.get(key)),
+      // Only the palette endpoints load the blob; they select it explicitly.
+      omit: { user: { paletteData: true } },
       transactionOptions: { maxWait: 5_000, timeout: 20_000 },
     });
   }

@@ -8,14 +8,6 @@ import type { DayLoad } from "../types/day-load.types";
 import { expandRrule } from "../core/recurrence";
 import { blocksPlacement, DAY_MS, type Interval } from "../core/slot";
 
-/**
- * Travel time kept clear on each side of a session that has a commute
- * (ADR-0029). It widens only the `occupied` intervals the placers schedule
- * around, so other sessions never land inside it. Workload is unaffected.
- */
-export const commuteBufferMs = (commuteMinutes: number | null | undefined) =>
-  Math.max(0, commuteMinutes ?? 0) * 60_000;
-
 /** Null-safe "not a member of series `id`" filter (standalone rows pass). */
 const notInSeries = (id: string) => [
   { OR: [{ seriesId: null }, { seriesId: { not: id } }] },
@@ -110,7 +102,6 @@ export async function loadDayLoad(
       scheduledStartTime: true,
       durationMinutes: true,
       type: true,
-      commuteMinutes: true,
     },
   });
 
@@ -129,14 +120,13 @@ export async function loadDayLoad(
     if (!o.scheduledStartTime) continue;
     const start = o.scheduledStartTime.getTime();
     const end = start + o.durationMinutes * 60_000;
-    const buffer = commuteBufferMs(o.commuteMinutes);
-    // Ended before this day, travel time included — a stale left-neighbour.
-    if (end + buffer <= dayStartMs) continue;
+    // Ended before this day: a stale left-neighbour.
+    if (end <= dayStartMs) continue;
     // A minimum-duration (<=15min) session is a placeholder sliver, not a
     // real occupant — it must not block placement, but still counts toward
     // workload below.
     if (blocksPlacement(o.durationMinutes)) {
-      occupied.push({ start: start - buffer, end: end + buffer });
+      occupied.push({ start, end });
     }
     // Workload is "what this calendar day carries" — key it by the start day so
     // the lookahead sliver and the previous night's spillover don't inflate it.
@@ -160,7 +150,6 @@ export async function loadDayLoad(
         select: {
           scheduledStartTime: true,
           durationMinutes: true,
-          commuteMinutes: true,
         },
         orderBy: { createdAt: "asc" },
         take: 1,
@@ -170,7 +159,6 @@ export async function loadDayLoad(
   for (const series of recurringSeries) {
     const rep = series.sessions[0];
     if (!series.rrule || !rep?.scheduledStartTime) continue;
-    const buffer = commuteBufferMs(rep.commuteMinutes);
     for (const occStart of expandRrule(
       series.rrule,
       rep.scheduledStartTime,
@@ -182,9 +170,9 @@ export async function loadDayLoad(
     )) {
       const start = occStart.getTime();
       const end = start + rep.durationMinutes * 60_000;
-      if (end + buffer <= dayStartMs) continue;
+      if (end <= dayStartMs) continue;
       if (blocksPlacement(rep.durationMinutes)) {
-        occupied.push({ start: start - buffer, end: end + buffer });
+        occupied.push({ start, end });
       }
       if (start < dayStartMs || start >= dayEndMs) continue;
       addWorkload(series.type, rep.durationMinutes);
@@ -207,8 +195,8 @@ export interface ScheduleItem {
   durationMinutes: number;
   /** The row's TASK deadline, if any. */
   deadlineMs: number | null;
-  /** Travel time kept clear on each side in `occupied`. Absent means none. */
-  bufferMs?: number;
+  /** The user moved this row by hand (`lastMovedAt`): it is fixed for placement. */
+  moved: boolean;
 }
 
 /**
@@ -260,8 +248,7 @@ export async function loadScheduleItems(
         durationMinutes: true,
         deadline: true,
         type: true,
-        skipped: true,
-        commuteMinutes: true,
+        lastMovedAt: true,
       },
     }),
     prisma.sessionSeries.findMany({
@@ -276,7 +263,6 @@ export async function loadScheduleItems(
           select: {
             scheduledStartTime: true,
             durationMinutes: true,
-            commuteMinutes: true,
           },
           orderBy: { createdAt: "asc" },
           take: 1,
@@ -298,7 +284,7 @@ export async function loadScheduleItems(
       end: start + o.durationMinutes * 60_000,
       durationMinutes: o.durationMinutes,
       deadlineMs: (o as { deadline?: Date | null }).deadline?.getTime() ?? null,
-      bufferMs: commuteBufferMs(o.commuteMinutes),
+      moved: o.lastMovedAt !== null,
     });
   }
   for (const series of recurringSeries) {
@@ -322,7 +308,7 @@ export async function loadScheduleItems(
         end: start + rep.durationMinutes * 60_000,
         durationMinutes: rep.durationMinutes,
         deadlineMs: null,
-        bufferMs: commuteBufferMs(rep.commuteMinutes),
+        moved: false,
       });
     }
   }
@@ -346,11 +332,9 @@ export function dayLoadFromItems(
   const lo = dayStartMs - DAY_MS;
   const hi = dayEndMs + lookaheadMs;
   for (const it of items) {
-    const buffer = it.bufferMs ?? 0;
-    if (it.start < lo || it.start > hi || it.end + buffer <= dayStartMs)
-      continue;
+    if (it.start < lo || it.start > hi || it.end <= dayStartMs) continue;
     if (blocksPlacement(it.durationMinutes)) {
-      occupied.push({ start: it.start - buffer, end: it.end + buffer });
+      occupied.push({ start: it.start, end: it.end });
     }
     if (
       it.start >= dayStartMs &&

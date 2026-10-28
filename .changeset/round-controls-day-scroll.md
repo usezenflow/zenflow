@@ -1,5 +1,4 @@
 ---
-"pwa": patch
 "mobile": patch
 ---
 

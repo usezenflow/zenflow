@@ -3,7 +3,7 @@
 The production placer and the production update run in-process (``tests/test_evalx.py``
 pins the placer to ``/v1/place``). Every student gets the same tasks and random
 draws under every arm (common random numbers), so arms differ only by placement.
-Rewards follow ADR-0035: START +1, MOVE negative by drag, pairwise pick of
+Rewards follow ADR-0035: KEPT +1, MOVE negative by drag, pairwise pick of
 LinUCB's option +0.5, kept heuristic option over LinUCB's -0.2, no LAPSED.
 
 Arms (``ARM_SPEC``)
@@ -75,6 +75,7 @@ from src.api import update_arm  # noqa: E402
 from src.core import constants as consts  # noqa: E402
 from src.core.constants import (  # noqa: E402
     DAY_MS,
+    KEPT_REWARD,
     MS_PER_MINUTE,
     PREFERENCE_KEPT_WEIGHT,
 )
@@ -90,7 +91,7 @@ from src.schemas_place import PLACEMENT_CONTRACT_VERSION, PlaceRequest  # noqa: 
 
 ALPHA = 0.15  # BANDIT_ALPHA, backend/src/scheduler/constants.ts
 RIDGE = 1.0  # BANDIT_RIDGE
-START_REWARD = 1.0  # a START
+# KEPT_REWARD comes from src.core.constants (mirror of the backend).
 PAIRWISE_WIN_REWARD = 0.5  # backend/src/scheduler/constants.ts
 PAIRWISE_LOSS_REWARD = -0.2
 MIN_ALTERNATIVE_GAP_MINUTES = 60  # an offer needs two starts at least this far apart
@@ -137,8 +138,7 @@ CFG: dict[str, Any] = {
     "worlds": "all",  # "all" or "bands"
     # Reality knobs (semester). The defaults are the headline student and signal.
     "timing": 1.0,  # how much the hour matters to a student, 1 to 0
-    "detect": 1.0,  # chance a real start reaches the learner
-    "false_start": 0.0,  # chance a non-start is logged as a start
+    "detect": 1.0,  # chance a kept slot reaches the learner
     "delay": 0,  # tasks between a start and its reward
     "tap_scale": 1.0,  # scale on the chance a student answers an offer
     "drift": None,  # {"kind": "step" or "walk", "hours": n}: the peak hour moves
@@ -153,6 +153,19 @@ CFG: dict[str, Any] = {
     "kernel_sd": 0.75,  # arms marked "kernel": hour kernel width (production)
     "kernel_pool": 1.0,  # arms marked "kernel": same-group weekdays (production)
     "kept_weight": PREFERENCE_KEPT_WEIGHT,
+    # Delete behaviour of the students (semester): noise, and the slot-dependent part.
+    "delete_noise": 0.0,
+    "delete_slot": 0.0,
+    # Reward v2 (semester ``Lv2-*`` arms), frozen after the tuning sweep on seeds
+    # 100 to 109 (docs/adr/0045). Move, create and delete sit at the edge of the
+    # searched range, so the optimum may lie beyond it.
+    "v2_kept": 1.0,
+    "v2_delete": -0.2,
+    "v2_move": 0.5,
+    # Assumed share of tasks the student also makes by hand (never measured).
+    "create_share": 0.1,
+    # Hand-made blocks at the best free hour (1) or at a random free hour (0).
+    "create_fit": 1.0,
 }
 _PRODUCTION = {
     "gap": consts.LINUCB_GAP_WEIGHT,
@@ -294,10 +307,16 @@ def _days(
     while ms <= last_ms:
         busy = busy_minutes(cal, ms)
         mine = (placed or {}).get(ms // DAY_MS, [])
+        lectures = cal.lecture_blocks(ms // DAY_MS)
+        dnd = cal.dnd_blocks(ms // DAY_MS)
         workload = {**ZERO_WORKLOAD}
         workload["LECTURE"] = {
-            "hours": sum(b - a for a, b in busy) / 60,
-            "count": len(busy),
+            "hours": sum(b - a for a, b in lectures) / 60,
+            "count": len(lectures),
+        }
+        workload["DND"] = {
+            "hours": sum(b - a for a, b in dnd) / 60,
+            "count": len(dnd),
         }
         if mine:
             workload["TASK"] = {
@@ -390,6 +409,15 @@ def _kept(matrix: Any, start: int, kern: tuple[float, float] = NO_KERNEL) -> Any
     )
 
 
+def _deleted(
+    matrix: Any, start: int, weight: float, kern: tuple[float, float] = NO_KERNEL
+) -> Any:
+    """The heuristic's table after a delete: a kept update with a negative weight."""
+    return reinforce_preference_smooth(
+        matrix, start, "UTC", weight, CFG["pref_rate"], *kern
+    )
+
+
 def _moved(
     matrix: Any, old: int, new: int, drag: float, kern: tuple[float, float] = NO_KERNEL
 ) -> Any:
@@ -451,16 +479,15 @@ def react(
 ) -> tuple[bool, str | None, float | None, int]:
     """(done, signal, reward, new_start) for a block at ``start``.
 
-    START inside the band when the student opens the app. Outside it only a
-    ``drag`` style student moves the block, to the free start nearest the band
-    centre (a MOVE); with none free, it stays.
+    ``done`` is the latent outcome the metrics read: the student completes a block
+    inside the band. The learner hears only KEPT for a block left in place, in the
+    band or not. Outside the band a ``drag`` style student moves the block, to the
+    free start nearest the band centre (a MOVE); with none free, it stays.
     """
     midnight = (start // DAY_MS) * DAY_MS
     p = open_chance(s, (task.deadline_ms - start) / DAY_MS, start)
     if in_band(s, start, midnight):
-        if task.u_open < p:
-            return True, "START", START_REWARD, start
-        return False, None, None, start  # ignored: no signal
+        return task.u_open < p, "KEPT", KEPT_REWARD, start
     if style == "drag" and task.u_drag < s.drag:
         minute = feasible_start(
             s.band_on(midnight // DAY_MS),
@@ -468,7 +495,7 @@ def react(
             task.duration_min,
         )
         if minute is None:
-            return False, None, None, start
+            return False, "KEPT", KEPT_REWARD, start
         moved = midnight + minute * MS_PER_MINUTE
         drag = abs(moved - start) / MS_PER_MINUTE
         return (
@@ -477,7 +504,7 @@ def react(
             drag_distance_reward(drag, CFG["move_scale"]),
             moved,
         )
-    return False, None, None, start
+    return False, "KEPT", KEPT_REWARD, start
 
 
 def utility(s: Student, start: int) -> float:
@@ -586,8 +613,7 @@ def simulate(
             close += left_h <= CLOSE_HOURS
         ok, signal, reward, new_start = react(st, task, start, style, cal)
         done += ok
-        if signal == "START":
-            starts += 1
+        if signal == "KEPT":
             matrix = _kept(matrix, start, kern)
         elif signal == "MOVE":
             moves += 1
@@ -684,7 +710,7 @@ def simulate_ab(
                 )
                 matrix = _moved(matrix, ls, hs, drag, kern)
         ok, signal, reward, new_start = react(st, task, applied, style, cal)
-        if signal == "START":
+        if signal == "KEPT":
             matrix = _kept(matrix, applied, kern)
         elif signal == "MOVE":
             drag = abs(new_start - applied) / MS_PER_MINUTE
@@ -808,8 +834,8 @@ def _ab_summary(cols: dict[str, np.ndarray], seed: int) -> dict[str, Any]:
         "offered": rate(cols["offered"], cols["events"], seed),
         "tapped": rate(cols["tapped"], cols["offered"], seed),
         "pick_linucb": rate(cols["picked_linucb"], cols["tapped"], seed),
-        "start_linucb_primary": rate(cols["done_linucb"], cols["events_linucb"], seed),
-        "start_heuristic_primary": rate(
+        "done_linucb_primary": rate(cols["done_linucb"], cols["events_linucb"], seed),
+        "done_heuristic_primary": rate(
             cols["done_heuristic"], cols["events_heuristic"], seed
         ),
     }
@@ -1136,7 +1162,7 @@ def render(res: dict[str, Any]) -> str:
         f"tasks, reaction mix `{cfg['cfg']['mix']}`. Code `{man['code_sha']}`, "
         f"config `{man['config_hash']}`, {man['generated']}.",
         "",
-        "Effects are starts per student. Each reads "
+        "Effects are done rate per student. Each reads "
         "`mean [95% CI over students] / [95% CI over seeds]`.",
         "",
         "## Headline: L against the default heuristic (H)",
@@ -1154,7 +1180,7 @@ def render(res: dict[str, Any]) -> str:
         )
     lines += [
         "",
-        "## Every arm, starts per student",
+        "## Every arm, done rate per student",
         "",
         "| World | H | L-cold | L | Oracle | Rand |",
         "|---|---|---|---|---|---|",
@@ -1204,15 +1230,15 @@ def render(res: dict[str, Any]) -> str:
         "Cluster bootstrap by student. A pick rate of 50% is no preference.",
         "",
         "| World | Offered | Tapped | LinUCB pick rate "
-        "| Start, LinUCB primary | Start, heuristic primary |",
+        "| Done, LinUCB primary | Done, heuristic primary |",
         "|---|---|---|---|---|---|",
     ]
     for name, w in res["worlds"].items():
         a = w["ab"]
         lines.append(
             f"| {name} | {_pct(a['offered'])} | {_pct(a['tapped'])} "
-            f"| {_pct(a['pick_linucb'])} | {_pct(a['start_linucb_primary'])} "
-            f"| {_pct(a['start_heuristic_primary'])} |"
+            f"| {_pct(a['pick_linucb'])} | {_pct(a['done_linucb_primary'])} "
+            f"| {_pct(a['done_heuristic_primary'])} |"
         )
     lines += [
         "",
@@ -1322,7 +1348,7 @@ def main(argv: list[str] | None = None) -> int:
     real.add_argument("--seed-offset", type=int, default=100)
     dl = sub.add_parser(
         "deadline",
-        help="adherence and distance by deadline weight",
+        help="done rate and distance by deadline weight",
         parents=[sub_bands],
     )
     dl.add_argument("--seeds", type=int, default=10)

@@ -3,7 +3,12 @@ import { ConfigService } from "@nestjs/config";
 import { cert, deleteApp, initializeApp, type App } from "firebase-admin/app";
 import { getMessaging, type Messaging } from "firebase-admin/messaging";
 import { pushChannelId } from "@zenflow/shared";
-import { toStringMap, type PushMessage, type SendResult } from "./types";
+import {
+  actionFields,
+  toStringMap,
+  type PushMessage,
+  type SendResult,
+} from "./types";
 
 /** FCM caps a multicast at 500 tokens per call. */
 const FCM_MULTICAST_LIMIT = 500;
@@ -60,7 +65,11 @@ export class FcmSender implements OnApplicationShutdown {
       return { sent: 0, invalidTokens: [] };
     }
 
-    const data = { ...toStringMap(msg.data), ...msg.extra };
+    const data = {
+      ...toStringMap(msg.data),
+      ...msg.extra,
+      ...actionFields(msg),
+    };
     const invalidTokens: string[] = [];
     let sent = 0;
 

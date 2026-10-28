@@ -2,11 +2,10 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { TagsService } from "../tags/tags.service";
 import { TaskPlacementService } from "../scheduler/io/task-placement.service";
 import { SeriesService } from "./series.service";
 import { occurrenceId } from "../scheduler/core/recurrence";
-import type { Tag, Session, SessionSeries, User } from "../../generated/prisma";
+import type { Session, SessionSeries, User } from "../../generated/prisma";
 
 /**
  * Focused coverage for `SeriesService`'s two drag/resize-confirmation scope
@@ -14,11 +13,11 @@ import type { Tag, Session, SessionSeries, User } from "../../generated/prisma";
  * `updateRecurringFollowing` (recurring fixed series "this and following").
  * `SessionUpdateService`'s own routing into these is covered by
  * `session-update.service.spec.ts`; these tests exercise the methods directly
- * against a hand-rolled Prisma double (`TaskPlacementService`/`TagsService`
+ * against a hand-rolled Prisma double (`TaskPlacementService`
  * aren't touched by either method, so they're stubbed out).
  */
 
-type SessionRow = Session & { tags: Tag[]; series: SessionSeries | null };
+type SessionRow = Session & { series: SessionSeries | null };
 
 const user: User = {
   id: "user-1",
@@ -37,16 +36,14 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     title: "Session",
     note: null,
     location: null,
-    locationLat: null,
-    locationLng: null,
-    originLocation: null,
-    originLat: null,
-    originLng: null,
-    commuteMinutes: null,
-    commuteAuto: false,
+    examFormat: null,
+    examCredits: null,
+    examRetake: null,
+    reminderMinutes: null,
     durationMinutes: 60,
     deadline: null,
-    tags: [],
+    notBefore: null,
+    window: null,
     series: null,
     type: "TASK",
     source: "USER",
@@ -56,9 +53,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
     submittedAt: null,
     prepForSessionId: null,
     prepForOccurrenceStart: null,
-    syncConfirmedAt: null,
-    syncMissedAt: null,
-    skipped: false,
     placementReason: null,
     placementReasonStartAt: null,
     deleted: false,
@@ -75,7 +69,6 @@ function session(overrides: Partial<SessionRow> & { id: string }): SessionRow {
 
 async function makeSeriesService(
   prisma: unknown,
-  tags: unknown = { resolveTagIds: jest.fn().mockResolvedValue([]) },
   placement: unknown = {
     canPlaceSeries: jest.fn(),
     placeSeriesOnCreate: jest.fn(),
@@ -86,7 +79,6 @@ async function makeSeriesService(
     providers: [
       SeriesService,
       { provide: PrismaService, useValue: prisma },
-      { provide: TagsService, useValue: tags },
       { provide: TaskPlacementService, useValue: placement },
     ],
   }).compile();
@@ -102,9 +94,6 @@ describe("SeriesService.updateRecurringFollowing", () => {
     seriesId: oldSeriesId,
     title: "Gym",
     note: "bring a towel",
-    tags: [
-      { id: "tag-1", name: "fitness", userId: user.id, createdAt: new Date() },
-    ],
     scheduledStartTime: new Date("2026-06-01T09:00:00.000Z"),
     durationMinutes: 60,
   });
@@ -150,7 +139,6 @@ describe("SeriesService.updateRecurringFollowing", () => {
           durationMinutes: number;
           scheduledStartTime: Date;
           seriesId: string;
-          tags: { connect: { id: string }[] };
         };
       }) => {
         createdSession = session({
@@ -162,7 +150,6 @@ describe("SeriesService.updateRecurringFollowing", () => {
           durationMinutes: args.data.durationMinutes,
           scheduledStartTime: args.data.scheduledStartTime,
           seriesId: args.data.seriesId,
-          tags: oldRep.tags,
         });
         return Promise.resolve(createdSession);
       },
@@ -213,7 +200,7 @@ describe("SeriesService.updateRecurringFollowing", () => {
     };
   }
 
-  it("truncates the old series and creates a new one anchored at the new date/time, carrying title/note/tags/type forward", async () => {
+  it("truncates the old series and creates a new one anchored at the new date/time, carrying title/note/type forward", async () => {
     const { prisma, seriesUpdate, seriesCreate, sessionCreate, eventCreate } =
       buildPrisma({ rrule: "FREQ=DAILY" });
     const service = await makeSeriesService(prisma);
@@ -247,7 +234,6 @@ describe("SeriesService.updateRecurringFollowing", () => {
           durationMinutes: 90,
           scheduledStartTime: new Date("2026-06-15T14:00:00.000Z"),
           seriesId: "lecture-series-2",
-          tags: { connect: [{ id: "tag-1" }] },
         }),
       }),
     );

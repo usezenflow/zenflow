@@ -13,9 +13,9 @@ HOUR_MS = 3_600_000
 DAY_H = 24.0
 
 
-def adherence_rate(started: np.ndarray) -> float:
-    """Share of placed blocks the student started. NaN when nothing was placed."""
-    return float(started.mean()) if len(started) else float("nan")
+def done_rate(completed: np.ndarray) -> float:
+    """Share of placed blocks the student completed. NaN when nothing was placed."""
+    return float(completed.mean()) if len(completed) else float("nan")
 
 
 def deadline_margin_h(end_ms: np.ndarray, deadline_ms: np.ndarray) -> np.ndarray:

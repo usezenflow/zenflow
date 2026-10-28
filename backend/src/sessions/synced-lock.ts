@@ -7,8 +7,9 @@ const SYNCED_TYPES: SessionType[] = ["LECTURE", "EXAM", "ASSIGNMENT"];
 
 /**
  * A timetable, exam or assignment written by a sync. The upstream is the
- * source of truth, so the student skips or completes these rather than editing
- * them. Sessions the student created themselves stay editable.
+ * source of truth, so the student deletes these rather than editing them. A
+ * deleted one stays deleted: the sync leaves its row alone. Sessions the
+ * student created themselves stay editable.
  */
 export function isSynced(row: {
   source: SessionSource;
@@ -20,12 +21,10 @@ export function isSynced(row: {
   );
 }
 
-/** Fields a sync owns. Note, tags, reminders and the commute start stay the student's. */
+/** Fields a sync owns. Note stays the student's. */
 const SYNCED_FIELDS = [
   "title",
   "location",
-  "locationLat",
-  "locationLng",
   "durationMinutes",
   "deadline",
   "scheduledStartTime",
@@ -39,16 +38,6 @@ export function assertSyncedEditable(
   if (!isSynced(row)) return;
   if (SYNCED_FIELDS.some((f) => dto[f] !== undefined))
     throw new ForbiddenException(
-      "Synced sessions can't be edited. Skip it instead.",
-    );
-}
-
-export function assertSyncedDeletable(row: {
-  source: SessionSource;
-  type: SessionType;
-}): void {
-  if (isSynced(row))
-    throw new ForbiddenException(
-      "Synced sessions can't be deleted. Skip it instead.",
+      "Synced sessions can't be edited. Delete it instead.",
     );
 }

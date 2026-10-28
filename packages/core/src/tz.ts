@@ -24,12 +24,3 @@ export const zonedDate = (iso: string | Date, tz: string): Date =>
 export const zonedWallClockToUtc = (wallClock: Date, tz: string): Date =>
   fromZonedTime(wallClock, tz);
 
-/** True when `zonedDate` (already in user-tz space) falls on the user's today. */
-export const isZonedToday = (zonedDate: Date, tz: string): boolean =>
-  isSameDay(zonedDate, zonedNow(tz));
-
-/** Short timezone label (e.g. "GMT+2", "PDT") for the user's tz. */
-export const tzAbbrev = (tz: string): string =>
-  new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
-    .formatToParts(new Date())
-    .find((p) => p.type === "timeZoneName")?.value ?? tz;

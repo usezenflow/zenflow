@@ -3,7 +3,7 @@ import type {
   SessionSource,
   SessionType,
 } from "../../generated/prisma";
-import { WITH_TAGS_AND_SERIES, type SessionRow } from "./types/session-row";
+import { WITH_SERIES, type SessionRow } from "./types/session-row";
 import { createEventData, recordCreateEvent } from "./session-events";
 
 /**
@@ -28,6 +28,8 @@ import { createEventData, recordCreateEvent } from "./session-events";
  * the caller decides how small that transaction is.
  */
 export interface FixedSessionInput {
+  /** Minutes before start; null uses the user's default. */
+  reminderMinutes?: number | null;
   userId: string;
   /** Never `TASK` — a task is placed by the scheduler, not pinned. */
   type: Exclude<SessionType, "TASK">;
@@ -54,12 +56,11 @@ export interface FixedSessionInput {
   scheduleStudyUnitId?: string | null;
   /** Moodle course id for an LMS-ingested ASSIGNMENT / EXAM; null/absent otherwise. */
   lmsCourseId?: number | null;
-  tagIds?: readonly string[];
 }
 
 /**
  * Insert the session and its `CREATE` `SessionEvent` inside `tx`, returning the
- * row with tags + series loaded (a {@link SessionRow}, ready for
+ * row with its series loaded (a {@link SessionRow}, ready for
  * `toSessionDto`).
  */
 export async function insertFixedSession(
@@ -73,6 +74,7 @@ export async function insertFixedSession(
       title: input.title,
       note: input.note ?? null,
       location: input.location ?? null,
+      reminderMinutes: input.reminderMinutes ?? null,
       durationMinutes: input.durationMinutes,
       // Fixed types are pinned in time, so they carry no EDF ordering key.
       deadline: null,
@@ -82,10 +84,9 @@ export async function insertFixedSession(
       seriesId: input.seriesId ?? null,
       scheduleStudyUnitId: input.scheduleStudyUnitId ?? null,
       lmsCourseId: input.lmsCourseId ?? null,
-      tags: { connect: (input.tagIds ?? []).map((id) => ({ id })) },
       userId: input.userId,
     },
-    include: WITH_TAGS_AND_SERIES,
+    include: WITH_SERIES,
   });
   await tx.sessionEvent.create({ data: createEventData(row, input.userId) });
   recordCreateEvent();

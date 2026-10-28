@@ -12,7 +12,6 @@ owns:
   - backend/src/queue/**
   - backend/ops/**
   - backend/env/**
-  - backend/scripts/push-*.sh
   - backend/killswitch
   - backend/src/killswitch/**
   - build_images.sh
@@ -21,8 +20,6 @@ owns:
   - docs/ops/**
   - docs/benchmarks/**
   - scripts/**
-  - backend/scripts/build-map-style.cjs
-  - backend/scripts/fetch-map-assets.sh
   - backend/scripts/nominatim-*.sh
   - backend/scripts/osrm-prepare.sh
 tools: Read, Edit, Write, Grep, Glob, Bash

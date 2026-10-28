@@ -13,7 +13,7 @@ Agents own domains, not tech layers. Exact globs live in `.agents/agents/*.md` (
 | `scheduler` | Placement, sessions, series, TS fallback, Python contract | [ADR-0003](docs/adr/0003-python-authoritative-placement.md), [docs/backend/scheduler.md](docs/backend/scheduler.md) |
 | `bandit` | `services/bandit`, LinUCB, telemetry, A/B | [services/bandit/README.md](services/bandit/README.md), [ADR-0001](docs/adr/0001-linucb-model-design.md) |
 | `campus-sync` | DLU/LMS ingestion, integrations | [docs/backend/ingestion.md](docs/backend/ingestion.md) |
-| `calendar-web` | `pwa/`, `dashboard/`, `packages/core` | [pwa/README.md](pwa/README.md), [dashboard/README.md](dashboard/README.md) |
+| `calendar-web` | `dashboard/`, `packages/core` | [dashboard/README.md](dashboard/README.md) |
 | `calendar-mobile` | `mobile/`, `mockups/` | [mobile/README.md](mobile/README.md) |
 | `accounts-api` | Auth, users, files, notifications, Prisma, `packages/shared` | [ADR-0004](docs/adr/0004-s3-file-storage.md) |
 | `platform` | Compose, CI/CD, observability, secrets, load tests | [docs/ops/](docs/ops/) |
@@ -31,11 +31,11 @@ Delegate work in a domain to its agent; cross-domain changes go to each owner in
 pnpm install            # install all workspaces
 pnpm shared:build       # build @zenflow/shared — run BEFORE typechecking FE/BE
 pnpm -r build | typecheck | test     # run a script across all packages
-pnpm --filter backend <script>       # target one app (also: pwa, dashboard)
+pnpm --filter backend <script>       # target one app (also: mobile, dashboard)
 ```
 
 Per-app scripts: backend `start:dev | typecheck | lint | test | test:e2e | prisma:dev:*`;
-pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typecheck | lint` (port 5174).
+mobile `dev | typecheck | test`; dashboard `dev | build | typecheck | lint` (port 5174).
 
 ## Critical invariants
 
@@ -78,8 +78,8 @@ pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typech
    `DELETE /sessions/series/:id/truncate?from=<ISO>` pulls the rrule `UNTIL` back ("this and
    following"); `DELETE /sessions/series/:id` drops the whole series. A `TASK` is always one row.
 
-5. **Timezone wall-clock rule (pwa).** All calendar `Date`s carry the user-tz wall
-   clock in their local fields — go through `pwa/src/utils/tz.ts`, never a bare
+5. **Timezone wall-clock rule (clients).** All calendar `Date`s carry the user-tz wall
+   clock in their local fields — go through `packages/core/src/tz.ts`, never a bare
    `new Date()` in day/grid logic. Convert back with `zonedWallClockToUtc` before calling
    the API.
 
@@ -91,7 +91,7 @@ pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typech
    may still reject a create/edit before anything is written; once a row exists, placement ends in
    a real slot or the last resort (`ACCEPTED_LAST_RESORT` / `lastResortStart`), and a placement
    that throws discards the just-inserted rows (`placeOrDiscard`). Don't add a path that writes
-   `null` onto a `TASK`. Repair old rows with `pnpm --filter backend backfill:unplaced`.
+   `null` onto a `TASK`.
 
 8. **Auth is OTP + Redis sessions** (no passwords/JWT). Protected routes use
    `CookieAuthGuard`; the current user comes from `@CurrentUser()`.
@@ -102,27 +102,42 @@ pwa `dev | build | typecheck | lint | test:e2e`; dashboard `dev | build | typech
   a strict global pipe (`whitelist` + `forbidNonWhitelisted` + `transform`); custom
   decorators `@CurrentUser`, `@IsValidTimezone`, `@IsRRule`; Prisma errors via
   `src/prisma/error-codes.ts`. Global prefix `/api/v1`; Swagger at `/api`.
-- **PWA:** kebab-case files, PascalCase components; axios only in `src/api/`; Zustand
-  for the user store; build UI from `components/ui/` primitives; Tailwind v4 tokens
-  ("Warm Sunrise", `packages/core/src/palette.ts`); **no mobile-responsive target**.
+- **Dashboard:** kebab-case files, PascalCase components; build UI from `components/ui/`
+  primitives; Tailwind v4 tokens ("Warm Sunrise", `packages/core/src/palette.ts`);
+  **no mobile-responsive target**.
+
+## Workflow
+
+Plan first, then delegate the implementation.
+
+- **Plan mode first.** On the first prompt of a chat, enter plan mode (`EnterPlanMode`) unless the user already did. Edit nothing until the plan is approved.
+- **Plan detail.** The plan must let a weaker model implement it without guessing:
+  - Name every file and function to add or change, with signatures and types.
+  - State the algorithm: LinUCB (feature vector, `A`/`b` update, alpha, reward), heuristic (each term, weight, tie-break), eval (seeds, arms, metric, pass bar), or the architecture (modules, data flow, ownership). Give formulas and constants, not adjectives.
+  - List edge cases, invariants from this file that apply, and the tests to add with expected values.
+  - Say what is out of scope. Mark anything unverified as "check in code", never invent an API.
+- **Delegate by default.** After approval, spawn subagents for the implementation; do not code in the main thread. Use the domain agent for the folder, one per plan section, in parallel when files don't overlap.
+- **Weakest model that works.** Exploration, search, implementation, tests and docs run on the lightest model: `model: "haiku"` in Claude Code, the smallest available model in Codex or any other tool. Keep the strongest model for planning, review and decisions the plan leaves open.
+- **Subagent prompt.** Plan section verbatim, exact paths, signatures, constants and tests. The subagent reports changed files and test output.
+- **Review.** The main model reads the diff and runs `pnpm check` and the tests.
+- **Code comments** follow the same rule: say what the algorithm does where the code can't.
 
 ## Tests, lint, typecheck
 
 - Backend unit tests are `*.spec.ts` (Jest) next to the code — pure functions like the
   scheduler are the priority to cover. E2e is `backend/test/jest-e2e.json` (needs the test
-  stack; see `docs/backend/testing.md`). PWA e2e is Playwright (`testDir` is `pwa/e2e/`; no specs checked in yet; needs the backend stack + Mailpit). CI runs unit tests only. Mobile has unit, component (MSW) and Maestro e2e layers: see `docs/mobile/testing.md`.
+  stack; see `docs/backend/testing.md`). CI runs unit tests only. Mobile has unit, component (MSW) and Maestro e2e layers: see `docs/mobile/testing.md`.
 - **Backend tests use NestJS DI.** Build the unit under test with `Test.createTestingModule({ providers: [Svc, { provide: Dep, useValue: mock }] })`, fetch it with `module.get(Svc)`, and replace real providers with `.overrideProvider(Dep).useValue(...)`; `useMocker` for broad auto-mocks. No `new Svc(mockA, mockB)`, no `as any` casts to satisfy constructors, no reaching into private fields. Inject tokens (`@Inject(TOKEN)`) are provided by token. E2E boots `AppModule` the same way and overrides externals. Exempt: pure functions and classes with no Nest deps (`scheduler/core/*`). Apply to new and touched specs; do not mass-rewrite old ones.
 - Run `pnpm --filter <app> typecheck` and `lint` before finishing. After editing shared
   types, `pnpm shared:build` first.
 - **Formatting:** ESLint (+ Prettier on the backend), 2-space indentation (`.editorconfig`);
-  pwa uses the `@/…` import alias. **Commits** follow
+  mobile uses the `@/…` import alias. **Commits** follow
   [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
   (`type(scope): summary`). Full guidelines: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Where things run
 
 - API → `http://localhost:8000`; Swagger UI → `http://localhost:8000/api`.
-- PWA dev → `http://localhost:5173` (`VITE_API_URL` points at the API).
 - Mobile dev → `http://localhost:8081` (Expo/Metro, web target only —
   `EXPO_PUBLIC_API_URL` points at the API; native iOS/Android isn't
   origin-based). Backend `CORS_ORIGIN` (`.env.dev`) is a comma-separated list

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zenflow Mobile: Command palette</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5.2.6/index.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist-mono@5.2.6/index.css" />
+<link rel="stylesheet" href="dist/output.css" />
+<link rel="stylesheet" href="gallery-chrome.css" />
+<style>@layer base{*{border-color:var(--border)}}
+/* Brand loader: the curve turns once, eases to rest, and drags fading copies behind it. */
+  :root { --zf-d: 1.6s; }
+  body:has(#zf-slow:checked) { --zf-d: 6s; }
+  .zf-curve {
+    transform-box: view-box; transform-origin: 50% 50%;
+    animation: zf-swirl var(--zf-d) cubic-bezier(.72,0,.22,1) infinite;
+  }
+  .zf-t1 { opacity: 0.55; animation-delay: calc(var(--zf-d) * 0.022); }
+  .zf-t2 { opacity: 0.4; animation-delay: calc(var(--zf-d) * 0.044); }
+  .zf-t3 { opacity: 0.28; animation-delay: calc(var(--zf-d) * 0.066); }
+  .zf-t4 { opacity: 0.18; animation-delay: calc(var(--zf-d) * 0.088); }
+  .zf-t5 { opacity: 0.1; animation-delay: calc(var(--zf-d) * 0.110); }
+  .zf-t6 { opacity: 0.05; animation-delay: calc(var(--zf-d) * 0.132); }
+  .zf-inline { flex-shrink: 0; }
+  @keyframes zf-swirl { 0% { transform: rotate(0) } 72%, 100% { transform: rotate(360deg) } }
+  /* Reduce Motion: no turn, a slow fade instead. */
+  .zf-still { animation: zf-fade 1.4s ease-in-out infinite alternate; }
+  @keyframes zf-fade { from { opacity: 1 } to { opacity: .55 } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="zf-sunrise" x1="48.5" y1="31.5" x2="222.5" y2="220.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF6900"/><stop offset="0.323567" stop-color="#F0B100"/><stop offset="1" stop-color="#D8F999"/>
+    </linearGradient>
+    <linearGradient id="zf-dusk" x1="48.5" y1="31.5" x2="222.5" y2="220.5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C9A58C"/><stop offset="0.45" stop-color="#B9AE9C"/><stop offset="1" stop-color="#C8C7B4"/>
+    </linearGradient>
+    <clipPath id="zf-disc"><circle cx="130" cy="130" r="130"/></clipPath>
+    <filter id="zf-soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.5"/></filter>
+  </defs>
+</svg>
+  <div class="page-head">
+    <h1><span class="dot"></span> Command palette</h1>
+    <p>The home screen. One glass pill. Type a task, then tap the chips it offers. A verb is only the first word. No slash, no tab key, no hover. Paste many lines to add in bulk. Every write shows a preview first, and every view spans at most 7 days.</p>
+    <div class="crumbs"><a href="index.html">All mobile mockups</a></div>
+  </div>
+
+  

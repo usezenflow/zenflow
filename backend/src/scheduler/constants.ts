@@ -66,12 +66,16 @@ export const STABILITY_WEIGHT = 0.1;
 export const STABILITY_SATURATION_HOURS = 4;
 
 /**
- * Reward written on the `SessionEvent` (ADR-0035). A user drag/resize of a
- * scheduled TASK is graded by displacement (`MOVE`). A START inside an unmoved
- * TASK's slot is positive. `CREATE` events carry a neutral 0.
+ * Reward written on the `SessionEvent` (ADR-0042). A user drag/resize of a
+ * scheduled TASK is graded by displacement (`MOVE`). A placement whose slot
+ * passed unmoved is `KEPT`. `CREATE` events carry a neutral 0.
  */
 export const SESSION_MOVE_REWARD = -1.0;
-export const SESSION_STARTED_REWARD = 1.0;
+export const SESSION_KEPT_REWARD = 0.5;
+/** A placement counts as kept once its slot began this long ago and it was never moved. */
+export const KEPT_GRACE_MS = 15 * 60_000;
+/** The sweep ignores placements older than this: they were swept already or predate the signal. */
+export const KEPT_LOOKBACK_MS = 14 * 24 * 60 * 60_000;
 /**
  * Reward for the LinUCB arm when the user picks LinUCB's option in a shown
  * pairwise comparison (`docs/scheduler/ab-testing.md` §3). Below completion:
@@ -91,6 +95,28 @@ export const PAIRWISE_LOSS_REWARD = -0.2;
  */
 export const PAIRWISE_KEEP_PREFERENCE_WEIGHT =
   PREFERENCE_KEPT_WEIGHT * PAIRWISE_WIN_REWARD;
+
+/**
+ * Reward for the LinUCB arm when the user deletes a placed TASK at least an hour
+ * before it starts (`core/reward.ts` `deleteReward`). Eval value on seeds 1400 to 1499.
+ */
+export const DELETE_REWARD = -0.2;
+/** Off until the offline evaluation passes. While off, the event stores the reward but the arm does not learn from it. */
+export const DELETE_REWARD_ENABLED = false;
+/**
+ * Reward v2 (docs/adr/0045), off until the offline evaluation passes the ship
+ * rule. On: a KEPT slot pays `REWARD_V2_KEPT` to the LinUCB arm instead of 1,
+ * and a MOVE also pays `REWARD_V2_DESTINATION` to the hour it lands in.
+ * Mirrored in services/bandit/src/core/constants.py.
+ */
+export const REWARD_V2_ENABLED = false;
+export const REWARD_V2_KEPT = 1;
+export const REWARD_V2_DESTINATION = 0.5;
+/**
+ * Preference-matrix weight on the deleted slot. The matrix variant exists only in
+ * the simulator (`services/bandit/evalx`), so production keeps it at 0.
+ */
+export const PREFERENCE_DELETE_WEIGHT = 0;
 
 /**
  * Disjoint LinUCB scheduling parameters

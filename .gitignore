@@ -13,12 +13,10 @@ start-dev.bat
 start-dev.ps1
 startdev-*.bat
 
-# Env files: commit only *.example (pwa .env.production/.staging are tracked Vite build config)
+# Env files: commit only *.example
 .env
 .env.*
 !.env.example
-!pwa/.env.production
-!pwa/.env.staging
 backend/.vault-dev/
 
 # Local agent settings

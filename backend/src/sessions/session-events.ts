@@ -1,4 +1,9 @@
-import { Prisma, SessionEventType } from "../../generated/prisma";
+import {
+  Prisma,
+  SessionEventType,
+  type SessionEventSource,
+  type SessionType,
+} from "../../generated/prisma";
 import type { SessionRow } from "./types/session-row";
 import { toSessionSnapshot } from "./session-mapper";
 import { SESSION_MOVE_REWARD } from "../scheduler/constants";
@@ -44,6 +49,54 @@ export function createEventData(
   };
 }
 
+/** The `{ scheduledStartTime, durationMinutes, type }` a change-log row records. */
+export function snapshotOf(row: {
+  scheduledStartTime: Date | null;
+  durationMinutes: number;
+  type: SessionType;
+}): Prisma.InputJsonValue {
+  return {
+    scheduledStartTime: row.scheduledStartTime?.toISOString() ?? null,
+    durationMinutes: row.durationMinutes,
+    type: row.type,
+  };
+}
+
+/** A session removed before it started, from the app or the phone. Carries no reward. */
+export function deleteEventData(args: {
+  sessionId: string;
+  userId: string;
+  snapshot: Prisma.InputJsonValue;
+  source: SessionEventSource;
+}): Prisma.SessionEventUncheckedCreateInput {
+  return {
+    sessionId: args.sessionId,
+    userId: args.userId,
+    eventType: SessionEventType.DELETE,
+    oldSnapshot: args.snapshot,
+    newSnapshot: { deleted: true },
+    source: args.source,
+  };
+}
+
+/** A change to a session's reminder. Carries no reward. */
+export function editEventData(args: {
+  sessionId: string;
+  userId: string;
+  oldReminderMinutes: number | null;
+  newReminderMinutes: number | null;
+  source: SessionEventSource;
+}): Prisma.SessionEventUncheckedCreateInput {
+  return {
+    sessionId: args.sessionId,
+    userId: args.userId,
+    eventType: SessionEventType.EDIT,
+    oldSnapshot: { reminderMinutes: args.oldReminderMinutes },
+    newSnapshot: { reminderMinutes: args.newReminderMinutes },
+    source: args.source,
+  };
+}
+
 /** A `MOVE` event for a user drag (or start-side resize) of a scheduled TASK. */
 export function moveEventData(args: {
   sessionId: string;
@@ -53,11 +106,13 @@ export function moveEventData(args: {
   newStart: Date;
   newDurationMinutes: number;
   dragDistanceMinutes: number;
+  source?: SessionEventSource;
 }): Prisma.SessionEventUncheckedCreateInput {
   return {
     sessionId: args.sessionId,
     userId: args.userId,
     eventType: SessionEventType.MOVE,
+    source: args.source ?? "ZENFLOW",
     oldSnapshot: {
       scheduledStartTime: args.oldStart.toISOString(),
       durationMinutes: args.oldDurationMinutes,

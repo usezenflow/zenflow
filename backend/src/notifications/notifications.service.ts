@@ -1,4 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Cron, CronExpression } from "@nestjs/schedule";
+import { runCronJob } from "../observability/cron";
 import {
   notificationCategory,
   type NotificationDto,
@@ -26,7 +29,12 @@ import { QueueService } from "../queue/queue.service";
 import { NOTIFY_QUEUE, type PushProvider } from "../queue/queues";
 import { idempotencyKey } from "../queue/queue.types";
 
-const PUSH_PROVIDERS: readonly PushProvider[] = ["fcm", "apns", "web"];
+/** Credentials each sender needs, mirroring its own `enabled` check. */
+const PROVIDER_CREDENTIALS: Record<PushProvider, readonly string[]> = {
+  fcm: ["FCM_SERVICE_ACCOUNT"],
+  apns: ["APNS_KEY", "APNS_KEY_ID", "APNS_TEAM_ID", "APNS_BUNDLE_ID"],
+  web: ["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"],
+};
 
 /** Delay before each enqueue attempt of {@link NotificationsService.announce}. */
 const ENQUEUE_RETRY_DELAYS_MS = [0, 250, 1_000];
@@ -123,7 +131,6 @@ function resolveSessionDefaults(eventName: string): {
     case "LECTURE":
       return { type: "LECTURE", source: "PORTAL", durationMinutes: 90 };
     case "ASSIGNMENT":
-    case "REMINDER":
     default:
       return { type: "TASK", source: "LMS", durationMinutes: 90 };
   }
@@ -182,7 +189,15 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly pubsub: NotificationPubSub,
     private readonly queue: QueueService,
-  ) {}
+    config: ConfigService,
+  ) {
+    // An unconfigured sender drops its job, so queueing one only wastes Redis and worker time.
+    this.pushProviders = (
+      Object.keys(PROVIDER_CREDENTIALS) as PushProvider[]
+    ).filter((p) => PROVIDER_CREDENTIALS[p].every((k) => config.get(k)));
+  }
+
+  private readonly pushProviders: readonly PushProvider[];
 
   /**
    * The process-local emitter `GET /notifications/stream` reads. Fed by
@@ -216,7 +231,7 @@ export class NotificationsService {
   async announce(event: string, payload: Notification): Promise<void> {
     await Promise.all([
       this.pubsub.publish(event, payload),
-      ...PUSH_PROVIDERS.map((provider) =>
+      ...this.pushProviders.map((provider) =>
         this.enqueuePush(payload.id, provider),
       ),
     ]);
@@ -241,6 +256,11 @@ export class NotificationsService {
       `push enqueue dropped for ${notificationId}/${provider}; the reconciliation sweep will retry`,
     );
     return false;
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleReconcileCron(): Promise<void> {
+    await runCronJob("notifications-reconcile", () => this.reconcileRecent());
   }
 
   /**
@@ -272,7 +292,7 @@ export class NotificationsService {
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       });
       for (const { id } of rows) {
-        for (const provider of PUSH_PROVIDERS) {
+        for (const provider of this.pushProviders) {
           const jobId = idempotencyKey("push", id, provider);
           // Throws when the queue Redis is down: stop, the next sweep retries.
           if (await this.queue.getJob(NOTIFY_QUEUE, jobId)) continue;

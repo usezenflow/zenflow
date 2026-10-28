@@ -103,8 +103,11 @@ export function localizeNotification<
         /^Still syncing, check back soon\.$/,
         "Đang đồng bộ, lát ghé lại nha.",
       );
-  } else if (row.eventName === "marks.ready") {
-    title = title.replace(/^Your marks are available$/, "Điểm của bạn đã có");
+  } else if (row.eventName.startsWith("marks.")) {
+    title = title
+      .replace(/^Your marks are available$/, "Điểm của bạn đã có")
+      .replace(/^New mark: /, "Điểm mới: ")
+      .replace(/^(\d+) new marks$/, "$1 điểm mới");
     content = content.replace(/^Open your profile\.$/, "Mở hồ sơ của bạn.");
   } else if (row.eventName === "timetable.changed") {
     title = title
@@ -114,77 +117,6 @@ export function localizeNotification<
     content = content
       .replace(/^See what changed\.$/, "Xem có gì thay đổi.")
       .replace(/^Check your timetable\.$/, "Xem lại thời khóa biểu của bạn.");
-  } else if (row.eventName === "reminder.fired") {
-    const match = title.match(
-      /^(Exam|Due|Class|Task starts|Event starts) in (.+?): ([\s\S]+)$/,
-    );
-    if (match) {
-      const [, kind, originalLead, sessionTitle] = match;
-      const lead = originalLead
-        .replace(/days?/g, "ngày")
-        .replace(/hours?/g, "giờ")
-        .replace(/minutes?/g, "phút");
-      const label: Record<string, string> = {
-        Exam: "Thi sau",
-        Due: "Đến hạn sau",
-        Class: "Buổi học sau",
-        "Task starts": "Công việc bắt đầu sau",
-        "Event starts": "Sự kiện bắt đầu sau",
-      };
-      title = `${label[kind]} ${lead}: ${sessionTitle}`;
-      // Only replace framing surrounding the exact session title.
-      const prefixes =
-        kind === "Exam"
-          ? ["Starts at ", "Your exam starts at "]
-          : kind === "Due"
-            ? ["Due at ", `${sessionTitle} is due at `]
-            : [
-                `${sessionTitle}${kind === "Class" ? " begins at " : " starts at "}`,
-              ];
-      const prefix = prefixes.find((p) => content.startsWith(p));
-      if (prefix) {
-        let rest = content
-          .slice(prefix.length)
-          .replace(/\. Good luck!$/, ". Chúc bạn thi tốt!")
-          .replace(
-            /\. Time for a last look at your notes\.$/,
-            ". Hãy xem lại ghi chú trước khi thi.",
-          )
-          .replace(/\. Submit it now\.$/, ". Hãy nộp bài ngay.")
-          .replace(
-            /\. Make sure it's submitted before the deadline\.$/,
-            ". Hãy nộp bài trước hạn.",
-          );
-        const date = rest.match(
-          /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),? (\d+) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec), (\d{2}:\d{2})/,
-        );
-        if (date) {
-          const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-          const months = [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dec",
-          ];
-          const index = weekdays.indexOf(date[1]);
-          rest =
-            `${index === 6 ? "Chủ nhật" : `Thứ ${index + 2}`}, ${date[2]}/${months.indexOf(date[3]) + 1}, ${date[4]}` +
-            rest.slice(date[0].length).replace(/^ (in|at) /, " tại ");
-        }
-        content =
-          prefix === "Starts at " || prefix === "Due at "
-            ? `${prefix === "Due at " ? "Đến hạn lúc" : "Bắt đầu lúc"} ${rest}`
-            : `${kind === "Exam" ? "Kỳ thi" : sessionTitle}${kind === "Due" ? " đến hạn lúc " : " bắt đầu lúc "}${rest}`;
-      }
-    }
   } else if (row.eventName.startsWith("sync_conflict.")) {
     const label = (value: string) =>
       value === "your timetable"
@@ -211,58 +143,4 @@ export function localizeNotification<
     );
   }
   return { ...row, title, content };
-}
-
-/** Daily brief counts and the first item of the day (issue #255). */
-export interface DailyBriefCopyInput {
-  classes: number;
-  blocks: number;
-  firstTitle: string;
-  /** `HH:mm` in the user's timezone. */
-  firstTime: string;
-}
-
-/** Morning brief push: counts as the title, the first item as the body. */
-export function dailyBriefCopy(
-  input: DailyBriefCopyInput,
-  lang?: string,
-): { title: string; body: string } {
-  const { classes, blocks, firstTitle, firstTime } = input;
-  if (lang === "VI_VN") {
-    const parts = [
-      classes > 0 ? `${classes} tiết học` : null,
-      blocks > 0 ? `${blocks} buổi học tập` : null,
-    ].filter(Boolean);
-    return {
-      title: parts.join(", "),
-      body: `Tiếp theo: ${firstTitle} lúc ${firstTime}`,
-    };
-  }
-  const parts = [
-    classes > 0 ? `${classes} ${classes === 1 ? "class" : "classes"}` : null,
-    blocks > 0
-      ? `${blocks} ${blocks === 1 ? "study block" : "study blocks"}`
-      : null,
-  ].filter(Boolean);
-  return {
-    title: parts.join(", "),
-    body: `First up: ${firstTitle} at ${firstTime}`,
-  };
-}
-
-/** Evening check-in push: the action buttons carry the choice, so the copy only asks. */
-export function dailyCheckinCopy(lang?: string): {
-  title: string;
-  body: string;
-} {
-  if (lang === "VI_VN") {
-    return {
-      title: "Kiểm tra hôm nay",
-      body: "Xem lại các buổi hôm nay.",
-    };
-  }
-  return {
-    title: "Check in on today",
-    body: "Look over today's sessions.",
-  };
 }

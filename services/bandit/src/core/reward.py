@@ -1,4 +1,4 @@
-"""Graded MOVE reward: a port of ``reward.ts`` (ADR-0001, ADR-0035)."""
+"""Graded MOVE reward: a port of ``reward.ts`` (ADR-0001, ADR-0042)."""
 
 from .constants import MOVE_REWARD_SCALE_MINUTES
 

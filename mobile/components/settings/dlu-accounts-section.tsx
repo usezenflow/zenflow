@@ -112,7 +112,7 @@ function ProviderIcon({
 }
 
 /** Compact "5m ago" / "3h ago" / "2d ago". */
-function shortAgo(iso: string): string {
+export function shortAgo(iso: string): string {
   const minutes = Math.max(
     0,
     Math.floor((Date.now() - Date.parse(iso)) / 60000),

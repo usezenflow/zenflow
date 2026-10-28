@@ -44,7 +44,6 @@
     "workbox-core": "^7.3.0",
     "workbox-precaching": "^7.4.1",
     "workbox-routing": "^7.4.1",
-    "workbox-window": "^7.3.0",
     "wrangler": "^4.151.2"
   }
 }

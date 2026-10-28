@@ -1,6 +1,5 @@
 ---
 "backend": minor
-"pwa": minor
 "mobile": minor
 ---
 

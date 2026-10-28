@@ -133,4 +133,3 @@ Client endpoints, parser rules, semester resolution and job tracking: see the `i
 
 ## One-off repairs
 
-- **LMS course link.** Sessions ingested before `Session.lmsCourseId` existed have it null, so their course colour and occurrence fan-out miss them. Link them from `LmsCourseOccurrence`: `pnpm --filter backend backfill:lms-course [--dry-run]`. Idempotent. Rows with no occurrence row stay null.

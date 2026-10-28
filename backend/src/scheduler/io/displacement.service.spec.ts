@@ -85,6 +85,10 @@ describe("isFlexible", () => {
     expect(isFlexible(base as never)).toBe(true);
   });
 
+  it("false once the user has moved the row by hand", () => {
+    expect(isFlexible({ ...base, moved: true } as never)).toBe(false);
+  });
+
   it("false when recurring, not a TASK, part of a series, or deadline-less", () => {
     expect(isFlexible({ ...base, recurring: true } as never)).toBe(false);
     expect(isFlexible({ ...base, type: "LECTURE" } as never)).toBe(false);

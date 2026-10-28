@@ -44,8 +44,7 @@ interface ErrorBoundaryState {
  * (`components/tasks/note/description-field.tsx`) mounts a
  * `react-native-webview`-backed native view the first time its sheet opens
  * (`@gorhom/bottom-sheet`'s `BottomSheetModal` defers mounting sheet content
- * until `present()` — see its `mount` state); if `react-native-webview` /
- * `@10play/tentap-editor` aren't yet linked into the running dev client (a
+ * until `present()` — see its `mount` state); if `react-native-webview` isn't yet linked into the running dev client (a
  * native rebuild is required after adding them — see `mobile/README.md`'s
  * pitfalls section — and wasn't verified on-device when they were wired up),
  * creating that native view throws during render. Unhandled, that crash

@@ -26,12 +26,8 @@ services:
       - pubsub
       - bandit
       - mail
-      - storage
-      - geo
       - o11y
     depends_on:
-      storage:
-        condition: service_started
       postgres:
         condition: service_healthy
       session-redis:
@@ -54,7 +50,6 @@ services:
       - .env.staging
     environment:
       ROLE: api
-      NOMINATIM_URL: http://nominatim:8080
       SWAGGER_ENABLED: "true"
       INGESTION_OCCURRENCE_CACHE_ENABLED: "true"
       OTEL_SDK_DISABLED: "false"
@@ -223,62 +218,6 @@ services:
       start_period: 30s
 
 
-  # Place search for the location screen. Run scripts/nominatim-extract.sh on the
-  # host first. The first start imports the Lam Dong extract (a few minutes);
-  # search is empty until /status returns OK. Capped so an import cannot starve
-  # the stack. Only the API reaches it, over the geo network.
-  nominatim:
-    container_name: zenflow-nominatim-staging
-    image: mediagis/nominatim:5.1
-    expose:
-      - "8080"
-    shm_size: 1gb
-    environment:
-      PBF_PATH: /pbf/lamdong.osm.pbf
-      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:-nominatim}
-      IMPORT_STYLE: full
-      THREADS: 2
-    mem_limit: 2g
-    cpus: 2
-    volumes:
-      - ./nominatim/lamdong.osm.pbf:/pbf/lamdong.osm.pbf:ro
-      - nominatim_data:/var/lib/postgresql/16/main
-    healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8080/status"]
-      interval: 30s
-      timeout: 5s
-      retries: 10
-      start_period: 300s
-    restart: unless-stopped
-    networks:
-      - geo
-
-  # Walking and driving routes for the campus map, served at /osrm/foot/ and
-  # /osrm/car/ by nginx. Push the graphs with scripts/push-osrm.sh.
-  osrm-foot:
-    container_name: zenflow-osrm-foot-staging
-    image: osrm/osrm-backend
-    command: osrm-routed --algorithm mld --max-table-size 1000 /data/map.osrm
-    expose:
-      - "5000"
-    volumes:
-      - ./osrm/data/foot:/data:ro
-    restart: unless-stopped
-    networks:
-      - geo
-
-  osrm-car:
-    container_name: zenflow-osrm-car-staging
-    image: osrm/osrm-backend
-    command: osrm-routed --algorithm mld --max-table-size 1000 /data/map.osrm
-    expose:
-      - "5000"
-    volumes:
-      - ./osrm/data/car:/data:ro
-    restart: unless-stopped
-    networks:
-      - geo
-
   bandit:
     profiles: ["template"]
     container_name: zenflow-bandit-staging
@@ -364,7 +303,7 @@ services:
       BACKUP_ENV: staging
       BACKUP_CRON: ${BACKUP_CRON:-*/15 * * * *}
       RESTORE_TEST_CRON: ${RESTORE_TEST_CRON:-7 * * * *}
-      BACKUP_S3_ENDPOINT: http://storage:9000
+      BACKUP_S3_ENDPOINT: http://backup-storage:9000
       BACKUP_CREATE_BUCKET: "1"
       BACKUP_ON_START: "1"
       BACKUP_PRUNE_DAYS: ${BACKUP_PRUNE_DAYS:-1}
@@ -373,7 +312,7 @@ services:
       - backup_metrics:/metrics
     networks:
       - db
-      - storage
+      - backup-store
       - egress
     depends_on:
       postgres:
@@ -786,21 +725,14 @@ services:
       - ./nginx/snippets-proxy.conf:/etc/nginx/zenflow/snippets-proxy.conf:ro
       - ./nginx/sse.conf:/etc/nginx/zenflow/sse.conf:ro
       - ./nginx/grafana.conf:/etc/nginx/zenflow/grafana.conf:ro
-      - ./nginx/minio.conf:/etc/nginx/zenflow/minio.conf:ro
-      - ./nginx/maps.conf:/etc/nginx/zenflow/maps.conf:ro
-      - ./tiles:/srv/maps:ro
     depends_on:
       grafana:
-        condition: service_started
-      storage:
         condition: service_started
       state-init:
         condition: service_completed_successfully
     networks:
       - edge
       - o11y
-      - storage
-      - geo
 
   # Local `compose up` bootstrap: seeds the nginx upstream (state/ is git-ignored, written by
   # deploy.sh) with the blue colour when it is missing. Never overwrites; deploy.sh skips it.
@@ -813,31 +745,27 @@ services:
       - ./state:/state
     restart: "no"
 
-  storage:
-    container_name: zenflow-storage-staging
+  # Staging-only backup target. Prod backs up to real S3.
+  backup-storage:
+    container_name: zenflow-backup-storage-staging
     image: alphatran/minio:latest
     # The bucket is created before the server starts (a top-level directory in
-    # the data dir is a bucket), so it exists the moment the API can connect —
-    # no init job and no create-if-missing logic in the app.
+    # the data dir is a bucket), so it exists the moment the backup job connects.
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
-        mkdir -p "/data/$$S3_BUCKET" &&
-        MINIO_ROOT_USER="$$S3_ACCESS_KEY_ID"
-        MINIO_ROOT_PASSWORD="$$S3_SECRET_ACCESS_KEY"
-        exec minio server /data --console-address ":9001"
-    environment:
-      # Console redirects and cookies use the public URL behind nginx.
-      MINIO_BROWSER_REDIRECT_URL: http://minio.localhost
+        mkdir -p "/data/$$BACKUP_S3_BUCKET" &&
+        MINIO_ROOT_USER="$$BACKUP_S3_ACCESS_KEY_ID"
+        MINIO_ROOT_PASSWORD="$$BACKUP_S3_SECRET_ACCESS_KEY"
+        exec minio server /data
     expose:
       - "9000"
-      - "9001"
     volumes:
       - storage_data:/data
     env_file:
       - .env.staging
     networks:
-      - storage
+      - backup-store
 
 networks:
   edge:
@@ -863,14 +791,11 @@ networks:
     driver: bridge
   mail:
     driver: bridge
-  storage:
+  backup-store:
     driver: bridge
     internal: true
   o11y:
     driver: bridge
-  geo:
-    driver: bridge
-
 volumes:
   storage_data:
   postgres_data:
@@ -884,4 +809,3 @@ volumes:
   redis_queue_data:
   backup_metrics:
   redis_killswitch_data:
-  nominatim_data:

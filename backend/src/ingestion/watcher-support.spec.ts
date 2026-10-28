@@ -6,6 +6,7 @@ import {
   isIngestionEnabled,
   jobItemBody,
   MAX_RESPONSE_BODY_CHARS,
+  jitter,
   sleep,
   statusCodeOf,
 } from "./watcher-support";
@@ -75,6 +76,18 @@ describe("sleep", () => {
     const before = Date.now();
     await sleep(0);
     expect(Date.now() - before).toBeLessThan(50);
+  });
+});
+
+describe("jitter", () => {
+  it("spreads the delay ±25%", () => {
+    expect(jitter(1000, () => 0)).toBe(750);
+    expect(jitter(1000, () => 0.5)).toBe(1000);
+    expect(jitter(1000, () => 0.999)).toBeLessThanOrEqual(1250);
+  });
+
+  it("leaves a non-positive delay alone", () => {
+    expect(jitter(0)).toBe(0);
   });
 });
 

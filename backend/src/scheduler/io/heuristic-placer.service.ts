@@ -3,6 +3,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { minutesToUtc } from "../../common/utils";
 import { MAX_SCAN_DAYS, SCAN_CAP_DAYS } from "../constants";
 import { loadDayLoads } from "./day-load";
+import { constraintBlocks } from "./constraint-blocks";
 import {
   bestFreeSlot,
   slotPreferenceScore,
@@ -12,6 +13,7 @@ import { emptyWorkloadByType } from "../types/context-vector.types";
 import type { DayLoad } from "../types/day-load.types";
 import type {
   PlaceableTask,
+  PlacementConstraint,
   PlacementWindow,
   ScoredSlot,
 } from "../types/placement.types";
@@ -28,6 +30,8 @@ import {
 export interface PlaceInWindowOpts {
   /** Intervals to schedule around on top of the day's own occupancy. */
   extraOccupied?: Interval[];
+  /** `notBefore` / `window` bounds, applied per scanned day as blocked time. */
+  constraint?: PlacementConstraint;
   /** Return `true` to skip a candidate day entirely (e.g. a per-day series cap). */
   skipDay?: (dayStr: string) => boolean;
   /** Max days scanned (default `MAX_SCAN_DAYS`; single-task placement passes `SCAN_CAP_DAYS`). */
@@ -80,6 +84,7 @@ export class HeuristicPlacer {
     preferenceMatrix: number[],
     now: Date,
     extraOccupied: Interval[] = [],
+    constraint?: PlacementConstraint,
   ): Promise<Date | null> {
     const next15Ms = ceilToSlot(now.getTime());
     const deadlineMs = task.deadline.getTime();
@@ -97,7 +102,7 @@ export class HeuristicPlacer {
       preferenceMatrix,
       now,
       window,
-      { extraOccupied, maxScanDays: SCAN_CAP_DAYS },
+      { extraOccupied, constraint, maxScanDays: SCAN_CAP_DAYS },
     );
     return best?.start ?? null;
   }
@@ -158,6 +163,14 @@ export class HeuristicPlacer {
 
     let best: ScoredSlot | null = null;
     dayStrs.forEach((_, i) => {
+      const blocks = opts.constraint
+        ? constraintBlocks(
+            bounds[i],
+            timezone,
+            opts.constraint,
+            overhangMs,
+          ).map((iv) => ({ start: iv.startMs, end: iv.endMs }))
+        : [];
       const slot = this.bestSlotOnDay(
         bounds[i],
         loads[i].occupied,
@@ -165,7 +178,7 @@ export class HeuristicPlacer {
         timezone,
         preferenceMatrix,
         now,
-        extraOccupied,
+        [...extraOccupied, ...blocks],
       );
       if (slot && (best === null || slot.score > best.score)) {
         best = slot;

@@ -1,5 +1,4 @@
 import type { SessionCardState, SessionType } from "@zenflow/shared";
-import { SESSION_TONE_CLASSES, type SessionTone } from "./palette";
 
 interface StateInput {
   type: SessionType;
@@ -45,23 +44,3 @@ export function withOverlap(
   if (!overlapping || state === "dnd") return state;
   return "conflict";
 }
-
-function cardClasses(tone: SessionTone): string {
-  const c = SESSION_TONE_CLASSES[tone];
-  return `${c.tint} ${c.stripe} ${c.text}`;
-}
-
-/** Block classes per state: tone tint, 3px stripe and AA ink. */
-export const TASK_CARD_CLASSES: Record<SessionCardState, string> = {
-  fluid: cardClasses("task"),
-  conflict: cardClasses("conflict"),
-  assignment: cardClasses("assignment"),
-  exam: cardClasses("exam"),
-  lecture: cardClasses("lecture"),
-  // Blocked time: muted lavender with a dashed stripe; the hatch is drawn by
-  // the block itself.
-  dnd: cardClasses("dnd"),
-};
-
-/** Classes for a late or overdue block. */
-export const LATE_CARD_CLASSES = cardClasses("late");

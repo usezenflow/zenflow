@@ -135,6 +135,7 @@ describe("PortalAPIService", () => {
         clientid: "dtl",
         apikey: DKHP_API_KEY,
         "content-type": "application/json",
+        "user-agent": "Zenflow/1.0 (+https://usezenflow.com)",
       });
     });
 
@@ -178,6 +179,7 @@ describe("PortalAPIService", () => {
         authorization: "Bearer TOKEN",
         clientid: "vhu",
         apikey: API_KEY,
+        "user-agent": "Zenflow/1.0 (+https://usezenflow.com)",
       });
     });
 
@@ -294,6 +296,7 @@ describe("PortalAPIService", () => {
         "content-type": "application/json",
         apikey: DKHP_API_KEY,
         clientid: "dtl",
+        "user-agent": "Zenflow/1.0 (+https://usezenflow.com)",
       });
       expect(JSON.parse(init.body as string)).toEqual({
         username: "sv",

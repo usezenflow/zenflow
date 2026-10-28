@@ -20,13 +20,17 @@ export interface DisplacementMove {
   toMs: number;
 }
 
-/** Only standalone scheduled TASK rows are movable; everything else is fixed. */
+/**
+ * Only standalone scheduled TASK rows the user has not moved are movable;
+ * everything else is fixed. A user move makes the row fixed.
+ */
 export const isFlexible = (it: ScheduleItem): boolean =>
   !it.recurring &&
   it.type === "TASK" &&
   it.seriesId === null &&
   it.id !== null &&
-  it.deadlineMs !== null;
+  it.deadlineMs !== null &&
+  !it.moved;
 
 /**
  * I/O half of displacement (issue #62 B): persists a plan's moves — computed

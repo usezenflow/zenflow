@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "license": "UNLICENSED",
-  "description": "Zenflow brand assets shared by mobile and pwa: Geist fonts and notification chimes.",
+  "description": "Zenflow brand assets shared by the clients: Geist fonts and notification chimes.",
   "files": [
     "fonts",
     "sounds"

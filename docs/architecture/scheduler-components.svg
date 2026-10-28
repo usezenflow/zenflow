@@ -54,8 +54,8 @@
   <text x="40" y="918" text-anchor="start" font-size="12" font-weight="700" fill="#3B7EA1">Learning loop</text>
   <rect x="40" y="930" width="400" height="130" rx="8" fill="#EEF5F9" stroke="#3B7EA1" stroke-width="2"/>
   <text x="240" y="984.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">SchedulingFeedbackService</text>
-  <text x="240" y="1000.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">drag → reward</text>
-  <text x="240" y="1014.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">updates one arm</text>
+  <text x="240" y="1000.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">drag, destination, delete → reward</text>
+  <text x="240" y="1014.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">updates one arm · 2 flags</text>
   <rect x="470" y="930" width="195" height="60" rx="8" fill="#FFFFFF" stroke="#E3DFDA" stroke-width="1.5"/>
   <text x="567.5" y="956.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#2B2724">BanditService</text>
   <text x="567.5" y="972.5" text-anchor="middle" font-size="10.5" font-weight="400" fill="#2B2724" opacity="0.75">/v1/update client</text>

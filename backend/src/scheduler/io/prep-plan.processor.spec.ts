@@ -132,22 +132,6 @@ describe("PrepPlanProcessor", () => {
     expect(h.notifications.create).not.toHaveBeenCalled();
   });
 
-  it("drops a parent the student skipped", async () => {
-    const h = setup({
-      id: "p1",
-      title: "Essay",
-      type: "ASSIGNMENT",
-      scheduledStartTime: new Date("2026-10-30T00:00:00.000Z"),
-      submittedAt: null,
-      skipped: true,
-    });
-    const processor = await build(h);
-
-    await processor.process(job);
-
-    expect(h.prep.planFor).not.toHaveBeenCalled();
-  });
-
   it("drops a parent that no longer exists", async () => {
     const h = setup(null);
     const processor = await build(h);

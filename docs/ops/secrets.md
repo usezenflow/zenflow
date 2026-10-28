@@ -10,11 +10,10 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | API, migrations, Postgres, backup (Vault sets `api`, `postgres`, `backup`) | [runbook](#database-password) |
 | `SESSION_SECRET` | Signs the session cookie | [runbook](#session-signing-key-session_secret) |
-| `FILE_URL_SECRET` | HMAC key for signed file URLs (`/files/:id?sig=`) | Change and redeploy. Notes need no rewrite |
+| `API_TOKEN_PEPPER_V<n>` | Server pepper for hashing OAuth tokens and signing MCP plan tokens (required in production, min 32 chars; Vault sets `api`) | [runbook](#versioned-secrets) |
 | `MASTER_LMS_ENCRYPTION_KEY_V<n>`, `MASTER_PORTAL_ENCRYPTION_KEY_V<n>` | Wrap per-user DEKs for DLU and LMS credentials (`backend/src/crypto`) | [runbook](#crypto-master-keys-master__encryption_key_vn) |
 | `PORTAL_API_KEY` | DLU portal API key | Replace when DLU invalidates it |
 | `MAIL_PASSWORD` | SMTP password | At the SMTP provider |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | File storage and MinIO root (Vault sets `api`, `minio`) | Rotate in MinIO or S3, redeploy |
 | `BANDIT_SERVICE_TOKEN` | Bearer for `POST /v1/place` (both services) | Set the new value on bandit with the old as `BANDIT_SERVICE_TOKEN_PREVIOUS`, then API, then drop `_PREVIOUS` |
 | `FCM_SERVICE_ACCOUNT`, `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` | Push | Firebase or Apple portal |
 | `VAPID_PRIVATE_KEY` | Web Push signing (Vault sets `api`) | Regenerate with `npx web-push generate-vapid-keys` and redeploy. Browsers resubscribe |
@@ -26,7 +25,7 @@ Values are never listed. [`backend/.env.example`](../../backend/.env.example) sh
 | `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `SOPS_AGE_KEY`, `SECRETS_COMMAND` | CI deploy (GitHub Environment secrets) | Yearly or on offboarding |
 | `GITHUB_TOKEN` | Image push and pull | Automatic |
 
-Not secrets: `VITE_*`, `EXPO_PUBLIC_*`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`, `backend/certs/lms-ca.pem`, `CORS_ORIGIN`, hosts, ports, usernames, database and bucket names, URLs without credentials. They go in the non-secret env file (`backend/env/prod.env` for prod), never in Vault. A name must not be in both.
+Not secrets: `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `VITE_*`, `EXPO_PUBLIC_*`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`, `backend/certs/lms-ca.pem`, `CORS_ORIGIN`, hosts, ports, usernames, database and bucket names, URLs without credentials. They go in the non-secret env file (`backend/env/prod.env` for prod), never in Vault. A name must not be in both.
 
 ## How secrets reach the app
 
@@ -134,6 +133,27 @@ Add a version (config only):
 | Routine | Add V2 (new users only), keep V1 |
 | V1 compromised (it was committed, see below) | Back up the DB, run a re-wrap in a maintenance window, verify every row is `masterKeyVersion = 2`, then remove V1. Ask users to re-link DLU credentials and change their DLU passwords |
 
+### Versioned secrets
+
+Code: `backend/src/common/config/versioned-secret.ts`. Covers `API_TOKEN_PEPPER`, now `_V<n>` like the master keys.
+
+- A version stays readable until its var is removed. A pepper version verifies the tokens hashed under it. A key version opens the rows sealed under it (the value's `v<n>.` prefix).
+- Rotating a pepper does not revoke tokens while the old version stays. Removing the old version revokes them.
+
+Rotate in Vault, then deploy:
+
+1. `VAULT_ADDR=... VAULT_TOKEN=... VAULT_ENV=prod ./ops/vault/rotate-versioned.sh rotate API_TOKEN_PEPPER`. It writes a new random `_V<n+1>` to the `api` set and prints the next step.
+2. Set `<PREFIX>_CURRENT_VERSION=<n+1>` in `backend/env/prod.env`, commit, deploy.
+
+Move production from the unversioned name (once):
+
+1. Record the current `api` set version, `vault kv metadata get -mount=secret zenflow/prod/api`, for rollback.
+2. Run `migrate API_TOKEN_PEPPER`, with `VAULT_ENV=prod` and the ops token. It writes `API_TOKEN_PEPPER_V1` and removes `API_TOKEN_PEPPER`.
+3. Deploy the release that reads `_V1` right after step 2. The deploy renders secrets from Vault, so an old release restarted in between would not find the unversioned names. Production refuses to boot without the current pepper version.
+4. Check: an existing personal API token still authenticates.
+
+If the deploy fails, roll back the `api` set (`vault kv rollback -mount=secret -version=<recorded> zenflow/prod/api`), then redeploy the previous release. Do not leave a half-migrated set.
+
 ## Leak audit
 
 Audited 2026-10-04 (names and lengths only). Real env files (`backend/.env`, `.env.dev`, `.env.prod`, `.env.staging`, `.env.test`, `.env.sim`, `backend/docker*.env`) were committed between 2025-10 and 2026-10-04. They are untracked and gitignored now, but history was not rewritten and clones still carry them.
@@ -146,7 +166,7 @@ Rotate, assuming compromise:
 2. SMTP credentials at the mail provider.
 3. Prod and staging DB passwords. Confirm the DB is not publicly reachable.
 4. `MASTER_*` V1: compromised-key row above.
-5. `PORTAL_API_KEY`, `S3_*`, `BANDIT_SERVICE_TOKEN`, `FCM_*`, `APNS_*`, `VAPID_PRIVATE_KEY` if ever set there. Rotate S3 keys and refresh the portal key.
+5. `PORTAL_API_KEY`, `BANDIT_SERVICE_TOKEN`, `FCM_*`, `APNS_*`, `VAPID_PRIVATE_KEY` if ever set there. Refresh the portal key.
 6. Optionally purge history with `git filter-repo --path backend/.env --path ... --invert-paths`, force-push and re-clone. Rotation is what counts. Check forks, CI logs and branch `backup/issue-56-pre-cleanup`.
 
 The tree is clean: only `backend/.env.example`, the public `backend/certs/lms-ca.pem`, and a synthetic key in `backend/src/devices/apns.sender.spec.ts` (allowlisted in `.gitleaks.toml`).

@@ -31,14 +31,11 @@ export interface Event {
   start: string; // ISO
   end: string; // ISO
   type: SessionType;
-  tags: string[];
   state: SessionCardState;
   /** Free-text location (room / building) carried through from the session, or null. */
   location?: string | null;
   /** The course the session belongs to (see {@link Session.courseKey}), or null. */
   courseKey?: string | null;
-  /** One-way travel minutes kept clear on each side of the session, or null. */
-  commuteMinutes?: number | null;
 }
 
 /**

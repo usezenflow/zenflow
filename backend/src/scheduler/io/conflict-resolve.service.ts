@@ -21,8 +21,8 @@ import { PlacementClient } from "./placement-client.service";
 const RESOLVE_HORIZON_DAYS = 30;
 
 const interval = (it: ScheduleItem) => ({
-  startMs: it.start - (it.bufferMs ?? 0),
-  endMs: it.end + (it.bufferMs ?? 0),
+  startMs: it.start,
+  endMs: it.end,
 });
 
 /**

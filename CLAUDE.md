@@ -7,3 +7,5 @@ See [AGENTS.md](AGENTS.md).
 **Copy:** Every user-facing string is short, sentence case and imperative where it asks for something. No separators in text (`·`, `—`, `–`, `-`, `|`, `→`), no ALL CAPS, no filler. Details: AGENTS.md → User-facing copy.
 
 **Concise:** Docs, comments, commits, PR text and replies state facts only. No notes, caveats, corrections, recaps or paragraphs over three lines. Details: AGENTS.md → Concise writing.
+
+**Workflow:** On the first prompt of a chat, enter plan mode unless the user already did. Plans name files, signatures and the algorithm (LinUCB, heuristic, eval, architecture) with formulas and constants. After approval, spawn subagents to implement, one plan section each. Explore, implement and other agents run on the lightest model (`model: "haiku"`, or the smallest in Codex). Details: AGENTS.md → Workflow.

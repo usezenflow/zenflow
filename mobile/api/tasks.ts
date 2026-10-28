@@ -1,4 +1,10 @@
 import type {
+  BulkCreateSessionsInput,
+  BulkCreateSessionsResponse,
+  BulkDeleteSessionsInput,
+  BulkUpdateSessionsInput,
+  BulkUpdateSessionsResponse,
+  BulkDeleteSessionsResponse,
   ConfirmPlacementRequest,
   ConfirmPlacementResponse,
   CreateSessionInput,
@@ -10,15 +16,11 @@ import type {
   RemoveSessionSeriesResponse,
   Session,
   SessionDetailResponse,
-  SessionStartResponse,
-  SessionSearchQuery,
-  SessionSearchResponse,
   SessionsListResponse,
   SlotPickRequest,
   SlotPickResponse,
   UpdateSessionInput,
   UpdateSessionResponse,
-  ViewMode,
 } from "@zenflow/shared";
 import { format } from "date-fns";
 import { api } from "./base";
@@ -31,11 +33,11 @@ import { SAVE_TIMEOUT_MS } from "@/lib/save-error";
  * over the returned `tasks` array.
  */
 export async function listSessions(
-  view: ViewMode,
-  date: Date,
+  from: Date,
+  to: Date,
 ): Promise<SessionsListResponse> {
   const { data } = await api.get("/sessions", {
-    params: { view, date: format(date, "yyyy-MM-dd") },
+    params: { from: format(from, "yyyy-MM-dd"), to: format(to, "yyyy-MM-dd") },
   });
   return data.data;
 }
@@ -51,13 +53,6 @@ export async function listSessionSuggestions(
 }
 
 /** One page of `GET /sessions/search`; pass the returned `nextCursor` back with the same `direction`. */
-export async function searchSessions(
-  query: SessionSearchQuery,
-): Promise<SessionSearchResponse> {
-  const { data } = await api.get("/sessions/search", { params: query });
-  return data.data;
-}
-
 export async function createSession(
   input: CreateSessionInput,
 ): Promise<CreateSessionResponse> {
@@ -190,11 +185,6 @@ export async function undoPlacement(
  * `alternativeSlot`. Non-blocking — failures are surfaced as toasts by callers.
  */
 /** Records that the app is open inside a placed block. The server keeps one per slot. */
-export async function recordSessionStart(id: string): Promise<SessionStartResponse> {
-  const { data } = await api.post(`/sessions/${encodeURIComponent(id)}/start`);
-  return data.data;
-}
-
 export async function slotPick(
   id: string,
   input: SlotPickRequest,
@@ -204,5 +194,37 @@ export async function slotPick(
     input,
   );
   notifySessionsMutated();
+  return data.data;
+}
+
+/** `POST /sessions/bulk`; with `dryRun` it only proposes starts. */
+export async function bulkCreateSessions(
+  input: BulkCreateSessionsInput,
+): Promise<BulkCreateSessionsResponse> {
+  const { data } = await api.post("/sessions/bulk", input, {
+    timeout: SAVE_TIMEOUT_MS,
+  });
+  if (!input.dryRun) notifySessionsMutated();
+  return data.data;
+}
+
+/** `POST /sessions/bulk-delete`; one failing item does not stop the others. */
+export async function bulkUpdateSessions(
+  input: BulkUpdateSessionsInput,
+): Promise<BulkUpdateSessionsResponse> {
+  const { data } = await api.post("/sessions/bulk-update", input, {
+    timeout: SAVE_TIMEOUT_MS,
+  });
+  notifySessionsMutated();
+  return data.data;
+}
+
+export async function bulkDeleteSessions(
+  input: BulkDeleteSessionsInput,
+): Promise<BulkDeleteSessionsResponse> {
+  const { data } = await api.post("/sessions/bulk-delete", input, {
+    timeout: SAVE_TIMEOUT_MS,
+  });
+  if (!input.dryRun) notifySessionsMutated();
   return data.data;
 }

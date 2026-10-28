@@ -104,6 +104,7 @@ describe("SlotPickService — matrix reinforcement", () => {
       "task-1",
       7n,
       120,
+      expect.anything(),
     );
     expect(schedulingFeedback.reinforcePreferenceMove).toHaveBeenCalledWith(
       user.id,

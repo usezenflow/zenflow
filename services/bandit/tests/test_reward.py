@@ -1,4 +1,4 @@
-"""Graded MOVE reward (ADR-0001, ADR-0035)."""
+"""Graded MOVE reward (ADR-0001, ADR-0042)."""
 
 import pytest
 

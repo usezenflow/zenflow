@@ -35,6 +35,7 @@ import {
   isOccurrenceCacheEnabled,
   jobItemBody,
   positiveConfig,
+  jitter,
   sleep,
   statusCodeOf,
   type IntegrationTarget,
@@ -190,7 +191,7 @@ export class LmsWatcherService {
     )) {
       // Politeness for the baseline is deliberately this trivial: a fixed
       // pause between outbound requests, none before the first.
-      if (!first) await sleep(this.requestDelayMs);
+      if (!first) await sleep(jitter(this.requestDelayMs));
       first = false;
 
       const url =

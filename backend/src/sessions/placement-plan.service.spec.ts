@@ -5,7 +5,6 @@ import { SchedulingModel, type User } from "../../generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { DisplacementService } from "../scheduler/io/displacement.service";
 import { wouldConflict } from "../scheduler/io/conflict-check";
-import { RemindersService } from "../reminders/reminders.service";
 import { SessionCrudService } from "./session-crud.service";
 import { PlacementPlanService } from "./placement-plan.service";
 import { PlacementStaleException } from "./placement-plan.exception";
@@ -46,7 +45,6 @@ function planRow(over: Record<string, unknown> = {}) {
       durationMinutes: 60,
       deadline: "2026-06-10T00:00:00.000Z",
       tags: [],
-      reminders: [],
     },
     expiresAt: new Date(NOW.getTime() + HOUR),
     createdAt: NOW,
@@ -89,21 +87,16 @@ async function make() {
   const crud = {
     insertSingleTask: jest.fn().mockResolvedValue({ id: "new" }),
   };
-  const reminders = {
-    resolveForCreate: jest.fn().mockReturnValue([]),
-    replace: jest.fn().mockResolvedValue({ applied: [], skipped: [] }),
-  };
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       PlacementPlanService,
       { provide: PrismaService, useValue: prisma },
       { provide: DisplacementService, useValue: displacement },
       { provide: SessionCrudService, useValue: crud },
-      { provide: RemindersService, useValue: reminders },
     ],
   }).compile();
   const svc = module.get<PlacementPlanService>(PlacementPlanService);
-  return { svc, prisma, displacement, crud, reminders };
+  return { svc, prisma, displacement, crud };
 }
 
 beforeEach(() => {

@@ -56,8 +56,8 @@ docker compose --env-file .env.staging -f compose.staging.yml up -d    # API via
 
 Config and rationale: [ADR-0010](../docs/adr/0010-nginx-replaces-caddy.md); files in [`nginx/`](nginx/).
 
-- First issuance, once per certificate, before the first `up`: `LE_EMAIL=you@example.com ./nginx/init-cert.sh` (`api.usezenflow.com`). Repeat with `DOMAIN=grafana.usezenflow.com` and `DOMAIN=minio.usezenflow.com` (nginx will not start without them). Hosts: [docs/ops/domains.md](../docs/ops/domains.md).
-- Admin UIs go through nginx: Grafana at `grafana.*` and the MinIO console at `minio.*` (`minio.localhost` in staging). Log in to MinIO with `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`. The S3 API is not exposed.
+- First issuance, once per certificate, before the first `up`: `LE_EMAIL=you@example.com ./nginx/init-cert.sh` (`api.usezenflow.com`). Repeat with `DOMAIN=grafana.usezenflow.com`. Hosts: [docs/ops/domains.md](../docs/ops/domains.md).
+- Admin UI goes through nginx: Grafana at `grafana.*`.
 - Renewal is the `certbot` service (twice daily, webroot); `nginx` reloads every 12 h to pick the new certificate up. Alert on certificate expiry.
 - The API upstream is `state/upstream.api.conf` on the host, written by `scripts/deploy/deploy.sh` (blue-green, [ci-cd.md](../docs/ops/ci-cd.md)); do not edit it by hand.
 
@@ -68,9 +68,9 @@ backend/
 ├── prisma/schema.prisma   # schema (client in generated/prisma)
 ├── src/
 │   ├── main.ts            # /api/v1 prefix, CORS, ValidationPipe, Redis session, Swagger
-│   ├── auth/  users/  tags/  devices/  mail/  crypto/
+│   ├── auth/  users/  devices/  mail/  crypto/  oauth/
+│   ├── calendar-busy/     # busy time the phone sends
 │   ├── sessions/          # session CRUD; a create or edit places one TASK (or series)
-│   ├── reminders/         # per-session reminder timers
 │   ├── scheduler/         # core/ (pure), io/ (Prisma + bandit HTTP), types/
 │   ├── bandit/            # HTTP client for services/bandit + per-user (A,b) repo
 │   ├── experiments/       # 50/50 policy assignment + SlotProposal
@@ -78,7 +78,6 @@ backend/
 │   ├── lms/  portal/      # Moodle and portal/DKHP clients
 │   ├── integrations/      # encrypted DLU credentials + login probe + manual sync
 │   ├── notifications/     # ingestion inbox, SSE stream, push
-│   ├── files/             # multipart upload/download, S3-compatible storage
 │   ├── observability/     # metrics, tracing helpers (see tracing.ts)
 │   ├── prisma/            # PrismaService + error-code map
 │   └── common/            # constants, utils, dto, redis/, rate-limit/, circuit breakers
@@ -96,7 +95,7 @@ Layering rule: `scheduler/core/*` and `ingestion/core/*` are pure and determinis
 | [docs/backend/api.md](../docs/backend/api.md) | Endpoints, response envelope, error codes, rate limits, fail-open store |
 | [docs/backend/data-model.md](../docs/backend/data-model.md) | Tables, Session invariants, indexes |
 | [docs/backend/ingestion.md](../docs/backend/ingestion.md) | Queue flow, confirm/miss gate, cache, circuit breakers, manual sync |
-| [docs/backend/scheduler.md](../docs/backend/scheduler.md) | Python-authoritative placement, degraded mode, reminders, file map |
+| [docs/backend/scheduler.md](../docs/backend/scheduler.md) | Python-authoritative placement, degraded mode, file map |
 | [docs/backend/config.md](../docs/backend/config.md) | Every env var with defaults |
 | [observability/README.md](observability/README.md) | Traces, metrics, logs, Grafana |
 | [docs/architecture/](../docs/architecture/scheduler-flows.md) | Diagrams and sequence flows |

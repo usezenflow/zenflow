@@ -29,14 +29,12 @@ export type NotificationEventKind =
   | "REMOVED"
   | "COMPLETED"
   | "CONFLICT"
-  | "REMINDER"
   | "READY";
 
 /**
  * Classify a notification's {@link NotificationDto.eventName} without
  * pattern-matching the free-text `title`/`content`. Every event name is
- * `"sync_conflict.<thing>"` (a conflict), `"reminder.<…>"` (a reminder
- * nudge), `"<thing>.ready"` (a first sync finished), or
+ * `"sync_conflict.<thing>"` (a conflict), `"<thing>.ready"` (a first sync finished), or
  * `"<thing>.<created|updated|changed|removed|completed>"` /
  * `"<thing>.group_<created|updated|removed>"`.
  */
@@ -44,8 +42,6 @@ export function notificationEventKind(
   eventName: string,
 ): NotificationEventKind {
   if (eventName.startsWith("sync_conflict.")) return "CONFLICT";
-  // A reminder nudge ("reminder.fired") reports no change to any session.
-  if (eventName.startsWith("reminder.")) return "REMINDER";
   if (eventName.endsWith(".ready")) return "READY";
   if (eventName.endsWith("completed")) return "COMPLETED";
   if (eventName.endsWith("created")) return "CREATED";
@@ -58,8 +54,7 @@ export function notificationEventKind(
 /**
  * What a notification is about — which inbox section/icon it takes, and
  * (for `ASSIGNMENT`/`EXAM`/`LECTURE`) which calendar session type it tracks.
- * `REMINDER` is the non-ingestion, user-facing nudge and `MARKS` reports
- * synced marks; neither has a session type of its own. `timetable.*` rows
+ * `MARKS` reports synced marks and has no session type of its own. `timetable.*` rows
  * count as `LECTURE`. Derived from {@link NotificationDto.eventName}'s `<thing>`
  * segment by {@link notificationCategory}, same reasoning as
  * {@link notificationEventKind}.
@@ -68,7 +63,6 @@ export type NotificationCategory =
   | "ASSIGNMENT"
   | "EXAM"
   | "LECTURE"
-  | "REMINDER"
   | "MARKS";
 
 /**
@@ -90,8 +84,6 @@ export function notificationCategory(eventName: string): NotificationCategory {
       return "LECTURE";
     case "marks":
       return "MARKS";
-    case "reminder":
-      return "REMINDER";
     default:
       throw new Error(`Unrecognized notification eventName: "${eventName}"`);
   }

@@ -18,7 +18,6 @@ const notif = vi.hoisted(() => ({
     language: "en",
     timezone: "Asia/Ho_Chi_Minh",
     timezoneMode: "device",
-    defaultReminder: 10,
   },
   update: vi.fn(async () => true),
   setEnabled: vi.fn(async () => true),
@@ -32,11 +31,24 @@ vi.mock("@/hooks/use-push-status-store", () => ({
     getState: () => ({ permission: "denied", refresh: vi.fn(async () => {}) }),
   }),
 }));
-vi.mock("@/components/settings/travel-section", () => ({
-  TravelSection: () => <div data-testid="travel-section" />,
+vi.mock("@/components/onboarding/campus-step", () => ({
+  CampusStep: () => <div data-testid="campus-step" />,
 }));
-vi.mock("@/components/settings/dlu-accounts-section", () => ({
-  DluAccountsSection: () => <div data-testid="dlu-section" />,
+vi.mock("@/components/onboarding/assistants-step", () => ({
+  AssistantsStep: () => <div data-testid="assistants-step" />,
+}));
+vi.mock("@/components/onboarding/calendar-step", () => ({
+  CalendarStep: ({
+    onEnableNotifications,
+  }: {
+    onEnableNotifications: () => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="onboarding.notifications-switch"
+      onClick={onEnableNotifications}
+    />
+  ),
 }));
 
 const BASIC_INFO = `${API}/users/update/basic-info`;
@@ -49,7 +61,10 @@ beforeEach(() => {
   notif.permissionGranted = false;
   notif.update.mockResolvedValue(true);
   notif.setEnabled.mockResolvedValue(true);
-  useUserStore.setState({ user: { ...testUser, onboardedAt: null } as never, loading: false });
+  useUserStore.setState({
+    user: { ...testUser, onboardedAt: null } as never,
+    loading: false,
+  });
   useIntegrationStore.setState({ integrations: [], loading: true });
   server.use(
     http.patch(BASIC_INFO, async ({ request }) => {
@@ -62,134 +77,66 @@ beforeEach(() => {
 
 const primary = () => screen.getByTestId("onboarding.primary");
 const secondary = () => screen.getByTestId("onboarding.secondary");
-const next = async (title: string) =>
-  waitFor(() => expect(screen.getByText(title)).toBeTruthy());
-
-// The first step is the LMS and portal; the name step was removed (the DLU name fills it on first sync).
-const TITLES = [
-  "Connect your LMS or portal",
-  "Plan your commute",
-  "Stay ahead of deadlines",
-  "You’re all set",
-];
-
-/** Skip forward (secondary button) until `title` shows, awaiting each hop. */
-async function skipTo(title: string) {
-  for (const hop of TITLES.slice(1, TITLES.indexOf(title) + 1)) {
-    fireEvent.click(secondary());
-    await next(hop);
-  }
-}
 
 describe("OnboardingScreen", () => {
-  it("starts on the LMS step with no back button", () => {
+  it("starts on the welcome screen with no skip", () => {
     renderScreen(<OnboardingScreen />);
-    expect(screen.getByText("Connect your LMS or portal")).toBeTruthy();
-    expect(screen.queryByLabelText("Back")).toBeNull();
+    expect(screen.getByText("Let's go")).toBeTruthy();
+    expect(screen.queryByTestId("onboarding.secondary")).toBeNull();
   });
 
-  it("goes back a step and hides Back again on the first step", async () => {
+  it("walks campus, calendar and assistant, one at a time", () => {
     renderScreen(<OnboardingScreen />);
+    fireEvent.click(primary());
+    expect(screen.getByTestId("campus-step")).toBeTruthy();
+    fireEvent.click(primary());
+    expect(screen.getByTestId("onboarding.notifications-switch")).toBeTruthy();
+    expect(screen.queryByTestId("campus-step")).toBeNull();
     fireEvent.click(secondary());
-    await next("Plan your commute");
-    fireEvent.click(screen.getByLabelText("Back"));
-    await next("Connect your LMS or portal");
-    expect(screen.queryByLabelText("Back")).toBeNull();
+    expect(screen.getByTestId("assistants-step")).toBeTruthy();
   });
 
-  it("offers Skip for now on the LMS step while nothing is connected", async () => {
+  it("turns notifications on from the calendar step", async () => {
     renderScreen(<OnboardingScreen />);
-    await skipTo("Connect your LMS or portal");
-    expect(screen.getByTestId("dlu-section")).toBeTruthy();
-    expect(screen.getByText("Skip for now")).toBeTruthy();
-  });
-
-  it("hides Skip for now on the LMS step once an account is connected", async () => {
-    server.use(
-      http.get(`${API}/integrations`, () =>
-        HttpResponse.json({
-          data: { integrations: [{ provider: "PORTAL", connected: true }] },
-        }),
-      ),
+    fireEvent.click(primary());
+    fireEvent.click(primary());
+    fireEvent.click(screen.getByTestId("onboarding.notifications-switch"));
+    await waitFor(() =>
+      expect(notif.setEnabled).toHaveBeenCalledWith(true, { quiet: true }),
     );
-    renderScreen(<OnboardingScreen />);
-    await skipTo("Connect your LMS or portal");
-    await waitFor(() => expect(screen.queryByText("Skip for now")).toBeNull());
-  });
-
-  describe("notifications step", () => {
-    async function openNotifications() {
-      renderScreen(<OnboardingScreen />);
-      await skipTo("Stay ahead of deadlines");
-    }
-
-    it("turns notifications on quietly and advances", async () => {
-      await openNotifications();
-      fireEvent.click(primary());
-      await next("You’re all set");
-      expect(notif.setEnabled).toHaveBeenCalledWith(true, { quiet: true });
-    });
-
-    it("shows the blocked hint and stays when permission is denied", async () => {
-      notif.setEnabled.mockResolvedValue(false);
-      await openNotifications();
-      fireEvent.click(primary());
-      await waitFor(() => expect(screen.getByText("Notifications are blocked")).toBeTruthy());
-      expect(screen.getByText("Stay ahead of deadlines")).toBeTruthy();
-      expect(screen.getAllByText("Open system settings").length).toBeGreaterThan(0);
-    });
-
-    it("'Not now' turns notifications off and advances", async () => {
-      await openNotifications();
-      fireEvent.click(screen.getByText("Not now"));
-      await next("You’re all set");
-      expect(notif.setEnabled).toHaveBeenCalledWith(false);
-    });
-
-    it("reflects the active state on the switch and offers Continue", async () => {
-      notif.active = true;
-      await openNotifications();
-      const toggle = screen.getByTestId("onboarding.notifications-switch");
-      expect(toggle.getAttribute("aria-checked")).toBe("true");
-      expect(screen.queryByText("Not now")).toBeNull();
-      expect(screen.getByText("Continue")).toBeTruthy();
-    });
   });
 
   describe("finish", () => {
-    async function openSummary() {
+    const toDone = () => {
       renderScreen(<OnboardingScreen />);
-      await skipTo("You’re all set");
-    }
+      for (let i = 0; i < 4; i++) fireEvent.click(primary());
+    };
 
-    it("has no timezone or reminder steps", async () => {
-      await openSummary();
-      expect(screen.queryByText("Where are you?")).toBeNull();
-      expect(screen.queryByText("Default reminder")).toBeNull();
-    });
-
-    it("lists skipped steps on the summary and reopens one, returning to the summary", async () => {
-      await openSummary();
-      const setUp = screen.getAllByText("Set up");
-      expect(setUp.length).toBe(3); // LMS, commute and notifications were skipped
-      fireEvent.click(setUp[0]);
-      await next("Connect your LMS or portal");
+    it("opens the calendar on the last step", async () => {
+      toDone();
+      expect(screen.getByText("Open my calendar")).toBeTruthy();
       fireEvent.click(primary());
-      await next("You’re all set");
-    });
-
-    it("completes onboarding", async () => {
-      await openSummary();
-      fireEvent.click(screen.getByText("Open my calendar"));
       await waitFor(() => expect(patches).toContainEqual({ onboarded: true }));
     });
 
-    it("toasts and stays on the summary when completing fails", async () => {
-      await openSummary();
-      server.use(http.patch(BASIC_INFO, () => HttpResponse.json({ message: "no" }, { status: 500 })));
-      fireEvent.click(screen.getByText("Open my calendar"));
-      await waitFor(() => expect(screen.getByText("Couldn't save")).toBeTruthy());
-      expect(screen.getByText("You’re all set")).toBeTruthy();
+    it("does not save before the last step", () => {
+      renderScreen(<OnboardingScreen />);
+      fireEvent.click(primary());
+      fireEvent.click(secondary());
+      expect(patches).toEqual([]);
+    });
+
+    it("toasts when completing fails", async () => {
+      server.use(
+        http.patch(BASIC_INFO, () =>
+          HttpResponse.json({ message: "no" }, { status: 500 }),
+        ),
+      );
+      toDone();
+      fireEvent.click(primary());
+      await waitFor(() =>
+        expect(screen.getByText("Couldn't save")).toBeTruthy(),
+      );
     });
   });
 });

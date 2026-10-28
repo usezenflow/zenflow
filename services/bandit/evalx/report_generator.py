@@ -88,20 +88,20 @@ def render(res: dict[str, Any]) -> str:
         f"Drag {cfg['cfg']['drag']:.2f}. Code `{man['code_sha']}`, "
         f"config `{man['config_hash']}`, {man['generated']}.",
         "",
-        "Adherence is the share of tasks the student started. A task with no "
-        "placement counts as not started. Intervals read `mean [95% CI over "
+        "Done rate is the share of tasks the student completed. A task with no "
+        "placement counts as not done. Intervals read `mean [95% CI over "
         "students]`.",
         "",
         "## Headline",
         "",
-        "| Arm | Adherence | Hours before deadline | Last day share "
+        "| Arm | Done rate | Hours before deadline | Last day share "
         "| Conflict free | Events per student |",
         "|---|---|---|---|---|---|",
     ]
     for arm in _arms(res):
         a = res["arms"][arm]
         lines.append(
-            f"| {arm} | {_pct(a['adherence'])} | {_hours(a['margin_h'])} "
+            f"| {arm} | {_pct(a['done_rate'])} | {_hours(a['margin_h'])} "
             f"| {100 * a['last_day']['mean']:.0f}% "
             f"| {100 * a['conflict_free']['mean']:.0f}% "
             f"| {a['burden']['mean']:.1f} |"
@@ -135,8 +135,8 @@ def render(res: dict[str, Any]) -> str:
             "",
             "## Who benefits",
             "",
-            "L minus H in adherence points, by student group. Better and worse are "
-            "the shares of students whose own adherence is higher or lower under L.",
+            "L minus H in done-rate points, by student group. Better and worse are "
+            "the shares of students whose own done rate is higher or lower under L.",
             "",
             "| Group | Students | Points | Better | Worse |",
             "|---|---|---|---|---|",
@@ -172,7 +172,7 @@ def render(res: dict[str, Any]) -> str:
             "## Learning",
             "",
             "Regret is the running sum of the Oracle's start chance minus the arm's, "
-            f"per student. Early and late adherence are the first 10 and the "
+            f"per student. Early and late done rate are the first 10 and the "
             f"last of the first {CURVE_TASKS} tasks.",
             "",
             "| Arm | Regret at the last task | Adherence, tasks 1 to 10 "
@@ -221,7 +221,7 @@ def render(res: dict[str, Any]) -> str:
 def render_latex(res: dict[str, Any]) -> str:
     """The headline and contrast tables as LaTeX ``tabular`` blocks."""
     rows = [
-        f"{arm} & {100 * res['arms'][arm]['adherence']['mean']:.1f} "
+        f"{arm} & {100 * res['arms'][arm]['done_rate']['mean']:.1f} "
         f"& {res['arms'][arm]['margin_h']['mean']:.1f} "
         f"& {100 * res['arms'][arm]['conflict_free']['mean']:.0f} \\\\"
         for arm in _arms(res)
@@ -236,7 +236,7 @@ def render_latex(res: dict[str, Any]) -> str:
         [
             "\\begin{tabular}{lrrr}",
             "\\hline",
-            "Arm & Adherence (\\%) & Hours before deadline & Conflict free (\\%) \\\\",
+            "Arm & Done rate (\\%) & Hours before deadline & Conflict free (\\%) \\\\",
             "\\hline",
             *rows,
             "\\hline",

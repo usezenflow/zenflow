@@ -1,59 +1,9 @@
-import { t } from "@/lib/i18n";
 import { useAppUpdate } from "@/hooks/use-app-update";
-import { useCourseColourSync } from "@/hooks/use-course-colours";
 import { useLanguage } from "@/hooks/use-language";
-import { AppTabBar } from "@/components/tab-bar";
-import {
-  ListTabIcon,
-  MeTabIcon,
-  WeekTabIcon,
-} from "@/components/tab-icons";
-import { Tabs } from "expo-router";
+import { Stack } from "expo-router";
 
-export const unstable_settings = {
-  initialRouteName: "index",
-};
-
-export default function AppTabsLayout() {
+export default function AppLayout() {
   useLanguage();
   useAppUpdate();
-  useCourseColourSync();
-  return (
-    // Fully custom bar (`components/tab-bar.tsx`): a floating glassmorphic
-    // pill — the default edge-to-edge bar's rectangular `shadow*`/`elevation`
-    // read as almost nothing against the near-white background.
-    <Tabs
-      tabBar={(props) => <AppTabBar {...props} />}
-      screenOptions={{ headerShown: false, freezeOnBlur: true }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t("Calendar"),
-          tabBarIcon: ({ color, size }) => (
-            <WeekTabIcon color={color} size={size} />
-          ),
-        }}
-      />
-      {/* Every session in order (`list.tsx`). */}
-      <Tabs.Screen
-        name="list"
-        options={{
-          title: t("List"),
-          tabBarIcon: ({ color, size }) => (
-            <ListTabIcon color={color} size={size} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: t("Me"),
-          tabBarIcon: ({ color, size }) => (
-            <MeTabIcon color={color} size={size} />
-          ),
-        }}
-      />
-    </Tabs>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

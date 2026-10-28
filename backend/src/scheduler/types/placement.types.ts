@@ -1,8 +1,10 @@
 import type {
   PlacementMove,
   PlacementPlan,
+  IntervalMs,
   PlacementReason,
   SchedulingArm,
+  SessionWindow,
 } from "@zenflow/shared";
 import type { Interval } from "../core/slot";
 
@@ -18,6 +20,15 @@ export interface PlaceableTask {
   durationMinutes: number;
   deadline: Date;
   prevStartMs?: number;
+  constraint?: PlacementConstraint;
+}
+
+/** Where a `TASK` may not start: before `notBefore`, or outside `window`. */
+export interface PlacementConstraint {
+  notBefore?: Date | null;
+  window?: SessionWindow | null;
+  /** Time already claimed in memory (a replan in progress), on top of the calendar. */
+  extraOccupied?: IntervalMs[];
 }
 
 /** An already-clamped local-day candidate range, inclusive on both ends. */

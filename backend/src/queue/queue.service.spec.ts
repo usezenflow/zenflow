@@ -71,7 +71,7 @@ describe("QueueService (Redis)", () => {
     const svc = await make(redis);
     await svc.enqueue(
       NOTIFY_QUEUE,
-      { type: "reminder", reminderId: "r", startsAt: "s" },
+      { type: "push", notificationId: "n", provider: "fcm" },
       { jobId: "j", delayMs: 1500.4, jobOptions: { attempts: 1 } },
     );
     expect(add.mock.calls[0][2]).toMatchObject({ delay: 1500, attempts: 1 });

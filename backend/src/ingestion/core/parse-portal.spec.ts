@@ -252,6 +252,9 @@ describe("parseExams", () => {
         location: "X02.01",
         note: null,
         scheduleStudyUnitId: "99810AB100302",
+        examFormat: "Thi máy",
+        examCredits: null,
+        examRetake: null,
       },
       {
         externalKey: "portal:exam:500003",
@@ -262,6 +265,9 @@ describe("parseExams", () => {
         location: "VP_MAU",
         note: null,
         scheduleStudyUnitId: "99810AB100402",
+        examFormat: "Báo cáo TTTT,TL",
+        examCredits: null,
+        examRetake: null,
       },
       {
         externalKey: "portal:exam:500002",
@@ -273,8 +279,41 @@ describe("parseExams", () => {
         location: "X02.01",
         note: null,
         scheduleStudyUnitId: "99810AB1005D02",
+        examFormat: "Thi máy",
+        examCredits: null,
+        examRetake: null,
       },
     ]);
+  });
+
+  it("reads credits and the retake flag from the exam row", () => {
+    const row = {
+      ScheduleStudyUnitID: "25120CT220202",
+      CurriculumName: "Phát triển ứng dụng Desktop",
+      NgayThi: "01/12/2025",
+      GioThi: "07g30",
+      PhongThi: "A24.1",
+      Examination: "59738",
+      ThoiLuong: "120",
+      Credits: 4,
+      LanThi: "Lần 1",
+      HinhThucThi: "Thi máy",
+    } as PortalExamRow;
+
+    const [first] = parseExams([row], VN).items;
+    const [retake] = parseExams([{ ...row, LanThi: "Lần 2" }], VN).items;
+    const [unknown] = parseExams(
+      [{ ...row, Credits: "", LanThi: "" }],
+      VN,
+    ).items;
+
+    expect(first).toMatchObject({
+      examFormat: "Thi máy",
+      examCredits: 4,
+      examRetake: false,
+    });
+    expect(retake).toMatchObject({ examCredits: 4, examRetake: true });
+    expect(unknown).toMatchObject({ examCredits: null, examRetake: null });
   });
 
   it("rounds ThoiLuong up to a multiple of 15", () => {

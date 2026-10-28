@@ -12,45 +12,27 @@ export interface ActiveDay {
   dau: number;
 }
 
-/**
- * Users grouped by the `User.createdAt` week. `weeks[n]` is the share of the
- * cohort with an APP_OPEN in week n after joining, `null` while that week is ahead.
- */
-export interface RetentionCohort {
-  cohortWeek: string;
-  size: number;
-  weeks: (number | null)[];
-}
-
-/** Users by the length of their current run of consecutive UTC days with an APP_OPEN. */
-export interface StreakBucket {
-  days: string;
-  users: number;
-}
-
 /** `GET /admin/engagement` */
 export interface EngagementResponse {
   dau: number;
   wau: number;
   activeDays: ActiveDay[];
-  retention: RetentionCohort[];
-  streaks: StreakBucket[];
 }
 
 /**
  * Per primary policy, PYTHON placements only. Counts come from `SlotProposal`
  * and the `SessionEvent` rows of each session's latest proposal.
  * `dragMinutes` is the mean of |dragDistanceMinutes| over MOVE rows.
- * `reward` is the mean `rewardScore` over START and MOVE rows.
- * `due` counts placed sessions whose slot has passed. The start rate is
- * `events.START / due` (ADR-0035).
+ * `reward` is the mean `rewardScore` over KEPT and MOVE rows.
+ * `due` counts placed sessions whose slot has passed. The kept rate is
+ * `events.KEPT / due` (ADR-0042).
  */
 export interface PolicyQuality {
   policy: AdminPolicy;
   proposals: number;
   acceptedUnmodified: number;
   due: number;
-  events: { START: number; MOVE: number };
+  events: { KEPT: number; MOVE: number };
   dragMinutes: number;
   reward: number;
 }

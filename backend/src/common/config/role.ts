@@ -3,11 +3,11 @@ import { config } from "dotenv";
 /**
  * Process role (ADR-0011, ADR-0007). One image, picked by the `ROLE` env:
  *  - `api`            HTTP only; produces jobs, consumes none, no cron.
- *  - `watcher`        the cron heartbeat (ingestion watcher, reminder sweep,
- *                     matrix decay); enqueues, never consumes.
+ *  - `watcher`        the cron heartbeat (ingestion watcher, matrix decay);
+ *                     enqueues, never consumes.
  *  - `worker-portal`  consumes every `portal-*` queue.
  *  - `worker-lms`     consumes every `lms-*` queue.
- *  - `worker-notify`  consumes `notify` (push, email, reminder).
+ *  - `worker-notify`  consumes `notify` (push).
  *  - `worker-scheduler` consumes `prep-plan` (prep plans, sized by bandit).
  *  - `worker`         watcher + every consumer (the pre-queue single worker).
  *  - `all`            everything incl. HTTP (default; local dev and the test stack).

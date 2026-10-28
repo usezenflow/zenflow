@@ -3,12 +3,11 @@ import { useLanguage } from "@/hooks/use-language";
 import { Text } from "@/components/ui";
 import { useUserStore } from "@/hooks/use-user-store";
 import { routeForSession } from "@/lib/onboarding";
-import { Link, type Href, Redirect, Stack, usePathname } from "expo-router";
+import { Link, type Href, Redirect, Stack } from "expo-router";
 import { View } from "react-native";
 
 export default function NotFoundScreen() {
   useLanguage();
-  const pathname = usePathname();
   const user = useUserStore((s) => s.user);
   const loading = useUserStore((s) => s.loading);
 
@@ -18,8 +17,9 @@ export default function NotFoundScreen() {
   if (loading) return null;
   const target = routeForSession(user, "");
   if (target) return <Redirect href={target as Href} />;
-  // Onboarded and landed on the bare launch URL: that's just home.
-  if (user && pathname === "/") return <Redirect href={"/(app)" as Href} />;
+  // Onboarded: the only screen is Settings, so any unknown path (the bare
+  // launch URL, or one stranded when onboarding unmounted) is just home.
+  if (user) return <Redirect href={"/(app)/settings" as Href} />;
 
   return (
     <>

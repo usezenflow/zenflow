@@ -12,6 +12,7 @@ import { useUserStore } from "@/hooks/use-user-store";
 import { goToCalendar, navigateOnce } from "@/lib/nav";
 import { notificationToastVisual } from "@/lib/notification-visual";
 import { rescheduleWithToast } from "@/lib/reschedule-toast";
+import { markNotificationSeen } from "@/lib/background-notify";
 import { claimNotification, LOCAL_NOTIFICATION_SOURCE } from "@/lib/push";
 import { notifySessionsMutated } from "@/lib/session-cache";
 import {
@@ -297,9 +298,7 @@ export function useNotificationsSubscription(): void {
         // `rescheduleConflicts` in `api/notifications.ts` — already calls
         // `notifySessionsMutated()` itself), so skip invalidation here for
         // that case.
-        // A reminder changes no session either — it's just the nudge.
-        const kind = notificationEventKind(n.eventName);
-        if (kind !== "CONFLICT" && kind !== "REMINDER") {
+        if (notificationEventKind(n.eventName) !== "CONFLICT") {
           notifySessionsMutated();
         }
 
@@ -312,7 +311,8 @@ export function useNotificationsSubscription(): void {
 
         const cleanTitle = (n.title || "").replace(/^\[.*?\]\s*/, "").trim();
         const hasConflicts =
-          kind === "CONFLICT" && (n.conflictSessionIds?.length ?? 0) > 0;
+          notificationEventKind(n.eventName) === "CONFLICT" &&
+          (n.conflictSessionIds?.length ?? 0) > 0;
 
         // 1. In-app tap-to-act toast with clear title and "View on calendar" action
         const { router: currentRouter, toast: currentToast } =
@@ -348,6 +348,7 @@ export function useNotificationsSubscription(): void {
         // 2. System notification in Android notification shade / lock screen
         // Only while the app is open: a backgrounded app is already covered by
         // the server's native push, and posting this too showed it twice.
+        markNotificationSeen(n.sentAt);
         if (Platform.OS !== "web" && AppState.currentState === "active") {
           const tone = pushToneFor(n.eventName);
           void Notifications.scheduleNotificationAsync({

@@ -1,6 +1,6 @@
 # ADR-0021: Strict upload limits
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0039](0039-thin-layer-calendar-native.md)
 **Date:** 2026-10-11
 **Extends:** [ADR-0004](0004-s3-file-storage.md)
 

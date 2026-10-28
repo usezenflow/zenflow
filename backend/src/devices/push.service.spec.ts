@@ -153,6 +153,7 @@ describe("PushService", () => {
         },
         tone: "default",
         category: null,
+        actions: [],
       });
       expect(apns.send).toHaveBeenCalledWith(["i1"], expect.anything());
     });
@@ -171,6 +172,30 @@ describe("PushService", () => {
       expect(apns.send).toHaveBeenCalledWith(
         ["i1"],
         expect.objectContaining({ tone: "urgent", category: "sync_conflict" }),
+      );
+    });
+
+    it("sends a plan-offer push with the Keep and Prefer actions", async () => {
+      const { service, apns } = await make({
+        devices: [{ platform: "IOS", pushToken: "i1", userId: "u1" }],
+      });
+
+      await service.sendToUser("u1", {
+        ...ROW,
+        eventName: "plan_offer.ask",
+        title: "Essay draft",
+        content: "Keep the scheduled time?",
+        sessionId: "s1",
+      });
+
+      expect(apns.send).toHaveBeenCalledWith(
+        ["i1"],
+        expect.objectContaining({
+          title: "Essay draft",
+          body: "Keep the scheduled time?",
+          category: "plan_offer",
+          actions: ["keep", "prefer"],
+        }),
       );
     });
 

@@ -12,7 +12,7 @@ pnpm install            # install all workspaces
 pnpm shared:build       # build @zenflow/shared; required before FE/BE typecheck
 ```
 
-- Bring up the API and pwa: [README quick start](README.md#quick-start).
+- Bring up the API and the mobile app: [README quick start](README.md#quick-start).
 - Env files (`.env*`) are git-ignored; copy each app's `.env.example`.
 
 ## Monorepo commands (repo root)
@@ -23,7 +23,7 @@ pnpm -r build                  # build every package
 pnpm -r typecheck              # typecheck every package
 pnpm -r test                   # test every package
 pnpm check                     # shared build + typecheck
-pnpm --filter <app> <script>   # one app, e.g. pnpm --filter pwa dev
+pnpm --filter <app> <script>   # one app, e.g. pnpm --filter mobile dev
 ```
 
 ## Code style
@@ -31,7 +31,7 @@ pnpm --filter <app> <script>   # one app, e.g. pnpm --filter pwa dev
 - **Comments:** explain why; comment what only for algorithms.
 - **Lint:** ESLint (flat config per app). The backend also runs Prettier via `eslint-plugin-prettier`, so `eslint` is the single entry point.
 - **Format:** 2 spaces, LF, final newline, UTF-8 ([`.editorconfig`](.editorconfig)). Backend uses double quotes and semicolons (Prettier defaults).
-- **PWA imports:** use the `@/…` alias, not deep relative paths (`../../utils/tz` → `@/utils/tz`).
+- **Mobile imports:** use the `@/…` alias, not deep relative paths (`../../utils/tz` → `@/utils/tz`).
   - `eslint-plugin-no-relative-import-paths` autofixes it; same-folder `./sibling` stays relative.
 - **Cross-package types** belong in `@zenflow/shared`; never redefine an API shape in an app. Run `pnpm shared:build` after changing them.
 
@@ -39,7 +39,7 @@ Run before pushing:
 
 ```bash
 pnpm --filter backend lint        # eslint --fix (incl. prettier)
-pnpm --filter pwa lint       # eslint
+pnpm --filter dashboard lint # eslint
 pnpm shared:build && pnpm -r typecheck
 # then the relevant tests (see Testing)
 ```
@@ -59,14 +59,14 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 ```
 
 - **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-- **Scope** (optional, encouraged): the area touched, e.g. `backend`, `pwa`, `shared`, `scheduler`, `calendar`, `auth`, `tasks`, `ml`, `docs`.
+- **Scope** (optional, encouraged): the area touched, e.g. `backend`, `mobile`, `shared`, `scheduler`, `calendar`, `auth`, `tasks`, `ml`, `docs`.
 - Summary: imperative, lower-case, no trailing period ("add task comments").
 - Breaking change: append `!` after the type/scope and/or add a `BREAKING CHANGE:` footer.
 - Reference issues in the footer: `Refs #123` / `Closes #123`.
 
 ```
 feat(calendar): manual-pin drag, overlap conflicts, inline agenda
-fix(pwa): open clicked occurrence and compact short blocks
+fix(mobile): open clicked occurrence and compact short blocks
 docs: remove v2 draft docs
 refactor(scheduler): extract slot math into slot.ts
 feat(api)!: rename /tasks reschedule payload field
@@ -97,7 +97,6 @@ Opening a PR (`gh pr create` loads [`.github/PULL_REQUEST_TEMPLATE.md`](.github/
 | --- | --- | --- |
 | Backend unit | Jest `*.spec.ts` beside the code (pure scheduler first) | `pnpm --filter backend test` |
 | Backend e2e | supertest via `backend/test/jest-e2e.json` against the Docker test env | `pnpm --filter backend test:e2e` |
-| PWA e2e | Playwright (`pwa/playwright.config.ts`, `testDir` `pwa/e2e/`, no specs checked in yet) against a running stack | `pnpm --filter pwa test:e2e` |
 | Mobile | Vitest unit + component (MSW), Maestro e2e (`mobile/e2e/`), see [`docs/mobile/testing.md`](docs/mobile/testing.md) | `pnpm --filter mobile test` / `pnpm --filter mobile e2e` |
 
 - Backend tests use NestJS DI (`Test.createTestingModule`, `overrideProvider`), not hand-built `new Service(mocks)`: see [AGENTS.md](AGENTS.md) → Tests.
@@ -111,7 +110,7 @@ Open issues from the [templates](.github/ISSUE_TEMPLATE/) (bug, feature, chore) 
 | Kind | Labels |
 | --- | --- |
 | Type | `feature`, `hotfix` (bug), `documentation`, `migration` |
-| Area | `pwa`, `backend`, `mobile`, `ml`, `infra`, `devops`, `security`, `l10n`, `notifications`, `testing`, `dx` |
+| Area | `backend`, `mobile`, `ml`, `infra`, `devops`, `security`, `l10n`, `notifications`, `testing`, `dx` |
 | Priority | `P0-blocker`, `P1-high`, `P2-medium`, `P3-low` |
 
 ## Coding agents

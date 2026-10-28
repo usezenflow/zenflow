@@ -1,4 +1,3 @@
-import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import IORedis, { type Redis } from "ioredis";
@@ -63,10 +62,6 @@ export class HealthService {
         : {}),
       // Absent without REDIS_PUBSUB_HOST (events stay in-process).
       ...(pubsub ? { redisPubsub: pubsub } : {}),
-      // Uploaded files and signed-URL media: the bucket answers.
-      ...(this.config.get<string>("S3_ENDPOINT")
-        ? { storage: () => this.storageProbe() }
-        : {}),
       // Sign-in codes go out by SMTP: the relay accepts a connection and auth.
       ...(this.config.get<string>("MAIL_HOST")
         ? { mail: () => this.mailProbe() }
@@ -108,25 +103,6 @@ export class HealthService {
         client.disconnect();
       }
     };
-  }
-
-  private s3?: S3Client;
-
-  private async storageProbe(): Promise<void> {
-    this.s3 ??= new S3Client({
-      endpoint: this.config.getOrThrow<string>("S3_ENDPOINT"),
-      region: this.config.get<string>("S3_REGION", "us-east-1"),
-      credentials: {
-        accessKeyId: this.config.getOrThrow<string>("S3_ACCESS_KEY_ID"),
-        secretAccessKey: this.config.getOrThrow<string>("S3_SECRET_ACCESS_KEY"),
-      },
-      forcePathStyle: true,
-      maxAttempts: 1,
-    });
-    await this.s3.send(
-      new HeadBucketCommand({ Bucket: this.config.getOrThrow("S3_BUCKET") }),
-      { abortSignal: AbortSignal.timeout(CHECK_TIMEOUT_MS) },
-    );
   }
 
   private async mailProbe(): Promise<void> {

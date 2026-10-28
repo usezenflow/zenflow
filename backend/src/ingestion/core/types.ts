@@ -39,11 +39,10 @@ export interface ParsedBlock {
   note: string | null;
 }
 
-/** A {@link ParsedBlock} from the Moodle calendar, tagged with its course. */
+/** A {@link ParsedBlock} from the Moodle calendar, with its course. */
 export interface ParsedLmsItem extends ParsedBlock {
   /**
-   * The Moodle course this item belongs to — its `fullName` becomes a tag on
-   * the session. Null when the event carried no usable `course` block.
+   * The Moodle course this item belongs to. Null when the event carried no usable `course` block.
    */
   lmsCourse: ParsedLmsCourse | null;
   /**
@@ -61,7 +60,7 @@ export interface ParsedLmsCourse {
   shortName: string | null;
 }
 
-/** A {@link ParsedBlock} from the portal, tagged with its course section. */
+/** A {@link ParsedBlock} from the portal, with its course section. */
 export interface ParsedPortalItem extends ParsedBlock {
   /** Portal `ScheduleStudyUnitID`; joins to `PortalSection.scheduleStudyUnitId`. */
   scheduleStudyUnitId: string | null;
@@ -77,6 +76,12 @@ export interface ParsedPortalItem extends ParsedBlock {
    * timetable as cancelled. See `external-key.ts` for when this can be removed.
    */
   legacyExternalKey?: string | null;
+  /** DLU exam format (`HinhThucThi`); set only on an `EXAM`. */
+  examFormat?: string | null;
+  /** Course credits of the exam's course (`Credits`); set only on an `EXAM`. */
+  examCredits?: number | null;
+  /** True for a retake sitting (`LanThi` after "Lần 1"); set only on an `EXAM`. */
+  examRetake?: boolean | null;
 
   /**
    * Meeting day as a `DLU_TZ` wall-clock `'YYYY-MM-DD'`, and the meeting's

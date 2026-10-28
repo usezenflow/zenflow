@@ -11,3 +11,6 @@ export const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 
 /** Longest travel time kept clear around a session, each way. */
 export const MAX_COMMUTE_MINUTES = 180;
+
+/** Identifies Zenflow to DLU and the LMS. Never a browser string. */
+export const UPSTREAM_USER_AGENT = "Zenflow/1.0 (+https://usezenflow.com)";

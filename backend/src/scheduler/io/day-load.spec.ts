@@ -93,7 +93,6 @@ function makeFakePrisma(sessions: FakeSession[], seriesList: FakeSeries[]) {
               scheduledStartTime: r.scheduledStartTime,
               durationMinutes: r.durationMinutes,
               type: r.type,
-              commuteMinutes: r.commuteMinutes ?? null,
             })),
           );
         },
@@ -646,77 +645,5 @@ describe("loadDayLoads (batched range read, #62 C)", () => {
     );
     expect(batched[0].occupied).toEqual([]);
     expect(batched[0].workloadByType.TASK).toEqual({ hours: 0.25, count: 1 });
-  });
-
-  describe("commute buffer", () => {
-    const lecture: FakeSession = {
-      id: "lecture-1",
-      userId: "u1",
-      seriesId: null,
-      seriesRrule: null,
-      scheduledStartTime: new Date("2026-06-15T09:00:00.000Z"),
-      durationMinutes: 60,
-      type: "LECTURE",
-      commuteMinutes: 20,
-    };
-    const widened = {
-      start: new Date("2026-06-15T08:40:00.000Z").getTime(),
-      end: new Date("2026-06-15T10:20:00.000Z").getTime(),
-    };
-
-    it("keeps the travel time clear on both sides of a session", async () => {
-      const { occupied, workloadByType } = await loadDayLoad(
-        makeFakePrisma([lecture], []) as never,
-        {
-          userId: "u1",
-          dayStart: new Date("2026-06-15T00:00:00.000Z"),
-          dayEnd: new Date("2026-06-16T00:00:00.000Z"),
-          timezone: TZ,
-        },
-      );
-      expect(occupied).toEqual([widened]);
-      expect(workloadByType.LECTURE).toEqual({ hours: 1, count: 1 });
-    });
-
-    it("gives the same intervals through the batched loader", async () => {
-      const [load] = await loadDayLoads(
-        makeFakePrisma([lecture], []) as never,
-        {
-          userId: "u1",
-          days: [
-            {
-              dayStartMs: new Date("2026-06-15T00:00:00.000Z").getTime(),
-              dayEndMs: new Date("2026-06-16T00:00:00.000Z").getTime(),
-            },
-          ],
-          timezone: TZ,
-        },
-      );
-      expect(load.occupied).toEqual([widened]);
-    });
-
-    it("lets the buffer of a session that ended the day before reach into the day", async () => {
-      const late: FakeSession = {
-        ...lecture,
-        id: "late",
-        scheduledStartTime: new Date("2026-06-14T23:00:00.000Z"),
-        commuteMinutes: 45,
-      };
-      const { occupied } = await loadDayLoad(
-        makeFakePrisma([late], []) as never,
-        {
-          userId: "u1",
-          dayStart: new Date("2026-06-15T00:00:00.000Z"),
-          dayEnd: new Date("2026-06-16T00:00:00.000Z"),
-          timezone: TZ,
-        },
-      );
-      expect(occupied).toEqual([
-        {
-          start: new Date("2026-06-14T22:15:00.000Z").getTime(),
-          end: new Date("2026-06-15T00:45:00.000Z").getTime(),
-        },
-      ]);
-    });
   });
 });

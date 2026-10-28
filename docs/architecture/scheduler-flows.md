@@ -109,15 +109,32 @@ sequenceDiagram
   participant BA as Bandit service
   Note over S: First manual move of a scheduled task
   S->>S: record move event
-  S->>F: first move
-  F->>F: compute reward from drag distance
+  S->>F: first move (drag, from, to)
+  F->>F: reward from drag distance
   F->>F: find the proposal that chose an arm
   F->>BA: update arm state
+  opt REWARD_V2_ENABLED, same local day
+    F->>BA: update destination hour arm with the same context
+  end
   F->>F: mark proposal as modified
+  Note over S: Session removed before it started
+  S->>S: soft delete and record delete event
+  S->>F: delete (after commit)
+  F->>F: store would-be delete reward on the event
+  opt DELETE_REWARD_ENABLED
+    F->>BA: update placing arm
+  end
+  Note over S: Placed block untouched until its slot began (KEPT sweep)
+  S->>F: kept reward (keptReward())
+  F->>BA: update arm state
   Note over S: App opened inside a placed block (START)
   S->>F: start reward
   F->>BA: update arm state
 ```
+
+Both flags are off in production. While a flag is off the event still stores the reward, so
+shadow data accrues. The delete reward is stored for every user delete. The arm update also needs a LinUCB proposal for the session.
+See [ADR-0045](../adr/0045-reward-v2.md).
 
 ## Resize or promote a series
 

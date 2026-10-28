@@ -74,6 +74,13 @@ export function format(
   });
 }
 
+/** Short weekday that never wraps: T2 to T7 and CN in Vietnamese, Mon to Sun otherwise. */
+export function weekdayShort(date: Date) {
+  return language === "vi"
+    ? ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][date.getDay()]
+    : format(date, "EEE");
+}
+
 /** `format` for standalone labels (headers, titles): Vietnamese month/day names come back lowercase. */
 export function formatTitle(...args: Parameters<typeof format>) {
   const text = format(...args);
@@ -93,7 +100,12 @@ export function localizedDeadlineExact(
       ? t("today")
       : days === 1
         ? t("tomorrow")
-        : format(due, due.getFullYear() === zonedDate(ref, tz).getFullYear() ? "EEE MMM d" : "MMM d yyyy");
+        : format(
+            due,
+            due.getFullYear() === zonedDate(ref, tz).getFullYear()
+              ? "EEE MMM d"
+              : "MMM d yyyy",
+          );
   return `${day}, ${format(due, "HH:mm")}`;
 }
 

@@ -5,7 +5,7 @@
 //   - git add -A | --all | -u | --update | .        (stages everything / all tracked)
 //   - git commit -a | -am | --all                   (stages & commits all tracked)
 // Allows explicit, scoped operations:
-//   - git add pwa/src/foo.tsx                  (specific pathspecs)
+//   - git add mobile/lib/foo.ts                 (specific pathspecs)
 //   - git commit -m "..." / --amend                 (commit only what's already staged)
 // Exit 2 blocks the tool call and surfaces the message to Claude.
 

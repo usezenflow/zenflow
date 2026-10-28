@@ -120,6 +120,7 @@ describe("WebPushSender", () => {
         body: MSG.body,
         tone: "default",
         category: null,
+        actions: [],
         data: {
           notificationId: "n1",
           eventName: "exam.created",
@@ -127,6 +128,24 @@ describe("WebPushSender", () => {
           slotProposalId: "",
           url: "/calendar?session=s1",
         },
+      });
+    });
+
+    it("carries the plan-offer category and both action ids", async () => {
+      (webpush.sendNotification as jest.Mock).mockResolvedValue({});
+      const sender = await make(VAPID);
+
+      await sender.send([TARGET], {
+        ...MSG,
+        category: "plan_offer",
+        actions: ["keep", "prefer"],
+      });
+
+      const [, body] = (webpush.sendNotification as jest.Mock).mock
+        .calls[0] as [unknown, string];
+      expect(JSON.parse(body) as unknown).toMatchObject({
+        category: "plan_offer",
+        actions: ["keep", "prefer"],
       });
     });
 

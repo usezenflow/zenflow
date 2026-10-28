@@ -10,9 +10,6 @@ path "secret/data/zenflow/__ENV__/bandit" {
 path "secret/data/zenflow/__ENV__/postgres" {
   capabilities = ["read"]
 }
-path "secret/data/zenflow/__ENV__/minio" {
-  capabilities = ["read"]
-}
 path "secret/data/zenflow/__ENV__/grafana" {
   capabilities = ["read"]
 }
