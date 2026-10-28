@@ -44,7 +44,7 @@ Tests are layered (unit, component with MSW, Maestro e2e); how to run each is in
 - A loopback API host is rewritten to the dev machine's LAN address on device/emulator ([`lib/api-client.ts`](lib/api-client.ts)).
 - Offline behaviour and how to simulate it (dev menu *Toggle offline*): [docs/mobile/offline.md](../docs/mobile/offline.md).
 - Android push needs `google-services.json` next to `app.config.ts` (absent: push inert).
-- iOS push needs the `expo-notifications` plugin, a backend APNs key and a real device.
+- iOS push needs the `expo-notifications` plugin, a backend APNs key, a real device and `APNS_ENABLED=true` at build time. Without it, iOS polls the inbox in the background and posts local notifications ([ADR 0049](../docs/adr/0049-ios-local-notification-poll.md)).
 
 ## Tech stack
 
